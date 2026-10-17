@@ -1,0 +1,478 @@
+# LinkML schema for the GlossMark graph metamodel: the node and edge records
+# written to .glossmark/graph.jsonl. Derived from internal/graph/graph.go,
+# internal/marker/anchor.go and internal/model/vocab.go, which remain the
+# source of truth. Slot names follow the JSON keys except where noted in
+# `aliases`.
+id: https://glossmark.dev/schemas/graph.linkml.yaml
+name: glossmark-graph
+title: GlossMark graph metamodel
+description: >-
+  Five node types (concept, boundary, artifact, namespace, actor) joined by
+  typed, provenance-carrying edges. Concepts live in tiered namespaces;
+  boundaries are architectural containers declared by manifests; artifacts
+  are files or declarations bound by @gloss markers.
+version: 0.1.0
+license: https://creativecommons.org/publicdomain/zero/1.0/
+
+prefixes:
+  gm: https://glossmark.dev/vocab#
+  linkml: https://w3id.org/linkml/
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+  owl: http://www.w3.org/2002/07/owl#
+  skos: http://www.w3.org/2004/02/skos/core#
+  dcterms: http://purl.org/dc/terms/
+  prov: http://www.w3.org/ns/prov#
+  xsd: http://www.w3.org/2001/XMLSchema#
+
+default_prefix: gm
+default_range: string
+
+imports:
+  - linkml:types
+
+# ---------------------------------------------------------------------------
+# Enums
+
+enums:
+  NodeType:
+    description: The five node types of the metamodel (model.NodeType).
+    permissible_values:
+      concept:
+        description: An ontology concept.
+      boundary:
+        description: An architectural boundary declared by a .gloss.yaml manifest.
+      artifact:
+        description: A file or a declaration inside one, bound by a marker.
+      namespace:
+        description: An ontology namespace (one *.gloss.yaml file).
+      actor:
+        description: A human or agent that placed markers or owns a boundary.
+
+  Tier:
+    description: Ontology tiers (model.TierCore, model.TierImpl).
+    permissible_values:
+      core:
+        description: The platonic business ideal; never mentions implementation concepts.
+      implementation:
+        description: The concrete system that realizes the core tier.
+
+  ConceptKind:
+    description: The closed set of concept kinds (model.ConceptKinds).
+    permissible_values:
+      entity:
+        meaning: owl:Class
+      process:
+      capability:
+      event:
+      measure:
+      constraint:
+      resource:
+      system-type:
+
+  BoundaryLevel:
+    description: Boundary zoom levels, coarsest first (model.BoundaryLevels).
+    permissible_values:
+      domain:
+      system:
+      container:
+      component:
+
+  AnchorScope:
+    description: Where a marker binds (model.Scopes).
+    permissible_values:
+      file:
+      symbol:
+      block:
+      line:
+      range:
+
+  EdgeSource:
+    description: Where an edge came from (graph.Source* constants).
+    permissible_values:
+      declared:
+        description: Ontology files and boundary manifests.
+      inline:
+        description: "@gloss markers in source comments or sidecars."
+      derived:
+        description: Rollup rules.
+      inferred:
+        description: Inferrers (for example test paths defaulting to verifies).
+
+  RelationType:
+    description: >-
+      The builtin relation vocabulary (model.BuiltinRelations). Edge predicates
+      are strings in the Go graph: an ontology file may declare additional
+      concept-to-concept relations under `relations:`, so this enumeration is
+      the builtin set, not a closed one. Domain and range are given per value
+      as comments; see vocab.go for the authoritative table.
+    permissible_values:
+      is-a:
+        description: Taxonomic generalization. Stored as direct edges; the closure is computed.
+        meaning: rdfs:subClassOf
+        comments: ["domain: concept; range: concept; ontology"]
+      part-of:
+        description: Partonomy. Concept→Concept, Boundary→Boundary, and Artifact→Boundary by containment.
+        comments: ["domain: artifact, concept, boundary; range: concept, boundary; inverse: has-part; ontology, manifest, derived"]
+      has-part:
+        description: Inverse of part-of.
+        comments: ["domain: concept, boundary; range: concept, boundary; inverse: part-of; ontology"]
+      realizes:
+        description: impl Concept → core Concept; Boundary → Concept. Also derived by rollup.
+        comments: ["domain: concept, boundary; range: concept; ontology, manifest, derived"]
+      published-as:
+        description: impl Concept → core Concept under which it surfaces in the business view.
+        comments: ["domain: concept; range: concept; ontology"]
+      implements:
+        description: Artifact implements the behaviour of a concept.
+        comments: ["domain: artifact; range: concept; inline; range kinds: process, capability, system-type, event, constraint, measure"]
+      represents:
+        description: Artifact is the data shape of a concept.
+        comments: ["domain: artifact; range: concept; inline; range kinds: entity, event, measure, resource, constraint"]
+      tests:
+        description: Test artifact exercises a concept.
+        comments: ["domain: artifact; range: concept; inline, derived"]
+      verifies:
+        description: Test artifact verifies a concept (stronger than tests).
+        comments: ["domain: artifact; range: concept; inline, derived"]
+      provisions:
+        description: IaC artifact provisions a resource or boundary.
+        comments: ["domain: artifact; range: concept, boundary; inline"]
+      configures:
+        description: Config artifact configures a concept or boundary.
+        comments: ["domain: artifact; range: concept, boundary; inline"]
+      deploys:
+        description: CI artifact deploys a system-type or boundary.
+        comments: ["domain: artifact; range: concept, boundary; inline"]
+      documents:
+        description: Markdown documents a concept or boundary.
+        meaning: dcterms:subject
+        comments: ["domain: artifact; range: concept, boundary; inline", "dcterms:subject is the nearest standard property: the documented concept is the topic of the artifact."]
+      instructs:
+        description: An agent file's instructions concern a concept.
+        comments: ["domain: artifact; range: concept, boundary; inline"]
+      may-modify:
+        description: An agent's change remit. Targets may be globs (pa:*).
+        comments: ["domain: artifact; range: concept, boundary; inline"]
+      produces:
+        description: Intended (concept) or actual (artifact) production; lifted to boundaries.
+        comments: ["domain: artifact, concept, boundary; range: concept; inline, ontology, manifest, derived; lift: range-lcs"]
+      consumes:
+        comments: ["domain: artifact, concept, boundary; range: concept; inline, ontology, manifest, derived; lift: range-lcs"]
+      publishes:
+        comments: ["domain: artifact, concept, boundary; range: concept; inline, ontology, manifest, derived; lift: range-lcs; range kinds: event"]
+      subscribes:
+        comments: ["domain: artifact, concept, boundary; range: concept; inline, ontology, manifest, derived; lift: range-lcs; range kinds: event"]
+      constrains:
+        comments: ["domain: concept; range: concept; ontology"]
+      reverses:
+        comments: ["domain: concept; range: concept; ontology"]
+      attaches-to:
+        comments: ["domain: concept; range: concept; ontology"]
+      depends-on:
+        description: From imports and SCIP; lifted to boundaries by the implied-relationship rule.
+        comments: ["domain: artifact, boundary; range: artifact, boundary; derived"]
+      calls:
+        comments: ["domain: artifact, boundary; range: artifact, boundary; derived"]
+      owns:
+        description: Imported from CODEOWNERS or Backstage spec.owner.
+        comments: ["domain: actor; range: boundary; manifest"]
+      derived-from:
+        meaning: prov:wasDerivedFrom
+        comments: ["domain: any; range: any"]
+      same-as:
+        description: SSSOM equivalence.
+        meaning: owl:sameAs
+        comments: ["domain: any; range: any"]
+
+# ---------------------------------------------------------------------------
+# Slots
+
+slots:
+  id:
+    description: >-
+      Node identifier. An absolute IRI for concepts, boundaries and namespaces;
+      urn:gloss:artifact:<path>[#<symbol>] for artifacts;
+      urn:gloss:actor:<kind>:<name> for actors.
+    identifier: true
+    range: uriorcurie
+  node:
+    description: The node type (JSON key "node").
+    range: NodeType
+    required: true
+  curie:
+    description: CURIE alias of id when a prefix matches.
+  ns:
+    description: Prefix of the namespace the node belongs to.
+  tier:
+    description: Ontology tier of a concept or namespace node.
+    range: Tier
+  kind:
+    description: >-
+      Overloaded in the Go struct: concept kind, boundary level, artifact
+      declaration kind or actor kind. Narrowed per class via slot_usage.
+  label:
+    description: Human-readable label; defaults to the concept name or artifact path.
+    slot_uri: rdfs:label
+  doc:
+    description: Definition or documentation string.
+    slot_uri: rdfs:comment
+  published_as:
+    description: CURIE of the core concept this implementation concept surfaces as.
+    aliases: ["published-as"]
+  internal:
+    description: Private to the repository; never shown in the business view.
+    range: boolean
+  deprecated:
+    description: True when the concept is deprecated; see replaced_by.
+    range: boolean
+    slot_uri: owl:deprecated
+  replaced_by:
+    description: Concept that supersedes a deprecated one (JSON key "replaced-by").
+    aliases: ["replaced-by"]
+    slot_uri: dcterms:isReplacedBy
+  value:
+    description: A documented attribute value from the ontology; any JSON value.
+    range: Any
+  imported:
+    description: True when the concept comes from an imported namespace.
+    range: boolean
+  version:
+    description: Version string of a namespace.
+    slot_uri: owl:versionInfo
+  owner:
+    description: Owning team or actor.
+  path:
+    description: Repo-relative file path.
+  anchor:
+    description: Where the marker binds inside the artifact's file.
+    range: Anchor
+    inlined: true
+  boundary:
+    description: IRI of the boundary that contains an artifact, from the nearest manifest.
+    range: Boundary
+  dir:
+    description: Directory of a boundary's manifest, relative to the repo root.
+  file:
+    description: Source file of the declaration, for diagnostics.
+  line:
+    description: Source line (1-based).
+    range: integer
+    minimum_value: 1
+
+  # Anchor
+  scope:
+    description: Anchor scope of the marker.
+    range: AnchorScope
+  symbol:
+    description: Declaration name the marker anchored to.
+  start:
+    description: First line of the anchored region (1-based).
+    range: integer
+    minimum_value: 1
+  end:
+    description: Last line of the anchored region (inclusive).
+    range: integer
+    minimum_value: 1
+  signature:
+    description: Whitespace-normalized signature line.
+  fingerprint:
+    description: sha256:<hex prefix> of the signature (symbol/block/line) or of the whole file (file).
+    pattern: "^sha256:[0-9a-f]+$"
+
+  # Edge
+  subject:
+    description: Subject node (JSON key "s"). Always a node id.
+    aliases: ["s"]
+    range: Node
+    required: true
+  predicate:
+    description: Relation name (JSON key "p"). Builtins are enumerated in RelationType; ontology files may add more.
+    aliases: ["p"]
+    range: RelationType
+    required: true
+  object:
+    description: >-
+      Object node (JSON key "o"). Usually a node id, but may be a placeholder
+      URN (urn:gloss:new:, urn:gloss:glob:, urn:gloss:unresolved:) with no
+      node record, so the range is uriorcurie rather than Node.
+    aliases: ["o"]
+    range: uriorcurie
+    required: true
+  source:
+    description: Where the edge came from.
+    range: EdgeSource
+    required: true
+  prov:
+    description: Provenance of the edge; absent for some derived edges.
+    range: Provenance
+    inlined: true
+
+  # Provenance
+  col:
+    description: Column of the marker (1-based).
+    range: integer
+    minimum_value: 1
+  proposed:
+    description: True for a proposed, not yet accepted link.
+    range: boolean
+  conf:
+    description: Confidence of a proposed link, in [0,1].
+    range: float
+    minimum_value: 0
+    maximum_value: 1
+  marker_id:
+    description: Marker id (JSON key "id"; the ledger's marker_id).
+    aliases: ["id"]
+  note:
+    description: The marker's note= text.
+  actor:
+    description: Who placed the marker, as kind:name.
+    slot_uri: prov:wasAttributedTo
+  sugar:
+    description: True when the edge comes from a shorthand marker form expanded by the parser.
+    range: boolean
+  rule:
+    description: Rollup rule or inferrer that produced a derived or inferred edge.
+  via:
+    description: CURIEs the derivation passed through.
+    multivalued: true
+  raw:
+    description: The original target text as written (.Local, impl:NEW:X, pa:*).
+
+# ---------------------------------------------------------------------------
+# Classes
+
+classes:
+  Any:
+    class_uri: linkml:Any
+    description: Any JSON value.
+
+  Node:
+    abstract: true
+    description: One graph node (graph.Node). The Go type is a single struct; the subclasses below name which attributes each node type carries.
+    slots:
+      - id
+      - node
+      - curie
+      - ns
+      - kind
+      - label
+      - doc
+      - file
+      - line
+
+  Concept:
+    is_a: Node
+    class_uri: skos:Concept
+    description: An ontology concept from a *.gloss.yaml file.
+    slots:
+      - tier
+      - published_as
+      - internal
+      - deprecated
+      - replaced_by
+      - value
+      - imported
+    slot_usage:
+      node:
+        equals_string: concept
+      kind:
+        description: The concept kind.
+        range: ConceptKind
+
+  Boundary:
+    is_a: Node
+    description: An architectural boundary declared by a .gloss.yaml manifest.
+    slots:
+      - owner
+      - dir
+    slot_usage:
+      node:
+        equals_string: boundary
+      kind:
+        description: The boundary level (the manifest's level).
+        range: BoundaryLevel
+
+  Artifact:
+    is_a: Node
+    description: A file, or a declaration inside one, that a marker binds to.
+    slots:
+      - path
+      - anchor
+      - boundary
+    slot_usage:
+      node:
+        equals_string: artifact
+      path:
+        required: true
+      kind:
+        description: Declaration kind (file, function, class, resource, table, sql, heading, ...).
+
+  Namespace:
+    is_a: Node
+    description: An ontology namespace; its id is the IRI base.
+    slots:
+      - tier
+      - version
+      - owner
+    slot_usage:
+      node:
+        equals_string: namespace
+
+  Actor:
+    is_a: Node
+    class_uri: prov:Agent
+    description: A human or agent that placed markers or owns a boundary.
+    slot_usage:
+      node:
+        equals_string: actor
+      kind:
+        description: Actor kind, the part before the colon in human:alice or agent:claude.
+
+  Anchor:
+    description: Where a marker binds in a file (marker.Anchor).
+    slots:
+      - scope
+      - symbol
+      - kind
+      - start
+      - end
+      - signature
+      - fingerprint
+    slot_usage:
+      scope:
+        required: true
+      start:
+        required: true
+      end:
+        required: true
+      kind:
+        description: Declaration kind detected for the anchor.
+
+  Edge:
+    description: One triple with provenance (graph.Edge).
+    slots:
+      - subject
+      - predicate
+      - object
+      - source
+      - prov
+
+  Provenance:
+    description: Edge provenance (graph.Prov).
+    slots:
+      - path
+      - line
+      - col
+      - scope
+      - symbol
+      - fingerprint
+      - proposed
+      - conf
+      - marker_id
+      - note
+      - actor
+      - sugar
+      - rule
+      - via
+      - raw

@@ -1,0 +1,5 @@
+boundary: acme:animal-production
+level: system
+label: Animal production
+produces: [zoo:Animal]
+owner: zoo-product

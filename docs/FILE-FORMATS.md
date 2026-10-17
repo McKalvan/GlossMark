@@ -1,0 +1,105 @@
+# File formats
+
+Three file kinds carry the ontology: the repository file, ontology files per namespace, and per-directory boundary manifests. Views are a fourth, optional file. JSON Schemas for all of them live in `schemas/`; the Go types in `internal/model` are the source of truth.
+
+## `glossmark.yaml` (repository root)
+
+```yaml
+owns:
+  zoo:  { iri: https://onto.acme.dev/zoo/,           file: ontology/zoo.gloss.yaml,  tier: core,           version: 1.0.0, owner: zoo-product }
+  impl: { iri: https://onto.acme.dev/horse-factory/, file: ontology/impl.gloss.yaml, tier: implementation, version: 0.3.0 }
+imports:
+  billing: { iri: https://onto.acme.dev/billing/, version: "^2.1", source: ../billing-svc/ontology/ }
+prefixes:
+  acme: https://arch.acme.dev/boundaries/      # non-ontology prefixes (boundaries)
+views: ontology/views.yaml                      # default
+exclude: ["vendor/**"]
+comment-styles: { ".pkl": ["//"] }              # extend the comment table
+test-paths: ["**/tests/**", "**/*_test.go"]     # inferrer: implements in a test path also tests
+policy:
+  soft-conf-threshold: 0.7                      # proposals at or above are SOFT
+  hard-paths: ["ontology/**", "**/.gloss.yaml", "glossmark.yaml"]
+  coverage-fail-under: 0
+  waivers:
+    - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }
+```
+
+- `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`.
+- `imports.<prefix>`: a namespace defined elsewhere. `source` is a local path (file or directory) today; `git+` and `https://` sources are parsed and rejected with a message until the fetcher lands (vendor the directory, or point at a sibling checkout). Only **published** concepts of an imported implementation namespace are referenceable.
+- Authoring uses CURIEs; the graph stores IRIs. Concept IDs are permanent: a rename is `deprecated: true` plus `replaced-by:`.
+- Versions are semver: MAJOR removes or retypes a concept or changes is-a/part-of; MINOR adds; PATCH touches labels and docs. `gloss diff` classifies the bump.
+
+## `*.gloss.yaml` (one per namespace)
+
+```yaml
+namespace: impl
+version: 0.3.0
+concepts:
+  HorseFactoryService:        { kind: system-type, realizes: zoo:HorseFactory }
+  HoofAssembler:              { kind: process, part-of: HorseBuilder, internal: true }
+  StallionProduction:         { kind: process, realizes: zoo:Breeding, produces: [zoo:Stallion] }
+  FoalingPipelineThroughput:
+    kind: measure
+    realizes: zoo:ProductionCapacity
+    published: { as: zoo:ProductionCapacity }
+    value: "12 foals/day"
+relations:
+  produces: { lift: range-lcs }
+```
+
+Concept keys:
+
+| Key | Meaning |
+| --- | --- |
+| `kind` | `entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type` (required unless `is-a` is given) |
+| `is-a`, `part-of`, `has-part` | Taxonomy and partonomy. Bare names are in the file's namespace. |
+| `realizes` | Implementation → core. Every impl concept carries this or `internal: true` (GM320). |
+| `published: { as: <core> }` | The single seam into the business view and across repos. `as:` must name an existing core concept (GM330). |
+| `internal: true` | Engineering-private mechanism; realizes nothing, never crosses repos. |
+| `deprecated`, `replaced-by` | Renames. |
+| `value` | A concrete value (used by published measures and constraints). |
+| any other key | A relation: `produces`, `consumes`, `publishes`, `subscribes`, `constrains`, `reverses`, `attaches-to`, or one declared under `relations:`. |
+
+Tier rules: a core file may not reference any implementation namespace (GM310); core concepts realize nothing (GM312). The own-subject rule: a repo may only add edges whose subject is in a namespace it owns, so `mine:Pony is-a zoo:Horse` is allowed and `zoo:Horse has-part mine:Saddle` is rejected (GM400).
+
+## `.gloss.yaml` (boundary manifest, any directory)
+
+```yaml
+boundary: acme:horse-factory-svc
+level: container                 # domain | system | container | component
+label: Horse factory service
+part-of: acme:animal-production
+realizes: [impl:HorseFactoryService, zoo:Breeding, zoo:Foaling]
+produces: [zoo:Horse]
+default-namespace: impl          # .Name in markers below resolves to impl:Name
+allowed: [zoo:Horse, zoo:Mare, impl:Breeding*, impl:Foal*]
+generated: ["gen/**"]
+owner: horse-platform
+```
+
+The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives. A relation the manifest does not declare is not compared. Links to concepts outside `allowed` are HARD-gated.
+
+## `views.yaml`
+
+```yaml
+views:
+  business:
+    include: [zoo:*]
+    collapse: { "impl:*": via realizes }     # impl nodes fold into what they realize
+    show-published: true
+    relations: [produces, consumes, constrains]
+    lift: range-lcs                           # {Mare, Stallion} shows as Horse
+    zoom: system
+  engineering:
+    include: [zoo:*, impl:*]
+    expand: { part-of: 2 }                    # two levels of parts
+    zoom: container
+```
+
+Two presets ship (business, engineering) and are generated when the file is absent. Zoom (`landscape`, `system`, `container`, `component`, `code`) decides which boundary levels appear; artifacts appear only at `code`.
+
+## Tool-maintained files under `.glossmark/`
+
+- `graph.jsonl` — the canonical graph, one JSON record per line, deterministically sorted so `git diff` is meaningful (see `docs/GRAPH.md`).
+- `context.jsonld` — the JSON-LD context that makes `graph.jsonl` RDF-loadable.
+- `ledger.jsonl` — provenance and review state per marker: `{marker_id, path, relation, targets, actor, model, conf, created, status, reviewed_by, reviewed_at, anchor_fingerprint, rationale}`. Exportable as PROV-O with `gloss export --prov`.

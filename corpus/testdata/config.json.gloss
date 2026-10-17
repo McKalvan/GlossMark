@@ -1,0 +1,3 @@
+# Sidecar for config.json; scopes are JSON Pointers.
+@gloss configures impl:FoalEventBus scope=range note="/bus"
+@gloss configures impl:FoalRegistry

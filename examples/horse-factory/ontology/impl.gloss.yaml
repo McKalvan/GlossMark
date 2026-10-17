@@ -1,0 +1,19 @@
+# ontology/impl.gloss.yaml  (implementation tier: the concrete system that realizes zoo:)
+namespace: impl
+version: 0.3.0
+concepts:
+  HorseFactoryService:        { kind: system-type, realizes: zoo:HorseFactory }
+  HorseBuilder:               { kind: process, realizes: zoo:Breeding }
+  HoofAssembler:              { kind: process, part-of: HorseBuilder, internal: true }     # unpublished: private to this repo
+  HoofStep:                   { kind: process, part-of: HoofAssembler, internal: true }
+  TailQueue:                  { kind: resource, internal: true }
+  StallionProduction:         { kind: process, realizes: zoo:Breeding, produces: [zoo:Stallion] }
+  BreedingPlanner:            { kind: process, realizes: zoo:Breeding }
+  FoalingPipeline:            { kind: process, realizes: zoo:Foaling }
+  FoalEventBus:               { kind: resource, internal: true, publishes: [zoo:FoalBorn] }
+  FoalRegistry:               { kind: resource, internal: true }
+  FoalingPipelineThroughput:
+    kind: measure
+    realizes: zoo:ProductionCapacity
+    published: { as: zoo:ProductionCapacity }
+    value: "12 foals/day"

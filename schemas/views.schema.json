@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glossmark.dev/schemas/views.json",
+  "title": "GlossMark views",
+  "description": "views.yaml: the declared projections over tier × zoom that gloss view renders. Mirrors model.Views and model.View in internal/model/files.go, which decode with KnownFields(true), so unknown keys are errors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["views"],
+  "properties": {
+    "views": {
+      "description": "Projections keyed by view name. A view must have a body (null is rejected).",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/view" }
+    }
+  },
+  "$defs": {
+    "stringOrList": {
+      "description": "A single string or a list of strings (model.StringList).",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      ]
+    },
+    "curiePattern": {
+      "description": "A CURIE or CURIE glob selecting nodes, for example zoo:* or impl:Foal*.",
+      "anyOf": [
+        { "type": "string", "pattern": "^[A-Za-z][\\w-]*:[\\w.*-]+$" },
+        {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Za-z][\\w-]*:[\\w.*-]+$" }
+        }
+      ]
+    },
+    "view": {
+      "description": "One projection (model.View).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "doc": {
+          "description": "What the view shows and for whom.",
+          "type": "string"
+        },
+        "include": {
+          "description": "CURIE patterns of nodes to include.",
+          "$ref": "#/$defs/curiePattern"
+        },
+        "exclude": {
+          "description": "CURIE patterns of nodes to drop after inclusion.",
+          "$ref": "#/$defs/curiePattern"
+        },
+        "collapse": {
+          "description": "Nodes matching a CURIE pattern fold into what they realize (published-as first). The only rule understood is \"via realizes\".",
+          "type": "object",
+          "propertyNames": { "type": "string", "pattern": "^[A-Za-z][\\w-]*:[\\w.*-]+$" },
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["via realizes"]
+          }
+        },
+        "expand": {
+          "description": "Relation name → number of levels to expand along it (currently part-of is honoured).",
+          "type": "object",
+          "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "show-published": {
+          "description": "Show implementation concepts that are published under their core name.",
+          "type": "boolean"
+        },
+        "relations": {
+          "description": "Relation names to render; all when omitted.",
+          "anyOf": [
+            { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+            }
+          ]
+        },
+        "lift": {
+          "description": "Lift strategy for relations projected onto boundaries.",
+          "type": "string",
+          "enum": ["range-lcs"]
+        },
+        "zoom": {
+          "description": "Zoom level (model.ZoomLevels), coarsest first; landscape is above every boundary.",
+          "type": "string",
+          "enum": ["landscape", "system", "container", "component", "code"]
+        },
+        "boundaries": {
+          "description": "When true (the default) boundaries at or above the zoom level are shown.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  }
+}

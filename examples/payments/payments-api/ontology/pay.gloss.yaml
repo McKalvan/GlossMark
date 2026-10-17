@@ -1,0 +1,18 @@
+# payments-api/ontology/pay.gloss.yaml  (core: names only what the business recognizes, processes included)
+namespace: pay
+iri: https://onto.acme.dev/pay/
+version: 1.2.0
+concepts:
+  Payment:          { kind: entity }
+  Refund:           { kind: entity, reverses: Payment }
+  Refunding:        { kind: process, consumes: [Payment], produces: [Refund] }
+  Merchant:         { kind: entity }
+  Authorization:    { kind: process, produces: [Payment] }
+  Capture:          { kind: process, consumes: [Payment] }
+  Settlement:       { kind: process, consumes: [Payment], produces: [Payout] }
+  Payout:           { kind: entity }
+  CaptureConfirmed: { kind: event }
+  SettlementCutoff: { kind: constraint, constrains: [Settlement] }   # value comes from engineering
+relations:
+  produces: { lift: range-lcs }
+  consumes: { lift: range-lcs }

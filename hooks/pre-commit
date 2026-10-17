@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# GlossMark pre-commit hook: lint markers and keep .glossmark/graph.jsonl current.
+# Install: ln -s ../../hooks/pre-commit .git/hooks/pre-commit   (or use .pre-commit-hooks.yaml)
+set -e
+if ! command -v gloss >/dev/null 2>&1; then
+  echo "gloss: not installed (go install github.com/mckalvan/glossmark/cmd/gloss@latest)" >&2
+  exit 0
+fi
+gloss check
+gloss build -q
+git add .glossmark/graph.jsonl .glossmark/context.jsonld .glossmark/ledger.jsonl 2>/dev/null || true

@@ -1,0 +1,9 @@
+# .github/workflows/deploy.yml
+# @gloss deploys acme:payments-api scope=file
+name: deploy
+on: [push]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo deploy

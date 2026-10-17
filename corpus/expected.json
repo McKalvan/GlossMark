@@ -1,0 +1,81 @@
+{
+  "testdata/example.py": [
+    {"line": 7, "relation": "implements", "targets": ["impl:StallionProduction"], "scope": "symbol", "symbol": "breed_stallion"},
+    {"line": 12, "proposed": true, "relation": "represents", "targets": ["zoo:Mare"], "keys": {"conf": "0.72", "note": "agent guess from field names"}, "scope": "symbol", "symbol": "MareRecord"},
+    {"line": 17, "relation": "produces", "targets": ["zoo:Foal", "zoo:FoalBorn"], "scope": "symbol", "symbol": "foal"},
+    {"line": 24, "proposed": true, "relation": "implements", "targets": ["impl:NEW:Gelding"], "keys": {"note": "no concept exists yet"}, "scope": "symbol", "symbol": "geld"}
+  ],
+  "testdata/example.ts": [
+    {"line": 1, "proposed": true, "relation": "represents", "targets": ["zoo:Mare"], "keys": {"conf": "0.72"}, "scope": "symbol", "symbol": "Mare"},
+    {"line": 4, "relation": "implements", "targets": ["impl:FoalRegistry"], "scope": "symbol", "symbol": "FoalRegistry"},
+    {"line": 13, "relation": "documents", "targets": ["zoo:Foal"], "scope": "symbol", "symbol": "Foal"}
+  ],
+  "testdata/example.go": [
+    {"line": 3, "relation": "implements", "targets": ["impl:HorseFactoryService"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 6, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "HorseBuilder.AttachHoof"},
+    {"line": 9, "relation": "represents", "targets": ["zoo:Horse"], "scope": "symbol", "symbol": "Horse"}
+  ],
+  "testdata/example.tf": [
+    {"line": 1, "relation": "provisions", "targets": ["impl:FoalRegistry"], "scope": "symbol", "symbol": "resource.aws_dynamodb_table.foals"},
+    {"line": 7, "relation": "provisions", "targets": [".CaptureQueue"], "scope": "symbol", "symbol": "resource.aws_sqs_queue.capture"}
+  ],
+  "testdata/example.yaml": [
+    {"line": 1, "relation": "deploys", "targets": ["impl:HorseFactoryService"], "scope": "symbol", "symbol": "Deployment/horse-factory"},
+    {"line": 9, "relation": "configures", "targets": ["impl:FoalEventBus"], "scope": "symbol", "symbol": "ConfigMap/foal-bus"}
+  ],
+  "testdata/deploy.yml": [
+    {"line": 2, "relation": "deploys", "targets": ["acme:payments-api"], "keys": {"scope": "file"}, "scope": "file"}
+  ],
+  "testdata/agent.md": [
+    {"line": 1, "relation": "instructs", "targets": ["impl:BreedingPlanner"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 2, "relation": "may-modify", "targets": ["zoo:Foal", "zoo:Foaling", "impl:*"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 7, "relation": "documents", "targets": ["zoo:Foaling"], "scope": "symbol", "symbol": "Foaling"}
+  ],
+  "testdata/example.sql": [
+    {"line": 1, "relation": "represents", "targets": ["zoo:Foal"], "scope": "symbol", "symbol": "table.foals"},
+    {"line": 4, "relation": "represents", "targets": ["zoo:Mare"], "scope": "symbol", "symbol": "table.mares"}
+  ],
+  "testdata/example.feature": [
+    {"line": 1, "relation": "verifies", "targets": ["impl:StallionProduction"], "scope": "symbol", "symbol": "feature:Stallion production"}
+  ],
+  "testdata/example.sh": [
+    {"line": 2, "relation": "deploys", "targets": ["impl:HorseFactoryService"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 5, "relation": "configures", "targets": ["impl:FoalEventBus"], "scope": "symbol", "symbol": "configure_bus"}
+  ],
+  "testdata/Dockerfile": [
+    {"line": 1, "relation": "deploys", "targets": ["impl:HorseFactoryService"], "scope": "symbol", "symbol": "FROM"}
+  ],
+  "testdata/Example.java": [
+    {"line": 3, "relation": "implements", "targets": ["impl:HoofAssembler"], "scope": "symbol", "symbol": "HoofAssembler"},
+    {"line": 5, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "attach"}
+  ],
+  "testdata/example.rs": [
+    {"line": 2, "relation": "implements", "targets": ["impl:TailQueue"], "scope": "symbol", "symbol": "TailQueue"},
+    {"line": 5, "relation": "implements", "targets": ["impl:TailStep"], "scope": "symbol", "symbol": "enqueue"}
+  ],
+  "testdata/example.rb": [
+    {"line": 1, "relation": "represents", "targets": ["zoo:Mare"], "scope": "symbol", "symbol": "Mare"},
+    {"line": 3, "relation": "implements", "targets": ["impl:Foaling"], "scope": "symbol", "symbol": "foal"}
+  ],
+  "testdata/config.json.gloss": [
+    {"line": 2, "relation": "configures", "targets": ["impl:FoalEventBus"], "keys": {"scope": "range", "note": "/bus"}, "scope": "range"},
+    {"line": 3, "relation": "configures", "targets": ["impl:FoalRegistry"], "scope": "file"}
+  ],
+  "testdata/example.proto": [
+    {"line": 3, "relation": "represents", "targets": ["zoo:FoalBorn"], "scope": "symbol", "symbol": "FoalBorn"}
+  ],
+  "testdata/header.py": [
+    {"line": 2, "relation": "implements", "targets": ["impl:HorseFactoryService"], "keys": {"scope": "file"}, "scope": "file", "sugar": true},
+    {"line": 3, "relation": "may-modify", "targets": ["impl:Horse*", "zoo:Foal"], "keys": {"scope": "file"}, "scope": "file", "sugar": true}
+  ],
+  "testdata/malformed.py": [
+    {"line": 2, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM002"]},
+    {"line": 3, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM005"]},
+    {"line": 4, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM006"]},
+    {"line": 5, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM004"]},
+    {"line": 6, "relation": "implements", "targets": ["impl:X"], "keys": {"scope": "symbol"}, "scope": "symbol", "symbol": "ok"}
+  ],
+  "_diagnostics": {
+    "testdata/malformed.py": [{"line": 1, "code": "GM001"}, {"line": 2, "code": "GM002"}, {"line": 3, "code": "GM005"}, {"line": 4, "code": "GM006"}, {"line": 5, "code": "GM004"}]
+  }
+}
