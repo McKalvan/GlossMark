@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glossmark.dev/schemas/ontology.json",
+  "title": "GlossMark ontology file",
+  "description": "A *.gloss.yaml ontology: one namespace's concepts and relation declarations. Mirrors model.Ontology, model.Concept, model.Published and model.RelationDecl in internal/model. Concept keys that are not structural attributes are relations (produces, consumes, constrains, ...) whose targets are concept names or CURIEs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["concepts"],
+  "properties": {
+    "namespace": {
+      "description": "The CURIE prefix of this namespace; may repeat the key under owns: in glossmark.yaml.",
+      "$ref": "#/$defs/prefix"
+    },
+    "iri": {
+      "description": "IRI base of the namespace (normally taken from glossmark.yaml).",
+      "type": "string",
+      "format": "iri",
+      "minLength": 1
+    },
+    "version": {
+      "description": "Semantic version of the namespace.",
+      "type": "string",
+      "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "tier": {
+      "description": "Ontology tier (normally taken from glossmark.yaml).",
+      "type": "string",
+      "enum": ["core", "implementation"]
+    },
+    "doc": {
+      "description": "What this namespace is about.",
+      "type": "string"
+    },
+    "concepts": {
+      "description": "Concepts keyed by PascalCase name. A concept with no body (null) is allowed and treated as empty.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/conceptName" },
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "null" },
+          { "$ref": "#/$defs/concept" }
+        ]
+      }
+    },
+    "relations": {
+      "description": "Relation declarations or overrides, keyed by relation name. A known builtin is tuned field by field; an unknown name creates a new concept→concept relation usable in ontology files.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/relationName" },
+      "additionalProperties": { "$ref": "#/$defs/relationDecl" }
+    }
+  },
+  "$defs": {
+    "prefix": {
+      "type": "string",
+      "pattern": "^[A-Za-z][\\w-]*$"
+    },
+    "conceptName": {
+      "description": "PascalCase concept name.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$"
+    },
+    "relationName": {
+      "description": "kebab-case relation name.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "target": {
+      "description": "A relation target: a bare concept name in this namespace (Animal), a CURIE (zoo:Horse), or for some relations a CURIE glob (impl:Foal*).",
+      "type": "string",
+      "minLength": 1
+    },
+    "stringOrList": {
+      "description": "A single string or a list of strings (model.StringList).",
+      "anyOf": [
+        { "$ref": "#/$defs/target" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/target" }
+        }
+      ]
+    },
+    "nodeType": {
+      "description": "One of the five node types of the metamodel.",
+      "type": "string",
+      "enum": ["concept", "boundary", "artifact", "namespace", "actor"]
+    },
+    "published": {
+      "description": "Marks an implementation concept as crossing into the business view under a core concept's name (model.Published).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as"],
+      "properties": {
+        "as": {
+          "description": "The core concept (CURIE) this concept surfaces as.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "concept": {
+      "description": "One ontology entry (model.Concept). Known structural keys are typed; every other kebab-case key is a relation whose value is a target or list of targets. gloss check requires kind unless the concept has is-a.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "The concept kind (model.ConceptKinds).",
+          "type": "string",
+          "enum": ["entity", "process", "capability", "event", "measure", "constraint", "resource", "system-type"]
+        },
+        "label": {
+          "description": "Human-readable label; defaults to the concept name.",
+          "type": "string"
+        },
+        "doc": {
+          "description": "Definition of the concept.",
+          "type": "string"
+        },
+        "is-a": {
+          "description": "Taxonomic parent(s). Stored as direct edges; the closure is computed.",
+          "$ref": "#/$defs/stringOrList"
+        },
+        "part-of": {
+          "description": "Partonomy: the whole(s) this concept is part of.",
+          "$ref": "#/$defs/stringOrList"
+        },
+        "has-part": {
+          "description": "Inverse of part-of.",
+          "$ref": "#/$defs/stringOrList"
+        },
+        "realizes": {
+          "description": "Core concept(s) this implementation concept realizes.",
+          "$ref": "#/$defs/stringOrList"
+        },
+        "published": { "$ref": "#/$defs/published" },
+        "internal": {
+          "description": "Private to this repository; never shown in the business view.",
+          "type": "boolean"
+        },
+        "deprecated": {
+          "type": "boolean"
+        },
+        "replaced-by": {
+          "description": "Concept that supersedes a deprecated one.",
+          "type": "string"
+        },
+        "value": {
+          "description": "A documented attribute value (for example a measure's current value). Any YAML value."
+        },
+        "shapes": {
+          "description": "Reserved for SHACL-style instance validation (Phase 3). Any YAML value."
+        }
+      },
+      "patternProperties": {
+        "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes)$)[a-z][a-z0-9-]*$": {
+          "description": "A relation (produces, consumes, publishes, subscribes, constrains, reverses, attaches-to, or one declared under relations:) and its target(s).",
+          "$ref": "#/$defs/stringOrList"
+        }
+      },
+      "additionalProperties": false
+    },
+    "relationDecl": {
+      "description": "How an ontology file declares or tunes a relation (model.RelationDecl). Only the fields set are applied over the builtin.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lift": {
+          "description": "Lift strategy when the relation is projected onto boundaries.",
+          "type": "string",
+          "enum": ["range-lcs"]
+        },
+        "transitive": {
+          "type": "boolean"
+        },
+        "inverse": {
+          "description": "Name of the inverse relation.",
+          "$ref": "#/$defs/relationName"
+        },
+        "domain": {
+          "description": "Node types allowed as subject.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/nodeType" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "range": {
+          "description": "Node types allowed as object.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/nodeType" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "doc": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

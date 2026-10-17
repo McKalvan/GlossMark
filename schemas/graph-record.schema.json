@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glossmark.dev/schemas/graph-record.json",
+  "title": "GlossMark graph record",
+  "description": "One line of .glossmark/graph.jsonl. The first line is a context header; then one node record per graph node, sorted by (node type, id); then one edge record per triple, sorted. Mirrors graph.Header, graph.Node, graph.Edge and graph.Prov in internal/graph/graph.go and marker.Anchor in internal/marker/anchor.go (exact JSON tags; omitempty fields are absent when zero).",
+  "oneOf": [
+    { "$ref": "#/$defs/header" },
+    { "$ref": "#/$defs/node" },
+    { "$ref": "#/$defs/edge" }
+  ],
+  "$defs": {
+    "iri": {
+      "description": "A node identifier: an absolute IRI (https://onto.acme.dev/zoo/Horse), an artifact URN (urn:gloss:artifact:<path>[#<symbol>]), an actor URN (urn:gloss:actor:<kind>:<name>), or a placeholder URN (urn:gloss:new:<curie>, urn:gloss:glob:<pattern>, urn:gloss:unresolved:<text>).",
+      "type": "string",
+      "minLength": 1
+    },
+    "fingerprint": {
+      "description": "sha256: followed by a hex prefix of the digest of the normalized signature (symbol/block/line anchors) or of the whole file (file anchors).",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]+$"
+    },
+    "anchorScope": {
+      "description": "Where a marker binds (model.Scopes).",
+      "type": "string",
+      "enum": ["file", "symbol", "block", "line", "range"]
+    },
+    "header": {
+      "description": "The first JSONL line (graph.Header).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "generator", "prefixes"],
+      "properties": {
+        "type": { "const": "context" },
+        "generator": {
+          "description": "Tool and version that wrote the file, for example \"gloss 0.1.0\".",
+          "type": "string"
+        },
+        "prefixes": {
+          "description": "CURIE prefix → IRI base table used to abbreviate ids.",
+          "type": "object",
+          "propertyNames": { "type": "string", "pattern": "^[A-Za-z][\\w-]*$" },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "@context": {
+          "description": "Relative path of the JSON-LD context document (./context.jsonld).",
+          "type": "string"
+        }
+      }
+    },
+    "node": {
+      "description": "One graph node (graph.Node). Which attributes appear depends on the node type: concept nodes carry tier, kind, published-as, internal, deprecated, replaced-by, value and imported; boundary nodes carry kind (= level), owner and dir; artifact nodes carry path, anchor and boundary; namespace nodes carry tier, version and owner; actor nodes carry kind (human, agent, ...).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "node", "id"],
+      "properties": {
+        "type": { "const": "node" },
+        "node": {
+          "description": "Node type of the metamodel (model.NodeType).",
+          "type": "string",
+          "enum": ["concept", "boundary", "artifact", "namespace", "actor"]
+        },
+        "id": { "$ref": "#/$defs/iri" },
+        "curie": {
+          "description": "CURIE alias of id when a prefix matches (impl:Horse, acme:horse-factory-svc, impl: for a namespace, human:claude for an actor).",
+          "type": "string"
+        },
+        "ns": {
+          "description": "Prefix of the namespace the node belongs to.",
+          "type": "string"
+        },
+        "tier": {
+          "description": "Ontology tier of a concept or namespace node.",
+          "type": "string",
+          "enum": ["core", "implementation"]
+        },
+        "kind": {
+          "description": "Concept kind (entity, process, capability, event, measure, constraint, resource, system-type); boundary level (domain, system, container, component); declaration kind of an artifact (file, function, class, resource, table, sql, heading, ...); actor kind (human, agent).",
+          "type": "string"
+        },
+        "label": { "type": "string" },
+        "doc": { "type": "string" },
+        "published-as": {
+          "description": "Concept: CURIE of the core concept this implementation concept surfaces as.",
+          "type": "string"
+        },
+        "internal": { "type": "boolean" },
+        "deprecated": { "type": "boolean" },
+        "replaced-by": { "type": "string" },
+        "value": {
+          "description": "Concept: the documented attribute value from the ontology (any JSON value)."
+        },
+        "imported": {
+          "description": "Concept: true when the concept comes from an imported namespace.",
+          "type": "boolean"
+        },
+        "version": {
+          "description": "Namespace: version string.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Namespace or boundary: owning team or actor.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Artifact: repo-relative file path.",
+          "type": "string"
+        },
+        "anchor": { "$ref": "#/$defs/anchor" },
+        "boundary": {
+          "description": "Artifact: IRI of the boundary that contains it, from the nearest manifest.",
+          "type": "string"
+        },
+        "dir": {
+          "description": "Boundary: directory of its manifest, slash-separated, relative to the repo root (\"\" for the root, hence usually absent).",
+          "type": "string"
+        },
+        "file": {
+          "description": "Source file of the declaration, for diagnostics.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Source line of the declaration (1-based).",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "node": { "const": "boundary" } }, "required": ["kind"] },
+          "then": { "properties": { "kind": { "enum": ["domain", "system", "container", "component"] } } }
+        },
+        {
+          "if": { "properties": { "node": { "const": "artifact" } } },
+          "then": { "required": ["path"] }
+        }
+      ]
+    },
+    "anchor": {
+      "description": "Where a marker binds in a file (marker.Anchor): a line range, an optional symbol, and a content fingerprint.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "start", "end"],
+      "properties": {
+        "scope": { "$ref": "#/$defs/anchorScope" },
+        "symbol": {
+          "description": "Declaration name, for example breed_stallion, Mare.foal, resource.aws_sqs_queue.capture, table.foals, Deployment/web.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Declaration kind: function, method, class, interface, type, variable, resource, block, key, item, sql, alter, gherkin, heading, document, definition, instruction, proto, unresolved-symbol, ...",
+          "type": "string"
+        },
+        "start": {
+          "description": "First line of the anchored region (1-based).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "end": {
+          "description": "Last line of the anchored region (inclusive).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "signature": {
+          "description": "Whitespace-normalized signature line.",
+          "type": "string"
+        },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" }
+      }
+    },
+    "edge": {
+      "description": "One triple with provenance (graph.Edge).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "s", "p", "o", "source"],
+      "properties": {
+        "type": { "const": "edge" },
+        "s": {
+          "description": "Subject node id.",
+          "$ref": "#/$defs/iri"
+        },
+        "p": {
+          "description": "Predicate: a relation name from the vocabulary (builtin or declared in an ontology file).",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "o": {
+          "description": "Object node id (may be a placeholder URN for unresolved, new or glob targets).",
+          "$ref": "#/$defs/iri"
+        },
+        "source": {
+          "description": "Where the edge came from: declared (ontology files and manifests), inline (@gloss markers), derived (rollup rules) or inferred (inferrers such as test paths).",
+          "type": "string",
+          "enum": ["declared", "inline", "derived", "inferred"]
+        },
+        "prov": { "$ref": "#/$defs/prov" }
+      }
+    },
+    "prov": {
+      "description": "Edge provenance (graph.Prov).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Repo-relative file the edge was read or derived from.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Line of the marker or declaration (1-based).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "col": {
+          "description": "Column of the marker (1-based).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "scope": { "$ref": "#/$defs/anchorScope" },
+        "symbol": {
+          "description": "Symbol the marker anchored to.",
+          "type": "string"
+        },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "proposed": {
+          "description": "True for a proposed (?-suffixed or unaccepted) link.",
+          "type": "boolean"
+        },
+        "conf": {
+          "description": "Confidence of a proposed link, in [0,1].",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "id": {
+          "description": "Marker id (the ledger's marker_id).",
+          "type": "string"
+        },
+        "note": {
+          "description": "The marker's note= text.",
+          "type": "string"
+        },
+        "actor": {
+          "description": "Who placed the marker, as kind:name.",
+          "type": "string"
+        },
+        "sugar": {
+          "description": "True when the edge comes from a shorthand marker form expanded by the parser.",
+          "type": "boolean"
+        },
+        "rule": {
+          "description": "Rollup rule or inferrer that produced a derived or inferred edge (for example realization-lift).",
+          "type": "string"
+        },
+        "via": {
+          "description": "CURIEs (or artifact ids) the derivation passed through.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "raw": {
+          "description": "The original target text as written (.Local, impl:NEW:X, pa:*).",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

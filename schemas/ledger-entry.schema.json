@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glossmark.dev/schemas/ledger-entry.json",
+  "title": "GlossMark ledger entry",
+  "description": "One line of .glossmark/ledger.jsonl: provenance and review state for one inline @gloss marker. Mirrors model.LedgerEntry in internal/model/files.go (JSON tags, snake_case).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["marker_id", "path", "relation", "targets", "created", "status"],
+  "properties": {
+    "marker_id": {
+      "description": "Stable marker id: the id= key when given, else a content hash of the form m-<10 hex>.",
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "description": "Repo-relative path of the file holding the marker.",
+      "type": "string",
+      "minLength": 1
+    },
+    "relation": {
+      "description": "The marker's relation name.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "targets": {
+      "description": "Target texts as written in the marker (.Local, zoo:Foal, impl:NEW:Gelding, pa:*).",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "actor": {
+      "description": "Who placed the marker, as kind:name (human:alice, agent:claude).",
+      "type": "string"
+    },
+    "model": {
+      "description": "Model identifier when an agent placed the marker.",
+      "type": "string"
+    },
+    "conf": {
+      "description": "Confidence of a proposed link, in [0,1].",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "created": {
+      "description": "When the entry was first recorded (RFC 3339, UTC).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "description": "Review state.",
+      "type": "string",
+      "enum": ["proposed", "accepted", "rejected", "stale", "removed"]
+    },
+    "reviewed_by": {
+      "description": "Actor who accepted or rejected the marker.",
+      "type": "string"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "anchor_fingerprint": {
+      "description": "Fingerprint of the anchored signature (or file) at review time; a mismatch marks the entry stale.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]+$"
+    },
+    "rationale": {
+      "description": "The marker's note= text or the sidecar key.",
+      "type": "string"
+    },
+    "gate": {
+      "description": "Gate class recorded for the entry (reserved; not currently written by the tooling).",
+      "type": "string"
+    },
+    "last_seen": {
+      "description": "When the marker was last found in the source (RFC 3339, UTC).",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

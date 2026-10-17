@@ -1,0 +1,5 @@
+owns:
+  pay: { iri: https://onto.acme.dev/pay/,          file: ontology/pay.gloss.yaml, tier: core,           version: 1.2.0, owner: payments-product }
+  pa:  { iri: https://onto.acme.dev/payments-api/, file: ontology/pa.gloss.yaml,  tier: implementation, version: 0.9.0, owner: payments-eng }
+prefixes:
+  acme: https://arch.acme.dev/boundaries/

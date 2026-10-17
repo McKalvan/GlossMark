@@ -1,0 +1,403 @@
+// Package mcp serves the graph to agents over the Model Context Protocol
+// (JSON-RPC 2.0 on stdio): lookup_concept, search_concepts, concepts_for_path,
+// propose_link and impact_of.
+package mcp
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"sort"
+	"strings"
+	"sync"
+
+	"github.com/mckalvan/glossmark/internal/graph"
+	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/rollup"
+)
+
+// Protocol version implemented.
+const ProtocolVersion = "2024-11-05"
+
+// Backend supplies the graph and workspace, rebuilt on demand so edits are seen.
+type Backend interface {
+	Current() (*load.Workspace, *graph.Graph, map[string]*model.LedgerEntry, error)
+	// Impact classifies a proposed set of markers (as marker lines) against the current graph.
+	Impact(proposals []Proposal) (any, error)
+}
+
+// Proposal is a link an agent wants to add.
+type Proposal struct {
+	Path     string  `json:"path"`
+	Relation string  `json:"relation"`
+	Target   string  `json:"target"`
+	Conf     float64 `json:"conf,omitempty"`
+	Note     string  `json:"note,omitempty"`
+	Scope    string  `json:"scope,omitempty"`
+}
+
+// Server is one MCP session over a reader/writer.
+type Server struct {
+	backend Backend
+	in      io.Reader
+	out     io.Writer
+	mu      sync.Mutex
+	version string
+}
+
+// New returns a server.
+func New(b Backend, in io.Reader, out io.Writer, version string) *Server {
+	return &Server{backend: b, in: in, out: out, version: version}
+}
+
+type request struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type response struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Result  any             `json:"result,omitempty"`
+	Error   *rpcError       `json:"error,omitempty"`
+}
+
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// Serve runs until stdin closes.
+func (s *Server) Serve() error {
+	sc := bufio.NewScanner(s.in)
+	sc.Buffer(make([]byte, 1024*1024), 64*1024*1024)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		var req request
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			s.send(response{JSONRPC: "2.0", Error: &rpcError{-32700, "parse error: " + err.Error()}})
+			continue
+		}
+		if req.ID == nil {
+			// Notification: nothing to answer.
+			continue
+		}
+		res, rerr := s.handle(req)
+		if rerr != nil {
+			s.send(response{JSONRPC: "2.0", ID: req.ID, Error: rerr})
+		} else {
+			s.send(response{JSONRPC: "2.0", ID: req.ID, Result: res})
+		}
+	}
+	return sc.Err()
+}
+
+func (s *Server) send(r response) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, _ := json.Marshal(r)
+	s.out.Write(b)
+	s.out.Write([]byte("\n"))
+}
+
+type tool struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+}
+
+func obj(props map[string]any, required ...string) map[string]any {
+	m := map[string]any{"type": "object", "properties": props}
+	if len(required) > 0 {
+		m["required"] = required
+	}
+	return m
+}
+
+func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
+
+var tools = []tool{
+	{"lookup_concept", "Return a concept (by CURIE such as zoo:Mare) with its kind, tier, doc, relations, realizations and the artifacts linking to it.",
+		obj(map[string]any{"curie": str("Concept CURIE, e.g. pay:Refunding")}, "curie")},
+	{"search_concepts", "Full-text search over concept names, labels and docs; optionally restricted to a namespace, kind or tier.",
+		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
+	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
+		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
+	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files.",
+		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str("implements | represents | verifies | ..."), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "relation", "target")},
+	{"impact_of", "Classify a set of proposed links as a batch: per-link gate, the overall gate, and the drift findings the current tree already has.",
+		obj(map[string]any{"proposals": map[string]any{"type": "array", "items": obj(map[string]any{"path": str(""), "relation": str(""), "target": str(""), "conf": map[string]any{"type": "number"}, "note": str("")}, "path", "relation", "target")}}, "proposals")},
+	{"drift", "Run the drift comparison on the current tree and return violations, gaps, orphans, rogues and metrics.", obj(map[string]any{})},
+}
+
+func (s *Server) handle(req request) (any, *rpcError) {
+	switch req.Method {
+	case "initialize":
+		return map[string]any{
+			"protocolVersion": ProtocolVersion,
+			"capabilities":    map[string]any{"tools": map[string]any{}},
+			"serverInfo":      map[string]any{"name": "glossmark", "version": s.version},
+			"instructions":    "GlossMark serves the repository's code ontology. Call concepts_for_path before writing code in a directory, search_concepts to find the right concept, propose_link to get the exact @gloss? line and its gate. Never invent concepts: use ns:NEW:Name proposals.",
+		}, nil
+	case "ping":
+		return map[string]any{}, nil
+	case "tools/list":
+		return map[string]any{"tools": tools}, nil
+	case "tools/call":
+		var p struct {
+			Name      string          `json:"name"`
+			Arguments json.RawMessage `json:"arguments"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return nil, &rpcError{-32602, "invalid params"}
+		}
+		res, err := s.call(p.Name, p.Arguments)
+		if err != nil {
+			return map[string]any{"isError": true, "content": []map[string]any{{"type": "text", "text": err.Error()}}}, nil
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return map[string]any{"content": []map[string]any{{"type": "text", "text": string(b)}}, "structuredContent": res}, nil
+	case "resources/list", "prompts/list":
+		return map[string]any{strings.TrimSuffix(req.Method, "/list"): []any{}}, nil
+	}
+	return nil, &rpcError{-32601, "method not found: " + req.Method}
+}
+
+func (s *Server) call(name string, args json.RawMessage) (any, error) {
+	ws, g, lg, err := s.backend.Current()
+	if err != nil {
+		return nil, err
+	}
+	switch name {
+	case "lookup_concept":
+		var a struct {
+			Curie string `json:"curie"`
+		}
+		json.Unmarshal(args, &a)
+		n := g.NodeByCurie(a.Curie)
+		if n == nil {
+			return nil, fmt.Errorf("no concept %q; try search_concepts", a.Curie)
+		}
+		return describe(g, n), nil
+	case "search_concepts":
+		var a struct {
+			Query, Namespace, Kind, Tier string
+			Limit                        int
+		}
+		json.Unmarshal(args, &a)
+		if a.Limit <= 0 {
+			a.Limit = 20
+		}
+		return search(g, a.Query, a.Namespace, a.Kind, a.Tier, a.Limit), nil
+	case "concepts_for_path":
+		var a struct {
+			Path string `json:"path"`
+		}
+		json.Unmarshal(args, &a)
+		return conceptsForPath(ws, g, a.Path), nil
+	case "propose_link":
+		var p Proposal
+		if err := json.Unmarshal(args, &p); err != nil {
+			return nil, err
+		}
+		return s.backend.Impact([]Proposal{p})
+	case "impact_of":
+		var a struct {
+			Proposals []Proposal `json:"proposals"`
+		}
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, err
+		}
+		return s.backend.Impact(a.Proposals)
+	case "drift":
+		rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: ws.Config.EffectivePolicy()})
+		return rep, nil
+	}
+	return nil, fmt.Errorf("unknown tool %q", name)
+}
+
+func describe(g *graph.Graph, n *graph.Node) map[string]any {
+	out := map[string]any{"curie": n.CURIE, "iri": n.ID, "kind": n.Kind, "tier": n.Tier, "namespace": n.NS}
+	if n.Label != "" {
+		out["label"] = n.Label
+	}
+	if n.Doc != "" {
+		out["doc"] = n.Doc
+	}
+	if n.Published != "" {
+		out["published_as"] = n.Published
+	}
+	if n.Internal {
+		out["internal"] = true
+	}
+	if n.Deprecated {
+		out["deprecated"] = true
+		out["replaced_by"] = n.ReplacedBy
+	}
+	if n.Value != nil {
+		out["value"] = n.Value
+	}
+	rels := map[string][]string{}
+	for _, e := range g.Out(n.ID, "") {
+		if e.Source == graph.SourceDeclared {
+			rels[e.P] = append(rels[e.P], g.Curie(e.O))
+		}
+	}
+	out["relations"] = rels
+	var realizedBy, subclasses []string
+	for _, s := range g.Subjects(n.ID, "realizes") {
+		if sn := g.Node(s); sn != nil && sn.NodeType == model.NodeConcept {
+			realizedBy = append(realizedBy, sn.CURIE)
+		}
+	}
+	for _, s := range g.Subjects(n.ID, "is-a") {
+		subclasses = append(subclasses, g.Curie(s))
+	}
+	out["realized_by"] = realizedBy
+	out["subclasses"] = subclasses
+	out["ancestors"] = curies(g, g.Ancestors(n.ID))
+	var arts []map[string]any
+	for _, e := range g.In(n.ID, "") {
+		if a := g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && e.Prov != nil {
+			arts = append(arts, map[string]any{"path": e.Prov.Path, "line": e.Prov.Line, "symbol": e.Prov.Symbol, "relation": e.P, "proposed": e.Prov.Proposed, "marker_id": e.Prov.ID})
+		}
+	}
+	out["artifacts"] = arts
+	var bounds []string
+	for _, e := range g.In(n.ID, "") {
+		if b := g.Node(e.S); b != nil && b.NodeType == model.NodeBoundary {
+			bounds = append(bounds, b.CURIE+" "+e.P+" ("+e.Source+")")
+		}
+	}
+	sort.Strings(bounds)
+	out["boundaries"] = uniq(bounds)
+	return out
+}
+
+func curies(g *graph.Graph, ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, g.Curie(id))
+	}
+	return out
+}
+
+func uniq(xs []string) []string {
+	m := map[string]bool{}
+	var out []string
+	for _, x := range xs {
+		if !m[x] {
+			m[x] = true
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+func search(g *graph.Graph, q, ns, kind, tier string, limit int) []map[string]any {
+	words := strings.Fields(strings.ToLower(q))
+	type hit struct {
+		n     *graph.Node
+		score int
+	}
+	var hits []hit
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if ns != "" && n.NS != ns || kind != "" && n.Kind != kind || tier != "" && n.Tier != tier {
+			continue
+		}
+		if n.Imported && n.Tier == model.TierImpl && n.Published == "" {
+			continue
+		}
+		hay := strings.ToLower(n.CURIE + " " + n.Label + " " + n.Doc)
+		score := 0
+		for _, w := range words {
+			if strings.Contains(strings.ToLower(n.CURIE), w) {
+				score += 3
+			} else if strings.Contains(hay, w) {
+				score++
+			}
+		}
+		if len(words) == 0 || score > 0 {
+			hits = append(hits, hit{n, score})
+		}
+	}
+	sort.Slice(hits, func(i, j int) bool {
+		if hits[i].score != hits[j].score {
+			return hits[i].score > hits[j].score
+		}
+		return hits[i].n.CURIE < hits[j].n.CURIE
+	})
+	var out []map[string]any
+	for i, h := range hits {
+		if i >= limit {
+			break
+		}
+		item := map[string]any{"curie": h.n.CURIE, "kind": h.n.Kind, "tier": h.n.Tier}
+		if h.n.Doc != "" {
+			item["doc"] = h.n.Doc
+		}
+		if h.n.Published != "" {
+			item["published_as"] = h.n.Published
+		}
+		if r := g.Objects(h.n.ID, "realizes"); len(r) > 0 {
+			item["realizes"] = curies(g, r)
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string]any {
+	out := map[string]any{"path": path}
+	var links []map[string]any
+	for _, a := range g.NodesOf(model.NodeArtifact) {
+		if a.Path != path {
+			continue
+		}
+		for _, e := range g.Out(a.ID, "") {
+			if e.Source != graph.SourceInline || e.Prov == nil {
+				continue
+			}
+			links = append(links, map[string]any{"relation": e.P, "target": g.Curie(e.O), "line": e.Prov.Line, "symbol": e.Prov.Symbol, "proposed": e.Prov.Proposed, "marker_id": e.Prov.ID})
+		}
+	}
+	out["links"] = links
+	if m := ws.ManifestFor(path); m != nil {
+		b := map[string]any{"boundary": m.Boundary, "level": m.Level, "manifest": m.Path, "default_namespace": m.DefaultNamespace, "allowed": m.Allowed, "realizes": m.Realizes, "produces": m.Produces, "consumes": m.Consumes}
+		if bn := g.NodeByCurie(m.Boundary); bn != nil {
+			var derived []string
+			for _, e := range g.Out(bn.ID, "") {
+				if e.Source == graph.SourceDerived && e.P != "part-of" {
+					derived = append(derived, e.P+" "+g.Curie(e.O))
+				}
+			}
+			sort.Strings(derived)
+			b["derived"] = uniq(derived)
+		}
+		out["boundary"] = b
+		// Suggested vocabulary: allowed concepts, or everything owned when no list.
+		var vocab []string
+		for _, n := range g.NodesOf(model.NodeConcept) {
+			if n.Deprecated || (n.Imported && n.Tier == model.TierImpl && n.Published == "") {
+				continue
+			}
+			if len(m.Allowed) == 0 || model.MatchAnyCurie(m.Allowed, n.CURIE) {
+				vocab = append(vocab, n.CURIE+" ("+n.Kind+")")
+			}
+		}
+		out["vocabulary"] = vocab
+	} else {
+		out["boundary"] = nil
+		out["hint"] = "no .gloss.yaml manifest encloses this path; .Local targets will not resolve"
+	}
+	_ = os.Stderr
+	return out
+}

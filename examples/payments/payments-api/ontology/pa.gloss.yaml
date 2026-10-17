@@ -1,0 +1,7 @@
+# payments-api/ontology/pa.gloss.yaml  (implementation: pa: realizes core; one concept is internal)
+namespace: pa
+concepts:
+  AuthorizeHandler: { kind: process, realizes: pay:Authorization }
+  CaptureHandler:   { kind: process, realizes: pay:Capture }
+  CaptureQueue:     { kind: resource, internal: true }
+  CaptureEmitter:   { kind: process, realizes: pay:CaptureConfirmed, publishes: [pay:CaptureConfirmed] }

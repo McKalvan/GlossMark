@@ -1,0 +1,3 @@
+# services/api/handlers/authorize.py
+# @gloss implements .AuthorizeHandler
+def authorize(req: "AuthRequest") -> "Payment": ...

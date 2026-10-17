@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+// @gloss represents zoo:FoalBorn
+message FoalBorn {
+  string foal_id = 1;
+}

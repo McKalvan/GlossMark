@@ -1,0 +1,6 @@
+boundary: acme:payments-platform
+level: system
+label: Payments platform
+consumes: [pay:Payment]
+produces: [pay:Payment, pay:Payout, pay:Refund]
+owner: payments-product

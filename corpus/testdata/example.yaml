@@ -1,0 +1,13 @@
+# @gloss deploys impl:HorseFactoryService
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: horse-factory
+spec:
+  replicas: 2
+---
+# @gloss configures impl:FoalEventBus
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: foal-bus

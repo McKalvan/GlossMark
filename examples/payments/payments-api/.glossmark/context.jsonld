@@ -1,0 +1,149 @@
+{
+  "@context": {
+    "acme": "https://arch.acme.dev/boundaries/",
+    "attaches-to": {
+      "@id": "gm:attaches-to",
+      "@type": "@id"
+    },
+    "calls": {
+      "@id": "gm:calls",
+      "@type": "@id"
+    },
+    "configures": {
+      "@id": "gm:configures",
+      "@type": "@id"
+    },
+    "constrains": {
+      "@id": "gm:constrains",
+      "@type": "@id"
+    },
+    "consumes": {
+      "@id": "gm:consumes",
+      "@type": "@id"
+    },
+    "curie": "gm:curie",
+    "depends-on": {
+      "@id": "gm:depends-on",
+      "@type": "@id"
+    },
+    "deploys": {
+      "@id": "gm:deploys",
+      "@type": "@id"
+    },
+    "deprecated": "http://www.w3.org/2002/07/owl#deprecated",
+    "derived-from": {
+      "@id": "gm:derived-from",
+      "@type": "@id"
+    },
+    "doc": "http://www.w3.org/2000/01/rdf-schema#comment",
+    "documents": {
+      "@id": "gm:documents",
+      "@type": "@id"
+    },
+    "gm": "https://glossmark.dev/vocab#",
+    "has-part": {
+      "@id": "gm:has-part",
+      "@type": "@id"
+    },
+    "id": "@id",
+    "implements": {
+      "@id": "gm:implements",
+      "@type": "@id"
+    },
+    "instructs": {
+      "@id": "gm:instructs",
+      "@type": "@id"
+    },
+    "is-a": {
+      "@id": "http://www.w3.org/2000/01/rdf-schema#subClassOf",
+      "@type": "@id"
+    },
+    "kind": "gm:kind",
+    "label": "http://www.w3.org/2000/01/rdf-schema#label",
+    "line": "gm:line",
+    "may-modify": {
+      "@id": "gm:may-modify",
+      "@type": "@id"
+    },
+    "node": {
+      "@id": "gm:nodeType",
+      "@type": "@vocab"
+    },
+    "ns": "gm:namespace",
+    "o": {
+      "@id": "gm:object",
+      "@type": "@id"
+    },
+    "owns": {
+      "@id": "gm:owns",
+      "@type": "@id"
+    },
+    "p": {
+      "@id": "gm:predicate",
+      "@type": "@vocab"
+    },
+    "pa": "https://onto.acme.dev/payments-api/",
+    "part-of": {
+      "@id": "gm:part-of",
+      "@type": "@id"
+    },
+    "path": "gm:path",
+    "pay": "https://onto.acme.dev/pay/",
+    "produces": {
+      "@id": "gm:produces",
+      "@type": "@id"
+    },
+    "prov": "gm:provenance",
+    "provisions": {
+      "@id": "gm:provisions",
+      "@type": "@id"
+    },
+    "published-as": {
+      "@id": "gm:publishedAs",
+      "@type": "@id"
+    },
+    "publishes": {
+      "@id": "gm:publishes",
+      "@type": "@id"
+    },
+    "realizes": {
+      "@id": "gm:realizes",
+      "@type": "@id"
+    },
+    "replaced-by": {
+      "@id": "http://purl.org/dc/terms/isReplacedBy",
+      "@type": "@id"
+    },
+    "represents": {
+      "@id": "gm:represents",
+      "@type": "@id"
+    },
+    "reverses": {
+      "@id": "gm:reverses",
+      "@type": "@id"
+    },
+    "s": {
+      "@id": "gm:subject",
+      "@type": "@id"
+    },
+    "same-as": {
+      "@id": "http://www.w3.org/2002/07/owl#sameAs",
+      "@type": "@id"
+    },
+    "source": "gm:source",
+    "subscribes": {
+      "@id": "gm:subscribes",
+      "@type": "@id"
+    },
+    "tests": {
+      "@id": "gm:tests",
+      "@type": "@id"
+    },
+    "tier": "gm:tier",
+    "verifies": {
+      "@id": "gm:verifies",
+      "@type": "@id"
+    },
+    "version": "http://www.w3.org/2002/07/owl#versionInfo"
+  }
+}

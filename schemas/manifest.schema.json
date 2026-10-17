@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glossmark.dev/schemas/manifest.json",
+  "title": "GlossMark boundary manifest",
+  "description": "A per-directory .gloss.yaml boundary manifest: the architectural boundary the directory belongs to, its level, declared intent relations and the concepts its markers may reference. Mirrors model.Manifest in internal/model/files.go, which decodes with KnownFields(true), so unknown keys are errors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["boundary"],
+  "properties": {
+    "boundary": {
+      "description": "The boundary's CURIE (prefix:local-name), for example acme:horse-factory-svc.",
+      "type": "string",
+      "pattern": "^[A-Za-z][\\w-]*:[\\w.-]+$"
+    },
+    "level": {
+      "description": "Zoom level of the boundary (model.BoundaryLevels), coarsest first. Default: component.",
+      "type": "string",
+      "enum": ["domain", "system", "container", "component"],
+      "default": "component"
+    },
+    "label": {
+      "description": "Human-readable name of the boundary.",
+      "type": "string"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "part-of": {
+      "description": "Enclosing boundary(ies), as CURIEs.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "realizes": {
+      "description": "Concepts this boundary realizes, as CURIEs.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "produces": {
+      "description": "Concepts this boundary intends to produce.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "consumes": {
+      "description": "Concepts this boundary intends to consume.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "publishes": {
+      "description": "Events this boundary intends to publish.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "subscribes": {
+      "description": "Events this boundary intends to subscribe to.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "default-namespace": {
+      "description": "Prefix assumed for bare (.Local) concept references in markers under this directory.",
+      "type": "string",
+      "pattern": "^[A-Za-z][\\w-]*$"
+    },
+    "allowed": {
+      "description": "Concepts that markers under this directory may reference: CURIEs or CURIE globs (impl:Foal*). When empty, everything is allowed.",
+      "anyOf": [
+        { "$ref": "#/$defs/curieGlob" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/curieGlob" }
+        }
+      ]
+    },
+    "generated": {
+      "description": "Globs (relative to this directory) of generated files the scanner ignores.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "owner": {
+      "description": "Team or actor that owns the boundary; becomes an owns edge from an actor node.",
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "stringOrList": {
+      "description": "A single string or a list of strings (model.StringList).",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      ]
+    },
+    "curieGlob": {
+      "description": "A CURIE (zoo:Horse) or a CURIE glob where * matches any run of characters (impl:Foal*, impl:*).",
+      "type": "string",
+      "pattern": "^[A-Za-z][\\w-]*:[\\w.*-]+$"
+    }
+  }
+}
