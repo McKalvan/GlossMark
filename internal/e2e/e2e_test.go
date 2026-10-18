@@ -685,9 +685,23 @@ func TestSearchByMeaning(t *testing.T) {
 			t.Errorf("search %q = %q, want %q (hits %+v)", q, got, want, mcp.Search(g, q, "", "", "", 3))
 		}
 	}
+	// Ranking v2 on horse-factory: every query word matched beats one word,
+	// "birth" reaches FoalBorn through the synonym table, a kind word boosts
+	// that kind, and the hit carries the doc and what matched.
+	_, hf, _, _ := build(t, example(t, "horse-factory"))
+	hits2 := mcp.Search(hf, "foal birth", "", "", "", 5)
+	if len(hits2) == 0 || hits2[0].Curie != "zoo:FoalBorn" || hits2[0].Doc == "" || !strings.HasPrefix(hits2[0].Matched, "name:") {
+		t.Errorf("foal birth = %+v", hits2)
+	}
+	if len(hits2) > 1 && hits2[1].Score == hits2[0].Score {
+		t.Errorf("foal birth: FoalBorn should rank strictly first, got %+v", hits2[:2])
+	}
+	if ev := mcp.Search(hf, "foal event", "", "", "", 3); len(ev) == 0 || ev[0].Curie != "zoo:FoalBorn" || !strings.HasSuffix(ev[0].Matched, "+kind") {
+		t.Errorf("foal event = %+v", ev)
+	}
 	// One hop: the impl handler is found through the core concept it realizes.
 	hits := mcp.Search(g, "authorization", "pa", "", "", 5)
-	if len(hits) == 0 || hits[0].Curie != "pa:AuthorizeHandler" || !strings.HasPrefix(hits[0].Matched, "via") && hits[0].Matched != "name" {
+	if len(hits) == 0 || hits[0].Curie != "pa:AuthorizeHandler" || !strings.HasPrefix(hits[0].Matched, "via") && !strings.HasPrefix(hits[0].Matched, "name") {
 		t.Errorf("one-hop search = %+v", hits)
 	}
 }
@@ -983,5 +997,46 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	// Six marker lines state eight targets; every one is accepted.
 	if m.Markers != 6 || m.Targets != 8 || m.Accepted != 6 || m.Proposed != 0 {
 		t.Errorf("markers=%d targets=%d accepted=%d proposed=%d", m.Markers, m.Targets, m.Accepted, m.Proposed)
+	}
+}
+
+// TestVerifiesCanonical: the test-path inferrer emits verifies, and an inline
+// tests marker is accepted with a prefer-verifies warning (GM240).
+func TestVerifiesCanonical(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Other: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("app.py", "# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Other\ndef other(): pass\n")
+	write("tests/test_app.py", "# @gloss implements .Doer\ndef test_go(): pass\n\n# @gloss tests .Other\ndef test_other(): pass\n")
+	ws, g, _, _ := build(t, root)
+	doer := g.NodeByCurie("i:Doer")
+	if len(g.In(doer.ID, "verifies")) == 0 || len(g.In(doer.ID, "tests")) != 0 {
+		t.Errorf("inferrer should emit verifies, not tests: verifies=%d tests=%d", len(g.In(doer.ID, "verifies")), len(g.In(doer.ID, "tests")))
+	}
+	var gm240 []int
+	for _, d := range check.Run(ws, g) {
+		if d.Severity == "error" {
+			t.Errorf("unexpected error: %s", d)
+		}
+		if d.Code == "GM240" {
+			gm240 = append(gm240, d.Line)
+		}
+	}
+	if len(gm240) != 1 || gm240[0] != 4 {
+		t.Errorf("GM240 lines = %v, want [4]", gm240)
+	}
+	// tests still counts: Other is not untested.
+	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+	for _, f := range findings(rep, rollup.KindUntested) {
+		if f.Concept == "i:Other" || f.Concept == "i:Doer" {
+			t.Errorf("%s should count as tested: %s", f.Concept, f.Msg)
+		}
 	}
 }
