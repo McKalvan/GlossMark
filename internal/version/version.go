@@ -38,7 +38,10 @@ func String() string {
 	if Version != "" {
 		return strings.TrimPrefix(Version, "v")
 	}
-	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" && !strings.HasPrefix(bi.Main.Version, "v0.0.0-") {
+		// A real module version (go install ...@vX.Y.Z); pseudo-versions from a
+		// plain checkout build are treated as development builds so generated
+		// files do not churn with every commit.
 		return strings.TrimPrefix(bi.Main.Version, "v")
 	}
 	return "0.0.0-dev"
