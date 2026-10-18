@@ -19,10 +19,10 @@
 {"type":"node","node":"concept","id":"https://onto.acme.dev/pay/Merchant","curie":"pay:Merchant","ns":"pay","tier":"core","kind":"entity","file":"ontology/pay.gloss.yaml","line":9}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/pay/Payment","curie":"pay:Payment","ns":"pay","tier":"core","kind":"entity","file":"ontology/pay.gloss.yaml","line":6}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/pay/Payout","curie":"pay:Payout","ns":"pay","tier":"core","kind":"entity","file":"ontology/pay.gloss.yaml","line":13}
-{"type":"node","node":"concept","id":"https://onto.acme.dev/pay/Refund","curie":"pay:Refund","ns":"pay","tier":"core","kind":"entity","file":"ontology/pay.gloss.yaml","line":7}
+{"type":"node","node":"concept","id":"https://onto.acme.dev/pay/Refund","curie":"pay:Refund","ns":"pay","tier":"core","kind":"entity","aliases":["chargeback","reversal"],"file":"ontology/pay.gloss.yaml","line":7}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/pay/Refunding","curie":"pay:Refunding","ns":"pay","tier":"core","kind":"process","file":"ontology/pay.gloss.yaml","line":8}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/pay/Settlement","curie":"pay:Settlement","ns":"pay","tier":"core","kind":"process","file":"ontology/pay.gloss.yaml","line":12}
-{"type":"node","node":"concept","id":"https://onto.acme.dev/pay/SettlementCutoff","curie":"pay:SettlementCutoff","ns":"pay","tier":"core","kind":"constraint","file":"ontology/pay.gloss.yaml","line":15}
+{"type":"node","node":"concept","id":"https://onto.acme.dev/pay/SettlementCutoff","curie":"pay:SettlementCutoff","ns":"pay","tier":"core","kind":"constraint","doc":"The time of day after which captures settle the next day.","aliases":["cut-off time"],"file":"ontology/pay.gloss.yaml","line":15}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/payments-api/AuthorizeHandler","curie":"pa:AuthorizeHandler","ns":"pa","tier":"implementation","kind":"process","file":"ontology/pa.gloss.yaml","line":4}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/payments-api/CaptureEmitter","curie":"pa:CaptureEmitter","ns":"pa","tier":"implementation","kind":"process","file":"ontology/pa.gloss.yaml","line":7}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/payments-api/CaptureHandler","curie":"pa:CaptureHandler","ns":"pa","tier":"implementation","kind":"process","file":"ontology/pa.gloss.yaml","line":5}

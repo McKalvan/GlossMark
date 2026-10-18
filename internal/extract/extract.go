@@ -118,7 +118,8 @@ func (ex *extractor) ontologies() {
 			curie := ns + ":" + name
 			iri, _ := ex.g.Expand(curie)
 			n := &graph.Node{NodeType: model.NodeConcept, ID: iri, CURIE: curie, NS: ns, Tier: o.Tier, Kind: c.Kind, Label: c.Label, Doc: c.Doc,
-				Internal: c.Internal, Deprecated: c.Deprecated, Value: c.Value, Imported: !ex.ws.Owned[ns], File: file, Line: c.Line}
+				Internal: c.Internal, Deprecated: c.Deprecated, Value: c.Value, Imported: !ex.ws.Owned[ns], File: file, Line: c.Line,
+				Proposed: c.Proposed, ProposedBy: c.ProposedBy, Aliases: []string(c.Aliases)}
 			if c.ReplacedBy != "" {
 				_, cur := ex.resolveRef(c.ReplacedBy, ns)
 				n.ReplacedBy = cur

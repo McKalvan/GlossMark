@@ -5,7 +5,9 @@
   "description": "A *.gloss.yaml ontology: one namespace's concepts and relation declarations. Mirrors model.Ontology, model.Concept, model.Published and model.RelationDecl in internal/model. Concept keys that are not structural attributes are relations (produces, consumes, constrains, ...) whose targets are concept names or CURIEs.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["concepts"],
+  "required": [
+    "concepts"
+  ],
   "properties": {
     "namespace": {
       "description": "The CURIE prefix of this namespace; may repeat the key under owns: in glossmark.yaml.",
@@ -25,7 +27,10 @@
     "tier": {
       "description": "Ontology tier (normally taken from glossmark.yaml).",
       "type": "string",
-      "enum": ["core", "implementation"]
+      "enum": [
+        "core",
+        "implementation"
+      ]
     },
     "doc": {
       "description": "What this namespace is about.",
@@ -34,19 +39,29 @@
     "concepts": {
       "description": "Concepts keyed by PascalCase name. A concept with no body (null) is allowed and treated as empty.",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/conceptName" },
+      "propertyNames": {
+        "$ref": "#/$defs/conceptName"
+      },
       "additionalProperties": {
         "anyOf": [
-          { "type": "null" },
-          { "$ref": "#/$defs/concept" }
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/concept"
+          }
         ]
       }
     },
     "relations": {
-      "description": "Relation declarations or overrides, keyed by relation name. A known builtin is tuned field by field; an unknown name creates a new concept→concept relation usable in ontology files.",
+      "description": "Relation declarations or overrides, keyed by relation name. A known builtin is tuned field by field; an unknown name creates a new concept\u2192concept relation usable in ontology files.",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/relationName" },
-      "additionalProperties": { "$ref": "#/$defs/relationDecl" }
+      "propertyNames": {
+        "$ref": "#/$defs/relationName"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/relationDecl"
+      }
     }
   },
   "$defs": {
@@ -72,23 +87,35 @@
     "stringOrList": {
       "description": "A single string or a list of strings (model.StringList).",
       "anyOf": [
-        { "$ref": "#/$defs/target" },
+        {
+          "$ref": "#/$defs/target"
+        },
         {
           "type": "array",
-          "items": { "$ref": "#/$defs/target" }
+          "items": {
+            "$ref": "#/$defs/target"
+          }
         }
       ]
     },
     "nodeType": {
       "description": "One of the five node types of the metamodel.",
       "type": "string",
-      "enum": ["concept", "boundary", "artifact", "namespace", "actor"]
+      "enum": [
+        "concept",
+        "boundary",
+        "artifact",
+        "namespace",
+        "actor"
+      ]
     },
     "published": {
       "description": "Marks an implementation concept as crossing into the business view under a core concept's name (model.Published).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["as"],
+      "required": [
+        "as"
+      ],
       "properties": {
         "as": {
           "description": "The core concept (CURIE) this concept surfaces as.",
@@ -104,7 +131,16 @@
         "kind": {
           "description": "The concept kind (model.ConceptKinds).",
           "type": "string",
-          "enum": ["entity", "process", "capability", "event", "measure", "constraint", "resource", "system-type"]
+          "enum": [
+            "entity",
+            "process",
+            "capability",
+            "event",
+            "measure",
+            "constraint",
+            "resource",
+            "system-type"
+          ]
         },
         "label": {
           "description": "Human-readable label; defaults to the concept name.",
@@ -130,7 +166,9 @@
           "description": "Core concept(s) this implementation concept realizes.",
           "$ref": "#/$defs/stringOrList"
         },
-        "published": { "$ref": "#/$defs/published" },
+        "published": {
+          "$ref": "#/$defs/published"
+        },
         "internal": {
           "description": "Private to this repository; never shown in the business view.",
           "type": "boolean"
@@ -147,10 +185,22 @@
         },
         "shapes": {
           "description": "Reserved for SHACL-style instance validation (Phase 3). Any YAML value."
+        },
+        "proposed": {
+          "type": "boolean",
+          "description": "The entry is a proposal (the ontology's @gloss?): it exists so links resolve, and a human accepts it with gloss accept --concept."
+        },
+        "proposed-by": {
+          "type": "string",
+          "description": "Actor that proposed the entry, e.g. agent:claude-code@model."
+        },
+        "aliases": {
+          "$ref": "#/$defs/stringOrList",
+          "description": "Other names people and agents use; search_concepts matches them."
         }
       },
       "patternProperties": {
-        "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes)$)[a-z][a-z0-9-]*$": {
+        "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|aliases)$)[a-z][a-z0-9-]*$": {
           "description": "A relation (produces, consumes, publishes, subscribes, constrains, reverses, attaches-to, or one declared under relations:) and its target(s).",
           "$ref": "#/$defs/stringOrList"
         }
@@ -165,7 +215,9 @@
         "lift": {
           "description": "Lift strategy when the relation is projected onto boundaries.",
           "type": "string",
-          "enum": ["range-lcs"]
+          "enum": [
+            "range-lcs"
+          ]
         },
         "transitive": {
           "type": "boolean"
@@ -177,14 +229,18 @@
         "domain": {
           "description": "Node types allowed as subject.",
           "type": "array",
-          "items": { "$ref": "#/$defs/nodeType" },
+          "items": {
+            "$ref": "#/$defs/nodeType"
+          },
           "minItems": 1,
           "uniqueItems": true
         },
         "range": {
           "description": "Node types allowed as object.",
           "type": "array",
-          "items": { "$ref": "#/$defs/nodeType" },
+          "items": {
+            "$ref": "#/$defs/nodeType"
+          },
           "minItems": 1,
           "uniqueItems": true
         },

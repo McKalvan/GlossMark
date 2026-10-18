@@ -7,7 +7,7 @@ concepts:
   Horse:              { kind: entity, is-a: Animal }
   Mare:               { kind: entity, is-a: Horse, doc: A female horse of breeding age. }
   Stallion:           { kind: entity, is-a: Horse }
-  Foal:               { kind: entity, is-a: Horse }
+  Foal:               { kind: entity, is-a: Horse, aliases: [filly, colt] }
   Donkey:             { kind: entity, is-a: Animal }
   HorseOrder:         { kind: entity, doc: A customer order for horses. }
   HorseFactory:       { kind: system-type, produces: [Horse] }

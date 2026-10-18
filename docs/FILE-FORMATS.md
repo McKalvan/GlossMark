@@ -58,6 +58,8 @@ Concept keys:
 | `internal: true` | Engineering-private mechanism; realizes nothing, never crosses repos. |
 | `deprecated`, `replaced-by` | Renames. |
 | `value` | A concrete value (used by published measures and constraints). |
+| `proposed: true`, `proposed-by` | The entry is a proposal, the ontology's `@gloss?`. Links to it resolve; it is HARD-gated until `gloss accept --concept` drops the flag. `gloss propose` writes these entries. |
+| `aliases` | Other names people and agents use; `search_concepts` matches them. |
 | any other key | A relation: `produces`, `consumes`, `publishes`, `subscribes`, `constrains`, `reverses`, `attaches-to`, or one declared under `relations:`. |
 
 Tier rules: a core file may not reference any implementation namespace (GM310); core concepts realize nothing (GM312). The own-subject rule: a repo may only add edges whose subject is in a namespace it owns, so `mine:Pony is-a zoo:Horse` is allowed and `zoo:Horse has-part mine:Saddle` is rejected (GM400).

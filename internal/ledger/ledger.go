@@ -159,6 +159,39 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			g.AddNode(&graph.Node{NodeType: model.NodeActor, ID: "urn:gloss:actor:" + e.Actor, CURIE: e.Actor, Label: e.Actor, Kind: strings.SplitN(e.Actor, ":", 2)[0]})
 		}
 	}
+	// Proposed concepts are tracked like markers, keyed concept:<curie>.
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if n.Imported {
+			continue
+		}
+		id := "concept:" + n.CURIE
+		e, ok := l.Entries[id]
+		switch {
+		case n.Proposed && !ok:
+			by := n.ProposedBy
+			if by == "" {
+				by = actor
+			}
+			l.Entries[id] = &model.LedgerEntry{MarkerID: id, Path: n.File, Relation: "concept", Targets: []string{n.CURIE}, Actor: by, Model: modelOf(by), Created: ts, Status: model.StatusProposed, Rationale: n.Doc, LastSeen: ts}
+			l.dirty = true
+		case n.Proposed && ok:
+			if e.Status == model.StatusRemoved {
+				e.Status = model.StatusProposed
+				l.dirty = true
+			}
+			e.LastSeen = ts
+		case !n.Proposed && ok && e.Status == model.StatusProposed:
+			e.Status = model.StatusAccepted
+			e.ReviewedBy, e.ReviewedAt = actor, ts
+			e.LastSeen = ts
+			l.dirty = true
+		case ok:
+			e.LastSeen = ts
+		}
+		if ok || n.Proposed {
+			seen[id] = true
+		}
+	}
 	for id, e := range l.Entries {
 		if !seen[id] && e.Status != model.StatusRemoved {
 			e.Status = model.StatusRemoved

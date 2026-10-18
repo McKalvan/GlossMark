@@ -15,7 +15,9 @@ import (
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/mcp"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/ontoedit"
 	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/internal/views"
 )
@@ -476,5 +478,148 @@ func TestOwnSubjectRule(t *testing.T) {
 		if c != "GM400" && c != "GM302" {
 			t.Errorf("unexpected diagnostic %s (Pony is-a zoo:Horse and Saddle attaches-to zoo:Horse are allowed)", c)
 		}
+	}
+}
+
+// TestProposedConcepts covers the ontology-side ?: propose, link, gate, accept.
+func TestProposedConcepts(t *testing.T) {
+	src := example(t, "horse-factory")
+	root := filepath.Join(t.TempDir(), "hf")
+	copyTree(t, src, root)
+	_, base, _, _ := build(t, root)
+	// An agent proposes impl:Gelding and links to it.
+	implPath := filepath.Join(root, "ontology", "impl.gloss.yaml")
+	if err := ontoedit.AddConcept(implPath, "Gelding", ontoedit.ConceptSpec{Kind: "process", Realizes: []string{"zoo:Breeding"}, Doc: "Castration step.", Proposed: true, ProposedBy: "agent:bot@m"}); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{filepath.Join(root, "services", "horse-factory", "breeding", "engine.py")}
+	if n, err := ontoedit.RewriteNewMarkers(files, "impl:Gelding"); err != nil || n != 1 {
+		t.Fatalf("rewrite: n=%d err=%v", n, err)
+	}
+	ws, head, _, lg := build(t, root)
+	n := head.NodeByCurie("impl:Gelding")
+	if n == nil || !n.Proposed || n.ProposedBy != "agent:bot@m" {
+		t.Fatalf("proposed concept missing or unflagged: %+v", n)
+	}
+	// The link now resolves: no rogue, a proposed finding, a decision request.
+	rep := rollup.Compare(head, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if len(findings(rep, rollup.KindRogue)) != 0 {
+		t.Errorf("rogue should be gone after proposal: %+v", findings(rep, rollup.KindRogue))
+	}
+	if p := findings(rep, rollup.KindProposed); len(p) != 1 || p[0].Concept != "impl:Gelding" {
+		t.Errorf("proposed findings = %+v", p)
+	}
+	// Lint: proposed impl concept without realizes would be a warning, with realizes nothing.
+	for _, d := range check.Run(ws, head) {
+		if d.Severity == "error" {
+			t.Errorf("check error: %s", d)
+		}
+	}
+	// Ledger tracks the concept proposal.
+	if e := lg.Entry("concept:impl:Gelding"); e == nil || e.Status != model.StatusProposed || e.Actor != "agent:bot@m" {
+		t.Errorf("ledger concept entry = %+v", lg.Entry("concept:impl:Gelding"))
+	}
+	// Gate: the proposal is HARD but in one PR; the link to it is HARD because the target is proposed.
+	im := gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: ws.Config.EffectivePolicy(), HeadLedger: lg.Entries})
+	var proposed, linkHard bool
+	for _, ch := range im.Changes {
+		if ch.Kind == "concept-proposed" && ch.Subject == "impl:Gelding" && ch.Gate == gate.HARD {
+			proposed = true
+		}
+		if ch.Kind == "link-added" && ch.Object == "impl:Gelding" && ch.Gate == gate.HARD {
+			linkHard = true
+		}
+	}
+	if !proposed || !linkHard {
+		t.Errorf("gate changes: %+v", im.Changes)
+	}
+	// Accept: drop proposed:, the graph node is plain, the ledger entry accepted, the diff shows concept-accepted.
+	if err := ontoedit.SetProposed(implPath, "Gelding", false, ""); err != nil {
+		t.Fatal(err)
+	}
+	ws2, head2, res2, _ := build(t, root)
+	lg.Sync(head2, res2.Markers, "human:alice", time.Now())
+	if n := head2.NodeByCurie("impl:Gelding"); n == nil || n.Proposed {
+		t.Fatalf("after accept: %+v", n)
+	}
+	if e := lg.Entry("concept:impl:Gelding"); e.Status != model.StatusAccepted || e.ReviewedBy != "human:alice" {
+		t.Errorf("ledger after accept = %+v", e)
+	}
+	im2 := gate.Classify(head, head2, ws2, gate.Options{Base: "proposal", Policy: ws2.Config.EffectivePolicy()})
+	ok := false
+	for _, ch := range im2.Changes {
+		if ch.Kind == "concept-accepted" && ch.Gate == gate.AUTO {
+			ok = true
+		}
+	}
+	if !ok {
+		t.Errorf("expected AUTO concept-accepted, got %+v", im2.Changes)
+	}
+	// The YAML edit preserved the other entries and comments.
+	b, _ := os.ReadFile(implPath)
+	if !strings.Contains(string(b), "HoofAssembler") || !strings.Contains(string(b), "# unpublished") {
+		t.Errorf("ontology file lost content:\n%s", b)
+	}
+}
+
+// TestSearchByMeaning: aliases, CamelCase splitting, stems, typos, one hop.
+func TestSearchByMeaning(t *testing.T) {
+	_, g, _, _ := build(t, example(t, "payments/payments-api"))
+	first := func(q string) string {
+		hits := mcp.Search(g, q, "", "", "", 5)
+		if len(hits) == 0 {
+			return ""
+		}
+		return hits[0].Curie
+	}
+	cases := map[string]string{
+		"chargeback":        "pay:Refund",           // alias
+		"settlement cutoff": "pay:SettlementCutoff", // CamelCase split
+		"refunding":         "pay:Refunding",
+		"refunds":           "pay:Refund",     // stem
+		"settlment":         "pay:Settlement", // typo
+		"captured":          "pay:Capture",    // stem
+		"capture confirmed": "pay:CaptureConfirmed",
+	}
+	for q, want := range cases {
+		if got := first(q); got != want {
+			t.Errorf("search %q = %q, want %q (hits %+v)", q, got, want, mcp.Search(g, q, "", "", "", 3))
+		}
+	}
+	// One hop: the impl handler is found through the core concept it realizes.
+	hits := mcp.Search(g, "authorization", "pa", "", "", 5)
+	if len(hits) == 0 || hits[0].Curie != "pa:AuthorizeHandler" || !strings.HasPrefix(hits[0].Matched, "via") && hits[0].Matched != "name" {
+		t.Errorf("one-hop search = %+v", hits)
+	}
+}
+
+// TestTouched: what a change to a file touches.
+func TestTouched(t *testing.T) {
+	ws, g, _, _ := build(t, example(t, "payments/settlement-worker"))
+	ts := gate.Touched(g, ws, []string{"internal/batch/cutoff.go", "internal/batch/settler.go", "ontology/sw.gloss.yaml"})
+	if len(ts) != 3 {
+		t.Fatalf("touched %d files", len(ts))
+	}
+	cut := ts[0]
+	if cut.Gate != gate.HARD {
+		t.Errorf("cutoff.go should be HARD (published seam): %+v", cut)
+	}
+	found := false
+	for _, c := range cut.Concepts {
+		if c.Curie == "sw:CutoffClock" && c.Published == "pay:SettlementCutoff" {
+			found = true
+		}
+		if c.Curie == "pay:SettlementCutoff" && (len(c.Constrains) != 1 || c.Constrains[0] != "pay:Settlement") {
+			t.Errorf("SettlementCutoff should constrain Settlement: %+v", c)
+		}
+	}
+	if !found {
+		t.Errorf("cutoff.go concepts: %+v", cut.Concepts)
+	}
+	if ts[1].Gate != gate.SOFT {
+		t.Errorf("settler.go should be SOFT: %+v", ts[1])
+	}
+	if ts[2].Gate != gate.HARD || len(ts[2].Concepts) < 3 {
+		t.Errorf("ontology file should be HARD with its concepts: %+v", ts[2])
 	}
 }

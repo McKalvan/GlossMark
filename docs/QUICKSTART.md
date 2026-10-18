@@ -89,6 +89,25 @@ gloss mcp                        # MCP server on stdio for agents
 
 Set `GLOSS_ACTOR=agent:claude-code@claude-fable-5-1` (or `human:alice`) so the ledger attributes links correctly.
 
+## Agent experience
+
+Four commands exist so an agent can work the ontology without a human in the loop until the review:
+
+```sh
+gloss hook install                      # SessionStart hook → 'gloss context' briefing; MCP server in .mcp.json
+gloss context --dir services/api        # the briefing: boundary, allowed targets, remits, concepts, state
+gloss impact --base origin/main         # what the working tree touches: published seam, constraints, tests, blast radius
+gloss impact services/api/handlers/refund.py
+gloss propose concept pa:RefundHandler --kind process --realizes pay:Refunding --doc "Handles refund requests"
+gloss propose --from-new                # lift every ns:NEW:Name marker into a proposed concept and rewrite the markers
+gloss accept --concept pa:RefundHandler # a human accepts the proposal (drops proposed: true)
+gloss reject --concept pa:RefundHandler --reason "duplicate of pa:RefundFlow" --remove
+```
+
+A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [chargeback]` on `pay:Refund`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "settlement cutoff" finds `sw:CutoffClock`.
+
+Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept` and `drift`.
+
 ## 7. Wire CI
 
 `.github/workflows/gloss.yml`:

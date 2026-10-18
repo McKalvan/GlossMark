@@ -216,6 +216,13 @@ type Concept struct {
 	Deprecated bool       `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	ReplacedBy string     `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	Value      any        `yaml:"value,omitempty" json:"value,omitempty"`
+	// Proposed marks an entry an agent (or anyone) added with the same semantics
+	// as @gloss?: it exists so links resolve, but a human accepts it
+	// (gloss accept --concept) before it counts as part of the ontology.
+	Proposed   bool   `yaml:"proposed,omitempty" json:"proposed,omitempty"`
+	ProposedBy string `yaml:"proposed-by,omitempty" json:"proposed-by,omitempty"`
+	// Aliases are other names people and agents use for the concept; search matches them.
+	Aliases StringList `yaml:"aliases,omitempty" json:"aliases,omitempty"`
 	// Shapes is reserved for SHACL-style instance validation (Phase 3).
 	Shapes any `yaml:"shapes,omitempty" json:"shapes,omitempty"`
 	// Relations holds every other key: relation name → targets.

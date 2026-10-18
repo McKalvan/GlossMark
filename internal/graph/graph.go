@@ -38,12 +38,15 @@ type Node struct {
 	Label    string         `json:"label,omitempty"`
 	Doc      string         `json:"doc,omitempty"`
 	// Concept attributes.
-	Published  string `json:"published-as,omitempty"`
-	Internal   bool   `json:"internal,omitempty"`
-	Deprecated bool   `json:"deprecated,omitempty"`
-	ReplacedBy string `json:"replaced-by,omitempty"`
-	Value      any    `json:"value,omitempty"`
-	Imported   bool   `json:"imported,omitempty"`
+	Published  string   `json:"published-as,omitempty"`
+	Internal   bool     `json:"internal,omitempty"`
+	Deprecated bool     `json:"deprecated,omitempty"`
+	ReplacedBy string   `json:"replaced-by,omitempty"`
+	Value      any      `json:"value,omitempty"`
+	Imported   bool     `json:"imported,omitempty"`
+	Proposed   bool     `json:"proposed,omitempty"`
+	ProposedBy string   `json:"proposed-by,omitempty"`
+	Aliases    []string `json:"aliases,omitempty"`
 	// Namespace attributes.
 	Version string `json:"version,omitempty"`
 	Owner   string `json:"owner,omitempty"`

@@ -195,7 +195,20 @@ func (c *classifier) ontology() {
 	for id, h := range hn {
 		b, ok := bn[id]
 		if !ok {
+			if h.Proposed {
+				by := ""
+				if h.ProposedBy != "" {
+					by = " by " + h.ProposedBy
+				}
+				c.add(Change{Gate: HARD, Kind: "concept-proposed", Glyph: "?", Subject: h.CURIE, Path: h.File, Line: h.Line, Proposed: true, Actor: h.ProposedBy,
+					Reasons: []string{"new concept proposed; accept with gloss accept --concept " + h.CURIE}, Msg: fmt.Sprintf("concept %s proposed%s (%s)", h.CURIE, by, h.Kind)})
+				continue
+			}
 			c.add(Change{Gate: HARD, Kind: "concept-added", Glyph: "!", Subject: h.CURIE, Path: h.File, Line: h.Line, Reasons: []string{"edit to ontology"}, Msg: fmt.Sprintf("concept %s added (%s)", h.CURIE, h.Kind)})
+			continue
+		}
+		if b.Proposed && !h.Proposed {
+			c.add(Change{Gate: AUTO, Kind: "concept-accepted", Glyph: "+", Subject: h.CURIE, Path: h.File, Line: h.Line, Reasons: []string{"proposal accepted"}, Msg: fmt.Sprintf("concept %s accepted", h.CURIE)})
 			continue
 		}
 		var diffs []string
@@ -412,6 +425,10 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 	if on.Deprecated {
 		gate = HARD
 		reasons = append(reasons, "target deprecated")
+	}
+	if on.Proposed {
+		gate = HARD
+		reasons = append(reasons, fmt.Sprintf("target %s is a proposed concept awaiting acceptance", on.CURIE))
 	}
 	if p.Proposed {
 		conf := -1.0

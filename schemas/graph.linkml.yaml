@@ -342,6 +342,14 @@ slots:
 # ---------------------------------------------------------------------------
 # Classes
 
+  proposed_by:
+    range: string
+    description: Actor that proposed the concept.
+  aliases:
+    range: string
+    multivalued: true
+    description: Other names used for the concept; matched by search.
+
 classes:
   Any:
     class_uri: linkml:Any
@@ -366,6 +374,9 @@ classes:
     class_uri: skos:Concept
     description: An ontology concept from a *.gloss.yaml file.
     slots:
+      - proposed
+      - proposed_by
+      - aliases
       - tier
       - published_as
       - internal

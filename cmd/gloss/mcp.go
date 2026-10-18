@@ -3,9 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mckalvan/glossmark/internal/agents"
+	"github.com/mckalvan/glossmark/internal/ontoedit"
 
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/gate"
@@ -135,6 +139,91 @@ func (b *mcpBackend) Impact(props []mcp.Proposal) (any, error) {
 	b.mu.Unlock()
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: pol})
 	return map[string]any{"gate": string(overall), "proposals": items, "current_drift": map[string]any{"violations": rep.Metrics.Violations, "gaps": rep.Metrics.Gaps, "orphans": rep.Metrics.Orphans, "rogues": rep.Metrics.Rogues}}, nil
+}
+
+func (b *mcpBackend) ImpactOfChange(base string, paths []string) (any, error) {
+	ws, g, lg, err := b.Current()
+	if err != nil {
+		return nil, err
+	}
+	files := append([]string{}, paths...)
+	if base != "" {
+		ch, err := changedFiles(ws.Root, base)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, ch...)
+	}
+	out := map[string]any{"files": gate.Touched(g, ws, uniqStrings(files))}
+	if base != "" {
+		bg, err := loadBaseGraph(ws, base)
+		if err != nil {
+			return nil, err
+		}
+		pol := ws.Config.EffectivePolicy()
+		after := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: pol})
+		im := gate.Classify(bg, g, ws, gate.Options{Base: base, Policy: pol, HeadLedger: lg, ChangedFiles: files, AfterReport: after})
+		out["gate"] = im.Gate
+		out["changes"] = im.Changes
+		out["views_changed"] = im.ViewsChanged
+		out["rollup"] = im.Rollup
+	}
+	return out, nil
+}
+
+func (b *mcpBackend) ProposeConcept(cp mcp.ConceptProposal) (any, error) {
+	b.mu.Lock()
+	b.p = nil
+	b.mu.Unlock()
+	p, err := buildGraph(b.root, false)
+	if err != nil {
+		return nil, err
+	}
+	ns, name, err := splitCurie(cp.Curie)
+	if err != nil {
+		return nil, err
+	}
+	actor := os.Getenv("GLOSS_ACTOR")
+	if actor == "" {
+		actor = "agent:mcp"
+	}
+	spec := ontoedit.ConceptSpec{Kind: cp.Kind, Doc: cp.Doc, Realizes: cp.Realizes, IsA: cp.IsA, Internal: cp.Internal, Aliases: cp.Aliases, Proposed: true, ProposedBy: actor}
+	if msg := validateSpec(p, ns, spec); msg != "" {
+		return nil, fmt.Errorf("%s", msg)
+	}
+	path, err := ontologyPath(p, ns)
+	if err != nil {
+		return nil, err
+	}
+	if err := ontoedit.AddConcept(path, name, spec); err != nil {
+		return nil, err
+	}
+	curie := ns + ":" + name
+	rewritten, _ := ontoedit.RewriteNewMarkers(absFiles(p), curie)
+	if _, err := buildGraph(b.root, true); err != nil {
+		return nil, err
+	}
+	b.mu.Lock()
+	b.p = nil
+	b.mu.Unlock()
+	return map[string]any{"curie": curie, "file": relOrAbs(p.WS.Root, path), "status": "proposed", "markers_rewritten": rewritten,
+		"next": "link to it with @gloss? ... " + curie + "; a human accepts it with: gloss accept --concept " + curie}, nil
+}
+
+func (b *mcpBackend) Context(dir string) (string, error) {
+	p, err := buildGraph(b.root, false)
+	if err != nil {
+		return "", err
+	}
+	rel := filepath.ToSlash(filepath.Clean(dir))
+	var m *model.Manifest
+	if rel != "" && rel != "." {
+		m = p.WS.ManifestFor(rel + "/x")
+	} else {
+		m = p.WS.ManifestFor("x")
+	}
+	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy()})
+	return agents.Context(p.WS, p.Graph, m, rep, 60), nil
 }
 
 func containsStr(xs []string, x string) bool {

@@ -26,7 +26,7 @@ Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   S
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `coverage`, `accept`, `reject`, `status`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp` |
+| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
@@ -52,6 +52,10 @@ cd ../payments
 ```
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.
+
+## For agents
+
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## Design in one paragraph
 

@@ -4,9 +4,15 @@
   "title": "GlossMark graph record",
   "description": "One line of .glossmark/graph.jsonl. The first line is a context header; then one node record per graph node, sorted by (node type, id); then one edge record per triple, sorted. Mirrors graph.Header, graph.Node, graph.Edge and graph.Prov in internal/graph/graph.go and marker.Anchor in internal/marker/anchor.go (exact JSON tags; omitempty fields are absent when zero).",
   "oneOf": [
-    { "$ref": "#/$defs/header" },
-    { "$ref": "#/$defs/node" },
-    { "$ref": "#/$defs/edge" }
+    {
+      "$ref": "#/$defs/header"
+    },
+    {
+      "$ref": "#/$defs/node"
+    },
+    {
+      "$ref": "#/$defs/edge"
+    }
   ],
   "$defs": {
     "iri": {
@@ -22,24 +28,42 @@
     "anchorScope": {
       "description": "Where a marker binds (model.Scopes).",
       "type": "string",
-      "enum": ["file", "symbol", "block", "line", "range"]
+      "enum": [
+        "file",
+        "symbol",
+        "block",
+        "line",
+        "range"
+      ]
     },
     "header": {
       "description": "The first JSONL line (graph.Header).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "generator", "prefixes"],
+      "required": [
+        "type",
+        "generator",
+        "prefixes"
+      ],
       "properties": {
-        "type": { "const": "context" },
+        "type": {
+          "const": "context"
+        },
         "generator": {
           "description": "Tool and version that wrote the file, for example \"gloss 0.1.0\".",
           "type": "string"
         },
         "prefixes": {
-          "description": "CURIE prefix → IRI base table used to abbreviate ids.",
+          "description": "CURIE prefix \u2192 IRI base table used to abbreviate ids.",
           "type": "object",
-          "propertyNames": { "type": "string", "pattern": "^[A-Za-z][\\w-]*$" },
-          "additionalProperties": { "type": "string", "minLength": 1 }
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z][\\w-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "@context": {
           "description": "Relative path of the JSON-LD context document (./context.jsonld).",
@@ -51,15 +75,29 @@
       "description": "One graph node (graph.Node). Which attributes appear depends on the node type: concept nodes carry tier, kind, published-as, internal, deprecated, replaced-by, value and imported; boundary nodes carry kind (= level), owner and dir; artifact nodes carry path, anchor and boundary; namespace nodes carry tier, version and owner; actor nodes carry kind (human, agent, ...).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "node", "id"],
+      "required": [
+        "type",
+        "node",
+        "id"
+      ],
       "properties": {
-        "type": { "const": "node" },
+        "type": {
+          "const": "node"
+        },
         "node": {
           "description": "Node type of the metamodel (model.NodeType).",
           "type": "string",
-          "enum": ["concept", "boundary", "artifact", "namespace", "actor"]
+          "enum": [
+            "concept",
+            "boundary",
+            "artifact",
+            "namespace",
+            "actor"
+          ]
         },
-        "id": { "$ref": "#/$defs/iri" },
+        "id": {
+          "$ref": "#/$defs/iri"
+        },
         "curie": {
           "description": "CURIE alias of id when a prefix matches (impl:Horse, acme:horse-factory-svc, impl: for a namespace, human:claude for an actor).",
           "type": "string"
@@ -71,21 +109,34 @@
         "tier": {
           "description": "Ontology tier of a concept or namespace node.",
           "type": "string",
-          "enum": ["core", "implementation"]
+          "enum": [
+            "core",
+            "implementation"
+          ]
         },
         "kind": {
           "description": "Concept kind (entity, process, capability, event, measure, constraint, resource, system-type); boundary level (domain, system, container, component); declaration kind of an artifact (file, function, class, resource, table, sql, heading, ...); actor kind (human, agent).",
           "type": "string"
         },
-        "label": { "type": "string" },
-        "doc": { "type": "string" },
+        "label": {
+          "type": "string"
+        },
+        "doc": {
+          "type": "string"
+        },
         "published-as": {
           "description": "Concept: CURIE of the core concept this implementation concept surfaces as.",
           "type": "string"
         },
-        "internal": { "type": "boolean" },
-        "deprecated": { "type": "boolean" },
-        "replaced-by": { "type": "string" },
+        "internal": {
+          "type": "boolean"
+        },
+        "deprecated": {
+          "type": "boolean"
+        },
+        "replaced-by": {
+          "type": "string"
+        },
         "value": {
           "description": "Concept: the documented attribute value from the ontology (any JSON value)."
         },
@@ -105,7 +156,9 @@
           "description": "Artifact: repo-relative file path.",
           "type": "string"
         },
-        "anchor": { "$ref": "#/$defs/anchor" },
+        "anchor": {
+          "$ref": "#/$defs/anchor"
+        },
         "boundary": {
           "description": "Artifact: IRI of the boundary that contains it, from the nearest manifest.",
           "type": "string"
@@ -122,16 +175,58 @@
           "description": "Source line of the declaration (1-based).",
           "type": "integer",
           "minimum": 1
+        },
+        "proposed": {
+          "type": "boolean"
+        },
+        "proposed-by": {
+          "type": "string"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "allOf": [
         {
-          "if": { "properties": { "node": { "const": "boundary" } }, "required": ["kind"] },
-          "then": { "properties": { "kind": { "enum": ["domain", "system", "container", "component"] } } }
+          "if": {
+            "properties": {
+              "node": {
+                "const": "boundary"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "domain",
+                  "system",
+                  "container",
+                  "component"
+                ]
+              }
+            }
+          }
         },
         {
-          "if": { "properties": { "node": { "const": "artifact" } } },
-          "then": { "required": ["path"] }
+          "if": {
+            "properties": {
+              "node": {
+                "const": "artifact"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
         }
       ]
     },
@@ -139,9 +234,15 @@
       "description": "Where a marker binds in a file (marker.Anchor): a line range, an optional symbol, and a content fingerprint.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["scope", "start", "end"],
+      "required": [
+        "scope",
+        "start",
+        "end"
+      ],
       "properties": {
-        "scope": { "$ref": "#/$defs/anchorScope" },
+        "scope": {
+          "$ref": "#/$defs/anchorScope"
+        },
         "symbol": {
           "description": "Declaration name, for example breed_stallion, Mare.foal, resource.aws_sqs_queue.capture, table.foals, Deployment/web.",
           "type": "string"
@@ -164,16 +265,26 @@
           "description": "Whitespace-normalized signature line.",
           "type": "string"
         },
-        "fingerprint": { "$ref": "#/$defs/fingerprint" }
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        }
       }
     },
     "edge": {
       "description": "One triple with provenance (graph.Edge).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "s", "p", "o", "source"],
+      "required": [
+        "type",
+        "s",
+        "p",
+        "o",
+        "source"
+      ],
       "properties": {
-        "type": { "const": "edge" },
+        "type": {
+          "const": "edge"
+        },
         "s": {
           "description": "Subject node id.",
           "$ref": "#/$defs/iri"
@@ -190,9 +301,16 @@
         "source": {
           "description": "Where the edge came from: declared (ontology files and manifests), inline (@gloss markers), derived (rollup rules) or inferred (inferrers such as test paths).",
           "type": "string",
-          "enum": ["declared", "inline", "derived", "inferred"]
+          "enum": [
+            "declared",
+            "inline",
+            "derived",
+            "inferred"
+          ]
         },
-        "prov": { "$ref": "#/$defs/prov" }
+        "prov": {
+          "$ref": "#/$defs/prov"
+        }
       }
     },
     "prov": {
@@ -214,12 +332,16 @@
           "type": "integer",
           "minimum": 1
         },
-        "scope": { "$ref": "#/$defs/anchorScope" },
+        "scope": {
+          "$ref": "#/$defs/anchorScope"
+        },
         "symbol": {
           "description": "Symbol the marker anchored to.",
           "type": "string"
         },
-        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
         "proposed": {
           "description": "True for a proposed (?-suffixed or unaccepted) link.",
           "type": "boolean"
@@ -253,7 +375,9 @@
         "via": {
           "description": "CURIEs (or artifact ids) the derivation passed through.",
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "raw": {
           "description": "The original target text as written (.Local, impl:NEW:X, pa:*).",
