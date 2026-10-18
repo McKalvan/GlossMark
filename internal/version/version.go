@@ -6,9 +6,13 @@ package version
 
 import (
 	"fmt"
+	"regexp"
 	"runtime/debug"
 	"strings"
 )
+
+// pseudo matches Go pseudo-versions (vX.Y.Z-0.yyyymmddhhmmss-abcdefabcdef) and dirty builds.
+var pseudo = regexp.MustCompile(`-\d{14}-[0-9a-f]{12}|\+dirty$`)
 
 // Version is the tool release. Builds from a tagged module get it from the Go
 // build info; release builds inject it with
@@ -38,7 +42,7 @@ func String() string {
 	if Version != "" {
 		return strings.TrimPrefix(Version, "v")
 	}
-	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" && !strings.HasPrefix(bi.Main.Version, "v0.0.0-") {
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" && !pseudo.MatchString(bi.Main.Version) {
 		// A real module version (go install ...@vX.Y.Z); pseudo-versions from a
 		// plain checkout build are treated as development builds so generated
 		// files do not churn with every commit.

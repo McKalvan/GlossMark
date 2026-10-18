@@ -1,4 +1,4 @@
-{"type":"context","format":1,"generator":"gloss 0.1.1-0.20261018164645-f7248f289a60+dirty","prefixes":{"acme":"https://arch.acme.dev/boundaries/","impl":"https://onto.acme.dev/horse-factory/","zoo":"https://onto.acme.dev/zoo/"},"@context":"./context.jsonld"}
+{"type":"context","format":1,"generator":"gloss 0.0.0-dev","prefixes":{"acme":"https://arch.acme.dev/boundaries/","impl":"https://onto.acme.dev/horse-factory/","zoo":"https://onto.acme.dev/zoo/"},"@context":"./context.jsonld"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:human:claude","curie":"human:claude","kind":"human","label":"human:claude"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:team:horse-platform","curie":"team:horse-platform","label":"horse-platform"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:team:zoo-product","curie":"team:zoo-product","label":"zoo-product"}
