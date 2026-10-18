@@ -82,7 +82,7 @@ func cmdAccept(args []string) int {
 	byPolicy := fs.Bool("policy", false, "accept every proposed link the policy classifies SOFT")
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 && !*all && !*byPolicy {
@@ -174,7 +174,7 @@ func cmdReject(args []string) int {
 	reason := fs.String("reason", "", "why the link is wrong (recorded in the ledger)")
 	remove := fs.Bool("remove", false, "also delete the marker line from the source file (or the concept entry with --concept)")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 {

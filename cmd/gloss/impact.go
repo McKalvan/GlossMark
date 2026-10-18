@@ -23,7 +23,7 @@ func cmdImpact(args []string) int {
 	fs, root := newFlags("impact")
 	base := fs.String("base", "", "git ref; when set, the changed files come from git diff against it and the AUTO/SOFT/HARD classification is included")
 	format := fs.String("format", "text", "text | json")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
