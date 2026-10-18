@@ -36,7 +36,7 @@ Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   S
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
 | `examples/payments` | The worked example: two repos sharing one core, with the published seam, extension, remits and a landscape |
-| `docs/` | [Plan](docs/PLAN.md) · [Quickstart](docs/QUICKSTART.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Versioning](docs/VERSIONING.md) |
+| `docs/` | [Plan](docs/PLAN.md) · [Quickstart](docs/QUICKSTART.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
 ## Try it
@@ -46,7 +46,7 @@ go build -o gloss ./cmd/gloss
 cd examples/horse-factory
 ../../gloss check          # 0 errors, 1 warning: the Donkey link is outside the boundary's allowed list
 ../../gloss drift          # the drift report above
-../../gloss view           # .glossmark/viewer.html — open it in a browser
+../../gloss view           # .glossmark/viewer.html — open it in a browser: boundaries are boxes, click to drill in
 cd ../payments
 ../../gloss landscape payments-api settlement-worker   # cross-repo context map and drift
 ```
@@ -60,6 +60,10 @@ cd ../payments
 ## Design in one paragraph
 
 Two tiers plus instances: core is implementation-independent by construction; every implementation concept `realizes` a core concept or is `internal`; instances live outside both. The **namespace** is the unit of modularity, with one repo as the default layout and imports by path (git ref and URL to come). The **published** flag is the only seam between tiers and the only thing importable across repos; touching a published concept is HARD. Importers **extend, never mutate** (own-subject rule). **Views are projections** over tier × zoom; PR impact is "which views changed". Five deterministic rollup rules derive higher-level facts from code and compare them with what manifests declare; the comparison is the drift signal.
+
+## Governance
+
+Not every subsystem carries the same risk. `criticality: low | medium | high | critical` on a concept or a boundary flows through `realizes` to the code, tags every change in the PR comment and `gloss impact`, raises the gate by policy (`critical` is HARD by default), colours the viewer and gives agents a reason to flag what they touch. See [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
 
 ## Versions
 

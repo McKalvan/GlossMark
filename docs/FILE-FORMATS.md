@@ -21,6 +21,7 @@ policy:
   soft-conf-threshold: 0.7                      # proposals at or above are SOFT
   hard-paths: ["ontology/**", "**/.gloss.yaml", "glossmark.yaml"]
   coverage-fail-under: 0
+  criticality-gates: { critical: HARD }         # minimum gate by criticality (docs/GOVERNANCE.md)
   waivers:
     - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }
 ```
@@ -41,6 +42,7 @@ concepts:
   StallionProduction:         { kind: process, realizes: zoo:Breeding, produces: [zoo:Stallion] }
   FoalingPipelineThroughput:
     kind: measure
+    criticality: low                 # telemetry; see docs/GOVERNANCE.md
     realizes: zoo:ProductionCapacity
     published: { as: zoo:ProductionCapacity }
     value: "12 foals/day"
@@ -61,6 +63,7 @@ Concept keys:
 | `value` | A concrete value (used by published measures and constraints). |
 | `proposed: true`, `proposed-by` | The entry is a proposal, the ontology's `@gloss?`. Links to it resolve; it is HARD-gated until `gloss accept --concept` drops the flag. `gloss propose` writes these entries. |
 | `aliases` | Other names people and agents use; `search_concepts` matches them. |
+| `criticality` | `low`, `medium`, `high` or `critical`: how much a mistake here matters. Implementation concepts inherit the highest level of what they realize when unset. See [GOVERNANCE.md](GOVERNANCE.md). |
 | any other key | A relation: `produces`, `consumes`, `publishes`, `subscribes`, `constrains`, `reverses`, `attaches-to`, or one declared under `relations:`. |
 
 Tier rules: a core file may not reference any implementation namespace (GM310); core concepts realize nothing (GM312). The own-subject rule: a repo may only add edges whose subject is in a namespace it owns, so `mine:Pony is-a zoo:Horse` is allowed and `zoo:Horse has-part mine:Saddle` is rejected (GM400).
@@ -78,9 +81,10 @@ default-namespace: impl          # .Name in markers below resolves to impl:Name
 allowed: [zoo:Horse, zoo:Mare, impl:Breeding*, impl:Foal*]
 generated: ["gen/**"]
 owner: horse-platform
+criticality: high                # optional; else the highest of what the code realizes, else the parent's
 ```
 
-The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives. A relation the manifest does not declare is not compared. Links to concepts outside `allowed` are HARD-gated.
+The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives. A relation the manifest does not declare is not compared. Links to concepts outside `allowed` are HARD-gated. `criticality` classifies the boundary for review (see [GOVERNANCE.md](GOVERNANCE.md)); `gloss check` warns when it is declared below a concept the code realizes.
 
 ## `views.yaml`
 
@@ -100,6 +104,8 @@ views:
 ```
 
 Two presets ship (business, engineering) and are generated when the file is absent. Zoom (`landscape`, `system`, `container`, `component`, `code`) decides which boundary levels appear; artifacts appear only at `code`.
+
+In a projection every concept also carries the boundary it sits in (`boundary`): the deepest boundary whose code realizes or represents it, or the nearest boundary enclosing all of them when several do. The viewer draws a boundary as a box around those concepts, closed at first; the reader opens boxes to drill in. Projections also carry each node's effective `criticality` (the highest of its own and of everything folded into it).
 
 ## Tool-maintained files under `.glossmark/`
 

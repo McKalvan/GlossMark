@@ -20,7 +20,7 @@ CREATE TABLE nodes (
   id TEXT PRIMARY KEY, curie TEXT, node TEXT NOT NULL, ns TEXT, tier TEXT, kind TEXT, label TEXT, doc TEXT,
   published_as TEXT, internal INTEGER NOT NULL DEFAULT 0, deprecated INTEGER NOT NULL DEFAULT 0, replaced_by TEXT,
   value TEXT, imported INTEGER NOT NULL DEFAULT 0, version TEXT, owner TEXT, path TEXT, symbol TEXT, scope TEXT,
-  fingerprint TEXT, boundary TEXT, file TEXT, line INTEGER, json TEXT NOT NULL
+  fingerprint TEXT, boundary TEXT, file TEXT, line INTEGER, criticality TEXT, criticality_from TEXT, json TEXT NOT NULL
 );
 CREATE INDEX nodes_curie ON nodes(curie);
 CREATE INDEX nodes_node ON nodes(node);
@@ -80,8 +80,8 @@ func Export(g *graph.Graph, path string) error {
 			return err
 		}
 	}
-	ins, err := tx.Prepare(`INSERT INTO nodes (id, curie, node, ns, tier, kind, label, doc, published_as, internal, deprecated, replaced_by, value, imported, version, owner, path, symbol, scope, fingerprint, boundary, file, line, json)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	ins, err := tx.Prepare(`INSERT INTO nodes (id, curie, node, ns, tier, kind, label, doc, published_as, internal, deprecated, replaced_by, value, imported, version, owner, path, symbol, scope, fingerprint, boundary, file, line, criticality, criticality_from, json)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func Export(g *graph.Graph, path string) error {
 		if n.Anchor != nil {
 			sym, scope, fp = n.Anchor.Symbol, n.Anchor.Scope, n.Anchor.Fingerprint
 		}
-		if _, err := ins.Exec(n.ID, n.CURIE, string(n.NodeType), n.NS, n.Tier, n.Kind, n.Label, n.Doc, n.Published, b2i(n.Internal), b2i(n.Deprecated), n.ReplacedBy, val, b2i(n.Imported), n.Version, n.Owner, n.Path, sym, scope, fp, n.Boundary, n.File, n.Line, string(js)); err != nil {
+		if _, err := ins.Exec(n.ID, n.CURIE, string(n.NodeType), n.NS, n.Tier, n.Kind, n.Label, n.Doc, n.Published, b2i(n.Internal), b2i(n.Deprecated), n.ReplacedBy, val, b2i(n.Imported), n.Version, n.Owner, n.Path, sym, scope, fp, n.Boundary, n.File, n.Line, n.Criticality, n.CriticalityFrom, string(js)); err != nil {
 			return fmt.Errorf("node %s: %w", n.ID, err)
 		}
 	}

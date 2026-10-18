@@ -83,7 +83,7 @@ gloss drift                      # violations, gaps, orphans, rogues, stale, unt
 gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
-gloss view                       # .glossmark/viewer.html, static, no server
+gloss view                       # .glossmark/viewer.html, static, no server: boundaries are boxes, click to drill in, double-click to focus
 gloss coverage --fail-under 80
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)

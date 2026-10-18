@@ -190,6 +190,78 @@ func TestHorseFactory(t *testing.T) {
 	if len(eng.Nodes) <= len(biz.Nodes) {
 		t.Errorf("engineering view (%d nodes) should be larger than business (%d)", len(eng.Nodes), len(biz.Nodes))
 	}
+	// Boundaries house what their code realizes: at system zoom the container folds
+	// into the system; at container zoom Breeding sits in the service, a part follows
+	// its mechanism, Foal (represented only by the root migration) stays in the system,
+	// and HorseOrder, which nothing implements, is unplaced.
+	wantIn := map[string]map[string]string{
+		"business":    {"zoo:Breeding": "acme:animal-production", "zoo:HorseOrder": "", "acme:animal-production": ""},
+		"engineering": {"zoo:Breeding": "acme:horse-factory-svc", "impl:HoofStep": "acme:horse-factory-svc", "zoo:Foal": "acme:animal-production", "zoo:HorseOrder": "", "acme:horse-factory-svc": ""},
+	}
+	for _, p := range []*views.Projection{biz, eng} {
+		for _, n := range p.Nodes {
+			if want, ok := wantIn[p.Name][n.ID]; ok && n.Boundary != want {
+				t.Errorf("%s view: %s in boundary %q, want %q", p.Name, n.ID, n.Boundary, want)
+			}
+			if n.ID == "acme:horse-factory-svc" && n.Parent != "acme:animal-production" {
+				t.Errorf("container boundary should nest in the system: %+v", n)
+			}
+		}
+	}
+	// Criticality: declared on zoo:Breeding, inherited by what realizes it and by the boundary.
+	wantCrit := map[string][2]string{
+		"zoo:Breeding":                   {"medium", "declared"},
+		"impl:StallionProduction":        {"medium", "zoo:Breeding"},
+		"impl:HoofStep":                  {"medium", "impl:HoofAssembler"},
+		"zoo:HorseOrder":                 {"high", "declared"},
+		"impl:FoalingPipelineThroughput": {"low", "declared"},
+		"acme:horse-factory-svc":         {"medium", "zoo:Breeding"},
+		"acme:animal-production":         {"medium", "zoo:Breeding"},
+		"zoo:Donkey":                     {"", ""},
+	}
+	for cu, want := range wantCrit {
+		n := g.NodeByCurie(cu)
+		if n == nil {
+			t.Fatalf("missing %s", cu)
+		}
+		if n.Criticality != want[0] || n.CriticalityFrom != want[1] {
+			t.Errorf("%s criticality = %q from %q, want %q from %q", cu, n.Criticality, n.CriticalityFrom, want[0], want[1])
+		}
+	}
+	for _, a := range g.NodesOf(model.NodeArtifact) {
+		if a.Path == "services/horse-factory/breeding/metrics.py" && a.Criticality != "medium" {
+			t.Errorf("metrics.py takes its boundary's level: %+v", a)
+		}
+	}
+	for _, n := range eng.Nodes {
+		if n.ID == "acme:horse-factory-svc" && (n.Criticality != "medium" || n.Owner != "horse-platform") {
+			t.Errorf("projection should carry boundary criticality and owner: %+v", n)
+		}
+	}
+	// A manifest that understates its risk is a governance warning.
+	svc := g.NodeByCurie("acme:horse-factory-svc")
+	svc.Criticality, svc.CriticalityFrom = "low", "declared"
+	us := rollup.Understated(g)
+	seenU := map[string]int{}
+	for _, u := range us {
+		seenU[u.Concept]++
+		if u.Boundary != "acme:horse-factory-svc" || u.Declared != "low" || u.Level != "medium" {
+			t.Errorf("understated = %+v", u)
+		}
+	}
+	if seenU["zoo:Breeding"] != 1 {
+		t.Errorf("understated should list zoo:Breeding once: %+v", us)
+	}
+	gm600 := false
+	for _, d := range check.Run(ws, g) {
+		if d.Code == "GM600" && strings.Contains(d.Msg, "zoo:Breeding") {
+			gm600 = true
+		}
+	}
+	if !gm600 {
+		t.Error("expected GM600 for an understated boundary")
+	}
+	svc.Criticality, svc.CriticalityFrom = "medium", "zoo:Breeding"
 	// Graph round-trips deterministically.
 	var sb1, sb2 strings.Builder
 	g.WriteJSONL(&sb1)
@@ -208,6 +280,12 @@ func TestPayments(t *testing.T) {
 	ws, g, _, lg := build(t, api)
 	if errs := errorsOf(check.Run(ws, g)); len(errs) > 0 {
 		t.Errorf("payments-api check errors: %v", errs)
+	}
+	if b := g.NodeByCurie("acme:payments-api"); b == nil || b.Criticality != "critical" || b.CriticalityFrom != "pay:Authorization" {
+		t.Errorf("payments-api should inherit critical from pay:Authorization: %+v", b)
+	}
+	if b := g.NodeByCurie("acme:payments-platform"); b == nil || b.Criticality != "critical" || b.CriticalityFrom != "declared" {
+		t.Errorf("payments-platform declares critical: %+v", b)
 	}
 	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
 	viol := findings(rep, rollup.KindViolation)
@@ -364,13 +442,31 @@ func TestGateCutoffChange(t *testing.T) {
 	if !has(im.ViewsChanged, "business") {
 		t.Errorf("business view should change when a published value moves; got %v", im.ViewsChanged)
 	}
+	// Governance: the Payment proposal touches a critical concept; the cutoff change a medium one.
+	if im.Criticality != "critical" {
+		t.Errorf("impact criticality = %q, want critical", im.Criticality)
+	}
+	for _, ch := range im.Changes {
+		if ch.Kind == "link-added" && ch.Object == "pay:Payment" && (ch.Criticality != "critical" || ch.CriticalityFrom != "pay:Payment" || !strings.Contains(strings.Join(ch.Reasons, ";"), "criticality critical")) {
+			t.Errorf("Payment link should carry critical and the policy reason: %+v", ch)
+		}
+		if ch.Kind == "published-changed" && ch.Subject == "sw:CutoffClock" && ch.Criticality != "medium" {
+			t.Errorf("CutoffClock change should carry medium (via pay:SettlementCutoff): %+v", ch)
+		}
+	}
 	txt := gate.RenderText(im)
 	if !strings.Contains(txt, "published sw:CutoffClock value 16:00Z → 17:00Z") || !strings.Contains(txt, "Views changed:") {
 		t.Errorf("render:\n%s", txt)
 	}
+	if !strings.Contains(txt, "criticality critical") || !strings.Contains(txt, "Criticality touched: ") || !strings.Contains(txt, "pay:Payment critical (declared)") || !strings.Contains(txt, "[CRITICAL, agent") {
+		t.Errorf("render lacks criticality:\n%s", txt)
+	}
 	md := gate.RenderMarkdown(im)
 	if !strings.Contains(md, "<!-- glossmark-impact -->") {
 		t.Error("markdown lacks the comment marker used to update PR comments")
+	}
+	if !strings.Contains(md, "criticality **critical**") || !strings.Contains(md, "**Criticality touched**") {
+		t.Errorf("markdown lacks the criticality summary:\n%s", md)
 	}
 }
 
@@ -618,8 +714,15 @@ func TestTouched(t *testing.T) {
 	if !found {
 		t.Errorf("cutoff.go concepts: %+v", cut.Concepts)
 	}
-	if ts[1].Gate != gate.SOFT {
-		t.Errorf("settler.go should be SOFT: %+v", ts[1])
+	// settler.go implements sw:BatchSettler, which inherits critical from pay:Settlement;
+	// the default policy makes anything critical HARD (docs/GOVERNANCE.md).
+	if ts[1].Gate != gate.HARD || ts[1].Criticality != "critical" || ts[1].CriticalityFrom != "acme:settlement-worker" {
+		t.Errorf("settler.go should be HARD with criticality critical via its boundary: %+v", ts[1])
+	}
+	for _, c := range ts[1].Concepts {
+		if c.Curie == "sw:BatchSettler" && (c.Criticality != "critical" || c.CriticalityFrom != "pay:Settlement") {
+			t.Errorf("BatchSettler should inherit critical from pay:Settlement: %+v", c)
+		}
 	}
 	if ts[2].Gate != gate.HARD || len(ts[2].Concepts) < 3 {
 		t.Errorf("ontology file should be HARD with its concepts: %+v", ts[2])
@@ -646,7 +749,7 @@ func TestImportRangesAndLock(t *testing.T) {
 		}
 		return out
 	}
-	// No lock yet → GM108; range ^1.2 satisfied by 1.2.0 → no GM106.
+	// No lock yet → GM108; range ^1.2 satisfied by 1.2.1 → no GM106.
 	c := codes()
 	if !has(c, "GM108") || has(c, "GM106") {
 		t.Fatalf("initial diags = %v", c)
@@ -667,7 +770,7 @@ func TestImportRangesAndLock(t *testing.T) {
 		t.Fatalf("content change not noticed: %v", c)
 	}
 	// Upstream bumps to 2.0.0 → outside ^1.2 → GM106 and GM107 (version).
-	os.WriteFile(up, []byte(strings.Replace(string(b), "version: 1.2.0", "version: 2.0.0", 1)), 0o644)
+	os.WriteFile(up, []byte(strings.Replace(string(b), "version: 1.2.1", "version: 2.0.0", 1)), 0o644)
 	if c := codes(); !has(c, "GM106") || !has(c, "GM107") {
 		t.Fatalf("major bump not caught: %v", c)
 	}

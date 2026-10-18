@@ -48,6 +48,11 @@ type Node struct {
 	Proposed   bool     `json:"proposed,omitempty"`
 	ProposedBy string   `json:"proposed-by,omitempty"`
 	Aliases    []string `json:"aliases,omitempty"`
+	// Criticality is the effective governance level (low | medium | high |
+	// critical) of a concept, boundary or artifact; CriticalityFrom says where
+	// it came from: "declared", or the CURIE it was inherited from.
+	Criticality     string `json:"criticality,omitempty"`
+	CriticalityFrom string `json:"criticality-from,omitempty"`
 	// Namespace attributes.
 	Version string `json:"version,omitempty"`
 	Owner   string `json:"owner,omitempty"`
@@ -201,6 +206,12 @@ func (g *Graph) AddNode(n *Node) *Node {
 		}
 		if ex.File == "" {
 			ex.File, ex.Line = n.File, n.Line
+		}
+		if ex.Owner == "" {
+			ex.Owner = n.Owner
+		}
+		if ex.Criticality == "" {
+			ex.Criticality, ex.CriticalityFrom = n.Criticality, n.CriticalityFrom
 		}
 		return ex
 	}

@@ -12,7 +12,11 @@ func RenderText(im *Impact) string {
 	if len(im.Boundaries) > 0 {
 		where += " (" + strings.Join(im.Boundaries, ", ") + ")"
 	}
-	fmt.Fprintf(&sb, "Ontology impact — %s   base %s   gate %s\n", where, im.Base, im.Gate)
+	fmt.Fprintf(&sb, "Ontology impact — %s   base %s   gate %s", where, im.Base, im.Gate)
+	if im.Criticality != "" {
+		fmt.Fprintf(&sb, "   criticality %s", im.Criticality)
+	}
+	sb.WriteString("\n")
 	if len(im.Changes) == 0 {
 		sb.WriteString("  no ontology-relevant changes\n")
 	}
@@ -55,6 +59,9 @@ func RenderText(im *Impact) string {
 	}
 	sb.WriteString("\n")
 	fmt.Fprintf(&sb, "Coverage %.0f%% → %.0f%%   Orphans: %s   Rogue: %d   Proposed: %d   Stale: %d\n", im.Before.CoveragePct, im.After.CoveragePct, orphans(im.Orphans), im.After.Rogues, im.After.Proposed, im.After.Stale)
+	if len(im.Critical) > 0 {
+		sb.WriteString("Criticality touched: " + criticalList(im.Critical, 6) + "\n")
+	}
 	for _, v := range im.Versions {
 		mark := "✓"
 		if !v.OK {
@@ -63,6 +70,23 @@ func RenderText(im *Impact) string {
 		fmt.Fprintf(&sb, "Version %s: %s → %s (requires %s) %s\n", v.Namespace, orNone(v.From), orNone(v.To), v.Required, mark)
 	}
 	return sb.String()
+}
+
+// criticalList renders "pay:Payment critical (declared), acme:payments-api critical (via pay:Payment), …".
+func criticalList(ts []CriticalityTouch, max int) string {
+	var parts []string
+	for i, t := range ts {
+		if i >= max {
+			parts = append(parts, fmt.Sprintf("… %d more", len(ts)-max))
+			break
+		}
+		from := t.From
+		if from != "declared" && from != "" {
+			from = "via " + from
+		}
+		parts = append(parts, fmt.Sprintf("%s %s (%s)", t.Curie, t.Level, from))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func orphans(xs []string) string {
@@ -77,6 +101,9 @@ func orphans(xs []string) string {
 
 func tagFor(ch Change) string {
 	var parts []string
+	if ch.Criticality != "" {
+		parts = append(parts, strings.ToUpper(ch.Criticality))
+	}
 	if ch.Actor != "" {
 		if strings.HasPrefix(ch.Actor, "agent:") {
 			parts = append(parts, "agent")
@@ -107,7 +134,14 @@ func tagFor(ch Change) string {
 func RenderMarkdown(im *Impact) string {
 	var sb strings.Builder
 	sb.WriteString("<!-- glossmark-impact -->\n")
-	fmt.Fprintf(&sb, "## Ontology impact — gate **%s**\n\n```text\n%s```\n", im.Gate, RenderText(im))
+	fmt.Fprintf(&sb, "## Ontology impact — gate **%s**", im.Gate)
+	if im.Criticality != "" {
+		fmt.Fprintf(&sb, " · criticality **%s**", im.Criticality)
+	}
+	fmt.Fprintf(&sb, "\n\n```text\n%s```\n", RenderText(im))
+	if len(im.Critical) > 0 {
+		fmt.Fprintf(&sb, "\n**Criticality touched** (highest first): %s. Reviewers of %s-criticality areas should look at this PR.\n", criticalList(im.Critical, 8), im.Criticality)
+	}
 	for _, d := range im.Views {
 		if !d.Changed() {
 			continue

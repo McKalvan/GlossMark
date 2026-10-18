@@ -9,9 +9,9 @@ concepts:
   Stallion:           { kind: entity, is-a: Horse }
   Foal:               { kind: entity, is-a: Horse, aliases: [filly, colt] }
   Donkey:             { kind: entity, is-a: Animal }
-  HorseOrder:         { kind: entity, doc: A customer order for horses. }
+  HorseOrder:         { kind: entity, doc: A customer order for horses., criticality: high }
   HorseFactory:       { kind: system-type, produces: [Horse] }
-  Breeding:           { kind: process, consumes: [Mare, Stallion], produces: [Foal] }
+  Breeding:           { kind: process, consumes: [Mare, Stallion], produces: [Foal], criticality: medium }
   Foaling:            { kind: process, produces: [Foal], publishes: [FoalBorn] }
   FoalBorn:           { kind: event }
   ProductionCapacity: { kind: constraint, constrains: [HorseOrder], doc: How many horses the factory can deliver per period; the value comes from engineering. }

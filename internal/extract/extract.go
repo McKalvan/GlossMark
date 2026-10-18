@@ -118,6 +118,9 @@ func (ex *extractor) ontologies() {
 			n := &graph.Node{NodeType: model.NodeConcept, ID: iri, CURIE: curie, NS: ns, Tier: o.Tier, Kind: c.Kind, Label: c.Label, Doc: c.Doc,
 				Internal: c.Internal, Deprecated: c.Deprecated, Value: c.Value, Imported: !ex.ws.Owned[ns], File: file, Line: c.Line,
 				Proposed: c.Proposed, ProposedBy: c.ProposedBy, Aliases: []string(c.Aliases)}
+			if c.Criticality != "" {
+				n.Criticality, n.CriticalityFrom = c.Criticality, "declared"
+			}
 			if c.ReplacedBy != "" {
 				_, cur := ex.resolveRef(c.ReplacedBy, ns)
 				n.ReplacedBy = cur
@@ -167,6 +170,9 @@ func (ex *extractor) manifests() {
 	for _, m := range ex.ws.Manifests {
 		iri := ex.boundaryIRI(m.Boundary, m.Path, 1)
 		n := &graph.Node{NodeType: model.NodeBoundary, ID: iri, CURIE: m.Boundary, Kind: m.Level, Label: m.Label, Doc: m.Doc, Dir: m.Dir, File: m.Path, Line: 1, Owner: m.Owner}
+		if m.Criticality != "" {
+			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
+		}
 		if i := strings.Index(m.Boundary, ":"); i > 0 {
 			n.NS = m.Boundary[:i]
 		}

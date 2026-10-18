@@ -61,6 +61,11 @@ type Change struct {
 	Reasons  []string `json:"reasons,omitempty"`
 	Msg      string   `json:"msg"`
 	MarkerID string   `json:"marker_id,omitempty"`
+	// Criticality is the highest governance level among the change's subject,
+	// object and the boundary of its path; CriticalityFrom names the node that
+	// carries it. See docs/GOVERNANCE.md.
+	Criticality     string `json:"criticality,omitempty"`
+	CriticalityFrom string `json:"criticality_from,omitempty"`
 }
 
 // Impact is the result of gloss diff.
@@ -77,6 +82,17 @@ type Impact struct {
 	Orphans      []string        `json:"orphans"`
 	Versions     []VersionChange `json:"versions,omitempty"`
 	Boundaries   []string        `json:"boundaries"`
+	// Criticality is the highest level any change touches; Critical lists the
+	// nodes that carry the levels, highest first.
+	Criticality string             `json:"criticality,omitempty"`
+	Critical    []CriticalityTouch `json:"critical,omitempty"`
+}
+
+// CriticalityTouch is one classified node a change touches.
+type CriticalityTouch struct {
+	Curie string `json:"curie"`
+	Level string `json:"level"`
+	From  string `json:"from"` // declared, or the CURIE the level is inherited from
 }
 
 // VersionChange records a namespace version bump and the bump the diff implies.
@@ -114,11 +130,15 @@ func Classify(base, head *graph.Graph, ws *load.Workspace, opt Options) *Impact 
 	c.versions()
 	c.paths()
 	c.viewsImpact()
+	c.governance()
 	c.metrics()
 	sort.SliceStable(im.Changes, func(i, j int) bool {
 		a, b := im.Changes[i], im.Changes[j]
 		if rank(a.Gate) != rank(b.Gate) {
 			return rank(a.Gate) > rank(b.Gate)
+		}
+		if ra, rb := model.CriticalityRank(a.Criticality), model.CriticalityRank(b.Criticality); ra != rb {
+			return ra > rb
 		}
 		if a.Path != b.Path {
 			return a.Path < b.Path
@@ -227,6 +247,9 @@ func (c *classifier) ontology() {
 		if b.Deprecated != h.Deprecated {
 			diffs = append(diffs, fmt.Sprintf("deprecated %v → %v", b.Deprecated, h.Deprecated))
 		}
+		if declaredCriticality(b) != declaredCriticality(h) {
+			diffs = append(diffs, fmt.Sprintf("criticality %s → %s", orNone(declaredCriticality(b)), orNone(declaredCriticality(h))))
+		}
 		if b.Label != h.Label || b.Doc != h.Doc {
 			diffs = append(diffs, "label/doc")
 		}
@@ -296,6 +319,77 @@ func (c *classifier) ontology() {
 	}
 }
 
+func declaredCriticality(n *graph.Node) string {
+	if n != nil && n.CriticalityFrom == "declared" {
+		return n.Criticality
+	}
+	return ""
+}
+
+// governance stamps every change with the criticality of what it touches and
+// raises its gate to what the policy demands for that level.
+func (c *classifier) governance() {
+	bookkeeping := map[string]bool{"link-accepted": true, "concept-accepted": true, "stale": true, "fingerprint-changed": true}
+	linkKinds := map[string]bool{"link-added": true, "link-removed": true, "new-concept": true, "link-accepted": true, "stale": true, "fingerprint-changed": true}
+	touched := map[string]CriticalityTouch{}
+	for i := range c.im.Changes {
+		ch := &c.im.Changes[i]
+		lvl, from := "", ""
+		consider := func(n *graph.Node) {
+			if n == nil || n.Criticality == "" {
+				return
+			}
+			if model.CriticalityRank(n.Criticality) > model.CriticalityRank(lvl) {
+				lvl, from = n.Criticality, n.CURIE
+			}
+			touched[n.CURIE] = CriticalityTouch{Curie: n.CURIE, Level: n.Criticality, From: n.CriticalityFrom}
+		}
+		for _, cu := range []string{ch.Subject, ch.Object} {
+			if cu == "" {
+				continue
+			}
+			if n := c.head.NodeByCurie(cu); n != nil {
+				consider(n)
+			} else {
+				consider(c.base.NodeByCurie(cu))
+			}
+		}
+		// A link lives in a file, so its boundary's level applies; an ontology,
+		// manifest or policy edit is judged by the thing it edits.
+		if ch.Path != "" && linkKinds[ch.Kind] {
+			if m := c.ws.ManifestFor(ch.Path); m != nil {
+				if b := c.head.NodeByCurie(m.Boundary); b != nil {
+					consider(b)
+				}
+			}
+		}
+		if lvl == "" {
+			continue
+		}
+		ch.Criticality, ch.CriticalityFrom = lvl, from
+		if bookkeeping[ch.Kind] {
+			continue
+		}
+		if want := Class(c.opt.Policy.GateForCriticality(lvl)); want != "" {
+			if rank(want) > rank(ch.Gate) {
+				ch.Gate = want
+			}
+			ch.Reasons = append(ch.Reasons, fmt.Sprintf("criticality %s: %s", lvl, from))
+		}
+	}
+	for _, t := range touched {
+		c.im.Critical = append(c.im.Critical, t)
+		c.im.Criticality = model.MaxCriticality(c.im.Criticality, t.Level)
+	}
+	sort.Slice(c.im.Critical, func(i, j int) bool {
+		a, b := c.im.Critical[i], c.im.Critical[j]
+		if ra, rb := model.CriticalityRank(a.Level), model.CriticalityRank(b.Level); ra != rb {
+			return ra > rb
+		}
+		return a.Curie < b.Curie
+	})
+}
+
 func pubPrefix(pub bool) string {
 	if pub {
 		return "published "
@@ -348,6 +442,8 @@ func (c *classifier) manifests() {
 			c.bounds[h.CURIE] = true
 		} else if bn[id].Kind != h.Kind {
 			c.add(Change{Gate: HARD, Kind: "boundary-changed", Glyph: "!", Subject: h.CURIE, Path: h.File, Reasons: []string{"edit to manifest"}, Msg: fmt.Sprintf("boundary %s level %s → %s", h.CURIE, bn[id].Kind, h.Kind)})
+		} else if declaredCriticality(bn[id]) != declaredCriticality(h) {
+			c.add(Change{Gate: HARD, Kind: "boundary-changed", Glyph: "!", Subject: h.CURIE, Path: h.File, Reasons: []string{"edit to manifest", "governance: criticality changed"}, Msg: fmt.Sprintf("boundary %s criticality %s → %s", h.CURIE, orNone(declaredCriticality(bn[id])), orNone(declaredCriticality(h)))})
 		}
 	}
 	for id, b := range bn {

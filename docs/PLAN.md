@@ -118,11 +118,20 @@ Built after the first cut, because they are what pays off on an agent's first da
 3. **Search by meaning.** `search_concepts` matches aliases (`aliases:` on concepts), CamelCase words, stems and small typos, follows `realizes`/`is-a` one hop, and says why each hit matched.
 4. **Session-start briefing.** `gloss context --dir` renders a bounded briefing (boundary, allowed targets, remits, concepts, state); `gloss hook install` registers it as a Claude Code SessionStart hook and registers the MCP server in `.mcp.json`.
 
-## 7. Versioning
+## 7. Governance and the viewer
+
+Built from the first round of user feedback:
+
+1. **Criticality.** `criticality: low | medium | high | critical` on concepts (ontology) and boundaries (manifests); effective levels and provenance stamped on every concept, boundary and artifact by the rollup (declared wins; impl inherits from what it realizes; boundaries from what their code realizes, else their parent; artifacts from both). Surfaced in `gloss diff` (per-change tag, `criticality-gates` policy, PR comment summary), `gloss impact` / MCP `impact_of`, `gloss context`, the SQLite export and the viewer. `gloss check` GM600 flags a boundary that understates a concept it realizes. See `docs/GOVERNANCE.md`.
+2. **Boundaries as containers.** A projection places every concept inside the deepest boundary whose code realizes or represents it (`PNode.Boundary`; several unrelated boundaries resolve to their common enclosing boundary, or to none). The viewer draws boundaries as boxes around their members instead of as a hub node; housing edges and boundary `part-of` become containment; the boundary's interface (`produces`, `consumes`, `publishes`, `subscribes`) stays drawn from the box edge.
+3. **Top-down discovery.** The viewer opens with every boundary closed: the system's top level plus the concepts nothing realizes. A click opens a box one level, a double-click focuses on a boundary (its contents plus what they connect to, with a breadcrumb), Esc steps back up.
+4. **Filters.** Type, tier, namespace, kind, boundary level, criticality (including unclassified), relation and internal mechanisms, each a toggle chip with counts.
+
+## 8. Versioning
 
 Four numbers, documented in `docs/VERSIONING.md`: the tool release (git tag, injected at build time by the release workflow, read from Go build info for `go install`), the grammar (`grammar: N` directive with a written stability and deprecation policy), file formats (`format` headers on `graph.jsonl`, `ledger.jsonl` and `glossmark.lock`, newer formats refused), and namespace semver with enforced import ranges and a `glossmark.lock` written by `gloss lock`.
 
-## 8. Verification
+## 9. Verification
 
 - `go test ./...` runs the conformance corpus, grammar edge cases, rollup rules on synthetic graphs, and end-to-end runs on both examples.
 - The payments example test asserts the spec's "What the tooling makes of it" table: one violation (Refunding handled, not declared), one gap (Capture implemented but untested), one landscape edge (CaptureConfirmed across repos), one HARD change (SettlementCutoff value), one consistent rollup after taxonomic lift.

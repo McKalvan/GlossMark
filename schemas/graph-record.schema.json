@@ -157,6 +157,15 @@
           "description": "Namespace or boundary: owning team or actor.",
           "type": "string"
         },
+        "criticality": {
+          "description": "Concept, boundary or artifact: effective governance level (docs/GOVERNANCE.md).",
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "criticality-from": {
+          "description": "Where the level comes from: \"declared\", or the CURIE of the node it was inherited from.",
+          "type": "string"
+        },
         "path": {
           "description": "Artifact: repo-relative file path.",
           "type": "string"

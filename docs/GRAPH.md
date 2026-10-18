@@ -10,7 +10,7 @@ Node records (`"type":"node"`), sorted by node type then IRI:
 
 ```json
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Mare","curie":"zoo:Mare","ns":"zoo","tier":"core","kind":"entity","doc":"...","file":"ontology/zoo.gloss.yaml","line":6}
-{"type":"node","node":"boundary","id":"https://arch.acme.dev/boundaries/horse-factory-svc","curie":"acme:horse-factory-svc","kind":"container","dir":"services/horse-factory","owner":"horse-platform"}
+{"type":"node","node":"boundary","id":"https://arch.acme.dev/boundaries/horse-factory-svc","curie":"acme:horse-factory-svc","kind":"container","dir":"services/horse-factory","owner":"horse-platform","criticality":"medium","criticality-from":"zoo:Breeding"}
 {"type":"node","node":"artifact","id":"urn:gloss:artifact:services/horse-factory/breeding/engine.py#foal_male","kind":"function","path":"services/horse-factory/breeding/engine.py","anchor":{"scope":"symbol","symbol":"foal_male","start":7,"end":8,"fingerprint":"sha256:..."},"boundary":"https://arch.acme.dev/boundaries/horse-factory-svc"}
 ```
 
@@ -32,6 +32,7 @@ Special object IRIs: `urn:gloss:new:impl:NEW:Gelding` (a proposed new concept), 
 3. **Taxonomic lift** (`lift: range-lcs`). A set `{Mare, Stallion}` is summarized as its least common subsumer `Horse` in views and in the drift report. Opt-in per relation because it is valid for existential claims and invalid for exclusivity claims.
 4. **Implied relationships.** A `publishes`/`subscribes` or `produces`/`consumes` pair on one concept between two boundaries implies `depends-on` (consumer → producer) unless declared. Across repositories this is the context-map edge `gloss landscape` draws.
 5. **Generalization.** Views fold implementation into core via `collapse: via realizes`.
+6. **Criticality.** Every concept, boundary and artifact carries an effective `criticality` and its provenance (`criticality-from`): declared levels win; implementation concepts inherit from what they realize, boundaries from what their code realizes (else their parent), artifacts from their boundary and the concepts they link to. See `docs/GOVERNANCE.md`.
 
 ## Comparison
 
