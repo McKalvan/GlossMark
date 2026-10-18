@@ -35,7 +35,7 @@
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Breeding","curie":"zoo:Breeding","ns":"zoo","tier":"core","kind":"process","criticality":"medium","criticality-from":"declared","file":"ontology/zoo.gloss.yaml","line":14}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Donkey","curie":"zoo:Donkey","ns":"zoo","tier":"core","kind":"entity","file":"ontology/zoo.gloss.yaml","line":11}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Foal","curie":"zoo:Foal","ns":"zoo","tier":"core","kind":"entity","aliases":["filly","colt"],"file":"ontology/zoo.gloss.yaml","line":10}
-{"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/FoalBorn","curie":"zoo:FoalBorn","ns":"zoo","tier":"core","kind":"event","file":"ontology/zoo.gloss.yaml","line":16}
+{"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/FoalBorn","curie":"zoo:FoalBorn","ns":"zoo","tier":"core","kind":"event","doc":"A foal has been born; the registry and the planner react.","file":"ontology/zoo.gloss.yaml","line":16}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Foaling","curie":"zoo:Foaling","ns":"zoo","tier":"core","kind":"process","file":"ontology/zoo.gloss.yaml","line":15}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Horse","curie":"zoo:Horse","ns":"zoo","tier":"core","kind":"entity","file":"ontology/zoo.gloss.yaml","line":7}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/HorseFactory","curie":"zoo:HorseFactory","ns":"zoo","tier":"core","kind":"system-type","file":"ontology/zoo.gloss.yaml","line":13}

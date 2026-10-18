@@ -28,7 +28,7 @@ Special object IRIs: `urn:gloss:new:impl:NEW:Gelding` (a proposed new concept), 
 ## Derivation rules
 
 1. **Containment.** An artifact under a manifest is `part-of` that boundary; boundaries chain upward via `part-of`.
-2. **Realization lift.** If artifacts in boundary B `implements` X then B `realizes` X, and every core concept X realizes (through `realizes`, `published-as` and `part-of` chains). Intended relations declared on X and on the concepts it realizes (`produces`, `consumes`, `publishes`, `subscribes`) lift to B as well; `represents`, `tests` and `verifies` lift as themselves.
+2. **Realization lift.** If artifacts in boundary B `implements` X then B `realizes` X, and every core concept X realizes (through `realizes`, `published-as` and `part-of` chains). Intended relations declared on X and on the concepts it realizes (`produces`, `consumes`, `publishes`, `subscribes`) lift to B as well; `represents` and `verifies` (with its alias `tests`) lift as themselves; the `test-paths` inferrer turns `implements` and `represents` under a test path into `verifies`.
 3. **Taxonomic lift** (`lift: range-lcs`). A set `{Mare, Stallion}` is summarized as its least common subsumer `Horse` in views and in the drift report. Opt-in per relation because it is valid for existential claims and invalid for exclusivity claims.
 4. **Implied relationships.** A `publishes`/`subscribes` or `produces`/`consumes` pair on one concept between two boundaries implies `depends-on` (consumer → producer) unless declared. Across repositories this is the context-map edge `gloss landscape` draws.
 5. **Generalization.** Views fold implementation into core via `collapse: via realizes`.

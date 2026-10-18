@@ -9,7 +9,7 @@ A gloss mark is one line, inside whatever comment syntax the file already uses.
 | Part | Meaning |
 | --- | --- |
 | `?` | The link is a proposal nobody has accepted yet. Accepting is the one-character diff `@gloss?` → `@gloss` (`gloss accept`). |
-| `relation` | kebab-case, one of the inline relations: `implements`, `represents`, `tests`, `verifies`, `provisions`, `configures`, `deploys`, `documents`, `instructs`, `may-modify`, `produces`, `consumes`, `publishes`, `subscribes`. |
+| `relation` | kebab-case, one of the inline relations: `implements`, `represents`, `verifies`, `provisions`, `configures`, `deploys`, `documents`, `instructs`, `may-modify`, `produces`, `consumes`, `publishes`, `subscribes`. `tests` is an accepted alias of `verifies` and means the same; `gloss check` asks for `verifies` (GM240). |
 | `target` | A CURIE (`zoo:Mare`, `impl:HoofStep`), or `.Local` resolved against the enclosing manifest's `default-namespace`, or `ns:NEW:Name` to propose a concept that does not exist yet. `may-modify` targets may be globs (`pa:*`). |
 | `key=value` | Only `scope` (`file`, `symbol`, `block`, `line`, `range`), `conf` (0–1), `id`, `note`. Values with spaces are double-quoted. Nothing else goes inline; provenance lives in the ledger. |
 
@@ -99,4 +99,5 @@ Feature: Stallion production
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected) |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
+| GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
 | GM131 | the same marker on consecutive declarations: one `scope=block` marker above the run says the same with one edge |
