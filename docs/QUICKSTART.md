@@ -90,6 +90,7 @@ gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
 gloss mcp                        # MCP server on stdio for agents
+gloss doctor                     # one line per setup check with its fix: gloss on PATH, GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
 ```
 
 ### Who wrote a link, and what was decided
