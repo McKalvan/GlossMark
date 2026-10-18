@@ -42,7 +42,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 
 ## Anchoring
 
-A marker binds, in order of precedence, to an explicit `scope=`, else to the next declaration (function, class, resource block, YAML document, Gherkin Feature, SQL `CREATE`, Markdown heading), else to the file when it sits in the header comment, else to the next block. Markers never contain code identifiers; the anchor is derived and stored three ways:
+A marker binds, in order of precedence, to an explicit `scope=`, else to the next declaration (function, class, resource block, YAML document, Gherkin Feature, SQL `CREATE`, Markdown heading), skipping any decorator or annotation stack above it (`@app.route(...)`, `@dataclass`, `@Override`, `#[derive]`, multi-line arguments included, so the marker goes above the decorators where formatters leave it), else to the file when it sits in the header comment, else to the next block. Markers never contain code identifiers; the anchor is derived and stored three ways:
 
 1. path plus line range;
 2. a symbol string (`breed_stallion`, `HorseBuilder.AttachHoof`, `resource.aws_sqs_queue.capture`, `Deployment/horse-factory`, `table.foals`, `feature:Stallion production`) — a SCIP symbol once an indexer is joined;

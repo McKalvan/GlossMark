@@ -5,6 +5,11 @@
     {"line": 17, "relation": "produces", "targets": ["zoo:Foal", "zoo:FoalBorn"], "scope": "symbol", "symbol": "foal"},
     {"line": 24, "proposed": true, "relation": "implements", "targets": ["impl:NEW:Gelding"], "keys": {"note": "no concept exists yet"}, "scope": "symbol", "symbol": "geld"}
   ],
+  "testdata/decorated.py": [
+    {"line": 4, "relation": "implements", "targets": ["impl:FoalingPipeline"], "scope": "symbol", "symbol": "foal_endpoint"},
+    {"line": 14, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "Shoe"},
+    {"line": 20, "relation": "implements", "targets": ["impl:TailQueue"], "scope": "symbol", "symbol": "shoe"}
+  ],
   "testdata/example.ts": [
     {"line": 1, "proposed": true, "relation": "represents", "targets": ["zoo:Mare"], "keys": {"conf": "0.72"}, "scope": "symbol", "symbol": "Mare"},
     {"line": 4, "relation": "implements", "targets": ["impl:FoalRegistry"], "scope": "symbol", "symbol": "FoalRegistry"},
