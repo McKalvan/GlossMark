@@ -136,3 +136,65 @@ Four numbers, documented in `docs/VERSIONING.md`: the tool release (git tag, inj
 - `go test ./...` runs the conformance corpus, grammar edge cases, rollup rules on synthetic graphs, and end-to-end runs on both examples.
 - The payments example test asserts the spec's "What the tooling makes of it" table: one violation (Refunding handled, not declared), one gap (Capture implemented but untested), one landscape edge (CaptureConfirmed across repos), one HARD change (SettlementCutoff value), one consistent rollup after taxonomic lift.
 - `gloss build` on either example completes well under the 5 s gate.
+
+## 10. Roadmap from the first two adoptions
+
+Source: the review of the pfinance and AgentArena adoption branches against `main` at 681517a (`docs/reviews/2026-10-18-adoption-review.md`). Every item is a GitHub issue with what ships, what it touches, the finding it closes and a done-when that is testable on one of the two adoption branches. Sizes: S = a day, M = a few days, L = a week plus an ADR.
+
+### Phase A: ship-blockers
+
+| Issue | Deliverable | Closes | Size |
+| --- | --- | --- | --- |
+| [#4](https://github.com/McKalvan/GlossMark/issues/4) | Release v0.1.0: tag, binaries, install script, Action pinned | no releases; `@latest` is `0.0.0-dev` | S |
+| [#5](https://github.com/McKalvan/GlossMark/issues/5) | Ontology-file lint: null keys (GM304), docs truncated by flow-style commas (GM305), proposal and rogue counts in `check` | silent doc truncation (3.1), silent proposals (4.4) | S |
+| [#6](https://github.com/McKalvan/GlossMark/issues/6) | Durable provenance: actor from ledger or blame, hook sets `GLOSS_ACTOR`, ledger belongs in git | actor rewritten on every rebuild (4.1) | S |
+| [#7](https://github.com/McKalvan/GlossMark/issues/7) | Adoption-mode diff, grouped PR comment, corrected gate reasons, coverage ratchet | unreadable first PR (5.1) | M |
+
+### Phase B: modelling
+
+| Issue | Deliverable | Closes | Size |
+| --- | --- | --- | --- |
+| [#8](https://github.com/McKalvan/GlossMark/issues/8) | `presents` and `hosts` relations; criticality inherits through `implements` only (ADR) | overloaded `realizes` (3.2, 3.11) | L |
+| [#9](https://github.com/McKalvan/GlossMark/issues/9) | `realizes` inherits through `is-a` and rolls up through `part-of`; `realizes: inherit` in manifests | manifest boilerplate (3.3) | M |
+| [#10](https://github.com/McKalvan/GlossMark/issues/10) | Derived `allowed` default | unusable `allowed` lists (3.4) | S |
+| [#11](https://github.com/McKalvan/GlossMark/issues/11) | `provisions`, `deploys`, `configures`, `represents` satisfy boundary declarations | undeclarable data and infra boundaries (3.5) | S |
+| [#12](https://github.com/McKalvan/GlossMark/issues/12) | `verifies` canonical, `tests` an alias | two test relations (3.6) | S |
+| [#13](https://github.com/McKalvan/GlossMark/issues/13) | `value-from` binding for published values | values drift from code (3.7) | M |
+| [#14](https://github.com/McKalvan/GlossMark/issues/14) | Criticality: artifact level rule, `gloss criticality suggest`, empty states | 3.11 | M |
+
+### Phase C: the agent loop
+
+| Issue | Deliverable | Closes | Size |
+| --- | --- | --- | --- |
+| [#15](https://github.com/McKalvan/GlossMark/issues/15) | Briefing v2: relevance-ranked, budgeted, role-scoped, one proposal sentence everywhere | root-only alphabetical briefing (4.2), three proposal workflows (4.3) | M |
+| [#16](https://github.com/McKalvan/GlossMark/issues/16) | Search ranking v2 with docs in hits | flat score-50 results (3.10) | S |
+| [#17](https://github.com/McKalvan/GlossMark/issues/17) | Format-preserving `propose`, proposal docs separate from notes, decorator anchoring | reflowed ontology, lost anchors (3.10, 4.5) | S |
+| [#18](https://github.com/McKalvan/GlossMark/issues/18) | Redundant-marker lint, concept-side coverage, honest counters | coverage rewarding noise (3.8, 5.3) | S |
+
+### Phase D: onboarding
+
+| Issue | Deliverable | Closes | Size |
+| --- | --- | --- | --- |
+| [#19](https://github.com/McKalvan/GlossMark/issues/19) | `gloss init` | hand-built scaffolding (6.2) | M |
+| [#20](https://github.com/McKalvan/GlossMark/issues/20) | `gloss suggest` and a shipped adoption skill | big-bang hand-written adoption (6.3) | M |
+| [#21](https://github.com/McKalvan/GlossMark/issues/21) | Vocabulary importers (markdown glossary, enums) and `export --status` | three sources of truth in AgentArena (3.9) | M |
+| [#22](https://github.com/McKalvan/GlossMark/issues/22) | `gloss doctor` | silent misconfiguration (6.9) | S |
+
+### Phase E: viewer and docs
+
+| Issue | Deliverable | Closes | Size |
+| --- | --- | --- | --- |
+| [#23](https://github.com/McKalvan/GlossMark/issues/23) | Viewer: containment tie-break, curated views open expanded, concept pane, split data file | concepts collapse to the root box (5.2) | M |
+| [#24](https://github.com/McKalvan/GlossMark/issues/24) | Docs: starter five relations and a "when to mark" page | vocabulary load (5.3) | S |
+
+### Order
+
+| Week | Issues | Why |
+| --- | --- | --- |
+| 1 | #4, #5, #6, #17, #18 | small, independent, and they stop silent damage |
+| 2 | #7, #10, #12, #16, #22 | the next PR on either adopter becomes readable and the manifests shrink |
+| 3 | #8 (ADR), #9, #11 | the modelling fixes; the viewer and criticality depend on them |
+| 4 | #15, #23, #24 | agent briefing and viewer on top of the fixed model |
+| 5 | #19, #20, #21, #13, #14 | onboarding and the two value-adds |
+
+Each done-when is testable on the pfinance or AgentArena adoption branch, so each issue can carry an end-to-end test in `internal/e2e` against a fixture copied from those repos.
