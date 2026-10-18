@@ -46,6 +46,9 @@ func (s *StringList) UnmarshalYAML(n *yaml.Node) error {
 
 // Config is the repository-level file: namespaces owned and imported.
 type Config struct {
+	// Grammar pins the @gloss grammar version the repository is written in
+	// (like Go's `go 1.24` directive). Default 1.
+	Grammar  int                       `yaml:"grammar,omitempty" json:"grammar,omitempty"`
 	Owns     map[string]*NamespaceDecl `yaml:"owns" json:"owns"`
 	Imports  map[string]*ImportDecl    `yaml:"imports,omitempty" json:"imports,omitempty"`
 	Prefixes map[string]string         `yaml:"prefixes,omitempty" json:"prefixes,omitempty"`
@@ -142,6 +145,12 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	c.Dir = filepath.Dir(path)
+	if c.Grammar == 0 {
+		c.Grammar = 1
+	}
+	if c.Grammar < 0 {
+		return nil, fmt.Errorf("%s: grammar must be a positive integer", path)
+	}
 	for prefix, ns := range c.Owns {
 		if ns == nil {
 			return nil, fmt.Errorf("%s: owns.%s is empty", path, prefix)
@@ -158,6 +167,11 @@ func LoadConfig(path string) (*Config, error) {
 		if ns.IRI == "" {
 			return nil, fmt.Errorf("%s: owns.%s: iri is required", path, prefix)
 		}
+		if ns.Version != "" {
+			if _, err := ParseSemver(ns.Version); err != nil {
+				return nil, fmt.Errorf("%s: owns.%s: version %q is not semver", path, prefix, ns.Version)
+			}
+		}
 	}
 	for prefix, im := range c.Imports {
 		if im == nil {
@@ -168,6 +182,11 @@ func LoadConfig(path string) (*Config, error) {
 		}
 		if im.Tier != "" && im.Tier != TierCore && im.Tier != TierImpl {
 			return nil, fmt.Errorf("%s: imports.%s: tier must be core or implementation, got %q", path, prefix, im.Tier)
+		}
+		if im.Version != "" {
+			if _, err := ParseConstraint(im.Version); err != nil {
+				return nil, fmt.Errorf("%s: imports.%s: version range %q: %v", path, prefix, im.Version, err)
+			}
 		}
 	}
 	if c.Views == "" {
@@ -216,6 +235,13 @@ type Concept struct {
 	Deprecated bool       `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	ReplacedBy string     `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	Value      any        `yaml:"value,omitempty" json:"value,omitempty"`
+	// Proposed marks an entry an agent (or anyone) added with the same semantics
+	// as @gloss?: it exists so links resolve, but a human accepts it
+	// (gloss accept --concept) before it counts as part of the ontology.
+	Proposed   bool   `yaml:"proposed,omitempty" json:"proposed,omitempty"`
+	ProposedBy string `yaml:"proposed-by,omitempty" json:"proposed-by,omitempty"`
+	// Aliases are other names people and agents use for the concept; search matches them.
+	Aliases StringList `yaml:"aliases,omitempty" json:"aliases,omitempty"`
 	// Shapes is reserved for SHACL-style instance validation (Phase 3).
 	Shapes any `yaml:"shapes,omitempty" json:"shapes,omitempty"`
 	// Relations holds every other key: relation name → targets.

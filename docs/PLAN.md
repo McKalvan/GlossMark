@@ -71,7 +71,8 @@ Gates are a policy table with spec defaults, overridable in `glossmark.yaml` und
 ## 4. Repository layout of this project
 
 ```
-cmd/gloss/                CLI entry point (subcommands: build, check, drift, diff, coverage, accept, reject, status, view, export, publish, landscape, mcp, agents, version)
+cmd/gloss/                CLI entry point (subcommands: build, check, drift, diff, impact, coverage, accept, reject, status, propose, context, hook, view, export, publish, landscape, mcp, agents, version)
+internal/ontoedit/        Formatting-preserving edits to *.gloss.yaml (propose, accept, remove)
 internal/model/           File formats as Go types + validation; relation vocabulary
 internal/marker/          Grammar, comment table, declaration detector
 internal/load/            Workspace loader and import resolver
@@ -108,7 +109,20 @@ action.yml                Composite GitHub Action: build, check, drift, diff, PR
 9. **Comparison details the spec leaves open.** A manifest relation that declares nothing is not compared (no claim, no finding). `implements` lifts to `realizes`; `represents` lifts as itself and is reported, not gated, because manifests declare behaviour. Internal concepts and event emitters are exempt from the `realizes` comparison; events are compared through `publishes`/`subscribes`. Intended relations lift through the realized core concept, so `AuthorizeHandler realizes Authorization produces Payment` makes the boundary produce `Payment`.
 10. **Landscape before federation.** `gloss landscape <repo>...` unions sibling checkouts by IRI and re-derives rollups, which gives the context-map edge and closes single-repo gaps today; the published-artifact fetcher will feed the same union later.
 
-## 6. Verification
+## 6. Agent-experience additions (beyond the spec)
+
+Built after the first cut, because they are what pays off on an agent's first day:
+
+1. **Proposed ontology entries.** `proposed: true` / `proposed-by:` on a concept is the ontology's `@gloss?`. `gloss propose concept` and `gloss propose --from-new` write them (and rewrite `ns:NEW:Name` markers); they are HARD until `gloss accept --concept` drops the flag, tracked in the ledger as `concept:<curie>` entries, so a new concept and its implementation ship in one PR.
+2. **Diff-aware impact.** `gloss impact [--base ref] [paths]` and MCP `impact_of` with `paths`/`base` report, per changed file, the concepts touched, whether they sit on the published seam, what constrains them, which boundaries declare them, their tests and the other files sharing them, plus the AUTO/SOFT/HARD classification when a base is given.
+3. **Search by meaning.** `search_concepts` matches aliases (`aliases:` on concepts), CamelCase words, stems and small typos, follows `realizes`/`is-a` one hop, and says why each hit matched.
+4. **Session-start briefing.** `gloss context --dir` renders a bounded briefing (boundary, allowed targets, remits, concepts, state); `gloss hook install` registers it as a Claude Code SessionStart hook and registers the MCP server in `.mcp.json`.
+
+## 7. Versioning
+
+Four numbers, documented in `docs/VERSIONING.md`: the tool release (git tag, injected at build time by the release workflow, read from Go build info for `go install`), the grammar (`grammar: N` directive with a written stability and deprecation policy), file formats (`format` headers on `graph.jsonl`, `ledger.jsonl` and `glossmark.lock`, newer formats refused), and namespace semver with enforced import ranges and a `glossmark.lock` written by `gloss lock`.
+
+## 8. Verification
 
 - `go test ./...` runs the conformance corpus, grammar edge cases, rollup rules on synthetic graphs, and end-to-end runs on both examples.
 - The payments example test asserts the spec's "What the tooling makes of it" table: one violation (Refunding handled, not declared), one gap (Capture implemented but untested), one landscape edge (CaptureConfirmed across repos), one HARD change (SettlementCutoff value), one consistent rollup after taxonomic lift.

@@ -4,7 +4,7 @@ Everything downstream reads `.glossmark/graph.jsonl`, never the source. Adding a
 
 ## Records
 
-Line 1 is the context: `{"type":"context","generator":"gloss 0.1.0","prefixes":{...},"@context":"./context.jsonld"}`.
+Line 1 is the context: `{"type":"context","format":1,"generator":"gloss 0.2.0","prefixes":{...},"@context":"./context.jsonld"}`. `format` is the record format version; a reader refuses a newer one (see `docs/VERSIONING.md`).
 
 Node records (`"type":"node"`), sorted by node type then IRI:
 

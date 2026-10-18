@@ -1,4 +1,4 @@
-{"type":"context","generator":"gloss 0.1.0","prefixes":{"acme":"https://arch.acme.dev/boundaries/","impl":"https://onto.acme.dev/horse-factory/","zoo":"https://onto.acme.dev/zoo/"},"@context":"./context.jsonld"}
+{"type":"context","format":1,"generator":"gloss 0.0.0-dev","prefixes":{"acme":"https://arch.acme.dev/boundaries/","impl":"https://onto.acme.dev/horse-factory/","zoo":"https://onto.acme.dev/zoo/"},"@context":"./context.jsonld"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:human:claude","curie":"human:claude","kind":"human","label":"human:claude"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:team:horse-platform","curie":"team:horse-platform","label":"horse-platform"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:team:zoo-product","curie":"team:zoo-product","label":"zoo-product"}
@@ -34,7 +34,7 @@
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Animal","curie":"zoo:Animal","ns":"zoo","tier":"core","kind":"entity","file":"ontology/zoo.gloss.yaml","line":6}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Breeding","curie":"zoo:Breeding","ns":"zoo","tier":"core","kind":"process","file":"ontology/zoo.gloss.yaml","line":14}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Donkey","curie":"zoo:Donkey","ns":"zoo","tier":"core","kind":"entity","file":"ontology/zoo.gloss.yaml","line":11}
-{"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Foal","curie":"zoo:Foal","ns":"zoo","tier":"core","kind":"entity","file":"ontology/zoo.gloss.yaml","line":10}
+{"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Foal","curie":"zoo:Foal","ns":"zoo","tier":"core","kind":"entity","aliases":["filly","colt"],"file":"ontology/zoo.gloss.yaml","line":10}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/FoalBorn","curie":"zoo:FoalBorn","ns":"zoo","tier":"core","kind":"event","file":"ontology/zoo.gloss.yaml","line":16}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Foaling","curie":"zoo:Foaling","ns":"zoo","tier":"core","kind":"process","file":"ontology/zoo.gloss.yaml","line":15}
 {"type":"node","node":"concept","id":"https://onto.acme.dev/zoo/Horse","curie":"zoo:Horse","ns":"zoo","tier":"core","kind":"entity","file":"ontology/zoo.gloss.yaml","line":7}

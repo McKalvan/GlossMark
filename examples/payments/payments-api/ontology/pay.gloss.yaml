@@ -4,7 +4,7 @@ iri: https://onto.acme.dev/pay/
 version: 1.2.0
 concepts:
   Payment:          { kind: entity }
-  Refund:           { kind: entity, reverses: Payment }
+  Refund:           { kind: entity, reverses: Payment, aliases: [chargeback, reversal] }
   Refunding:        { kind: process, consumes: [Payment], produces: [Refund] }
   Merchant:         { kind: entity }
   Authorization:    { kind: process, produces: [Payment] }
@@ -12,7 +12,7 @@ concepts:
   Settlement:       { kind: process, consumes: [Payment], produces: [Payout] }
   Payout:           { kind: entity }
   CaptureConfirmed: { kind: event }
-  SettlementCutoff: { kind: constraint, constrains: [Settlement] }   # value comes from engineering
+  SettlementCutoff: { kind: constraint, constrains: [Settlement], aliases: [cut-off time], doc: The time of day after which captures settle the next day. }   # value comes from engineering
 relations:
   produces: { lift: range-lcs }
   consumes: { lift: range-lcs }

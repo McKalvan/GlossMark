@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.24", cache: true }
+      - run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Examples still build and drift as documented
+        run: |
+          go build -o gloss ./cmd/gloss
+          (cd examples/horse-factory && ../../gloss check && ../../gloss build -q)
+          (cd examples/payments/payments-api && ../../../gloss check)
+          (cd examples/payments/settlement-worker && ../../../gloss check)
+          ./gloss landscape examples/payments/payments-api examples/payments/settlement-worker --fail-on dangling

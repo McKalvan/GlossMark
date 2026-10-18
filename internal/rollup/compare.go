@@ -21,6 +21,7 @@ const (
 	KindUntested   = "untested"  // implemented but no tests/verifies
 	KindStale      = "stale"     // anchor fingerprint changed
 	KindDangling   = "dangling"  // unresolved reference
+	KindProposed   = "proposed"  // proposed concept awaiting acceptance
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
@@ -72,6 +73,7 @@ type Metrics struct {
 	Violations       int     `json:"violations"`
 	Gaps             int     `json:"gaps"`
 	Untested         int     `json:"untested"`
+	ProposedConcepts int     `json:"proposed_concepts"`
 	Dangling         int     `json:"dangling"`
 	BacklogOldestDay int     `json:"review_backlog_oldest_days"`
 	Concepts         int     `json:"concepts"`
@@ -430,6 +432,23 @@ func (c *comparer) rogues() {
 			}
 		}
 	}
+	// Proposed concepts: in the ontology with proposed: true, awaiting a human.
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		if !n.Proposed || n.Imported {
+			continue
+		}
+		by := ""
+		if n.ProposedBy != "" {
+			by = " by " + n.ProposedBy
+		}
+		c.add(Finding{Kind: KindProposed, Severity: "info", Concept: n.CURIE, Path: n.File, Line: n.Line, Proposed: true,
+			Msg: fmt.Sprintf("%s is a proposed %s%s; accept with gloss accept --concept %s", n.CURIE, n.Kind, by, n.CURIE)})
+		var owners []string
+		if d, ok := c.ws.Config.Owns[n.NS]; ok && d.Owner != "" {
+			owners = []string{d.Owner}
+		}
+		c.r.Decisions = append(c.r.Decisions, Decision{Kind: "proposed-concept", Concept: n.CURIE, Path: n.File, Line: n.Line, Note: n.Doc, Actor: n.ProposedBy, Owners: owners})
+	}
 	// Extension proposals: owned concepts that is-a an imported core concept are candidates for upstreaming.
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
 		if n.Imported || n.Deprecated {
@@ -571,6 +590,8 @@ func (c *comparer) metrics() {
 			m.Stale++
 		case KindDangling:
 			m.Dangling++
+		case KindProposed:
+			m.ProposedConcepts++
 		}
 	}
 	// Coverage: files under a boundary with at least one accepted link.

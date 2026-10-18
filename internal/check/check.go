@@ -85,7 +85,11 @@ func (c *checker) concepts() {
 		case model.TierImpl:
 			realizes := c.g.Objects(n.ID, "realizes")
 			if len(realizes) == 0 && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 {
-				c.add(n.File, n.Line, "error", "GM320", fmt.Sprintf("%s: implementation concept must carry realizes: <core concept> or internal: true", n.CURIE))
+				sev := "error"
+				if n.Proposed {
+					sev = "warning" // a proposal may be incomplete; acceptance requires the full entry
+				}
+				c.add(n.File, n.Line, sev, "GM320", fmt.Sprintf("%s: implementation concept must carry realizes: <core concept> or internal: true", n.CURIE))
 			}
 			for _, r := range realizes {
 				rn := c.g.Node(r)
@@ -108,6 +112,9 @@ func (c *checker) concepts() {
 					c.add(n.File, n.Line, "error", "GM332", fmt.Sprintf("%s: a concept cannot be both internal and published", n.CURIE))
 				}
 			}
+		}
+		if n.Proposed && n.Imported {
+			c.add(n.File, n.Line, "error", "GM350", fmt.Sprintf("%s: proposed concepts live in owned namespaces; propose upstream through a decision request", n.CURIE))
 		}
 		if n.Deprecated && n.ReplacedBy == "" {
 			c.add(n.File, n.Line, "warning", "GM340", fmt.Sprintf("%s: deprecated concepts should carry replaced-by:", n.CURIE))
