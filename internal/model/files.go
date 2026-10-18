@@ -96,6 +96,10 @@ type Policy struct {
 	Waivers []Waiver `yaml:"waivers,omitempty" json:"waivers,omitempty"`
 	// CoverageFailUnder is the default for gloss coverage --fail-under (percent).
 	CoverageFailUnder float64 `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
+	// CriticalityGates raises the gate of any change that touches a concept or
+	// boundary at or above a criticality level: level → AUTO | SOFT | HARD.
+	// Default: critical → HARD. See docs/GOVERNANCE.md.
+	CriticalityGates map[string]string `yaml:"criticality-gates,omitempty" json:"criticality-gates,omitempty"`
 }
 
 // Waiver suppresses one finding until it expires.
@@ -113,7 +117,40 @@ func DefaultPolicy() *Policy {
 		SoftConfThreshold: 0.7,
 		HardPaths:         []string{"ontology/**", "**/.gloss.yaml", "glossmark.yaml"},
 		CoverageFailUnder: 0,
+		CriticalityGates:  map[string]string{"critical": "HARD"},
 	}
+}
+
+// GateForCriticality returns the minimum gate the policy demands for a change
+// touching something at the given criticality level ("" when none applies).
+// The strictest matching rule wins; a rule at a lower level covers every level above it.
+func (p *Policy) GateForCriticality(level string) string {
+	r := CriticalityRank(level)
+	if p == nil || r < 0 {
+		return ""
+	}
+	best, bestRank := "", -1
+	for lvl, gate := range p.CriticalityGates {
+		if CriticalityRank(lvl) < 0 || CriticalityRank(lvl) > r {
+			continue
+		}
+		if gr := gateRank(gate); gr > bestRank {
+			best, bestRank = gate, gr
+		}
+	}
+	return best
+}
+
+func gateRank(g string) int {
+	switch g {
+	case "AUTO":
+		return 0
+	case "SOFT":
+		return 1
+	case "HARD":
+		return 2
+	}
+	return -1
 }
 
 // EffectivePolicy merges the configured policy over the defaults.
@@ -128,6 +165,9 @@ func (c *Config) EffectivePolicy() *Policy {
 	}
 	if len(p.HardPaths) == 0 {
 		p.HardPaths = d.HardPaths
+	}
+	if p.CriticalityGates == nil {
+		p.CriticalityGates = d.CriticalityGates
 	}
 	return &p
 }
@@ -189,6 +229,16 @@ func LoadConfig(path string) (*Config, error) {
 			}
 		}
 	}
+	if c.Policy != nil {
+		for lvl, gate := range c.Policy.CriticalityGates {
+			if CriticalityRank(lvl) < 0 {
+				return nil, fmt.Errorf("%s: policy.criticality-gates: unknown level %q (one of %s)", path, lvl, strings.Join(CriticalityLevels, ", "))
+			}
+			if gateRank(gate) < 0 {
+				return nil, fmt.Errorf("%s: policy.criticality-gates.%s: gate must be AUTO, SOFT or HARD, got %q", path, lvl, gate)
+			}
+		}
+	}
 	if c.Views == "" {
 		c.Views = "ontology/views.yaml"
 	}
@@ -242,6 +292,10 @@ type Concept struct {
 	ProposedBy string `yaml:"proposed-by,omitempty" json:"proposed-by,omitempty"`
 	// Aliases are other names people and agents use for the concept; search matches them.
 	Aliases StringList `yaml:"aliases,omitempty" json:"aliases,omitempty"`
+	// Criticality classifies how much a change here matters (low | medium |
+	// high | critical). Implementation concepts inherit it from what they
+	// realize when unset. See docs/GOVERNANCE.md.
+	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
 	// Shapes is reserved for SHACL-style instance validation (Phase 3).
 	Shapes any `yaml:"shapes,omitempty" json:"shapes,omitempty"`
 	// Relations holds every other key: relation name → targets.
@@ -318,6 +372,10 @@ type Manifest struct {
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`
 	Owner            string     `yaml:"owner,omitempty" json:"owner,omitempty"`
+	// Criticality of the boundary (low | medium | high | critical). When unset
+	// it is the highest criticality of the concepts the boundary realizes,
+	// else its parent's. See docs/GOVERNANCE.md.
+	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
 
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
@@ -362,6 +420,9 @@ func LoadManifest(path string) (*Manifest, error) {
 	}
 	if !ok {
 		return nil, fmt.Errorf("%s: level must be one of %s, got %q", path, strings.Join(BoundaryLevels, ", "), m.Level)
+	}
+	if !ValidCriticality(m.Criticality) {
+		return nil, fmt.Errorf("%s: criticality must be one of %s, got %q", path, strings.Join(CriticalityLevels, ", "), m.Criticality)
 	}
 	return &m, nil
 }

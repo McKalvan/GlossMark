@@ -155,6 +155,9 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 		sort.Strings(via)
 		g.AddEdge(&graph.Edge{S: k.from, P: "depends-on", O: k.to, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleImplied, Via: via}})
 	}
+
+	// Governance: effective criticality of every concept, boundary and artifact.
+	Criticality(g)
 }
 
 func boundarySubjects(g *graph.Graph, o string, preds ...string) []string {

@@ -197,10 +197,15 @@
         "aliases": {
           "$ref": "#/$defs/stringOrList",
           "description": "Other names people and agents use; search_concepts matches them."
+        },
+        "criticality": {
+          "description": "Governance level of the concept (docs/GOVERNANCE.md). Implementation concepts inherit the highest level of what they realize when unset.",
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
         }
       },
       "patternProperties": {
-        "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|aliases)$)[a-z][a-z0-9-]*$": {
+        "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|aliases|criticality)$)[a-z][a-z0-9-]*$": {
           "description": "A relation (produces, consumes, publishes, subscribes, constrains, reverses, attaches-to, or one declared under relations:) and its target(s).",
           "$ref": "#/$defs/stringOrList"
         }

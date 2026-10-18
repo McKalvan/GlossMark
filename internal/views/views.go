@@ -10,6 +10,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
 // Projection is one rendered view.
@@ -40,6 +41,17 @@ type PNode struct {
 	Value       any      `json:"value,omitempty"`
 	Path        string   `json:"path,omitempty"`
 	Imported    bool     `json:"imported,omitempty"`
+	// Boundary is the boundary node (CURIE) this concept or artifact sits in,
+	// resolved from what the boundary's code realizes or represents; the
+	// viewer draws the boundary as a box around its members. Empty when no
+	// boundary houses the node or several unrelated boundaries do.
+	Boundary string `json:"boundary,omitempty"`
+	// Criticality is the effective governance level of the node (the highest
+	// of its own and of everything folded into it); CriticalityFrom says where
+	// the level comes from. Owner is the boundary's owner.
+	Criticality     string `json:"criticality,omitempty"`
+	CriticalityFrom string `json:"criticalityFrom,omitempty"`
+	Owner           string `json:"owner,omitempty"`
 }
 
 // PEdge is an edge as the view shows it.
@@ -87,6 +99,7 @@ func Project(g *graph.Graph, name string, v *model.View) *Projection {
 	if p.zoom >= zoomIndex["code"] {
 		p.artifacts()
 	}
+	p.house()
 	p.edges()
 	pr.Nodes = p.nodes
 	pr.Edges = p.outEdges
@@ -225,7 +238,7 @@ func (p *projector) concepts() {
 		}
 		p.included[n.ID] = true
 		p.fold[n.ID] = []string{n.ID}
-		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported}
+		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom}
 		pn.Branch = p.branch(n.ID)
 		if n.Published != "" {
 			pn.Published = true
@@ -295,7 +308,7 @@ func (p *projector) boundaries() {
 		}
 		p.included[b.ID] = true
 		p.fold[b.ID] = []string{b.ID}
-		pn := PNode{ID: b.CURIE, Label: p.g.Label(b.ID), Type: "boundary", Kind: b.Kind, NS: b.NS, Depth: lvl, Doc: b.Doc, Branch: "boundary"}
+		pn := PNode{ID: b.CURIE, Label: p.g.Label(b.ID), Type: "boundary", Kind: b.Kind, NS: b.NS, Depth: lvl, Doc: b.Doc, Branch: "boundary", Criticality: b.Criticality, CriticalityFrom: b.CriticalityFrom, Owner: b.Owner}
 		if chain := p.g.PartOfChain(b.ID); len(chain) > 0 {
 			pn.Parent = p.g.Curie(chain[0])
 		}
@@ -318,15 +331,159 @@ func (p *projector) artifacts() {
 	for _, a := range p.g.NodesOf(model.NodeArtifact) {
 		p.included[a.ID] = true
 		p.fold[a.ID] = []string{a.ID}
-		pn := PNode{ID: p.g.Curie(a.ID), Label: a.Label, Type: "artifact", Kind: a.Kind, Depth: 4, Path: a.Path, Branch: "artifact"}
+		pn := PNode{ID: p.g.Curie(a.ID), Label: a.Label, Type: "artifact", Kind: a.Kind, Depth: 4, Path: a.Path, Branch: "artifact", Criticality: a.Criticality, CriticalityFrom: a.CriticalityFrom}
 		if a.Boundary != "" {
 			if t := p.fold[a.Boundary]; len(t) > 0 {
 				pn.Parent = p.g.Curie(t[0])
+				pn.Boundary = pn.Parent
 			}
 		}
 		p.byID[pn.ID] = len(p.nodes)
 		p.nodes = append(p.nodes, pn)
 	}
+}
+
+// house places every concept node inside the boundary whose code realizes or
+// represents it. Candidates come from the housing relations on boundaries
+// (declared in manifests or derived from the artifacts beneath them), mapped
+// through this view's folds. The deepest candidates win; when several
+// unrelated boundaries house one concept it goes to their nearest common
+// enclosing boundary, or stays unplaced when there is none. A part-of tree
+// moves as one: its root takes the common boundary of its parts.
+func (p *projector) house() {
+	cand := map[string]map[string]bool{} // concept CURIE → boundary CURIEs
+	for _, b := range p.g.NodesOf(model.NodeBoundary) {
+		bt := p.fold[b.ID]
+		if len(bt) == 0 || !p.included[bt[0]] {
+			continue
+		}
+		bc := p.g.Curie(bt[0])
+		for _, rel := range rollup.HousingRelations {
+			for _, e := range p.g.Out(b.ID, rel) {
+				for _, t := range p.target(e.O, 0) {
+					if !p.included[t] {
+						continue
+					}
+					tc := p.g.Curie(t)
+					if i, ok := p.byID[tc]; !ok || p.nodes[i].Type != "concept" {
+						continue
+					}
+					if cand[tc] == nil {
+						cand[tc] = map[string]bool{}
+					}
+					cand[tc][bc] = true
+				}
+			}
+		}
+	}
+	for cu, set := range cand {
+		p.nodes[p.byID[cu]].Boundary = p.resolveBoundary(set)
+	}
+	// Part-of trees: the root adopts the common boundary of its descendants
+	// when it has none of its own; parts without one follow the root.
+	rootOf := func(i int) int {
+		cur := i
+		for g := 0; g < 32; g++ {
+			par := p.nodes[cur].Parent
+			j, ok := p.byID[par]
+			if par == "" || !ok || p.nodes[j].Type != "concept" {
+				break
+			}
+			cur = j
+		}
+		return cur
+	}
+	trees := map[int]map[string]bool{}
+	for i := range p.nodes {
+		if p.nodes[i].Type != "concept" {
+			continue
+		}
+		r := rootOf(i)
+		if r == i {
+			continue
+		}
+		if trees[r] == nil {
+			trees[r] = map[string]bool{}
+		}
+		if p.nodes[i].Boundary != "" {
+			trees[r][p.nodes[i].Boundary] = true
+		}
+	}
+	for r, set := range trees {
+		if p.nodes[r].Boundary == "" && len(set) > 0 {
+			p.nodes[r].Boundary = p.resolveBoundary(set)
+		}
+	}
+	for i := range p.nodes {
+		if p.nodes[i].Type == "concept" && p.nodes[i].Boundary == "" {
+			if r := rootOf(i); r != i {
+				p.nodes[i].Boundary = p.nodes[r].Boundary
+			}
+		}
+	}
+}
+
+// boundaryChain returns the boundary and its enclosing boundaries, nearest first.
+func (p *projector) boundaryChain(curie string) []string {
+	var out []string
+	cur := curie
+	for g := 0; g < 32; g++ {
+		i, ok := p.byID[cur]
+		if !ok || p.nodes[i].Type != "boundary" {
+			break
+		}
+		out = append(out, cur)
+		cur = p.nodes[i].Parent
+	}
+	return out
+}
+
+// resolveBoundary picks one boundary for a set of candidates: drop any that
+// encloses another candidate, then take the nearest common enclosing boundary.
+func (p *projector) resolveBoundary(set map[string]bool) string {
+	var deepest []string
+	for b := range set {
+		enclosesOther := false
+		for o := range set {
+			if o == b {
+				continue
+			}
+			for _, anc := range p.boundaryChain(o)[1:] {
+				if anc == b {
+					enclosesOther = true
+				}
+			}
+		}
+		if !enclosesOther {
+			deepest = append(deepest, b)
+		}
+	}
+	sort.Strings(deepest)
+	if len(deepest) == 0 {
+		return ""
+	}
+	if len(deepest) == 1 {
+		return deepest[0]
+	}
+	for _, anc := range p.boundaryChain(deepest[0]) {
+		common := true
+		for _, o := range deepest[1:] {
+			found := false
+			for _, x := range p.boundaryChain(o) {
+				if x == anc {
+					found = true
+				}
+			}
+			if !found {
+				common = false
+				break
+			}
+		}
+		if common {
+			return anc
+		}
+	}
+	return ""
 }
 
 func (p *projector) relationShown(rel string) bool {
@@ -527,7 +684,7 @@ type Delta struct {
 	RemovedNodes []string `json:"removed_nodes,omitempty"`
 	AddedEdges   []PEdge  `json:"added_edges,omitempty"`
 	RemovedEdges []PEdge  `json:"removed_edges,omitempty"`
-	ChangedNodes []string `json:"changed_nodes,omitempty"` // published value / badge changed
+	ChangedNodes []string `json:"changed_nodes,omitempty"` // published value / badge / criticality changed
 }
 
 // Changed reports whether the delta is non-empty.
@@ -552,7 +709,7 @@ func Diff(base, head *Projection) *Delta {
 			d.AddedNodes = append(d.AddedNodes, id)
 			continue
 		}
-		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Kind != n.Kind {
+		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Kind != n.Kind || b.Criticality != n.Criticality {
 			d.ChangedNodes = append(d.ChangedNodes, id)
 		}
 	}

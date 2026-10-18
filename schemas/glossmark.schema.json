@@ -208,6 +208,13 @@
           "minimum": 0,
           "maximum": 100,
           "default": 0
+        },
+        "criticality-gates": {
+          "description": "Minimum gate for a change that touches a concept or boundary at or above a criticality level (docs/GOVERNANCE.md). Default: critical → HARD.",
+          "type": "object",
+          "propertyNames": { "enum": ["low", "medium", "high", "critical"] },
+          "additionalProperties": { "type": "string", "enum": ["AUTO", "SOFT", "HARD"] },
+          "default": { "critical": "HARD" }
         }
       }
     },

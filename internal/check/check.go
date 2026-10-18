@@ -11,16 +11,18 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
 // Run returns lint diagnostics for a built graph. Codes:
 //
-//	GM2xx references   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests
+//	GM2xx references   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
 func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c := &checker{ws: ws, g: g}
 	c.concepts()
 	c.edges()
 	c.manifests()
+	c.governance()
 	sort.SliceStable(c.out, func(i, j int) bool {
 		a, b := c.out[i], c.out[j]
 		if a.Path != b.Path {
@@ -67,6 +69,9 @@ func (c *checker) concepts() {
 		}
 		if !isPascal(strings.TrimPrefix(n.CURIE, n.NS+":")) {
 			c.add(n.File, n.Line, "warning", "GM302", fmt.Sprintf("%s: concept names are PascalCase", n.CURIE))
+		}
+		if n.CriticalityFrom == "declared" && !model.ValidCriticality(n.Criticality) {
+			c.add(n.File, n.Line, "error", "GM303", fmt.Sprintf("%s: unknown criticality %q; allowed: %s", n.CURIE, n.Criticality, strings.Join(model.CriticalityLevels, ", ")))
 		}
 		switch n.Tier {
 		case model.TierCore:
@@ -245,6 +250,14 @@ func (c *checker) edges() {
 				c.add(relFile(c.ws, o.Path), con.Line, "error", "GM401", fmt.Sprintf("%s: concept defined in namespace %s: belongs to %s:, which this repo does not own (own-subject rule)", name, p, c.prefixOf(name)))
 			}
 		}
+	}
+}
+
+// governance: a boundary that declares a criticality below a concept its code
+// realizes understates its risk; the concept's level wins in reviews.
+func (c *checker) governance() {
+	for _, u := range rollup.Understated(c.g) {
+		c.add(u.File, 1, "warning", "GM600", fmt.Sprintf("%s declares criticality %s but realizes %s (%s); reviews use the higher level", u.Boundary, u.Declared, u.Concept, u.Level))
 	}
 }
 

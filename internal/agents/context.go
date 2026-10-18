@@ -28,6 +28,13 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 		if len(m.Realizes) > 0 {
 			fmt.Fprintf(&sb, "; realizes %s", strings.Join(m.Realizes, ", "))
 		}
+		if b := g.NodeByCurie(m.Boundary); b != nil && b.Criticality != "" {
+			from := b.CriticalityFrom
+			if from != "declared" {
+				from = "inherited from " + from
+			}
+			fmt.Fprintf(&sb, "; criticality %s (%s)", b.Criticality, from)
+		}
 		sb.WriteString("\n")
 		if len(m.Allowed) > 0 {
 			fmt.Fprintf(&sb, "Allowed targets: %s (others are HARD-gated)\n", strings.Join(m.Allowed, ", "))
@@ -72,6 +79,9 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 		}
 		if n.Proposed {
 			tags = append(tags, "PROPOSED")
+		}
+		if model.CriticalityRank(n.Criticality) >= model.CriticalityRank("high") {
+			tags = append(tags, "criticality "+n.Criticality)
 		}
 		if len(n.Aliases) > 0 {
 			tags = append(tags, "aka "+strings.Join(n.Aliases, "/"))

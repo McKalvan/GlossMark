@@ -41,7 +41,7 @@ or with the `jsonschema` Python package.
 Validates the repo-level `glossmark.yaml` (`model.Config`): the `owns` and
 `imports` namespace tables keyed by CURIE prefix, extra `prefixes`, the `views`
 path, `exclude` and `test-paths` globs, `comment-styles` overrides and the gate
-`policy` with its waivers. Unknown keys are rejected, matching the Go decoder's
+`policy` with its waivers and `criticality-gates`. Unknown keys are rejected, matching the Go decoder's
 `KnownFields(true)`; `tier` must be `core` or `implementation`.
 
 ### `ontology.schema.json`
@@ -50,7 +50,7 @@ Validates a `*.gloss.yaml` ontology file (`model.Ontology`, `model.Concept`,
 `model.Published`, `model.RelationDecl`). `concepts` maps PascalCase names to
 concepts; the structural keys (`kind`, `label`, `doc`, `is-a`, `part-of`,
 `has-part`, `realizes`, `published`, `internal`, `deprecated`, `replaced-by`,
-`value`, `shapes`) are typed and every other kebab-case key is a relation whose
+`value`, `shapes`, `criticality`) are typed and every other kebab-case key is a relation whose
 value is a target or a list of targets. `relations` declares or tunes relation
 types. Note the Go loader is lenient about unknown top-level keys; the schema is
 strict so that typos are caught in the editor.
@@ -60,7 +60,8 @@ strict so that typos are caught in the editor.
 Validates a per-directory `.gloss.yaml` boundary manifest (`model.Manifest`):
 the required `boundary` CURIE, its `level`, the declared intent relations
 (`part-of`, `realizes`, `produces`, `consumes`, `publishes`, `subscribes`),
-`default-namespace`, the `allowed` CURIE globs, `generated` globs and `owner`.
+`default-namespace`, the `allowed` CURIE globs, `generated` globs, `owner` and
+`criticality`.
 Unknown keys are rejected, as in Go.
 
 ### `views.schema.json`

@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -26,7 +27,10 @@ type ConceptTouch struct {
 	Proposed       bool     `json:"proposed,omitempty"`
 	Deprecated     bool     `json:"deprecated,omitempty"`
 	Internal       bool     `json:"internal,omitempty"`
-	Warnings       []string `json:"warnings,omitempty"`
+	// Criticality is the concept's effective governance level and where it comes from.
+	Criticality     string   `json:"criticality,omitempty"`
+	CriticalityFrom string   `json:"criticality_from,omitempty"`
+	Warnings        []string `json:"warnings,omitempty"`
 }
 
 // FileTouch is what one changed file touches.
@@ -39,6 +43,10 @@ type FileTouch struct {
 	Concepts []ConceptTouch `json:"concepts"`
 	Gate     Class          `json:"gate"`
 	Hints    []string       `json:"hints,omitempty"`
+	// Criticality is the highest level among the file's boundary and the
+	// concepts it touches; CriticalityFrom names the node that carries it.
+	Criticality     string `json:"criticality,omitempty"`
+	CriticalityFrom string `json:"criticality_from,omitempty"`
 }
 
 // LinkTouch is one marker in a changed file.
@@ -57,10 +65,14 @@ type LinkTouch struct {
 // Ontology and manifest files are expanded to the concepts and boundaries they define.
 func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 	var out []FileTouch
+	pol := ws.Config.EffectivePolicy()
 	for _, f := range files {
 		ft := FileTouch{Path: f, Gate: AUTO}
 		if m := ws.ManifestFor(f); m != nil {
 			ft.Boundary, ft.Manifest, ft.Allowed = m.Boundary, m.Path, m.Allowed
+			if b := g.NodeByCurie(m.Boundary); b != nil && b.Criticality != "" {
+				ft.Criticality, ft.CriticalityFrom = b.Criticality, b.CURIE
+			}
 		}
 		seen := map[string]bool{}
 		addConcept := func(id string) {
@@ -124,9 +136,20 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 			if c.Proposed {
 				ft.Gate = HARD
 			}
+			if model.CriticalityRank(c.Criticality) > model.CriticalityRank(ft.Criticality) {
+				ft.Criticality, ft.CriticalityFrom = c.Criticality, c.Curie
+			}
 		}
 		if ft.Gate == AUTO && len(ft.Links) > 0 {
 			ft.Gate = SOFT
+		}
+		if ft.Criticality != "" {
+			if want := Class(pol.GateForCriticality(ft.Criticality)); want != "" && rank(want) > rank(ft.Gate) {
+				ft.Gate = want
+			}
+			if model.CriticalityRank(ft.Criticality) >= model.CriticalityRank("high") {
+				ft.Hints = append(ft.Hints, fmt.Sprintf("criticality %s (via %s): a reviewer who owns this area should see the change", ft.Criticality, ft.CriticalityFrom))
+			}
 		}
 		sort.Slice(ft.Links, func(i, j int) bool { return ft.Links[i].Line < ft.Links[j].Line })
 		sort.Slice(ft.Concepts, func(i, j int) bool { return ft.Concepts[i].Curie < ft.Concepts[j].Curie })
@@ -158,7 +181,7 @@ func realizesChain(g *graph.Graph, id string) []string {
 }
 
 func describeTouch(g *graph.Graph, n *graph.Node, self string) ConceptTouch {
-	c := ConceptTouch{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, Published: n.Published, Proposed: n.Proposed, Deprecated: n.Deprecated, Internal: n.Internal}
+	c := ConceptTouch{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, Published: n.Published, Proposed: n.Proposed, Deprecated: n.Deprecated, Internal: n.Internal, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom}
 	for _, e := range g.In(n.ID, "published-as") {
 		c.PublishedBy = append(c.PublishedBy, g.Curie(e.S))
 	}

@@ -298,6 +298,10 @@ func describe(g *graph.Graph, n *graph.Node) map[string]any {
 	if n.Internal {
 		out["internal"] = true
 	}
+	if n.Criticality != "" {
+		out["criticality"] = n.Criticality
+		out["criticality_from"] = n.CriticalityFrom
+	}
 	if n.Deprecated {
 		out["deprecated"] = true
 		out["replaced_by"] = n.ReplacedBy

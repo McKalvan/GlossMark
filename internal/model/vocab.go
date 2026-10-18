@@ -30,6 +30,30 @@ var BoundaryLevels = []string{"domain", "system", "container", "component"}
 // ZoomLevels in order, coarsest first. "landscape" is above every boundary.
 var ZoomLevels = []string{"landscape", "system", "container", "component", "code"}
 
+// CriticalityLevels in increasing order. Empty means unclassified. See docs/GOVERNANCE.md.
+var CriticalityLevels = []string{"low", "medium", "high", "critical"}
+
+// CriticalityRank orders levels; unclassified is -1.
+func CriticalityRank(level string) int {
+	for i, l := range CriticalityLevels {
+		if l == level {
+			return i
+		}
+	}
+	return -1
+}
+
+// ValidCriticality reports whether level is empty or one of CriticalityLevels.
+func ValidCriticality(level string) bool { return level == "" || CriticalityRank(level) >= 0 }
+
+// MaxCriticality returns the higher of two levels.
+func MaxCriticality(a, b string) string {
+	if CriticalityRank(b) > CriticalityRank(a) {
+		return b
+	}
+	return a
+}
+
 // Scopes allowed on an inline marker.
 var Scopes = []string{"file", "symbol", "block", "line", "range"}
 

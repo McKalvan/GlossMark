@@ -71,6 +71,11 @@
     "owner": {
       "description": "Team or actor that owns the boundary; becomes an owns edge from an actor node.",
       "type": "string"
+    },
+    "criticality": {
+      "description": "Governance level of the boundary (docs/GOVERNANCE.md). When unset it is the highest level of the concepts the boundary's code realizes, else its parent's.",
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
     }
   },
   "$defs": {

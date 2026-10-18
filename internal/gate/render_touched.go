@@ -13,6 +13,9 @@ func RenderTouched(ts []FileTouch) string {
 		if t.Boundary != "" {
 			fmt.Fprintf(&sb, ", %s", t.Boundary)
 		}
+		if t.Criticality != "" {
+			fmt.Fprintf(&sb, ", criticality %s", t.Criticality)
+		}
 		sb.WriteString("]\n")
 		for _, l := range t.Links {
 			q := ""
@@ -26,7 +29,11 @@ func RenderTouched(ts []FileTouch) string {
 			fmt.Fprintf(&sb, "  @gloss%s %s %s  (line %d%s)\n", q, l.Relation, l.Target, l.Line, sym)
 		}
 		for _, c := range t.Concepts {
-			fmt.Fprintf(&sb, "  %s (%s, %s)", c.Curie, c.Kind, c.Tier)
+			fmt.Fprintf(&sb, "  %s (%s, %s", c.Curie, c.Kind, c.Tier)
+			if c.Criticality != "" {
+				fmt.Fprintf(&sb, ", %s", c.Criticality)
+			}
+			sb.WriteString(")")
 			var bits []string
 			if c.Published != "" {
 				bits = append(bits, "PUBLISHED as "+c.Published)

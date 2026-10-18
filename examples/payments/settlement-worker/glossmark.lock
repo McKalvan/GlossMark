@@ -2,7 +2,7 @@
 format: 1
 imports:
     pay:
-        version: 1.2.0
+        version: 1.2.1
         range: ^1.2
         source: ../payments-api/ontology/pay.gloss.yaml
-        hash: sha256:a48cf447c49db9709aca87ca2642a2ffe8692d54b08c7d2da4efacbfaa4a804e
+        hash: sha256:4d4ce21deb29581bcedd2e3ce7d4128db03bc8418a82f6523f7aca82fec2be66
