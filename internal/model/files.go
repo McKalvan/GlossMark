@@ -379,16 +379,19 @@ func LoadOntology(path string) (*Ontology, error) {
 
 // Manifest is a per-directory boundary declaration.
 type Manifest struct {
-	Boundary         string     `yaml:"boundary" json:"boundary"`
-	Level            string     `yaml:"level,omitempty" json:"level,omitempty"`
-	Label            string     `yaml:"label,omitempty" json:"label,omitempty"`
-	Doc              string     `yaml:"doc,omitempty" json:"doc,omitempty"`
-	PartOf           StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`
-	Realizes         StringList `yaml:"realizes,omitempty" json:"realizes,omitempty"`
-	Produces         StringList `yaml:"produces,omitempty" json:"produces,omitempty"`
-	Consumes         StringList `yaml:"consumes,omitempty" json:"consumes,omitempty"`
-	Publishes        StringList `yaml:"publishes,omitempty" json:"publishes,omitempty"`
-	Subscribes       StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
+	Boundary   string     `yaml:"boundary" json:"boundary"`
+	Level      string     `yaml:"level,omitempty" json:"level,omitempty"`
+	Label      string     `yaml:"label,omitempty" json:"label,omitempty"`
+	Doc        string     `yaml:"doc,omitempty" json:"doc,omitempty"`
+	PartOf     StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`
+	Realizes   StringList `yaml:"realizes,omitempty" json:"realizes,omitempty"`
+	Produces   StringList `yaml:"produces,omitempty" json:"produces,omitempty"`
+	Consumes   StringList `yaml:"consumes,omitempty" json:"consumes,omitempty"`
+	Publishes  StringList `yaml:"publishes,omitempty" json:"publishes,omitempty"`
+	Subscribes StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
+	// Holds names the entities whose data lives in this boundary (tables,
+	// files, packages); the code's represents links on entities derive it.
+	Holds            StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`
@@ -411,6 +414,7 @@ func (m *Manifest) DeclaredSets() map[string]StringList {
 		"consumes":   m.Consumes,
 		"publishes":  m.Publishes,
 		"subscribes": m.Subscribes,
+		"holds":      m.Holds,
 	}
 }
 

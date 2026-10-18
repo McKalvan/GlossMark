@@ -1159,3 +1159,49 @@ func TestAdoptionDiff(t *testing.T) {
 		t.Errorf("grouped markdown:\n%s", md)
 	}
 }
+
+// TestInfraAndDataSatisfyDeclarations: provisions, configures and deploys on
+// a resource or system-type lift to realizes; represents on an entity lifts
+// to holds; a manifest can declare both and gloss drift compares them.
+func TestInfraAndDataSatisfyDeclarations(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Host: { kind: resource }\n  Shop: { kind: system-type }\n  Order: { kind: entity }\n  Other: { kind: entity }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  AwsHost: { kind: resource, realizes: z:Host }\n  OrdersTable: { kind: entity, realizes: z:Order }\n")
+	write("deploy/.gloss.yaml", "boundary: o:deploy\nlevel: container\nrealizes: [z:Host, z:Shop]\n")
+	write("deploy/main.tf", "# @gloss provisions i:AwsHost\nresource \"aws_instance\" \"host\" {}\n")
+	write("deploy/ci.yml", "# @gloss deploys z:Shop scope=file\nname: deploy\n")
+	write("db/.gloss.yaml", "boundary: o:db\nlevel: container\nholds: [z:Order]\n")
+	write("db/0001.sql", "-- @gloss represents i:OrdersTable\nCREATE TABLE orders (id int);\n-- @gloss represents z:Other\nCREATE TABLE other (id int);\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if gaps := findings(rep, rollup.KindGap); len(gaps) != 0 {
+		t.Errorf("infra and data links should satisfy the declarations; gaps: %+v", gaps)
+	}
+	viol := findings(rep, rollup.KindViolation)
+	if len(viol) != 1 || viol[0].Boundary != "o:db" || viol[0].Relation != "holds" || viol[0].Concept != "z:Other" {
+		t.Errorf("want one holds violation for z:Other, got %+v", viol)
+	}
+	deploy := g.NodeByCurie("o:deploy")
+	if r := g.Objects(deploy.ID, "realizes"); !has(curies(g, r), "i:AwsHost") || !has(curies(g, r), "z:Host") || !has(curies(g, r), "z:Shop") {
+		t.Errorf("deploy realizes = %v", curies(g, r))
+	}
+	for _, d := range check.Run(ws, g) {
+		if d.Severity == "error" {
+			t.Errorf("check error: %s", d)
+		}
+	}
+}
+
+func curies(g *graph.Graph, ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		out = append(out, g.Curie(id))
+	}
+	return out
+}

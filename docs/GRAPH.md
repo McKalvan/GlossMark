@@ -28,7 +28,7 @@ Special object IRIs: `urn:gloss:new:impl:NEW:Gelding` (a proposed new concept), 
 ## Derivation rules
 
 1. **Containment.** An artifact under a manifest is `part-of` that boundary; boundaries chain upward via `part-of`.
-2. **Realization lift.** If artifacts in boundary B `implements` X then B `realizes` X, and every core concept X realizes (through `realizes`, `published-as` and `part-of` chains). Intended relations declared on X and on the concepts it realizes (`produces`, `consumes`, `publishes`, `subscribes`) lift to B as well; `represents` and `verifies` (with its alias `tests`) lift as themselves; the `test-paths` inferrer turns `implements` and `represents` under a test path into `verifies`.
+2. **Realization lift.** If artifacts in boundary B `implements` X then B `realizes` X, and every core concept X realizes (through `realizes`, `published-as` and `part-of` chains). `provisions`, `configures` and `deploys` on a `resource` or `system-type` concept lift to `realizes` the same way, so infrastructure, configuration and deployment boundaries can declare what they stand up. `represents` on an `entity` lifts to `holds` (and to the core entities it realizes), so a data boundary can declare `holds: [pf:Transaction]` and be compared. Intended relations declared on X and on the concepts it realizes (`produces`, `consumes`, `publishes`, `subscribes`) lift to B as well; `represents` and `verifies` (with its alias `tests`) lift as themselves; the `test-paths` inferrer turns `implements` and `represents` under a test path into `verifies`.
 3. **Taxonomic lift** (`lift: range-lcs`). A set `{Mare, Stallion}` is summarized as its least common subsumer `Horse` in views and in the drift report. Opt-in per relation because it is valid for existential claims and invalid for exclusivity claims.
 4. **Implied relationships.** A `publishes`/`subscribes` or `produces`/`consumes` pair on one concept between two boundaries implies `depends-on` (consumer → producer) unless declared. Across repositories this is the context-map edge `gloss landscape` draws.
 5. **Generalization.** Views fold implementation into core via `collapse: via realizes`.
@@ -36,7 +36,7 @@ Special object IRIs: `urn:gloss:new:impl:NEW:Gelding` (a proposed new concept), 
 
 ## Comparison
 
-For each boundary and each of `realizes`, `produces`, `consumes`, `publishes`, `subscribes` that the manifest declares:
+For each boundary and each of `realizes`, `holds`, `produces`, `consumes`, `publishes`, `subscribes` that the manifest declares:
 
 | Declared | Derived from code | Result |
 | --- | --- | --- |
