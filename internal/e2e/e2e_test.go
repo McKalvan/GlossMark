@@ -801,3 +801,61 @@ func TestGraphFormatGuard(t *testing.T) {
 		t.Fatalf("header lacks format: %s", sb.String())
 	}
 }
+
+// TestOntologyFileLint: an unquoted doc with a comma inside { } is cut at the
+// comma and the rest becomes null keys; check must say so (GM305), and report
+// any other null key (GM304). Quoting the doc clears both.
+func TestOntologyFileLint(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n"+
+		"  Account: { kind: entity, doc: One account at an institution (checking, savings, loan) }\n"+
+		"  Institution: { kind: entity, doc: \"A bank, broker or lender.\" }\n"+
+		"  Category:\n    kind: entity\n    doc: A label on a transaction.\n    constrains:\n")
+	codes := func() map[string][]string {
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		rollup.Derive(res.Graph, ws.Vocab)
+		out := map[string][]string{}
+		for _, d := range check.Run(ws, res.Graph) {
+			out[d.Code] = append(out[d.Code], d.Msg)
+		}
+		return out
+	}
+	got := codes()
+	if len(got["GM305"]) != 1 || !strings.Contains(got["GM305"][0], "pf:Account") || !strings.Contains(got["GM305"][0], "savings") {
+		t.Errorf("GM305 = %v", got["GM305"])
+	}
+	if len(got["GM304"]) != 1 || !strings.Contains(got["GM304"][0], "pf:Category") || !strings.Contains(got["GM304"][0], `"constrains"`) {
+		t.Errorf("GM304 = %v", got["GM304"])
+	}
+	// Quoting the doc and dropping the empty key clears both.
+	write("ontology/pf.gloss.yaml", "concepts:\n"+
+		"  Account: { kind: entity, doc: \"One account at an institution (checking, savings, loan)\" }\n"+
+		"  Institution: { kind: entity, doc: \"A bank, broker or lender.\" }\n"+
+		"  Category:\n    kind: entity\n    doc: A label on a transaction.\n")
+	got = codes()
+	if len(got["GM304"])+len(got["GM305"]) != 0 {
+		t.Errorf("after quoting: GM304=%v GM305=%v", got["GM304"], got["GM305"])
+	}
+	// gloss propose writes a quoted doc so the entry survives a later reflow into flow style.
+	path := filepath.Join(root, "ontology", "pf.gloss.yaml")
+	if err := ontoedit.AddConcept(path, "Holding", ontoedit.ConceptSpec{Kind: "entity", Doc: "A position: shares, bonds, cash.", Proposed: true, ProposedBy: "agent:x"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if !strings.Contains(string(b), `doc: "A position: shares, bonds, cash."`) {
+		t.Errorf("propose did not quote the doc:\n%s", b)
+	}
+	if got = codes(); len(got["GM304"])+len(got["GM305"]) != 0 {
+		t.Errorf("after propose: GM304=%v GM305=%v", got["GM304"], got["GM305"])
+	}
+}

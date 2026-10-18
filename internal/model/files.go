@@ -302,6 +302,12 @@ type Concept struct {
 	Relations map[string]StringList `yaml:",inline" json:"relations,omitempty"`
 
 	Line int `yaml:"-" json:"-"`
+	// NullKeys lists the entry's keys whose value is null in the file, in file
+	// order; Flow reports that the entry is written as a { } flow mapping. An
+	// unquoted doc with a comma inside { } ends at the comma and the rest
+	// becomes null keys, so both feed the GM304/GM305 lint. Not serialized.
+	NullKeys []string `yaml:"-" json:"-"`
+	Flow     bool     `yaml:"-" json:"-"`
 }
 
 // RelationNames returns the concept's generic relation keys, sorted.
@@ -338,7 +344,21 @@ func LoadOntology(path string) (*Ontology, error) {
 			if m.Content[i].Value == "concepts" && m.Content[i+1].Kind == yaml.MappingNode {
 				cm := m.Content[i+1]
 				for j := 0; j+1 < len(cm.Content); j += 2 {
-					o.Lines[cm.Content[j].Value] = cm.Content[j].Line
+					name := cm.Content[j].Value
+					o.Lines[name] = cm.Content[j].Line
+					c := o.Concepts[name]
+					if c == nil {
+						c = &Concept{}
+						o.Concepts[name] = c
+					}
+					if entry := cm.Content[j+1]; entry.Kind == yaml.MappingNode {
+						c.Flow = entry.Style&yaml.FlowStyle != 0
+						for k := 0; k+1 < len(entry.Content); k += 2 {
+							if v := entry.Content[k+1]; v.Kind == yaml.ScalarNode && v.Tag == "!!null" {
+								c.NullKeys = append(c.NullKeys, entry.Content[k].Value)
+							}
+						}
+					}
 				}
 			}
 		}

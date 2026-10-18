@@ -145,7 +145,8 @@ func AddConcept(path, name string, spec ConceptSpec) error {
 		mapSet(entry, "internal", boolNode(true))
 	}
 	if spec.Doc != "" {
-		mapSet(entry, "doc", scalar(spec.Doc))
+		// Quoted: inside a { } flow mapping an unquoted doc ends at its first comma.
+		mapSet(entry, "doc", &yaml.Node{Kind: yaml.ScalarNode, Style: yaml.DoubleQuotedStyle, Value: spec.Doc})
 	}
 	if len(spec.Aliases) > 0 {
 		mapSet(entry, "aliases", seq(spec.Aliases))

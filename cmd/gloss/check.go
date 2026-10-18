@@ -6,6 +6,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/marker"
+	"github.com/mckalvan/glossmark/internal/model"
 )
 
 func init() {
@@ -33,7 +34,30 @@ func cmdCheck(args []string) int {
 			warns++
 		}
 	}
-	fmt.Fprintf(os.Stderr, "gloss check: %s, %s\n", plural(errs, "error"), plural(warns, "warning"))
+	// Proposals and rogues pass check (they are decisions, not defects) but a
+	// reviewer running the hook must see that they exist.
+	proposals, rogues := 0, 0
+	for _, fm := range p.Res.Markers {
+		if fm.Marker.Proposed {
+			proposals++
+		}
+		for _, t := range fm.Marker.Targets {
+			if marker.IsNewTarget(t) {
+				rogues++
+				break
+			}
+		}
+	}
+	for _, n := range p.Graph.NodesOf(model.NodeConcept) {
+		if n.Proposed && !n.Imported {
+			proposals++
+		}
+	}
+	summary := fmt.Sprintf("gloss check: %s, %s", plural(errs, "error"), plural(warns, "warning"))
+	if proposals > 0 || rogues > 0 {
+		summary += fmt.Sprintf("; %s, %s (run gloss status)", plural(proposals, "proposal"), plural(rogues, "rogue"))
+	}
+	fmt.Fprintln(os.Stderr, summary)
 	if errs > 0 || (*warnErr && warns > 0) {
 		return 1
 	}

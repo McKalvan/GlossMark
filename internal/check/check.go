@@ -19,6 +19,7 @@ import (
 //	GM2xx references   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
 func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c := &checker{ws: ws, g: g}
+	c.ontologyFiles()
 	c.concepts()
 	c.edges()
 	c.manifests()
@@ -51,6 +52,57 @@ func (c *checker) prefixOf(curie string) string {
 		return curie[:i]
 	}
 	return ""
+}
+
+// ontologyFiles lints the YAML shape of owned ontology files. Inside a { }
+// flow mapping an unquoted doc ends at the first comma and the rest of the
+// sentence becomes null-valued keys; a null relation produces no edge, so
+// nothing else would notice. GM305 names the truncated doc, GM304 any other
+// null key.
+func (c *checker) ontologyFiles() {
+	for _, p := range sortedKeys(c.ws.Ontologies) {
+		if !c.ws.Owned[p] {
+			continue
+		}
+		o := c.ws.Ontologies[p]
+		file := relFile(c.ws, o.Path)
+		for _, name := range sortedKeys(o.Concepts) {
+			con := o.Concepts[name]
+			if con == nil || len(con.NullKeys) == 0 {
+				continue
+			}
+			curie := p + ":" + name
+			if con.Flow && con.Doc != "" && looksTruncated(con.Doc) {
+				c.add(file, con.Line, "error", "GM305", fmt.Sprintf("%s: doc is cut at a comma inside { }: %q; the rest became null keys (%s). Quote the doc or write the entry in block style", curie, con.Doc, strings.Join(con.NullKeys, ", ")))
+				continue
+			}
+			for _, k := range con.NullKeys {
+				c.add(file, con.Line, "warning", "GM304", fmt.Sprintf("%s: key %q has no value, so it adds no edge; give it targets or remove it", curie, k))
+			}
+		}
+	}
+}
+
+// looksTruncated reports whether a doc stops mid-sentence: no terminal
+// punctuation, or a parenthesis or bracket left open.
+func looksTruncated(doc string) bool {
+	d := strings.TrimSpace(doc)
+	if d == "" {
+		return false
+	}
+	depth := 0
+	for _, ch := range d {
+		switch ch {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		}
+	}
+	if depth > 0 {
+		return true
+	}
+	return !strings.ContainsAny(d[len(d)-1:], ".!?")
 }
 
 func (c *checker) concepts() {
