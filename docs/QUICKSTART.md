@@ -84,7 +84,7 @@ gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR 
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html, static, no server: boundaries are boxes, click to drill in, double-click to focus
-gloss coverage --fail-under 80
+gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift

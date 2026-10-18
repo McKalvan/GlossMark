@@ -98,3 +98,5 @@ Feature: Stallion production
 | GM006 | conf outside [0,1] |
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected) |
+| GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
+| GM131 | the same marker on consecutive declarations: one `scope=block` marker above the run says the same with one edge |

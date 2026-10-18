@@ -19,7 +19,7 @@ $ gloss drift
   services/horse-factory/breeding/engine.py:22 implements impl:NEW:Gelding: rogue concept; becomes a decision request
 · Orphan concepts (no artifacts)
   impl:TailQueue: orphan concept, implementation concept has no artifacts
-Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   Stale: 0   Untested: 6   Proposed: 3
+Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   Stale: 0   Untested: 3   Proposed links: 3   Proposed concepts: 0
 ```
 
 ## What is in this repository

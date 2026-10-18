@@ -12,7 +12,7 @@ import (
 
 func init() {
 	register(command{"drift", "compare declared boundaries with what the code derives: violations, gaps, orphans, rogues, stale, untested", cmdDrift})
-	register(command{"coverage", "share of in-scope files with an accepted link; --fail-under N", cmdCoverage})
+	register(command{"coverage", "concepts with an artifact and a verifier (headline), files with an accepted link; --fail-under N", cmdCoverage})
 }
 
 func cmdDrift(args []string) int {
@@ -48,7 +48,8 @@ func cmdDrift(args []string) int {
 
 func cmdCoverage(args []string) int {
 	fs, root := newFlags("coverage")
-	failUnder := fs.Float64("fail-under", -1, "fail when coverage is below this percentage (default from policy.coverage-fail-under)")
+	failUnder := fs.Float64("fail-under", -1, "fail when concept coverage is below this percentage (default from policy.coverage-fail-under)")
+	failUnderFiles := fs.Float64("fail-under-files", 0, "fail when file coverage is below this percentage")
 	format := fs.String("format", "text", "text | json")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -65,16 +66,21 @@ func cmdCoverage(args []string) int {
 		enc.SetIndent("", "  ")
 		enc.Encode(m)
 	} else {
-		fmt.Printf("coverage %.1f%% (%d of %d in-scope files carry an accepted link)\n", m.CoveragePct, m.CoveredFiles, m.InScopeFiles)
-		fmt.Printf("markers %d: accepted %d, proposed %d, stale %d, rejected %d; review backlog oldest %d days\n", m.Markers, m.Accepted, m.Proposed, m.Stale, m.Rejected, m.BacklogOldestDay)
+		fmt.Printf("concepts %.1f%% (%d of %d implementation concepts have an artifact and a verifier)\n", m.ConceptCoveragePct, m.ConceptsCovered, m.ConceptsInScope)
+		fmt.Printf("files %.1f%% (%d of %d in-scope files carry an accepted link)\n", m.CoveragePct, m.CoveredFiles, m.InScopeFiles)
+		fmt.Printf("markers %d (%d targets): accepted %d, proposed %d, stale %d, rejected %d; proposed concepts %d; review backlog oldest %d days\n", m.Markers, m.Targets, m.Accepted, m.Proposed, m.Stale, m.Rejected, m.ProposedConcepts, m.BacklogOldestDay)
 		fmt.Printf("orphans %d, rogues %d, violations %d, gaps %d, untested %d, dangling %d\n", m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Untested, m.Dangling)
 	}
 	threshold := *failUnder
 	if threshold < 0 {
 		threshold = pol.CoverageFailUnder
 	}
-	if threshold > 0 && m.CoveragePct < threshold {
-		fmt.Fprintf(os.Stderr, "gloss coverage: %.1f%% is below --fail-under %.1f%%\n", m.CoveragePct, threshold)
+	if threshold > 0 && m.ConceptCoveragePct < threshold {
+		fmt.Fprintf(os.Stderr, "gloss coverage: concept coverage %.1f%% is below --fail-under %.1f%%\n", m.ConceptCoveragePct, threshold)
+		return 1
+	}
+	if *failUnderFiles > 0 && m.CoveragePct < *failUnderFiles {
+		fmt.Fprintf(os.Stderr, "gloss coverage: file coverage %.1f%% is below --fail-under-files %.1f%%\n", m.CoveragePct, *failUnderFiles)
 		return 1
 	}
 	return 0

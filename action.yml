@@ -12,7 +12,7 @@ inputs:
     description: Gate class that fails the job (HARD | SOFT | none)
     default: HARD
   coverage-fail-under:
-    description: Minimum coverage percentage (0 disables)
+    description: Minimum concept coverage percentage, implementation concepts with an artifact and a verifier (0 disables)
     default: "0"
   comment:
     description: Post the impact as a PR comment (needs pull-requests write permission)

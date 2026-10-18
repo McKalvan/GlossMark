@@ -945,3 +945,43 @@ func TestActorDurability(t *testing.T) {
 		t.Errorf("actor changes = %+v", ch)
 	}
 }
+
+// TestRedundantMarkersAndConceptCoverage: a symbol marker shadowed by a file
+// marker (GM130) and the same marker on consecutive declarations (GM131) are
+// reported; the coverage headline counts concepts with an artifact and a
+// verifier, and the counters are per marker, not per target.
+func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n  Thing: { kind: entity }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Helper: { kind: process, realizes: z:Doing }\n  Store: { kind: resource, realizes: z:Thing }\n  Q: { kind: resource, internal: true }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("app.py", "# @gloss implements .Doer scope=file\n\n# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Helper, .Store\ndef a(): pass\n\n# @gloss implements .Store, .Helper\ndef b(): pass\n\n# @gloss represents .Store\nclass S: pass\n")
+	write("tests/test_app.py", "# @gloss verifies .Doer\ndef test_go(): pass\n")
+	ws, g, _, lg := build(t, root)
+	codes := map[string][]int{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Line)
+	}
+	if len(codes["GM130"]) != 1 || codes["GM130"][0] != 3 {
+		t.Errorf("GM130 lines = %v, want [3]", codes["GM130"])
+	}
+	if len(codes["GM131"]) != 1 || codes["GM131"][0] != 9 {
+		t.Errorf("GM131 lines = %v, want [9] (same targets in another order)", codes["GM131"])
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	m := rep.Metrics
+	// Doer has an artifact and a verifier; Helper and Store have artifacts only; Q is internal and out of scope.
+	if m.ConceptsInScope != 3 || m.ConceptsCovered != 1 || m.ConceptCoveragePct < 33 || m.ConceptCoveragePct > 34 {
+		t.Errorf("concept coverage = %d/%d (%.1f%%)", m.ConceptsCovered, m.ConceptsInScope, m.ConceptCoveragePct)
+	}
+	// Six marker lines state eight targets; every one is accepted.
+	if m.Markers != 6 || m.Targets != 8 || m.Accepted != 6 || m.Proposed != 0 {
+		t.Errorf("markers=%d targets=%d accepted=%d proposed=%d", m.Markers, m.Targets, m.Accepted, m.Proposed)
+	}
+}

@@ -58,7 +58,8 @@ func RenderText(im *Impact) string {
 		fmt.Fprintf(&sb, "      Rollup: %s", strings.Join(im.Rollup, "; "))
 	}
 	sb.WriteString("\n")
-	fmt.Fprintf(&sb, "Coverage %.0f%% → %.0f%%   Orphans: %s   Rogue: %d   Proposed: %d   Stale: %d\n", im.Before.CoveragePct, im.After.CoveragePct, orphans(im.Orphans), im.After.Rogues, im.After.Proposed, im.After.Stale)
+	fmt.Fprintf(&sb, "Concepts covered %.0f%% → %.0f%%   Files %.0f%% → %.0f%%   Orphans: %s   Rogue: %d   Proposed links: %d   Proposed concepts: %d   Stale: %d\n",
+		im.Before.ConceptCoveragePct, im.After.ConceptCoveragePct, im.Before.CoveragePct, im.After.CoveragePct, orphans(im.Orphans), im.After.Rogues, im.After.Proposed, im.After.ProposedConcepts, im.After.Stale)
 	if len(im.Critical) > 0 {
 		sb.WriteString("Criticality touched: " + criticalList(im.Critical, 6) + "\n")
 	}

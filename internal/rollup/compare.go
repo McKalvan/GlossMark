@@ -58,27 +58,36 @@ type Decision struct {
 	Owners   []string `json:"owners,omitempty"`
 }
 
-// Metrics are the CI numbers from the design.
+// Metrics are the CI numbers from the design. The headline is concept
+// coverage: implementation concepts that have at least one artifact and one
+// verifier. File coverage (files carrying an accepted link) is secondary,
+// because one marker per helper raises it without adding knowledge.
 type Metrics struct {
-	InScopeFiles     int     `json:"in_scope_files"`
-	CoveredFiles     int     `json:"covered_files"`
-	CoveragePct      float64 `json:"coverage_pct"`
-	Markers          int     `json:"markers"`
-	Accepted         int     `json:"accepted"`
-	Proposed         int     `json:"proposed"`
-	Stale            int     `json:"stale"`
-	Rejected         int     `json:"rejected"`
-	Orphans          int     `json:"orphans"`
-	Rogues           int     `json:"rogues"`
-	Violations       int     `json:"violations"`
-	Gaps             int     `json:"gaps"`
-	Untested         int     `json:"untested"`
-	ProposedConcepts int     `json:"proposed_concepts"`
-	Dangling         int     `json:"dangling"`
-	BacklogOldestDay int     `json:"review_backlog_oldest_days"`
-	Concepts         int     `json:"concepts"`
-	Boundaries       int     `json:"boundaries"`
-	Artifacts        int     `json:"artifacts"`
+	ConceptsInScope    int     `json:"concepts_in_scope"`
+	ConceptsCovered    int     `json:"concepts_covered"`
+	ConceptCoveragePct float64 `json:"concept_coverage_pct"`
+	InScopeFiles       int     `json:"in_scope_files"`
+	CoveredFiles       int     `json:"covered_files"`
+	CoveragePct        float64 `json:"coverage_pct"`
+	// Markers counts marker lines; Targets the links they state (a marker
+	// may name several targets). The review-state counts are per marker.
+	Markers          int `json:"markers"`
+	Targets          int `json:"targets"`
+	Accepted         int `json:"accepted"`
+	Proposed         int `json:"proposed"`
+	Stale            int `json:"stale"`
+	Rejected         int `json:"rejected"`
+	Orphans          int `json:"orphans"`
+	Rogues           int `json:"rogues"`
+	Violations       int `json:"violations"`
+	Gaps             int `json:"gaps"`
+	Untested         int `json:"untested"`
+	ProposedConcepts int `json:"proposed_concepts"`
+	Dangling         int `json:"dangling"`
+	BacklogOldestDay int `json:"review_backlog_oldest_days"`
+	Concepts         int `json:"concepts"`
+	Boundaries       int `json:"boundaries"`
+	Artifacts        int `json:"artifacts"`
 }
 
 // Report is the drift output.
@@ -586,20 +595,24 @@ func (c *comparer) metrics() {
 			m.Rogues++
 		case KindUntested:
 			m.Untested++
-		case KindStale:
-			m.Stale++
 		case KindDangling:
 			m.Dangling++
 		case KindProposed:
 			m.ProposedConcepts++
 		}
 	}
-	// Coverage: files under a boundary with at least one accepted link.
+	// Review state per marker (not per target), and the files an accepted link covers.
 	accepted := map[string]bool{}
+	counted := map[string]bool{}
 	for _, e := range c.g.Edges() {
 		if e.Source != graph.SourceInline || e.Prov == nil {
 			continue
 		}
+		m.Targets++
+		if counted[e.Prov.ID] {
+			continue
+		}
+		counted[e.Prov.ID] = true
 		m.Markers++
 		status := model.StatusAccepted
 		if e.Prov.Proposed {
@@ -624,16 +637,24 @@ func (c *comparer) metrics() {
 			}
 		case model.StatusRejected:
 			m.Rejected++
+		case model.StatusStale:
+			m.Stale++
 		}
 	}
-	// Markers counted edges; count distinct marker ids instead.
-	ids := map[string]bool{}
-	for _, e := range c.g.Edges() {
-		if e.Source == graph.SourceInline && e.Prov != nil {
-			ids[e.Prov.ID] = true
+	// Concept coverage: owned implementation concepts (not internal,
+	// deprecated or still proposed) with an artifact and a verifier.
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		if n.Imported || n.Tier != model.TierImpl || n.Internal || n.Deprecated || n.Proposed {
+			continue
+		}
+		m.ConceptsInScope++
+		if ok, _ := c.reachedByArtifact(n.ID); ok && c.tested(n.ID, 0) {
+			m.ConceptsCovered++
 		}
 	}
-	m.Markers = len(ids)
+	if m.ConceptsInScope > 0 {
+		m.ConceptCoveragePct = 100 * float64(m.ConceptsCovered) / float64(m.ConceptsInScope)
+	}
 	files := c.opt.Files
 	if files == nil {
 		files = c.ws.Files

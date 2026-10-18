@@ -22,6 +22,7 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c.ontologyFiles()
 	c.concepts()
 	c.edges()
+	c.markers()
 	c.manifests()
 	c.governance()
 	sort.SliceStable(c.out, func(i, j int) bool {
@@ -180,6 +181,73 @@ func (c *checker) concepts() {
 			c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s does not exist", n.CURIE, n.ReplacedBy))
 		}
 	}
+}
+
+// markers lints redundancy between inline markers. A symbol-level marker
+// that repeats a file-level marker's relation and target states the same
+// fact twice and makes two edges (GM130); the same marker on consecutive
+// declarations usually wants one scope=block marker above the run (GM131).
+// Both passed silently and inflated file coverage in the first adoptions.
+func (c *checker) markers() {
+	type fact struct{ path, rel, obj string }
+	type mk struct {
+		id, scope, rel string
+		line           int
+		objs           []string
+	}
+	fileLevel := map[fact]int{}
+	byPath := map[string][]*graph.Edge{}
+	for _, e := range c.g.Edges() {
+		if e.Source != graph.SourceInline || e.Prov == nil || e.P == "may-modify" {
+			continue
+		}
+		if e.Prov.Scope == "file" {
+			fileLevel[fact{e.Prov.Path, e.P, e.O}] = e.Prov.Line
+		}
+		byPath[e.Prov.Path] = append(byPath[e.Prov.Path], e)
+	}
+	for _, path := range sortedKeys(byPath) {
+		edges := byPath[path]
+		sort.SliceStable(edges, func(i, j int) bool { return edges[i].Prov.Line < edges[j].Prov.Line })
+		var ms []*mk
+		index := map[string]*mk{}
+		for _, e := range edges {
+			if e.Prov.Scope != "file" {
+				if fl, ok := fileLevel[fact{path, e.P, e.O}]; ok && fl != e.Prov.Line {
+					c.add(path, e.Prov.Line, "warning", "GM130", fmt.Sprintf("%s %s repeats the file-level marker at line %d; keep the file marker or the symbol markers, not both", e.P, c.g.Curie(e.O), fl))
+				}
+			}
+			m, ok := index[e.Prov.ID]
+			if !ok {
+				m = &mk{id: e.Prov.ID, scope: e.Prov.Scope, rel: e.P, line: e.Prov.Line}
+				index[e.Prov.ID] = m
+				ms = append(ms, m)
+			}
+			m.objs = append(m.objs, e.O)
+		}
+		for i := 1; i < len(ms); i++ {
+			a, b := ms[i-1], ms[i]
+			if a.scope != "symbol" || b.scope != "symbol" || a.rel != b.rel || !sameSet(a.objs, b.objs) {
+				continue
+			}
+			c.add(path, b.line, "warning", "GM131", fmt.Sprintf("%s %s repeats the marker at line %d on the previous declaration; one marker with scope=block above the run says the same with one edge", b.rel, c.g.Curie(b.objs[0]), a.line))
+		}
+	}
+}
+
+func sameSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	x, y := append([]string{}, a...), append([]string{}, b...)
+	sort.Strings(x)
+	sort.Strings(y)
+	for i := range x {
+		if x[i] != y[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *checker) edges() {
