@@ -5,6 +5,7 @@ package e2e
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -857,5 +858,90 @@ func TestOntologyFileLint(t *testing.T) {
 	}
 	if got = codes(); len(got["GM304"])+len(got["GM305"]) != 0 {
 		t.Errorf("after propose: GM304=%v GM305=%v", got["GM304"], got["GM305"])
+	}
+}
+
+// TestActorDurability: the actor belongs to a marker's first appearance. A
+// marker the ledger does not know takes the last built graph's actor, then
+// GLOSS_ACTOR, then the git blame author, then the fallback; an existing
+// entry keeps its actor whatever the session says.
+func TestActorDurability(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Alice Example", "GIT_AUTHOR_EMAIL=a@x", "GIT_COMMITTER_NAME=Alice Example", "GIT_COMMITTER_EMAIL=a@x")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Other: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("a.py", "# @gloss implements .Doer\ndef go(x): pass\n")
+	git("init", "-q")
+	git("add", ".")
+	git("commit", "-q", "-m", "committed marker")
+	// b.py is not committed.
+	write("b.py", "# @gloss? implements .Other conf=0.8\ndef other(): pass\n")
+
+	build := func(actors *ledger.Actors, session string) (*ledger.Ledger, map[string]string) {
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		rollup.Derive(res.Graph, ws.Vocab)
+		lg, _ := ledger.Open(filepath.Join(t.TempDir(), "ledger.jsonl"))
+		lg.Actors = actors
+		lg.Sync(res.Graph, res.Markers, session, time.Now())
+		by := map[string]string{}
+		for _, fm := range res.Markers {
+			by[fm.Path] = lg.Entry(fm.ID).Actor
+		}
+		return lg, by
+	}
+	// No previous graph, no GLOSS_ACTOR: blame for the committed line, the fallback for the rest.
+	_, by := build(&ledger.Actors{Root: root, Fallback: "human:runner"}, "human:runner")
+	if by["a.py"] != "human:alice-example" || by["b.py"] != "human:runner" {
+		t.Errorf("blame/fallback: %v", by)
+	}
+	// GLOSS_ACTOR set: it names the session's new markers, blame is not consulted.
+	lg, by := build(&ledger.Actors{Root: root, Session: "agent:bot@m", Fallback: "human:runner"}, "agent:bot@m")
+	if by["a.py"] != "agent:bot@m" || by["b.py"] != "agent:bot@m" {
+		t.Errorf("session: %v", by)
+	}
+	// The built graph records those actors; a later build by someone else, with
+	// no ledger, keeps them.
+	ws, _ := load.Load(root)
+	res, _ := extract.Build(ws)
+	rollup.Derive(res.Graph, ws.Vocab)
+	lg.Sync(res.Graph, res.Markers, "agent:bot@m", time.Now())
+	previous := ledger.PreviousActors(res.Graph)
+	if len(previous) != 2 {
+		t.Fatalf("previous actors = %v", previous)
+	}
+	lg2, by := build(&ledger.Actors{Previous: previous, Root: root, Fallback: "human:bob"}, "human:bob")
+	if by["a.py"] != "agent:bot@m" || by["b.py"] != "agent:bot@m" {
+		t.Errorf("previous graph: %v", by)
+	}
+	if ch := lg2.ActorChanges(previous); len(ch) != 0 {
+		t.Errorf("no actor should change: %+v", ch)
+	}
+	// An existing entry keeps its actor; a disagreement with the last graph is reported.
+	for _, e := range lg2.Entries {
+		if e.Path == "a.py" {
+			e.Actor = "human:carol"
+		}
+	}
+	ch := lg2.ActorChanges(previous)
+	if len(ch) != 1 || ch[0].Path != "a.py" || ch[0].From != "agent:bot@m" || ch[0].To != "human:carol" {
+		t.Errorf("actor changes = %+v", ch)
 	}
 }
