@@ -3,13 +3,13 @@
 ## Install
 
 ```sh
-go install github.com/mckalvan/glossmark/cmd/gloss@latest     # or @vX.Y.Z to pin a release
-# or, from a checkout
-make build                                                      # injects the git tag as the version
-gloss version                                                   # tool, grammar and file-format versions
+curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0   # binary into ~/.local/bin, sha256 verified
+go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0                                          # with a Go toolchain
+make build                                                                                         # from a checkout; injects the git tag as the version
+gloss version                                                                                      # tool, grammar and file-format versions
 ```
 
-Binaries for Linux, macOS and Windows are attached to each GitHub release.
+Pin a release everywhere the tool runs (`@v0.1.0`, never `@latest` or `@main`): binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/mckalvan/glossmark/releases), and `go install ...@v0.1.0` reports the same version. See [VERSIONING.md](VERSIONING.md).
 
 ## 1. Declare the namespaces
 
@@ -129,11 +129,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: mckalvan/glossmark@main
+      - uses: mckalvan/glossmark@v0.1.0
         with: { fail-on: HARD, coverage-fail-under: "0" }
 ```
 
-Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hooks from `.pre-commit-hooks.yaml` to your `.pre-commit-config.yaml`.
+The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
+
+Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hooks from `.pre-commit-hooks.yaml` to your `.pre-commit-config.yaml` with `rev: v0.1.0`.
 
 ## Review workflow
 

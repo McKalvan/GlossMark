@@ -39,6 +39,15 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 | `docs/` | [Plan](docs/PLAN.md) · [Quickstart](docs/QUICKSTART.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0   # Linux/macOS binary into ~/.local/bin
+go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0                                          # with a Go toolchain
+```
+
+Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.1.0` downloads the same binary.
+
 ## Try it
 
 ```sh
@@ -67,7 +76,7 @@ Not every subsystem carries the same risk. `criticality: low | medium | high | c
 
 ## Versions
 
-`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@vX.Y.Z`), pre-commit (`rev:`) or `go install ...@vX.Y.Z`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
+`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.1.0`), pre-commit (`rev: v0.1.0`), `install.sh v0.1.0` or `go install ...@v0.1.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Status
 
