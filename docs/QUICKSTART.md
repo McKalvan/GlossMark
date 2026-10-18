@@ -63,10 +63,26 @@ default-namespace: pa
 
 ## 5. Mark the code
 
+Five relations cover almost every marker; learn these and ignore the rest until you need them ([MARKING.md](MARKING.md) says when to mark, [ADVANCED.md](ADVANCED.md) has everything else):
+
 ```python
-# @gloss implements .AuthorizeHandler
+# @gloss implements .AuthorizeHandler        # the code that does the work (handler, pipeline, module)
 def authorize(req): ...
 ```
+```python
+# @gloss represents pay:Payment              # the data shape: a model, a table, a schema
+class Payment: ...
+```
+```python
+# @gloss verifies pay:Authorization          # in tests
+def test_authorize_declines_expired_cards(): ...
+```
+```markdown
+<!-- @gloss documents pay:Authorization -->  # in docs
+<!-- @gloss instructs pa:AuthorizeHandler scope=file -->   # in agent files
+```
+
+Mark one public surface per concept, not every helper; add `scope=file` when a whole file is about one concept, and then no symbol markers in it. The marker goes above the declaration and its decorators.
 
 Agents write `@gloss?` for links they propose and `ns:NEW:Name` for concepts that do not exist yet. Generate the vocabulary they should see first:
 
