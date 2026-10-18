@@ -1107,3 +1107,55 @@ func TestDerivedAllowed(t *testing.T) {
 		t.Errorf("after narrowing: GM502=%v GM503=%v", codes["GM502"], codes["GM503"])
 	}
 }
+
+// TestAdoptionDiff: a diff whose base has no graph is reported as counts per
+// boundary and per view with only the decision requests listed; the Markdown
+// comment groups changes by boundary; a HARD link never carries the SOFT
+// eligibility text; an owned namespace is "added", not a cross-repo import.
+func TestAdoptionDiff(t *testing.T) {
+	ws, head, _, lg := build(t, example(t, "horse-factory"))
+	pol := ws.Config.EffectivePolicy()
+	after := rollup.Compare(head, ws, rollup.Options{Ledger: lg.Entries, Policy: pol})
+	empty := graph.New(ws.Prefixes)
+	im := gate.Classify(empty, head, ws, gate.Options{Base: "main (no graph)", Policy: pol, HeadLedger: lg.Entries, AfterReport: after, Adoption: true})
+	a := im.Adoption
+	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 3 || len(a.PerBoundary) < 2 || len(a.PerView) != 2 || a.Hidden == 0 {
+		t.Fatalf("adoption summary = %+v", a)
+	}
+	for _, ch := range im.Changes {
+		if ch.Kind != "new-concept" && ch.Kind != "concept-proposed" {
+			t.Errorf("adoption keeps only decision requests, got %s %s", ch.Kind, ch.Msg)
+		}
+	}
+	md := gate.RenderMarkdown(im)
+	if n := strings.Count(md, "\n"); n > 60 {
+		t.Errorf("adoption comment is %d lines; want under 60", n)
+	}
+	if !strings.Contains(md, "Decisions requested") || !strings.Contains(md, "acme:horse-factory-svc") || strings.Contains(md, "cross-repo") {
+		t.Errorf("markdown:\n%s", md)
+	}
+	// Without adoption mode the same diff lists every link, grouped by boundary, and names the owned namespaces as added.
+	full := gate.Classify(empty, head, ws, gate.Options{Base: "main", Policy: pol, HeadLedger: lg.Entries, AfterReport: after})
+	if full.Adoption != nil || len(full.Changes) <= len(im.Changes) {
+		t.Fatalf("full diff: adoption=%v changes=%d", full.Adoption != nil, len(full.Changes))
+	}
+	var nsAdded bool
+	for _, ch := range full.Changes {
+		if ch.Gate == gate.HARD && strings.Contains(strings.Join(ch.Reasons, ";"), "inside allowed") {
+			t.Errorf("HARD change carries the SOFT reason: %+v", ch)
+		}
+		if ch.Kind == "namespace-added" {
+			nsAdded = true
+			if strings.Contains(strings.Join(ch.Reasons, ";"), "cross-repo") {
+				t.Errorf("owned namespace reported as cross-repo import: %+v", ch)
+			}
+		}
+	}
+	if !nsAdded {
+		t.Error("expected namespace-added changes")
+	}
+	md = gate.RenderMarkdown(full)
+	if !strings.Contains(md, "<details open><summary><b>acme:horse-factory-svc</b>") || !strings.Contains(md, "<b>Ontology, manifests and glossmark.yaml</b>") {
+		t.Errorf("grouped markdown:\n%s", md)
+	}
+}

@@ -81,11 +81,12 @@ gloss check                      # lint: syntax, dangling refs, domain/range, ow
 gloss lock                       # pin resolved import versions in glossmark.lock
 gloss build                      # .glossmark/graph.jsonl + context.jsonld + ledger.jsonl
 gloss drift                      # violations, gaps, orphans, rogues, stale, untested, metrics
-gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment
+gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html, static, no server: boundaries are boxes, click to drill in, double-click to focus
 gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
+gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
@@ -134,6 +135,8 @@ jobs:
       - uses: mckalvan/glossmark@v0.1.0
         with: { fail-on: HARD, coverage-fail-under: "0" }
 ```
+
+On the first PR (the base has no graph) the comment reports counts per boundary and per view plus the decision requests instead of one row per link; later PRs list changes grouped by boundary in collapsible sections, each capped. `coverage-fail-under: current` fails only when a PR lowers the base's concept coverage.
 
 The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
 
