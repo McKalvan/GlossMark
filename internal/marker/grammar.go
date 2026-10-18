@@ -1,5 +1,5 @@
 // @gloss implements gmi:MarkerGrammar scope=file
-// @gloss represents gm:Marker, gm:Confidence scope=file
+// @gloss represents gm:Link, gm:Confidence scope=file
 
 // Package marker implements the `@gloss` comment grammar: parsing one marker
 // line, the per-extension comment table, SPDX-style header sugar, and the

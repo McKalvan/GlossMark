@@ -1,4 +1,4 @@
-<!-- @gloss documents gm:Marker scope=file -->
+<!-- @gloss documents gm:Link scope=file -->
 # The `@gloss` marker grammar
 
 A gloss mark is one line, inside whatever comment syntax the file already uses.

@@ -57,7 +57,7 @@ cd ../payments
 
 ## GlossMark on GlossMark
 
-This repository is its own first user. `glossmark.yaml` at the root owns two namespaces: `gm:` is the core tier (what a comment-native code ontology is about: markers, concepts, namespaces, boundaries, extraction, drift, review, gating) and `gmi:` is the implementation tier (the Go packages and commands that realize it). Every package and command carries a marker, the JSON Schemas have sidecars, the docs `documents` what they describe, and `.gloss.yaml` manifests at the root, `cmd/` and `internal/` declare what `gloss drift` compares with the code. `go test ./internal/e2e/` includes a self-host test that fails on any lint error, violation, gap or dangling reference in this tree.
+This repository is its own first user. `glossmark.yaml` at the root owns two namespaces: `gm:` is the core tier (what a comment-native code ontology is about: links, concepts, namespaces, boundaries, extraction, lint, drift, review, gating) and `gmi:` is the implementation tier (the Go packages and commands that realize it). Every package and command carries a marker, the JSON Schemas have sidecars, the docs `documents` what they describe, and `.gloss.yaml` manifests at the root, `cmd/` and `internal/` declare what `gloss drift` compares with the code. `go test ./internal/e2e/` includes a self-host test that fails on any lint error, violation, gap or dangling reference in this tree.
 
 ```sh
 go build -o gloss ./cmd/gloss

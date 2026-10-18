@@ -1,4 +1,4 @@
-// @gloss verifies gm:Toolchain scope=file
+// @gloss verifies gm:GlossMark scope=file
 
 package e2e
 
@@ -32,7 +32,7 @@ func TestSelfHost(t *testing.T) {
 			t.Errorf("gloss drift: %s: %s", kind, f.Msg)
 		}
 	}
-	for _, curie := range []string{"gm:Toolchain", "gm:Extraction", "gmi:MarkerGrammar", "gmi:GlossCli"} {
+	for _, curie := range []string{"gm:GlossMark", "gm:Extraction", "gmi:MarkerGrammar", "gmi:GlossCli"} {
 		if g.Node(mustIRI(t, g, curie)) == nil {
 			t.Errorf("%s missing from the self-hosted graph", curie)
 		}

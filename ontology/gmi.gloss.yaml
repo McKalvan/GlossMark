@@ -2,7 +2,7 @@
 namespace: gmi
 version: 0.1.0
 concepts:
-  GlossCli:           { kind: system-type, realizes: gm:Toolchain }
+  GlossCli:           { kind: system-type, realizes: gm:GlossMark }
   # Reading a workspace
   MarkerGrammar:      { kind: process, realizes: gm:Extraction, doc: "Parsing one marker line and the per-extension comment table." }
   DeclarationAnchor:  { kind: process, realizes: gm:Extraction, doc: "Binding a marker to the declaration that follows it." }
@@ -11,18 +11,18 @@ concepts:
   FileFormats:        { kind: resource, internal: true, doc: "The typed shapes of every file GlossMark reads or writes." }
   # The graph and what is derived from it
   CanonicalGraph:     { kind: resource, realizes: gm:Graph }
-  Linter:             { kind: process, realizes: [gm:Checking, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule], doc: "Lint; it is also where the tier, seam and own-subject constraints are enforced." }
+  Linter:             { kind: process, realizes: [gm:Lint, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:AllowedList], doc: "Where the tier, seam, own-subject and allowed-list constraints are enforced." }
   RollupEngine:       { kind: process, realizes: gm:Rollup }
-  DriftComparator:    { kind: process, realizes: [gm:DriftDetection, gm:DeclaredCapability], produces: [gm:Coverage, gm:DecisionRequest], publishes: [gm:DecisionRequested] }
+  DriftComparator:    { kind: process, realizes: [gm:DriftComparison, gm:DeclaredCapability], produces: [gm:Coverage, gm:DecisionRequest], publishes: [gm:DecisionRequested] }
   Gate:               { kind: process, realizes: gm:Gating }
-  ReviewLedger:       { kind: resource, realizes: gm:Ledger }
+  ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale] }
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
   # Outputs
   ViewProjector:      { kind: process, realizes: gm:Projection }
   HtmlViewer:         { kind: process, internal: true, part-of: ViewProjector }
   Publisher:          { kind: process, realizes: gm:Publication, doc: "Per-namespace ontology.jsonld and graph.jsonl for importers." }
   SqliteExport:       { kind: process, internal: true }
-  LandscapeAssembler: { kind: process, realizes: gm:Federation }
+  LandscapeAssembler: { kind: process, realizes: gm:Landscape, doc: "Unions sibling repositories' graphs by IRI; realizes the landscape itself, there is no separate federation process yet." }
   # Agents
-  McpServer:          { kind: process, realizes: gm:Guidance, publishes: [gm:LinkProposed] }
-  AgentsSnippet:      { kind: process, realizes: gm:Guidance, doc: "The AGENTS.md vocabulary snippet." }
+  McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed] }
+  AgentsSnippet:      { kind: process, realizes: gm:Vocabulary, doc: "The AGENTS.md vocabulary snippet." }
