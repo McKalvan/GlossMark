@@ -532,6 +532,31 @@ function anchor(n,p,tx,ty){ // point on n's outline towards (tx,ty)
   return {x:p.x+dx/d*t,y:p.y+dy/d*t};
 }
 function roundRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+// nearestOnRect: the point on a box's wall closest to p.
+function nearestOnRect(r,p){
+  const cx=Math.min(Math.max(p.x,r.x),r.x+r.w),cy=Math.min(Math.max(p.y,r.y),r.y+r.h);
+  const dl=Math.abs(p.x-r.x),dr=Math.abs(r.x+r.w-p.x),dt=Math.abs(p.y-r.y),db=Math.abs(r.y+r.h-p.y),m=Math.min(dl,dr,dt,db);
+  if(m===dl)return {x:r.x,y:cy};if(m===dr)return {x:r.x+r.w,y:cy};if(m===dt)return {x:cx,y:r.y};return {x:cx,y:r.y+r.h};
+}
+// edgeGeom: endpoints and control point of an edge. An edge between an open
+// box and a node inside it is the box's interface (it produces or consumes
+// what it houses): drawn straight to the nearest wall, through a port.
+function edgeGeom(e){
+  const sIn=e.o._open&&under(e.s,e.o),oIn=e.s._open&&under(e.o,e.s);
+  if(sIn||oIn){
+    const box=sIn?e.o:e.s,node=sIn?e.s:e.o,r=rectOf(box),pn=centre(node);
+    if(!pn)return null;
+    const port=nearestOnRect(r,pn);
+    // Parallel interface edges spread along the wall.
+    if(port.x===r.x||port.x===r.x+r.w)port.y+=(e.off||0);else port.x+=(e.off||0);
+    const na=anchor(node,pn,port.x,port.y),cx=(na.x+port.x)/2,cy=(na.y+port.y)/2;
+    return sIn?{a:na,b:port,cx,cy,port}:{a:port,b:na,cx,cy,port};
+  }
+  const ps=centre(e.s),po=centre(e.o);if(!ps||!po)return null;
+  const mx=(ps.x+po.x)/2,my=(ps.y+po.y)/2,dx=po.x-ps.x,dy=po.y-ps.y,d=Math.hypot(dx,dy)||1;
+  const cx=mx-dy/d*(e.off||0)*2,cy=my+dx/d*(e.off||0)*2;
+  return {a:anchor(e.s,ps,cx,cy),b:anchor(e.o,po,cx,cy),cx,cy,port:null};
+}
 function draw(){
   const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
   if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
@@ -571,10 +596,8 @@ function draw(){
   // edges
   ctx.lineCap='round';ctx.font=(10*u)+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   VE.forEach(e=>{
-    const ps=centre(e.s),po=centre(e.o);if(!ps||!po)return;
-    const mx=(ps.x+po.x)/2,my=(ps.y+po.y)/2,dx=po.x-ps.x,dy=po.y-ps.y,d=Math.hypot(dx,dy)||1;
-    const cx=mx-dy/d*(e.off||0)*2,cy=my+dx/d*(e.off||0)*2;
-    const a=anchor(e.s,ps,cx,cy),b=anchor(e.o,po,cx,cy);
+    const gm=edgeGeom(e);if(!gm)return;
+    const {a,b,cx,cy,port}=gm;
     let alpha=Math.min(nodeAlpha(e.s),nodeAlpha(e.o));
     const hl=selEdge===e||(selNode&&(e.s===selNode||e.o===selNode))||S.hover===e;
     if(selNode&&!hl)alpha*=.5;
@@ -585,6 +608,10 @@ function draw(){
     ctx.setLineDash(edgeDash(e));
     ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(cx,cy,b.x,b.y);ctx.stroke();
     ctx.setLineDash([]);
+    if(port){ // the box wall is one end: mark the port
+      ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.arc(port.x,port.y,4*u,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=C.bg;ctx.beginPath();ctx.arc(port.x,port.y,1.8*u,0,Math.PI*2);ctx.fill();
+    }
     if(!e.contain){ // arrow head
       const ang=Math.atan2(b.y-cy,b.x-cx),s=(6+ctx.lineWidth)*u;
       ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(b.x,b.y);
@@ -660,8 +687,8 @@ function hitNode(w){
 }
 function hitEdge(w){
   const tol=7/S.cam.k;let best=null,bd=tol;
-  VE.forEach(e=>{if(e.contain)return;const a=centre(e.s),b=centre(e.o);
-    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,cx=mx-dy/d*(e.off||0)*2,cy=my+dx/d*(e.off||0)*2;
+  RC=new Map();
+  VE.forEach(e=>{if(e.contain)return;const gm=edgeGeom(e);if(!gm)return;const {a,b,cx,cy}=gm;
     for(let t=0;t<=1;t+=.05){const u=1-t,x=u*u*a.x+2*u*t*cx+t*t*b.x,y=u*u*a.y+2*u*t*cy+t*t*b.y,dd=Math.hypot(w.x-x,w.y-y);if(dd<bd){bd=dd;best=e;}}});
   return best;
 }
@@ -683,7 +710,8 @@ function nodeTip(n){
   return h;
 }
 function edgeTip(e){
-  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><br><span class="k">${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
+  const iface=(e.s._open&&under(e.o,e.s))||(e.o._open&&under(e.s,e.o));
+  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><br><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
   if(e.via&&e.via.size)h+=`<br><span class="k">via</span><ul>${[...e.via].slice(0,10).map(v=>'<li>'+esc(v)+'</li>').join('')}${e.via.size>10?'<li>…</li>':''}</ul>`;
   return h;
 }
