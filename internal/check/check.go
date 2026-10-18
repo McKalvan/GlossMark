@@ -142,12 +142,14 @@ func (c *checker) concepts() {
 			}
 		case model.TierImpl:
 			realizes := c.g.Objects(n.ID, "realizes")
-			if len(realizes) == 0 && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 {
+			// realizes is inherited through is-a and part-of (RealizesStar), so
+			// only a concept that stands for nothing at all is incomplete.
+			if len(realizes) == 0 && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 && len(rollup.RealizesStar(c.g, n.ID)) == 0 {
 				sev := "error"
 				if n.Proposed {
 					sev = "warning" // a proposal may be incomplete; acceptance requires the full entry
 				}
-				c.add(n.File, n.Line, sev, "GM320", fmt.Sprintf("%s: implementation concept must carry realizes: <core concept> or internal: true", n.CURIE))
+				c.add(n.File, n.Line, sev, "GM320", fmt.Sprintf("%s: implementation concept must carry realizes: <core concept>, is-a or part-of a concept that does, or internal: true", n.CURIE))
 			}
 			for _, r := range realizes {
 				rn := c.g.Node(r)

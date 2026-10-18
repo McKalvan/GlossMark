@@ -185,6 +185,17 @@ func (c *comparer) boundaries() {
 					declared = append(declared, e.O)
 				}
 			}
+			// realizes: inherit means "what my nested boundaries declare";
+			// their gaps are theirs to report, so inherited entries only cover.
+			inherited := map[string]bool{}
+			if rel == "realizes" {
+				if m := c.manifestOf(b.CURIE); m != nil && m.InheritsRealizes() {
+					for _, iri := range c.inheritedRealizes(m, map[*model.Manifest]bool{}) {
+						inherited[iri] = true
+						declared = append(declared, iri)
+					}
+				}
+			}
 			if len(declared) == 0 {
 				continue // no claim, nothing to compare
 			}
@@ -245,6 +256,9 @@ func (c *comparer) boundaries() {
 			}
 			// Gaps: declared not reached by any derived.
 			for _, s := range declared {
+				if inherited[s] {
+					continue
+				}
 				reached := false
 				for _, d := range derived {
 					if Covers(c.g, s, d) || c.g.Subsumes(s, d) {
@@ -269,6 +283,38 @@ func (c *comparer) boundaries() {
 }
 
 // lifted summarizes a derived set with the least common subsumer when the relation lifts.
+// manifestOf finds the manifest declaring a boundary CURIE.
+func (c *comparer) manifestOf(curie string) *model.Manifest {
+	for _, m := range c.ws.Manifests {
+		if m.Boundary == curie {
+			return m
+		}
+	}
+	return nil
+}
+
+// inheritedRealizes is the union of what m's nested boundaries declare under
+// realizes (following their own inherit markers), as IRIs.
+func (c *comparer) inheritedRealizes(m *model.Manifest, seen map[*model.Manifest]bool) []string {
+	if seen[m] {
+		return nil
+	}
+	seen[m] = true
+	set := map[string]bool{}
+	for _, child := range Children(c.ws, m) {
+		for _, t := range child.DeclaredSets()["realizes"] {
+			iri, _ := c.g.Expand(t)
+			set[iri] = true
+		}
+		if child.InheritsRealizes() {
+			for _, iri := range c.inheritedRealizes(child, seen) {
+				set[iri] = true
+			}
+		}
+	}
+	return sortedKeys(set)
+}
+
 func (c *comparer) lifted(rel string, derived []string) []string {
 	r := c.ws.Vocab.Get(rel)
 	var concepts []string

@@ -1205,3 +1205,77 @@ func curies(g *graph.Graph, ids []string) []string {
 	}
 	return out
 }
+
+// TestRealizesInheritance: a concept inherits realizes through is-a, a part
+// realizes its whole, a container can write realizes: inherit, and the
+// criticality understatement check (GM600) sees the closure.
+func TestRealizesInheritance(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n  pfi: { iri: https://x/pfi/, tier: implementation }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n  Importing: { kind: process, criticality: high }\n  Analysis: { kind: process }\n")
+	write("ontology/pfi.gloss.yaml", "concepts:\n"+
+		"  Importer: { kind: process, realizes: pf:Importing }\n"+
+		"  CsvImporter: { kind: process, is-a: Importer }\n"+
+		"  Pipeline: { kind: process, realizes: pf:Analysis }\n"+
+		"  Step: { kind: process, part-of: Pipeline }\n")
+	write(".gloss.yaml", "boundary: o:lib\nlevel: system\nrealizes: inherit\ncriticality: low\n")
+	write("importers/.gloss.yaml", "boundary: o:importers\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Importer]\n")
+	write("importers/csv.py", "# @gloss implements .CsvImporter\ndef run(): pass\n")
+	write("analytics/.gloss.yaml", "boundary: o:analytics\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Pipeline]\n")
+	write("analytics/step.py", "# @gloss implements .Step\ndef step(): pass\n")
+	ws, g, _, lg := build(t, root)
+	// GM320 does not fire for CsvImporter (is-a carries realizes); GM600 sees o:lib understating pf:Importing through the closure.
+	codes := map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Msg)
+	}
+	if len(codes["GM320"]) != 0 {
+		t.Errorf("GM320 = %v", codes["GM320"])
+	}
+	if len(codes["GM600"]) == 0 || !strings.Contains(strings.Join(codes["GM600"], ";"), "pf:Importing") {
+		t.Errorf("GM600 should report o:lib (low) housing pf:Importing (high) through CsvImporter is-a Importer: %v", codes["GM600"])
+	}
+	// The closure: CsvImporter stands for Importer's core; Step for Pipeline and its core.
+	if r := rollup.RealizesStar(g, g.NodeByCurie("pfi:CsvImporter").ID); !has(curies(g, r), "pf:Importing") {
+		t.Errorf("CsvImporter realizes* = %v", curies(g, r))
+	}
+	if r := rollup.RealizesStar(g, g.NodeByCurie("pfi:Step").ID); !has(curies(g, r), "pfi:Pipeline") || !has(curies(g, r), "pf:Analysis") {
+		t.Errorf("Step realizes* = %v", curies(g, r))
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
+		t.Errorf("no violation expected (CsvImporter covers Importer, Step covers Pipeline, lib inherits): %+v", v)
+	}
+	if gp := findings(rep, rollup.KindGap); len(gp) != 0 {
+		t.Errorf("no gap expected: %+v", gp)
+	}
+	// The inherited parent is compared: a child declaring something nothing implements is the child's gap, not the parent's.
+	write("analytics/.gloss.yaml", "boundary: o:analytics\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Pipeline, pf:Importing]\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	gaps := findings(rep, rollup.KindGap)
+	if len(gaps) != 1 || gaps[0].Boundary != "o:analytics" {
+		t.Errorf("gaps = %+v, want one on o:analytics only", gaps)
+	}
+	// And an unlisted realization in the parent is still a violation there.
+	write("extra.py", "# @gloss implements pfi:Pipeline\ndef x(): pass\n")
+	write(".gloss.yaml", "boundary: o:lib\nlevel: system\nrealizes: [inherit]\ncriticality: low\n")
+	write("importers/.gloss.yaml", "boundary: o:importers\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Importer]\n")
+	write("analytics/.gloss.yaml", "boundary: o:analytics\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Importer]\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	var libViol []string
+	for _, v := range findings(rep, rollup.KindViolation) {
+		if v.Boundary == "o:lib" {
+			libViol = append(libViol, v.Concept)
+		}
+	}
+	if !has(libViol, "pfi:Pipeline") {
+		t.Errorf("o:lib should report pfi:Pipeline as a violation (nobody declares it): %v", libViol)
+	}
+}

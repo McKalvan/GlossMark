@@ -77,7 +77,7 @@ boundary: acme:horse-factory-svc
 level: container                 # domain | system | container | component
 label: Horse factory service
 part-of: acme:animal-production
-realizes: [impl:HorseFactoryService, zoo:Breeding, zoo:Foaling]
+realizes: [impl:HorseFactoryService, zoo:Breeding, zoo:Foaling]   # or [inherit, impl:Extra]: what the nested boundaries declare, plus additions
 produces: [zoo:Horse]
 holds: [zoo:Foal]                # entities whose data lives here (tables, files); derived from represents
 default-namespace: impl          # .Name in markers below resolves to impl:Name
@@ -87,7 +87,7 @@ owner: horse-platform
 criticality: high                # optional; else the highest of what the code realizes, else the parent's
 ```
 
-The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `holds`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives: `implements` (and `provisions`, `configures`, `deploys` on a resource or system-type) derive `realizes`; `represents` on an entity derives `holds`; the rest lift as themselves. A relation the manifest does not declare is not compared.
+The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `holds`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives: `implements` (and `provisions`, `configures`, `deploys` on a resource or system-type) derive `realizes`; `represents` on an entity derives `holds`; the rest lift as themselves. A relation the manifest does not declare is not compared. A container that only contains its components writes `realizes: inherit` (optionally with additions, `realizes: [inherit, impl:Gateway]`): its declared set is the union of what the boundaries nested inside it declare, so the list is not repeated at every level; gaps in inherited entries are reported by the child that declared them. A concept inherits `realizes` through `is-a` and a part realizes its whole, so `CsvImporter: { is-a: Importer }` needs no `realizes:` line of its own and code that implements a part of a pipeline satisfies a manifest that declares the pipeline.
 
 `allowed` is a deliberate narrowing, not a requirement. When it is absent the allowed set is derived: the `default-namespace`, every concept the manifest declares (`realizes`, `produces`, `consumes`, `publishes`, `subscribes`), their `part-of` and `is-a` descendants, the core concepts they realize, and whatever the boundaries nested inside it allow (a container holds its components). A link outside the derived set is a warning in `gloss check` (GM503) and HARD in the PR gate; outside a written list it is an error (GM502) and HARD. `gloss check --explain` prints the effective set per manifest. A manifest that declares nothing and names no default namespace restricts nothing. Write `allowed:` only to permit less than the derived set or to add a concept the boundary uses without declaring it. `criticality` classifies the boundary for review (see [GOVERNANCE.md](GOVERNANCE.md)); `gloss check` warns when it is declared below a concept the code realizes.
 

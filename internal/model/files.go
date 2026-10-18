@@ -406,10 +406,31 @@ type Manifest struct {
 	Dir  string `yaml:"-" json:"-"`
 }
 
-// DeclaredSets returns the manifest's declared intent relations.
+// InheritMarker in a manifest's realizes: list means "what my nested
+// boundaries declare"; the manifest may list additions beside it.
+const InheritMarker = "inherit"
+
+// InheritsRealizes reports whether the manifest wrote realizes: inherit.
+func (m *Manifest) InheritsRealizes() bool {
+	for _, r := range m.Realizes {
+		if r == InheritMarker {
+			return true
+		}
+	}
+	return false
+}
+
+// DeclaredSets returns the manifest's declared intent relations (without
+// the inherit marker).
 func (m *Manifest) DeclaredSets() map[string]StringList {
+	var realizes StringList
+	for _, r := range m.Realizes {
+		if r != InheritMarker {
+			realizes = append(realizes, r)
+		}
+	}
 	return map[string]StringList{
-		"realizes":   m.Realizes,
+		"realizes":   realizes,
 		"produces":   m.Produces,
 		"consumes":   m.Consumes,
 		"publishes":  m.Publishes,

@@ -213,10 +213,14 @@ func isAncestorBoundary(g *graph.Graph, anc, b string) bool {
 	return false
 }
 
-// RealizesStar returns every concept reachable from c through realizes,
-// published-as and part-of→realizes chains: the core concepts c stands for.
+// RealizesStar returns every concept c stands for: what it realizes or is
+// published as (transitively), the wholes it is part of and what they
+// realize (implementing a part implements the whole), and what its is-a
+// ancestors realize (a CsvImporter is-a Importer realizes pf:Importing
+// without repeating the line). Neither is-a ancestors nor c itself are
+// included.
 func RealizesStar(g *graph.Graph, c string) []string {
-	seen := map[string]bool{}
+	seen := map[string]bool{c: true}
 	var out []string
 	var walk func(x string, depth int)
 	walk = func(x string, depth int) {
@@ -235,8 +239,16 @@ func RealizesStar(g *graph.Graph, c string) []string {
 				}
 			}
 		}
-		// A part of a mechanism realizes what the mechanism realizes.
+		// A part of a mechanism realizes the mechanism and what it realizes.
 		for _, e := range g.Out(x, "part-of") {
+			if n := g.Node(e.O); n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived && !seen[e.O] {
+				seen[e.O] = true
+				out = append(out, e.O)
+				walk(e.O, depth+1)
+			}
+		}
+		// A kind of a mechanism realizes what the mechanism realizes.
+		for _, e := range g.Out(x, "is-a") {
 			if n := g.Node(e.O); n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived {
 				walk(e.O, depth+1)
 			}

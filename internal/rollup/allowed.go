@@ -71,19 +71,8 @@ func derive(g *graph.Graph, ws *load.Workspace, m *model.Manifest, set map[strin
 		set[m.DefaultNamespace+":*"] = true
 	}
 	expandDeclared(g, m, set)
-	// Children: manifests in nested directories or declaring part-of this boundary.
-	for _, c := range ws.Manifests {
-		if c == m || seen[c] {
-			continue
-		}
-		nested := m.Dir == "" && c.Dir != "" || m.Dir != "" && strings.HasPrefix(c.Dir, m.Dir+"/")
-		partOf := false
-		for _, p := range c.PartOf {
-			if p == m.Boundary {
-				partOf = true
-			}
-		}
-		if !nested && !partOf {
+	for _, c := range Children(ws, m) {
+		if seen[c] {
 			continue
 		}
 		if len(c.Allowed) > 0 {
@@ -125,4 +114,26 @@ func expandDeclared(g *graph.Graph, m *model.Manifest, set map[string]bool) {
 			}
 		}
 	}
+}
+
+// Children returns the manifests nested inside m: in a directory under m's,
+// or declaring part-of m's boundary.
+func Children(ws *load.Workspace, m *model.Manifest) []*model.Manifest {
+	var out []*model.Manifest
+	for _, c := range ws.Manifests {
+		if c == m {
+			continue
+		}
+		nested := m.Dir == "" && c.Dir != "" || m.Dir != "" && strings.HasPrefix(c.Dir, m.Dir+"/")
+		partOf := false
+		for _, p := range c.PartOf {
+			if p == m.Boundary {
+				partOf = true
+			}
+		}
+		if nested || partOf {
+			out = append(out, c)
+		}
+	}
+	return out
 }
