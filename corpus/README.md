@@ -1,3 +1,4 @@
+<!-- @gloss documents gmi:MarkerGrammar scope=file -->
 # Conformance corpus
 
 One file per supported comment style, each carrying `@gloss` markers in the

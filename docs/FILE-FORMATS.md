@@ -1,3 +1,4 @@
+<!-- @gloss documents gm:Namespace, gm:Boundary scope=file -->
 # File formats
 
 Three file kinds carry the ontology: the repository file, ontology files per namespace, and per-directory boundary manifests. Views are a fourth, optional file. JSON Schemas for all of them live in `schemas/`; the Go types in `internal/model` are the source of truth.

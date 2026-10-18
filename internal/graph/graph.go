@@ -1,3 +1,6 @@
+// @gloss represents gmi:CanonicalGraph scope=file
+// @gloss represents gm:Artifact, gm:Concept, gm:Boundary scope=file
+
 // Package graph is the canonical GlossMark graph: nodes and edges with
 // provenance, IRIs with CURIE aliases, computed closures, and a deterministic
 // newline-delimited JSON encoding that diffs cleanly in git.
@@ -21,7 +24,7 @@ const ArtifactPrefix = "urn:gloss:artifact:"
 // Edge sources.
 const (
 	SourceDeclared = "declared" // ontology files and manifests
-	SourceInline   = "inline"   // @gloss markers
+	SourceInline   = "inline"   // `@gloss` markers
 	SourceDerived  = "derived"  // rollup rules
 	SourceInferred = "inferred" // inferrers (test paths)
 )

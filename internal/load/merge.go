@@ -1,3 +1,5 @@
+// @gloss implements gmi:WorkspaceLoader scope=file
+
 package load
 
 import (

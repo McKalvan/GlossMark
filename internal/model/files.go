@@ -1,3 +1,6 @@
+// @gloss represents gmi:FileFormats scope=file
+// @gloss represents gm:Namespace, gm:Boundary scope=file
+
 package model
 
 import (

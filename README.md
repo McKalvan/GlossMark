@@ -1,3 +1,4 @@
+<!-- @gloss documents arch:glossmark scope=file -->
 # GlossMark
 
 GlossMark is a comment-native code ontology. One grammar, `@gloss`, links any artifact (code, tests, Terraform, configs, CI, Markdown, agent files) to concepts in two ontology tiers: a platonic **core** the business owns and a concrete **implementation** engineering owns. Agents write the links while they write the code; humans own the core and review only novelty. Everything compiles into one graph that tools diff, gate, project into views and serve to agents.
@@ -32,6 +33,7 @@ Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   S
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
+| `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
@@ -52,6 +54,19 @@ cd ../payments
 ```
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.
+
+## GlossMark on GlossMark
+
+This repository is its own first user. `glossmark.yaml` at the root owns two namespaces: `gm:` is the core tier (what a comment-native code ontology is about: markers, concepts, namespaces, boundaries, extraction, drift, review, gating) and `gmi:` is the implementation tier (the Go packages and commands that realize it). Every package and command carries a marker, the JSON Schemas have sidecars, the docs `documents` what they describe, and `.gloss.yaml` manifests at the root, `cmd/` and `internal/` declare what `gloss drift` compares with the code. `go test ./internal/e2e/` includes a self-host test that fails on any lint error, violation, gap or dangling reference in this tree.
+
+```sh
+go build -o gloss ./cmd/gloss
+./gloss check     # 0 errors, 0 warnings
+./gloss drift     # the remaining findings are honest: four core processes nothing tests yet
+./gloss view      # .glossmark/viewer.html
+```
+
+The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger records them as accepted without a reviewer until a human reviews them.
 
 ## Design in one paragraph
 

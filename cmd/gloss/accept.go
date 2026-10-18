@@ -1,3 +1,5 @@
+// @gloss implements gmi:ReviewCommands scope=file
+
 package main
 
 import (
@@ -52,7 +54,7 @@ func selectMarkers(p *pipeline, sel []string) ([]extract.FoundMarker, error) {
 	return out, nil
 }
 
-// flipMarker rewrites @gloss? to @gloss on the marker's line.
+// flipMarker rewrites `@gloss?` to `@gloss` on the marker's line.
 func flipMarker(p *pipeline, fm extract.FoundMarker) error {
 	path := p.WS.Abs(fm.Path)
 	b, err := os.ReadFile(path)

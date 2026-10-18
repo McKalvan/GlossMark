@@ -1,3 +1,5 @@
+// @gloss implements gmi:ViewProjector scope=file
+
 package views
 
 import "fmt"

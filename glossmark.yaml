@@ -1,0 +1,13 @@
+# glossmark.yaml (repo root): GlossMark applied to itself.
+# gm:  is the core tier, what a comment-native code ontology is about, independent of this tool.
+# gmi: is the implementation tier, the Go packages and commands that realize it.
+owns:
+  gm:  { iri: https://github.com/mckalvan/glossmark/ontology/gm/,  file: ontology/gm.gloss.yaml,  tier: core,           version: 0.1.0, owner: glossmark }
+  gmi: { iri: https://github.com/mckalvan/glossmark/ontology/gmi/, file: ontology/gmi.gloss.yaml, tier: implementation, version: 0.1.0, owner: glossmark }
+prefixes:
+  arch: https://github.com/mckalvan/glossmark/boundaries/
+# The example repositories are workspaces of their own and the corpus files carry
+# markers that point at the example ontologies, so neither belongs to this graph.
+exclude: ["examples/**", "corpus/testdata/**", ".glossmark/**", "dist/**", "go.sum"]
+policy:
+  soft-conf-threshold: 0.7

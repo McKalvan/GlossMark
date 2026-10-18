@@ -1,3 +1,4 @@
+# @gloss configures gmi:GlossCli scope=file
 name: GlossMark
 description: Lint @gloss markers, report ontology drift, and post the per-view impact of a pull request as a comment.
 branding: { icon: book-open, color: purple }

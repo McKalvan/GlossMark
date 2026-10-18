@@ -1,3 +1,5 @@
+// @gloss implements gmi:SqliteExport scope=file
+
 // Package store exports the graph to SQLite: nodes, edges and provenance
 // tables plus recursive-CTE views for the is-a and part-of closures, so any
 // SQL client can query the ontology.

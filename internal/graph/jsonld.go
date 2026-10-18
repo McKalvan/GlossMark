@@ -1,3 +1,5 @@
+// @gloss implements gmi:Publisher scope=file
+
 package graph
 
 import (

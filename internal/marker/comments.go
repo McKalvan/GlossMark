@@ -1,3 +1,5 @@
+// @gloss implements gmi:MarkerGrammar scope=file
+
 package marker
 
 import (
@@ -9,6 +11,9 @@ import (
 type CommentStyle struct {
 	Line  []string
 	Block [][2]string
+	// Fences is true for Markdown-like files: text inside a fenced code block
+	// (``` or ~~~) is quoted and never holds a marker.
+	Fences bool
 }
 
 var (
@@ -16,6 +21,7 @@ var (
 	slash = CommentStyle{Line: []string{"//"}, Block: [][2]string{{"/*", "*/"}}}
 	dash  = CommentStyle{Line: []string{"--"}, Block: [][2]string{{"/*", "*/"}}}
 	xml   = CommentStyle{Block: [][2]string{{"<!--", "-->"}}}
+	md    = CommentStyle{Block: [][2]string{{"<!--", "-->"}}, Fences: true}
 	semi  = CommentStyle{Line: []string{";"}}
 	// Sidecar files (foo.json.gloss) are plain marker lists; '#' comments are allowed.
 	sidecar = CommentStyle{Line: []string{"#", ""}}
@@ -34,7 +40,7 @@ var byExt = map[string]CommentStyle{
 	".cs": slash, ".swift": slash, ".scala": slash, ".php": slash, ".dart": slash, ".proto": slash, ".groovy": slash,
 	".gradle": slash, ".m": slash, ".mm": slash, ".zig": slash, ".v": slash, ".sv": slash, ".jsonc": slash, ".json5": slash,
 	".sql": dash, ".lua": dash, ".hs": dash, ".elm": dash, ".ada": dash, ".psql": dash, ".ddl": dash,
-	".md": xml, ".mdx": xml, ".html": xml, ".htm": xml, ".xml": xml, ".svg": xml, ".vue": xml, ".xsl": xml, ".xhtml": xml,
+	".md": md, ".mdx": md, ".html": xml, ".htm": xml, ".xml": xml, ".svg": xml, ".vue": xml, ".xsl": xml, ".xhtml": xml,
 	".lisp": semi, ".clj": semi, ".cljs": semi, ".edn": semi, ".el": semi, ".scm": semi, ".rkt": semi, ".asm": semi, ".s": semi,
 	".gloss": sidecar,
 }

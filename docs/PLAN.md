@@ -1,3 +1,4 @@
+<!-- @gloss documents arch:glossmark scope=file -->
 # GlossMark build plan
 
 Source: "GlossMark — Design v2" (claude.ai doc, revision 140, 2026-10-17). This plan turns that design into a shippable toolchain. It records the analysis of the spec, the architecture chosen, what is built in this repository today, and what is deliberately deferred.
@@ -106,7 +107,9 @@ action.yml                Composite GitHub Action: build, check, drift, diff, PR
 7. **Imports.** Local paths resolve now (`source: ../payments-api/ontology/`); `git+` and `https://` sources are parsed and rejected with a clear message until the fetcher lands. A local directory containing a published `ontology.jsonld` is also accepted.
 8. **Instances and fixtures.** Out of scope for this build; the schema reserves `shapes:` on impl concepts so the runtime check can land without a format change.
 9. **Comparison details the spec leaves open.** A manifest relation that declares nothing is not compared (no claim, no finding). `implements` lifts to `realizes`; `represents` lifts as itself and is reported, not gated, because manifests declare behaviour. Internal concepts and event emitters are exempt from the `realizes` comparison; events are compared through `publishes`/`subscribes`. Intended relations lift through the realized core concept, so `AuthorizeHandler realizes Authorization produces Payment` makes the boundary produce `Payment`.
-10. **Landscape before federation.** `gloss landscape <repo>...` unions sibling checkouts by IRI and re-derives rollups, which gives the context-map edge and closes single-repo gaps today; the published-artifact fetcher will feed the same union later.
+10. **Quoting the grammar.** Applying GlossMark to itself surfaced the quine problem: a comment that documents `@gloss` is itself a marker. The scanner, not the frozen regex, now treats text between a pair of backticks inside a comment as quoted prose, and skips the body of a Markdown fenced code block. The corpus files `quoted.md` and `quoted.go` pin the rule.
+11. **Self-hosting.** The repository owns `gm:` (core) and `gmi:` (implementation) and links its own packages, commands, schemas and docs; `internal/e2e/selfhost_test.go` fails on any lint error or failing drift finding. The example repositories and the corpus test files are excluded from the root workspace because they are workspaces of their own.
+12. **Landscape before federation.** `gloss landscape <repo>...` unions sibling checkouts by IRI and re-derives rollups, which gives the context-map edge and closes single-repo gaps today; the published-artifact fetcher will feed the same union later.
 
 ## 6. Verification
 

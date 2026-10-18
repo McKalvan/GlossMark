@@ -1,3 +1,4 @@
+# @gloss configures gmi:GlossCli scope=file
 # pre-commit framework hooks (https://pre-commit.com). Add to your .pre-commit-config.yaml:
 #   - repo: https://github.com/mckalvan/glossmark
 #     rev: v0.1.0

@@ -1,0 +1,49 @@
+# ontology/gm.gloss.yaml (core tier): what a comment-native code ontology is about.
+# Nothing here names a Go package, a file or a command; that is gmi:'s job.
+namespace: gm
+version: 0.1.0
+doc: The concepts GlossMark exists to manage, independent of how the tool is built.
+concepts:
+  # Things
+  Artifact:        { kind: entity, doc: "A file or a declaration inside one; the subject of a link." }
+  Concept:         { kind: entity, doc: "A named idea in a namespace; the object of a link." }
+  Relation:        { kind: entity, doc: "A typed edge with a domain, a range and lifting rules." }
+  Namespace:       { kind: entity, doc: "The unit of modularity; owns concepts and a tier." }
+  Boundary:        { kind: entity, doc: "An architectural unit (domain, system, container, component) with a manifest that declares its capability." }
+  Marker:          { kind: entity, doc: "A link written in a comment that binds an artifact to a concept." }
+  Proposal:        { kind: entity, is-a: Marker, doc: "A link an agent proposes and a human has not yet accepted." }
+  DecisionRequest: { kind: entity, doc: "A proposed concept nobody has defined, turned into a question for the namespace owner." }
+  View:            { kind: entity, doc: "A projection of the graph over tier and zoom for one observer." }
+  Landscape:       { kind: entity, doc: "Several repositories' graphs joined by IRI." }
+  # Records
+  Graph:           { kind: resource, doc: "The canonical graph of artifacts, concepts, boundaries and the edges between them." }
+  Ledger:          { kind: resource, doc: "The review state and provenance of every link." }
+  # Processes
+  Extraction:      { kind: process, consumes: [Marker, Artifact], produces: [Graph] }
+  Checking:        { kind: process, consumes: [Graph], doc: "Lint; syntax, references, domain and range, tiers, allowed lists." }
+  Rollup:          { kind: process, consumes: [Graph], doc: "Deriving higher-level facts (containment, realization, lifting) from code-level links." }
+  DriftDetection:  { kind: process, consumes: [Graph], produces: [Drift], publishes: [DriftDetected] }
+  Gating:          { kind: process, consumes: [Graph], produces: [Impact], doc: "Classifying a change as AUTO, SOFT or HARD by the views it touches." }
+  Review:          { kind: process, consumes: [Proposal], publishes: [LinkAccepted, LinkRejected] }
+  Projection:      { kind: process, consumes: [Graph], produces: [View] }
+  Publication:     { kind: process, consumes: [Namespace], doc: "Exposing a namespace's published concepts to importing repositories." }
+  Federation:      { kind: process, consumes: [Graph], produces: [Landscape] }
+  Guidance:        { kind: capability, doc: "Serving the vocabulary and the graph to coding agents while they write." }
+  # Events
+  LinkProposed:    { kind: event }
+  LinkAccepted:    { kind: event }
+  LinkRejected:    { kind: event }
+  DecisionRequested: { kind: event }
+  DriftDetected:   { kind: event }
+  # Measures
+  Drift:           { kind: measure, doc: "Disagreement between what a boundary declares and what its code derives." }
+  Coverage:        { kind: measure, doc: "The share of in-scope files that carry an accepted link." }
+  Confidence:      { kind: measure, doc: "How sure the author of a proposal is, in [0, 1]." }
+  Impact:          { kind: measure, doc: "Which views a change alters, and therefore how hard its gate is." }
+  # Constraints
+  TierSeparation:  { kind: constraint, constrains: [Concept], doc: "Core never mentions implementation; every implementation concept realizes a core concept or is internal." }
+  PublishedSeam:   { kind: constraint, constrains: [Concept], doc: "Only published concepts cross repositories, and touching one is HARD." }
+  OwnSubjectRule:  { kind: constraint, constrains: [Namespace], doc: "Importers extend, never mutate; a repo only asserts facts whose subject it owns." }
+  DeclaredCapability: { kind: constraint, constrains: [Boundary], doc: "What a boundary's code derives must stay within what its manifest declares." }
+  # The system
+  Toolchain:       { kind: system-type, produces: [Graph, View, Drift, Impact, Landscape] }

@@ -1,3 +1,5 @@
+// @gloss implements gmi:MarkerGrammar scope=file
+
 package marker
 
 import (
@@ -18,7 +20,10 @@ type Found struct {
 
 // Scan reads a file and returns every marker found in a comment, in order,
 // with diagnostics for malformed ones. Only text inside a comment is
-// considered, so "@gloss" in a string literal is never a marker.
+// considered, so a marker-shaped string literal is never a marker. Inside a
+// comment, text between a pair of backticks is quoted prose (so a comment can
+// talk about `@gloss` without being one), and for Markdown-like styles the
+// body of a fenced code block is quoted as well.
 // It also returns the file's lines for anchoring.
 func Scan(r io.Reader, style CommentStyle) ([]Found, []Diagnostic, []string) {
 	var lines []string
@@ -31,12 +36,28 @@ func Scan(r io.Reader, style CommentStyle) ([]Found, []Diagnostic, []string) {
 	var diags []Diagnostic
 	inBlock := -1 // index into style.Block when inside a block comment
 	header := true
+	inFence := "" // the fence token that opened the current Markdown code block
 	for i, line := range lines {
 		lineNo := i + 1
+		if style.Fences {
+			if tok := fenceToken(line); tok != "" {
+				if inFence == "" {
+					inFence = tok
+				} else if tok[0] == inFence[0] && len(tok) >= len(inFence) {
+					inFence = ""
+				}
+				header = false
+				continue
+			}
+			if inFence != "" {
+				header = false
+				continue
+			}
+		}
 		comments := commentSegments(line, style, &inBlock)
 		codeBefore := hasCode(line, style, comments)
 		for _, seg := range comments {
-			m, d := ParseLine(seg.text, lineNo, seg.col)
+			m, d := ParseLine(maskQuoted(seg.text), lineNo, seg.col)
 			for j := range d {
 				d[j].Line = lineNo
 			}
@@ -50,6 +71,46 @@ func Scan(r io.Reader, style CommentStyle) ([]Found, []Diagnostic, []string) {
 		}
 	}
 	return found, diags, lines
+}
+
+// maskQuoted blanks every span between a pair of backticks, keeping the
+// text's length so columns stay physical. An unpaired backtick is left alone.
+func maskQuoted(text string) string {
+	if strings.Count(text, "`") < 2 {
+		return text
+	}
+	b := []byte(text)
+	open := -1
+	for i, ch := range b {
+		if ch != '`' {
+			continue
+		}
+		if open < 0 {
+			open = i
+			continue
+		}
+		for j := open; j <= i; j++ {
+			b[j] = ' '
+		}
+		open = -1
+	}
+	return string(b)
+}
+
+// fenceToken returns the fence (``` or ~~~, possibly longer) that a Markdown
+// line opens or closes, or "" when the line is not a fence.
+func fenceToken(line string) string {
+	t := strings.TrimLeft(line, " \t")
+	for _, ch := range []byte{'`', '~'} {
+		n := 0
+		for n < len(t) && t[n] == ch {
+			n++
+		}
+		if n >= 3 {
+			return t[:n]
+		}
+	}
+	return ""
 }
 
 type segment struct {

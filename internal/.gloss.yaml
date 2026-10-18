@@ -1,0 +1,11 @@
+# internal/.gloss.yaml: the library every command is built from.
+boundary: arch:glossmark-lib
+level: container
+label: GlossMark library
+part-of: arch:glossmark
+realizes: [gm:Extraction, gm:Checking, gm:Rollup, gm:DriftDetection, gm:Gating, gm:Projection, gm:Publication, gm:Guidance, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability]
+produces: [gm:Graph, gm:View, gm:Drift, gm:Impact, gm:Coverage, gm:DecisionRequest]
+publishes: [gm:LinkProposed, gm:DecisionRequested, gm:DriftDetected]
+default-namespace: gmi
+allowed: [gm:*, gmi:*]
+owner: glossmark

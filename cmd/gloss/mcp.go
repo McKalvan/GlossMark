@@ -1,3 +1,5 @@
+// @gloss implements gmi:McpServer scope=file
+
 package main
 
 import (

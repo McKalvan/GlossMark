@@ -1,3 +1,6 @@
+// @gloss represents gmi:ReviewLedger scope=file
+// @gloss represents gm:Proposal scope=file
+
 // Package ledger maintains .glossmark/ledger.jsonl: provenance and review
 // state for every marker, keyed by marker id. Git blame is the second trail.
 package ledger

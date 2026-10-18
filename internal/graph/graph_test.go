@@ -1,3 +1,5 @@
+// @gloss verifies gmi:CanonicalGraph scope=file
+
 package graph
 
 import (
