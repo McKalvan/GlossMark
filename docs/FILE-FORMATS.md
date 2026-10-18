@@ -80,13 +80,15 @@ part-of: acme:animal-production
 realizes: [impl:HorseFactoryService, zoo:Breeding, zoo:Foaling]
 produces: [zoo:Horse]
 default-namespace: impl          # .Name in markers below resolves to impl:Name
-allowed: [zoo:Horse, zoo:Mare, impl:Breeding*, impl:Foal*]
+allowed: [zoo:Horse, zoo:Mare, impl:Breeding*, impl:Foal*]   # optional narrowing; see below
 generated: ["gen/**"]
 owner: horse-platform
 criticality: high                # optional; else the highest of what the code realizes, else the parent's
 ```
 
-The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives. A relation the manifest does not declare is not compared. Links to concepts outside `allowed` are HARD-gated. `criticality` classifies the boundary for review (see [GOVERNANCE.md](GOVERNANCE.md)); `gloss check` warns when it is declared below a concept the code realizes.
+The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives. A relation the manifest does not declare is not compared.
+
+`allowed` is a deliberate narrowing, not a requirement. When it is absent the allowed set is derived: the `default-namespace`, every concept the manifest declares (`realizes`, `produces`, `consumes`, `publishes`, `subscribes`), their `part-of` and `is-a` descendants, the core concepts they realize, and whatever the boundaries nested inside it allow (a container holds its components). A link outside the derived set is a warning in `gloss check` (GM503) and HARD in the PR gate; outside a written list it is an error (GM502) and HARD. `gloss check --explain` prints the effective set per manifest. A manifest that declares nothing and names no default namespace restricts nothing. Write `allowed:` only to permit less than the derived set or to add a concept the boundary uses without declaring it. `criticality` classifies the boundary for review (see [GOVERNANCE.md](GOVERNANCE.md)); `gloss check` warns when it is declared below a concept the code realizes.
 
 ## `views.yaml`
 

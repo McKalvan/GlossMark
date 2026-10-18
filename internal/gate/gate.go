@@ -500,10 +500,16 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 	if e.P == "may-modify" || e.P == "instructs" {
 		return HARD, []string{"agent remit or instructions changed"}
 	}
-	// Allowed list of the nearest manifest.
-	if m := ws.ManifestFor(p.Path); m != nil && len(m.Allowed) > 0 && on.NodeType == model.NodeConcept && !model.MatchAnyCurie(m.Allowed, on.CURIE) {
-		gate = HARD
-		reasons = append(reasons, "outside allowed")
+	// Allowed set of the nearest manifest: its list, else the derived default.
+	if m := ws.ManifestFor(p.Path); m != nil && on.NodeType == model.NodeConcept {
+		if a := rollup.AllowedFor(g, ws, m); !a.Matches(on.CURIE) {
+			gate = HARD
+			if a.Derived {
+				reasons = append(reasons, "outside the allowed set derived from the manifest")
+			} else {
+				reasons = append(reasons, "outside allowed")
+			}
+		}
 	}
 	// Agent remit (may-modify) when the actor is a named agent with an agent file.
 	if p.Actor != "" && strings.HasPrefix(p.Actor, "agent:") {

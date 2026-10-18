@@ -8,6 +8,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
 // ConceptTouch describes one concept a change touches and what constrains it.
@@ -69,7 +70,7 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 	for _, f := range files {
 		ft := FileTouch{Path: f, Gate: AUTO}
 		if m := ws.ManifestFor(f); m != nil {
-			ft.Boundary, ft.Manifest, ft.Allowed = m.Boundary, m.Path, m.Allowed
+			ft.Boundary, ft.Manifest, ft.Allowed = m.Boundary, m.Path, rollup.AllowedFor(g, ws, m).Patterns
 			if b := g.NodeByCurie(m.Boundary); b != nil && b.Criticality != "" {
 				ft.Criticality, ft.CriticalityFrom = b.Criticality, b.CURIE
 			}

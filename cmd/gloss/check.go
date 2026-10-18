@@ -16,12 +16,16 @@ func init() {
 func cmdCheck(args []string) int {
 	fs, root := newFlags("check")
 	warnErr := fs.Bool("strict", false, "treat warnings as errors")
+	explain := fs.Bool("explain", false, "print the effective allowed set of every manifest (declared, or derived from what it declares)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
+	}
+	if *explain {
+		fmt.Print(check.ExplainAllowed(p.WS, p.Graph))
 	}
 	diags := append([]marker.Diagnostic{}, p.Diags...)
 	diags = append(diags, check.Run(p.WS, p.Graph)...)

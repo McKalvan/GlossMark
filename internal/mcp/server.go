@@ -382,7 +382,8 @@ func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string
 	}
 	out["links"] = links
 	if m := ws.ManifestFor(path); m != nil {
-		b := map[string]any{"boundary": m.Boundary, "level": m.Level, "manifest": m.Path, "default_namespace": m.DefaultNamespace, "allowed": m.Allowed, "realizes": m.Realizes, "produces": m.Produces, "consumes": m.Consumes}
+		allowed := rollup.AllowedFor(g, ws, m)
+		b := map[string]any{"boundary": m.Boundary, "level": m.Level, "manifest": m.Path, "default_namespace": m.DefaultNamespace, "allowed": allowed.Patterns, "allowed_derived": allowed.Derived, "realizes": m.Realizes, "produces": m.Produces, "consumes": m.Consumes}
 		if bn := g.NodeByCurie(m.Boundary); bn != nil {
 			var derived []string
 			for _, e := range g.Out(bn.ID, "") {
@@ -400,7 +401,7 @@ func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string
 			if n.Deprecated || (n.Imported && n.Tier == model.TierImpl && n.Published == "") {
 				continue
 			}
-			if len(m.Allowed) == 0 || model.MatchAnyCurie(m.Allowed, n.CURIE) {
+			if allowed.Matches(n.CURIE) {
 				vocab = append(vocab, n.CURIE+" ("+n.Kind+")")
 			}
 		}

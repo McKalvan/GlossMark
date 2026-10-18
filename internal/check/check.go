@@ -400,8 +400,10 @@ func (c *checker) manifests() {
 				c.add(m.Path, 1, "warning", "GM501", fmt.Sprintf("allowed lists %s, which does not exist", pat))
 			}
 		}
-		// Inline links in this boundary must target allowed concepts (when the list exists).
-		if len(m.Allowed) == 0 {
+		// Inline links in this boundary must target the allowed set: the
+		// manifest's own list, else the set derived from what it declares.
+		allowed := rollup.AllowedFor(c.g, c.ws, m)
+		if len(allowed.Patterns) == 0 {
 			continue
 		}
 		for _, a := range c.g.NodesOf(model.NodeArtifact) {
@@ -419,16 +421,39 @@ func (c *checker) manifests() {
 				if on == nil || on.NodeType != model.NodeConcept {
 					continue
 				}
-				if !model.MatchAnyCurie(m.Allowed, on.CURIE) {
-					sev := "warning"
-					if e.Prov == nil || !e.Prov.Proposed {
-						sev = "error"
-					}
-					c.add(e.Prov.Path, e.Prov.Line, sev, "GM502", fmt.Sprintf("%s %s is outside this boundary's allowed list in %s (HARD gate)", e.P, on.CURIE, m.Path))
+				if allowed.Matches(on.CURIE) {
+					continue
 				}
+				if allowed.Derived {
+					c.add(e.Prov.Path, e.Prov.Line, "warning", "GM503", fmt.Sprintf("%s %s is outside the allowed set derived from %s (HARD gate); declare the concept there, or write allowed: to widen it (gloss check --explain shows the set)", e.P, on.CURIE, m.Path))
+					continue
+				}
+				sev := "warning"
+				if e.Prov == nil || !e.Prov.Proposed {
+					sev = "error"
+				}
+				c.add(e.Prov.Path, e.Prov.Line, sev, "GM502", fmt.Sprintf("%s %s is outside this boundary's allowed list in %s (HARD gate)", e.P, on.CURIE, m.Path))
 			}
 		}
 	}
+}
+
+// ExplainAllowed renders the effective allowed set of every manifest, one
+// line each, for gloss check --explain.
+func ExplainAllowed(ws *load.Workspace, g *graph.Graph) string {
+	var sb strings.Builder
+	for _, m := range ws.Manifests {
+		a := rollup.AllowedFor(g, ws, m)
+		switch {
+		case len(a.Patterns) == 0:
+			fmt.Fprintf(&sb, "%s (%s): allowed = everything; the manifest declares nothing and has no default-namespace\n", m.Boundary, m.Path)
+		case a.Derived:
+			fmt.Fprintf(&sb, "%s (%s): allowed = %s  [derived: default-namespace, declared concepts, their descendants, realized cores, nested boundaries]\n", m.Boundary, m.Path, strings.Join(a.Patterns, ", "))
+		default:
+			fmt.Fprintf(&sb, "%s (%s): allowed = %s  [declared]\n", m.Boundary, m.Path, strings.Join(a.Patterns, ", "))
+		}
+	}
+	return sb.String()
 }
 
 func relFile(ws *load.Workspace, path string) string {

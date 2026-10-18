@@ -1040,3 +1040,70 @@ func TestVerifiesCanonical(t *testing.T) {
 		}
 	}
 }
+
+// TestDerivedAllowed: a manifest without allowed: gets a derived set (default
+// namespace, declared concepts, descendants, realized cores, nested
+// boundaries); a link outside it is GM503 in check and HARD in the gate. A
+// written list is a deliberate narrowing (GM502).
+func TestDerivedAllowed(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n  Thing: { kind: entity }\n  Part: { kind: entity, part-of: Thing }\n  Sub: { kind: entity, is-a: Thing }\n  Elsewhere: { kind: entity }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:Doer]\nproduces: [z:Thing]\n")
+	write("svc/a.py", "# @gloss implements .Doer\ndef go(): pass\n\n# @gloss represents z:Part\nclass P: pass\n\n# @gloss represents z:Sub\nclass S: pass\n\n# @gloss produces z:Doing\ndef d(): pass\n\n# @gloss represents z:Elsewhere\nclass E: pass\n")
+	write("top.sql", "-- @gloss represents z:Sub\nCREATE TABLE sub (id int);\n")
+	ws, g, _, _ := build(t, root)
+	svc := ws.ManifestFor("svc/a.py")
+	a := rollup.AllowedFor(g, ws, svc)
+	if !a.Derived || !has(a.Patterns, "i:*") || !has(a.Patterns, "z:Thing") || !has(a.Patterns, "z:Part") || !has(a.Patterns, "z:Sub") || !has(a.Patterns, "z:Doing") || has(a.Patterns, "z:Elsewhere") {
+		t.Errorf("derived allowed = %+v", a)
+	}
+	// The root inherits what its nested boundary allows.
+	if ra := rollup.AllowedFor(g, ws, ws.ManifestFor("top.sql")); !ra.Derived || !has(ra.Patterns, "z:Sub") || !has(ra.Patterns, "i:*") {
+		t.Errorf("root allowed = %+v", ra)
+	}
+	codes := map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Msg)
+	}
+	if len(codes["GM503"]) != 1 || !strings.Contains(codes["GM503"][0], "z:Elsewhere") || len(codes["GM502"]) != 0 {
+		t.Errorf("GM503=%v GM502=%v", codes["GM503"], codes["GM502"])
+	}
+	if ex := check.ExplainAllowed(ws, g); !strings.Contains(ex, "o:svc (svc/.gloss.yaml): allowed = i:*, i:Doer, z:Doing, z:Part, z:Sub, z:Thing") || !strings.Contains(ex, "[derived") {
+		t.Errorf("explain:\n%s", ex)
+	}
+	// Gate: the Elsewhere link is HARD with the derived-set reason; Part is SOFT.
+	for _, e := range g.Edges() {
+		if e.Source != graph.SourceInline || e.P != "represents" {
+			continue
+		}
+		cls, why := gate.ClassifyLink(g, ws, e, ws.Config.EffectivePolicy())
+		switch g.Curie(e.O) {
+		case "z:Elsewhere":
+			if cls != gate.HARD || !strings.Contains(strings.Join(why, ";"), "derived") {
+				t.Errorf("Elsewhere: %s %v", cls, why)
+			}
+		case "z:Part":
+			if cls != gate.SOFT {
+				t.Errorf("Part: %s %v", cls, why)
+			}
+		}
+	}
+	// A written list narrows: only i:* now, so z:Part becomes GM502.
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:Doer]\nproduces: [z:Thing]\nallowed: [i:*]\n")
+	ws, g, _, _ = build(t, root)
+	codes = map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Msg)
+	}
+	if len(codes["GM502"]) != 4 || len(codes["GM503"]) != 0 {
+		t.Errorf("after narrowing: GM502=%v GM503=%v", codes["GM502"], codes["GM503"])
+	}
+}
