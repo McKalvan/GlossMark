@@ -633,6 +633,8 @@ func TestImportRangesAndLock(t *testing.T) {
 	copyTree(t, example(t, "payments/payments-api"), filepath.Join(tmp, "payments-api"))
 	copyTree(t, example(t, "payments/settlement-worker"), filepath.Join(tmp, "settlement-worker"))
 	root := filepath.Join(tmp, "settlement-worker")
+	// The example ships a lockfile; start from the unlocked state.
+	os.Remove(filepath.Join(root, load.LockName))
 	codes := func() []string {
 		ws, err := load.Load(root)
 		if err != nil {
