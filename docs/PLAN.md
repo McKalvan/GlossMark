@@ -118,7 +118,11 @@ Built after the first cut, because they are what pays off on an agent's first da
 3. **Search by meaning.** `search_concepts` matches aliases (`aliases:` on concepts), CamelCase words, stems and small typos, follows `realizes`/`is-a` one hop, and says why each hit matched.
 4. **Session-start briefing.** `gloss context --dir` renders a bounded briefing (boundary, allowed targets, remits, concepts, state); `gloss hook install` registers it as a Claude Code SessionStart hook and registers the MCP server in `.mcp.json`.
 
-## 7. Verification
+## 7. Versioning
+
+Four numbers, documented in `docs/VERSIONING.md`: the tool release (git tag, injected at build time by the release workflow, read from Go build info for `go install`), the grammar (`grammar: N` directive with a written stability and deprecation policy), file formats (`format` headers on `graph.jsonl`, `ledger.jsonl` and `glossmark.lock`, newer formats refused), and namespace semver with enforced import ranges and a `glossmark.lock` written by `gloss lock`.
+
+## 8. Verification
 
 - `go test ./...` runs the conformance corpus, grammar edge cases, rollup rules on synthetic graphs, and end-to-end runs on both examples.
 - The payments example test asserts the spec's "What the tooling makes of it" table: one violation (Refunding handled, not declared), one gap (Capture implemented but untested), one landscape edge (CaptureConfirmed across repos), one HARD change (SettlementCutoff value), one consistent rollup after taxonomic lift.

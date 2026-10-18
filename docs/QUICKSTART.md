@@ -3,10 +3,13 @@
 ## Install
 
 ```sh
-go install github.com/mckalvan/glossmark/cmd/gloss@latest
+go install github.com/mckalvan/glossmark/cmd/gloss@latest     # or @vX.Y.Z to pin a release
 # or, from a checkout
-go build -o gloss ./cmd/gloss
+make build                                                      # injects the git tag as the version
+gloss version                                                   # tool, grammar and file-format versions
 ```
+
+Binaries for Linux, macOS and Windows are attached to each GitHub release.
 
 ## 1. Declare the namespaces
 
@@ -73,7 +76,8 @@ gloss agents --dir services/api --write AGENTS.md
 ## 6. Run the tooling
 
 ```sh
-gloss check                      # lint: syntax, dangling refs, domain/range, own-subject rule, tiers
+gloss check                      # lint: syntax, dangling refs, domain/range, own-subject rule, tiers, import ranges, lockfile
+gloss lock                       # pin resolved import versions in glossmark.lock
 gloss build                      # .glossmark/graph.jsonl + context.jsonld + ledger.jsonl
 gloss drift                      # violations, gaps, orphans, rogues, stale, untested, metrics
 gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment

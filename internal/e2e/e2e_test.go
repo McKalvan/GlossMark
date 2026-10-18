@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/ontoedit"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/version"
 	"github.com/mckalvan/glossmark/internal/views"
 )
 
@@ -621,5 +623,76 @@ func TestTouched(t *testing.T) {
 	}
 	if ts[2].Gate != gate.HARD || len(ts[2].Concepts) < 3 {
 		t.Errorf("ontology file should be HARD with its concepts: %+v", ts[2])
+	}
+}
+
+// TestImportRangesAndLock: a range outside the resolved version fails check;
+// the lockfile notices an upstream change under the same version number.
+func TestImportRangesAndLock(t *testing.T) {
+	tmp := t.TempDir()
+	copyTree(t, example(t, "payments/payments-api"), filepath.Join(tmp, "payments-api"))
+	copyTree(t, example(t, "payments/settlement-worker"), filepath.Join(tmp, "settlement-worker"))
+	root := filepath.Join(tmp, "settlement-worker")
+	codes := func() []string {
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, d := range ws.Diags {
+			out = append(out, d.Code)
+		}
+		return out
+	}
+	// No lock yet → GM108; range ^1.2 satisfied by 1.2.0 → no GM106.
+	c := codes()
+	if !has(c, "GM108") || has(c, "GM106") {
+		t.Fatalf("initial diags = %v", c)
+	}
+	// Lock it.
+	ws, _ := load.Load(root)
+	if err := load.WriteLock(root, ws.Resolved); err != nil {
+		t.Fatal(err)
+	}
+	if c := codes(); has(c, "GM108") || has(c, "GM107") {
+		t.Fatalf("after lock diags = %v", c)
+	}
+	// Upstream edits the ontology without bumping → GM107 (hash).
+	up := filepath.Join(tmp, "payments-api", "ontology", "pay.gloss.yaml")
+	b, _ := os.ReadFile(up)
+	os.WriteFile(up, append(b, []byte("  Chargeback: { kind: entity }\n")...), 0o644)
+	if c := codes(); !has(c, "GM107") {
+		t.Fatalf("content change not noticed: %v", c)
+	}
+	// Upstream bumps to 2.0.0 → outside ^1.2 → GM106 and GM107 (version).
+	os.WriteFile(up, []byte(strings.Replace(string(b), "version: 1.2.0", "version: 2.0.0", 1)), 0o644)
+	if c := codes(); !has(c, "GM106") || !has(c, "GM107") {
+		t.Fatalf("major bump not caught: %v", c)
+	}
+	// An unsupported grammar directive is refused outright.
+	cfg := filepath.Join(root, "glossmark.yaml")
+	cb, _ := os.ReadFile(cfg)
+	os.WriteFile(cfg, append([]byte("grammar: 99\n"), cb...), 0o644)
+	if _, err := load.Load(root); err == nil || !strings.Contains(err.Error(), "grammar 99") {
+		t.Fatalf("grammar 99 should be refused, got %v", err)
+	}
+}
+
+// TestGraphFormatGuard: a graph written by a newer format is refused.
+func TestGraphFormatGuard(t *testing.T) {
+	newer := `{"type":"context","format":99,"generator":"gloss 9.0.0","prefixes":{}}` + "\n"
+	if _, err := graph.ReadJSONL(strings.NewReader(newer)); err == nil || !strings.Contains(err.Error(), "format 99") {
+		t.Fatalf("expected refusal, got %v", err)
+	}
+	// Format 0 (no header field) still reads.
+	old := `{"type":"context","generator":"gloss 0.1.0","prefixes":{}}` + "\n"
+	if _, err := graph.ReadJSONL(strings.NewReader(old)); err != nil {
+		t.Fatal(err)
+	}
+	// Written graphs carry the current format.
+	var sb strings.Builder
+	graph.New(nil).WriteJSONL(&sb)
+	if !strings.Contains(sb.String(), `"format":`+fmt.Sprint(version.GraphFormat)) {
+		t.Fatalf("header lacks format: %s", sb.String())
 	}
 }

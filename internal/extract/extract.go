@@ -15,10 +15,8 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/version"
 )
-
-// Version is stamped into the graph header.
-var Version = "0.1.0"
 
 // Result is the extractor output.
 type Result struct {
@@ -42,7 +40,7 @@ type FoundMarker struct {
 // Build runs pass 1 over a loaded workspace.
 func Build(ws *load.Workspace) (*Result, error) {
 	g := graph.New(ws.Prefixes)
-	g.Generator = "gloss " + Version
+	g.Generator = version.Generator()
 	res := &Result{Graph: g}
 	res.Diags = append(res.Diags, ws.Diags...)
 	ex := &extractor{ws: ws, g: g, res: res}

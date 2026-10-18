@@ -18,10 +18,18 @@ import (
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 // FileName is the ledger file under .glossmark/.
 const FileName = "ledger.jsonl"
+
+// header is the first line of the ledger file.
+type header struct {
+	Type      string `json:"type"`
+	Format    int    `json:"format"`
+	Generator string `json:"generator"`
+}
 
 // Ledger is the in-memory ledger.
 type Ledger struct {
@@ -50,9 +58,19 @@ func Open(path string) (*Ledger, error) {
 		if line == "" {
 			continue
 		}
+		if n == 1 && strings.Contains(line, `"type":"ledger"`) {
+			var h header
+			if err := json.Unmarshal([]byte(line), &h); err == nil && h.Format > version.LedgerFormat {
+				return nil, fmt.Errorf("%s: format %d was written by a newer gloss (%s); this release reads format %d", path, h.Format, h.Generator, version.LedgerFormat)
+			}
+			continue
+		}
 		var e model.LedgerEntry
 		if err := json.Unmarshal([]byte(line), &e); err != nil {
 			return nil, fmt.Errorf("%s:%d: %w", path, n, err)
+		}
+		if e.MarkerID == "" {
+			continue
 		}
 		l.Entries[e.MarkerID] = &e
 	}
@@ -73,6 +91,9 @@ func (l *Ledger) Save() error {
 	}
 	sort.Strings(ids)
 	var sb strings.Builder
+	hb, _ := json.Marshal(header{Type: "ledger", Format: version.LedgerFormat, Generator: version.Generator()})
+	sb.Write(hb)
+	sb.WriteByte('\n')
 	for _, id := range ids {
 		b, err := json.Marshal(l.Entries[id])
 		if err != nil {

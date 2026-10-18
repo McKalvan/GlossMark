@@ -1,6 +1,6 @@
 # pre-commit framework hooks (https://pre-commit.com). Add to your .pre-commit-config.yaml:
 #   - repo: https://github.com/mckalvan/glossmark
-#     rev: v0.1.0
+#     rev: v0.2.0            # pin a released tag
 #     hooks: [{id: gloss-check}, {id: gloss-build}]
 - id: gloss-check
   name: gloss check

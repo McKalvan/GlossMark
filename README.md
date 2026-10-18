@@ -26,7 +26,7 @@ Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   S
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp` |
+| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
@@ -36,7 +36,7 @@ Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   S
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
 | `examples/payments` | The worked example: two repos sharing one core, with the published seam, extension, remits and a landscape |
-| `docs/` | [Plan](docs/PLAN.md) · [Quickstart](docs/QUICKSTART.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) |
+| `docs/` | [Plan](docs/PLAN.md) · [Quickstart](docs/QUICKSTART.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Versioning](docs/VERSIONING.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
 ## Try it
@@ -60,6 +60,10 @@ cd ../payments
 ## Design in one paragraph
 
 Two tiers plus instances: core is implementation-independent by construction; every implementation concept `realizes` a core concept or is `internal`; instances live outside both. The **namespace** is the unit of modularity, with one repo as the default layout and imports by path (git ref and URL to come). The **published** flag is the only seam between tiers and the only thing importable across repos; touching a published concept is HARD. Importers **extend, never mutate** (own-subject rule). **Views are projections** over tier × zoom; PR impact is "which views changed". Five deterministic rollup rules derive higher-level facts from code and compare them with what manifests declare; the comparison is the drift signal.
+
+## Versions
+
+`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@vX.Y.Z`), pre-commit (`rev:`) or `go install ...@vX.Y.Z`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Status
 

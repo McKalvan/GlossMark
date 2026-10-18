@@ -1,0 +1,8 @@
+# glossmark.lock: resolved import versions, written by gloss lock. Commit it.
+format: 1
+imports:
+    pay:
+        version: 1.2.0
+        range: ^1.2
+        source: ../payments-api/ontology/pay.gloss.yaml
+        hash: sha256:a48cf447c49db9709aca87ca2642a2ffe8692d54b08c7d2da4efacbfaa4a804e

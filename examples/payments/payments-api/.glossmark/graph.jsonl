@@ -1,4 +1,4 @@
-{"type":"context","generator":"gloss 0.1.0","prefixes":{"acme":"https://arch.acme.dev/boundaries/","pa":"https://onto.acme.dev/payments-api/","pay":"https://onto.acme.dev/pay/"},"@context":"./context.jsonld"}
+{"type":"context","format":1,"generator":"gloss 4a9b5e3-dirty","prefixes":{"acme":"https://arch.acme.dev/boundaries/","pa":"https://onto.acme.dev/payments-api/","pay":"https://onto.acme.dev/pay/"},"@context":"./context.jsonld"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:human:claude","curie":"human:claude","kind":"human","label":"human:claude"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:team:payments-eng","curie":"team:payments-eng","label":"payments-eng"}
 {"type":"node","node":"actor","id":"urn:gloss:actor:team:payments-product","curie":"team:payments-product","label":"payments-product"}

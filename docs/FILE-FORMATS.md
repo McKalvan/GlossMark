@@ -5,6 +5,7 @@ Three file kinds carry the ontology: the repository file, ontology files per nam
 ## `glossmark.yaml` (repository root)
 
 ```yaml
+grammar: 1                                      # @gloss grammar version this repo is written in (default 1)
 owns:
   zoo:  { iri: https://onto.acme.dev/zoo/,           file: ontology/zoo.gloss.yaml,  tier: core,           version: 1.0.0, owner: zoo-product }
   impl: { iri: https://onto.acme.dev/horse-factory/, file: ontology/impl.gloss.yaml, tier: implementation, version: 0.3.0 }
@@ -25,7 +26,7 @@ policy:
 ```
 
 - `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`.
-- `imports.<prefix>`: a namespace defined elsewhere. `source` is a local path (file or directory) today; `git+` and `https://` sources are parsed and rejected with a message until the fetcher lands (vendor the directory, or point at a sibling checkout). Only **published** concepts of an imported implementation namespace are referenceable.
+- `imports.<prefix>`: a namespace defined elsewhere. `source` is a local path (file or directory) today; `git+` and `https://` sources are parsed and rejected with a message until the fetcher lands (vendor the directory, or point at a sibling checkout). `version` is a range (`^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0`) enforced against the resolved ontology's version; `gloss lock` pins the result in `glossmark.lock`. Only **published** concepts of an imported implementation namespace are referenceable.
 - Authoring uses CURIEs; the graph stores IRIs. Concept IDs are permanent: a rename is `deprecated: true` plus `replaced-by:`.
 - Versions are semver: MAJOR removes or retypes a concept or changes is-a/part-of; MINOR adds; PATCH touches labels and docs. `gloss diff` classifies the bump.
 
@@ -102,6 +103,7 @@ Two presets ship (business, engineering) and are generated when the file is abse
 
 ## Tool-maintained files under `.glossmark/`
 
-- `graph.jsonl` — the canonical graph, one JSON record per line, deterministically sorted so `git diff` is meaningful (see `docs/GRAPH.md`).
+- `graph.jsonl` — the canonical graph, one JSON record per line, deterministically sorted so `git diff` is meaningful (see `docs/GRAPH.md`). Its first line carries `"format"`; a newer format is refused, not misread.
+- `glossmark.lock` (repo root, committed) — resolved version, range, source and content hash per import, written by `gloss lock`.
 - `context.jsonld` — the JSON-LD context that makes `graph.jsonl` RDF-loadable.
 - `ledger.jsonl` — provenance and review state per marker: `{marker_id, path, relation, targets, actor, model, conf, created, status, reviewed_by, reviewed_at, anchor_fingerprint, rationale}`. Exportable as PROV-O with `gloss export --prov`.

@@ -68,6 +68,11 @@
         "@context": {
           "description": "Relative path of the JSON-LD context document (./context.jsonld).",
           "type": "string"
+        },
+        "format": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Record format version; readers refuse a newer one."
         }
       }
     },

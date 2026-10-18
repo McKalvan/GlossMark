@@ -19,6 +19,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/mcp"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 func init() {
@@ -254,7 +255,7 @@ func cmdMCP(args []string) int {
 		}
 		r = rr
 	}
-	srv := mcp.New(&mcpBackend{root: r}, os.Stdin, os.Stdout, extract.Version)
+	srv := mcp.New(&mcpBackend{root: r}, os.Stdin, os.Stdout, version.String())
 	if err := srv.Serve(); err != nil {
 		return fail(err)
 	}

@@ -12,11 +12,12 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 func init() {
 	register(command{"build", "extract markers, manifests and ontologies into .glossmark/graph.jsonl", cmdBuild})
-	register(command{"version", "print the version", func([]string) int { fmt.Println("gloss", extract.Version); return 0 }})
+	register(command{"version", "print the tool, grammar and file-format versions", func([]string) int { fmt.Print(version.Report()); return 0 }})
 }
 
 // pipeline is the shared load → extract → derive → ledger-sync sequence.

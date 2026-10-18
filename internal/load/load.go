@@ -14,6 +14,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 // ConfigName is the repository-level file.
@@ -39,6 +40,10 @@ type Workspace struct {
 	Diags      []marker.Diagnostic
 	// Prefixes is the effective CURIE table: owned, imported and config prefixes.
 	Prefixes map[string]string
+	// Resolved records how each import was resolved (version, source, hash).
+	Resolved map[string]*Resolved
+	// Lock is glossmark.lock when present.
+	Lock *Lock
 }
 
 // FindRoot walks up from start until it finds glossmark.yaml.
@@ -70,7 +75,10 @@ func Load(root string) (*Workspace, error) {
 		return nil, err
 	}
 	ws := &Workspace{Root: root, Config: cfg, Ontologies: map[string]*model.Ontology{}, Owned: map[string]bool{},
-		Imported: map[string]*model.ImportDecl{}, Vocab: model.NewVocabulary(), Prefixes: map[string]string{}}
+		Imported: map[string]*model.ImportDecl{}, Vocab: model.NewVocabulary(), Prefixes: map[string]string{}, Resolved: map[string]*Resolved{}}
+	if !version.SupportsGrammar(cfg.Grammar) {
+		return nil, fmt.Errorf("%s: grammar %d is not supported by gloss %s (supported: %v); upgrade gloss or lower the directive", ConfigName, cfg.Grammar, version.String(), version.SupportedGrammars)
+	}
 	for p, v := range cfg.Prefixes {
 		ws.Prefixes[p] = v
 	}
@@ -126,6 +134,8 @@ func Load(root string) (*Workspace, error) {
 		}
 		if o == nil {
 			o = &model.Ontology{Concepts: map[string]*model.Concept{}}
+		} else {
+			ws.Resolved[p] = &Resolved{Prefix: p, Version: o.Version, Range: im.Version, Source: im.Source, Hash: hashFile(o.Path), Path: o.Path}
 		}
 		o.Namespace = p
 		if o.IRI == "" {
@@ -168,6 +178,8 @@ func Load(root string) (*Workspace, error) {
 		}
 		ws.Views = model.DefaultViews(core, impl)
 	}
+	// Import version ranges and the lockfile.
+	ws.Diags = append(ws.Diags, verifyImports(ws)...)
 	// Walk the tree for manifests and candidate files.
 	if err := ws.walk(); err != nil {
 		return nil, err

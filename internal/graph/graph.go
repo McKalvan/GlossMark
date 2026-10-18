@@ -13,6 +13,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 // ArtifactPrefix is the IRI scheme for artifacts: urn:gloss:artifact:<path>[#<symbol>].
@@ -106,6 +107,7 @@ func (e *Edge) Key() string {
 // Header is the first JSONL line.
 type Header struct {
 	Type      string            `json:"type"`
+	Format    int               `json:"format"`
 	Generator string            `json:"generator"`
 	Prefixes  map[string]string `json:"prefixes"`
 	Context   string            `json:"@context,omitempty"`
@@ -492,7 +494,7 @@ func (g *Graph) WriteJSONL(w io.Writer) error {
 		bw.Write(b)
 		return bw.WriteByte('\n')
 	}
-	if err := enc(Header{Type: "context", Generator: g.Generator, Prefixes: g.Prefixes, Context: "./context.jsonld"}); err != nil {
+	if err := enc(Header{Type: "context", Format: version.GraphFormat, Generator: g.Generator, Prefixes: g.Prefixes, Context: "./context.jsonld"}); err != nil {
 		return err
 	}
 	for _, n := range g.Nodes() {
@@ -533,6 +535,9 @@ func ReadJSONL(r io.Reader) (*Graph, error) {
 				return nil, err
 			}
 			g.Generator = h.Generator
+			if h.Format > version.GraphFormat {
+				return nil, fmt.Errorf("graph.jsonl: format %d was written by a newer gloss (%s); this release reads format %d. Upgrade gloss or rebuild with: gloss build", h.Format, h.Generator, version.GraphFormat)
+			}
 			for k, v := range h.Prefixes {
 				g.Prefixes[k] = v
 			}
