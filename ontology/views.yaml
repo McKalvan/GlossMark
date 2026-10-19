@@ -1,0 +1,19 @@
+# ontology/views.yaml: the projections of GlossMark's own graph (docs/FILE-FORMATS.md).
+views:
+  business:
+    doc: What a comment-native code ontology is about; the Go packages fold into what they realize.
+    include: [gm:*]
+    collapse: { "gmi:*": via realizes }
+    show-published: true
+    relations: [produces, consumes, constrains, publishes, subscribes, is-a, realizes]
+    lift: range-lcs
+    zoom: system
+  engineering:
+    doc: Both tiers, two levels of parts, container zoom.
+    include: [gm:*, gmi:*]
+    expand: { part-of: 2 }
+    zoom: container
+  constraints:
+    doc: The rules GlossMark enforces and the code that enforces them. Curated (it names its concepts), so it opens expanded.
+    include: [gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:ValueBinding, gmi:Linter, gmi:DriftComparator, gmi:ValueBinder]
+    zoom: code

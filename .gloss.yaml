@@ -3,7 +3,9 @@
 boundary: arch:glossmark
 level: system
 label: GlossMark
-realizes: [gm:GlossMark, gm:Extraction, gm:Lint, gm:Rollup, gm:DriftComparison, gm:Gating, gm:Review, gm:Projection, gm:Publication, gm:Landscape, gm:Vocabulary, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:Criticality]
-produces: [gm:Graph, gm:View, gm:Drift, gm:Impact, gm:Landscape, gm:Coverage, gm:DecisionRequest]
+# realizes: inherit compares the root with the union of what cmd/ and internal/
+# declare; gm:Onboarding is added here for the skill shipped in skills/.
+realizes: [inherit, gm:Onboarding]
+produces: [gm:Graph, gm:View, gm:Drift, gm:Impact, gm:Landscape, gm:Coverage, gm:DecisionRequest, gm:ProposedLink]
 publishes: [gm:LinkProposed, gm:LinkAccepted, gm:LinkRejected, gm:LinkStale, gm:DecisionRequested, gm:DriftDetected]
 owner: glossmark

@@ -3,6 +3,8 @@
 package rollup
 
 import (
+	"fmt"
+	"regexp"
 	"sort"
 
 	"github.com/mckalvan/glossmark/internal/graph"
@@ -23,8 +25,9 @@ var HousingRelations = []string{"realizes", "represents"}
 //     ancestors.
 //   - A boundary without one takes the highest level of the concepts its code
 //     realizes or represents (declared or derived), else its parent's.
-//   - An artifact takes the highest level of its boundary and of the concepts
-//     it links to.
+//   - An artifact takes the highest level of the concepts it links to (not
+//     those it presents or hosts). A boundary's level is a floor for the
+//     artifacts beneath it only when its manifest sets criticality-floor: true.
 //
 // CriticalityFrom records the provenance: "declared", or the CURIE of the node
 // the level was inherited from.
@@ -115,16 +118,18 @@ func Criticality(g *graph.Graph) {
 		}
 	}
 
-	// Artifacts: max of boundary and linked concepts.
+	// Artifacts: the concepts they link to, raised to a floor boundary's level.
 	for _, a := range g.NodesOf(model.NodeArtifact) {
 		best := ""
 		var bestNode *graph.Node
-		if b := g.Node(a.Boundary); b != nil && b.Criticality != "" {
-			best, bestNode = b.Criticality, b
+		if f := FloorFor(g, a.Boundary); f != nil {
+			best, bestNode = f.Criticality, f
 		}
 		for _, e := range g.Out(a.ID, "") {
 			o := g.Node(e.O)
-			if o == nil || o.NodeType != model.NodeConcept || e.P == "part-of" {
+			// A page that presents a critical concept, or a shell that hosts
+			// it, is not itself critical: criticality follows the mechanism.
+			if o == nil || o.NodeType != model.NodeConcept || e.P == "part-of" || e.P == "presents" || e.P == "hosts" {
 				continue
 			}
 			if better(o.Criticality, o, best, bestNode) {
@@ -135,6 +140,25 @@ func Criticality(g *graph.Graph) {
 			a.Criticality, a.CriticalityFrom = best, bestNode.CURIE
 		}
 	}
+}
+
+// FloorFor returns the nearest boundary at or above b that declares
+// criticality-floor: true and has a level, or nil.
+func FloorFor(g *graph.Graph, b string) *graph.Node {
+	if b == "" {
+		return nil
+	}
+	var best *graph.Node
+	for _, id := range append([]string{b}, g.PartOfChain(b)...) {
+		n := g.Node(id)
+		if n == nil || !n.CriticalityFloor || n.Criticality == "" {
+			continue
+		}
+		if best == nil || model.CriticalityRank(n.Criticality) > model.CriticalityRank(best.Criticality) {
+			best = n
+		}
+	}
+	return best
 }
 
 // better reports whether candidate node n at level lvl should replace the
@@ -197,4 +221,62 @@ type Understatement struct {
 	Concept  string `json:"concept"`
 	Level    string `json:"level"`
 	File     string `json:"file,omitempty"`
+}
+
+// CriticalitySuggestion is one proposed classification.
+type CriticalitySuggestion struct {
+	Concept string `json:"concept"`
+	Level   string `json:"level"`
+	Reason  string `json:"reason"`
+}
+
+// securityTest matches test paths and symbols that name a security concern.
+var securityTest = regexp.MustCompile(`(?i)(secur|auth|permission|access.?control|acl|rbac|csrf|xss|inject|crypt|privacy|pii|gdpr|secret|token|sanitiz|tamper|fraud)`)
+
+// SuggestCriticality proposes a first classification for owned concepts that
+// have none, from facts already in the graph: a constraint is a rule the
+// business relies on, a published concept crosses the seam into the business
+// view, and a concept whose only verifiers are security tests guards
+// something sensitive. Each is high. Everything else stays unclassified; the
+// suggestion is a starting point a human edits, not a policy.
+func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
+	var out []CriticalitySuggestion
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if n.Imported || n.Deprecated || n.CriticalityFrom == "declared" {
+			continue
+		}
+		if model.CriticalityRank(n.Criticality) >= model.CriticalityRank("high") {
+			continue // already inherits high or above
+		}
+		reason := ""
+		switch {
+		case n.Kind == "constraint":
+			reason = "constraint: a rule the business relies on"
+		case n.Published != "" || len(g.In(n.ID, "published-as")) > 0:
+			reason = "published: crosses the seam into the business view"
+		default:
+			total, sec := 0, 0
+			for _, e := range g.In(n.ID, "") {
+				if e.P != "verifies" && e.P != "tests" {
+					continue
+				}
+				a := g.Node(e.S)
+				if a == nil || a.NodeType != model.NodeArtifact {
+					continue
+				}
+				total++
+				if securityTest.MatchString(a.Path) || (a.Anchor != nil && securityTest.MatchString(a.Anchor.Symbol)) {
+					sec++
+				}
+			}
+			if total > 0 && sec == total {
+				reason = fmt.Sprintf("verified only by security tests (%d)", total)
+			}
+		}
+		if reason != "" {
+			out = append(out, CriticalitySuggestion{Concept: n.CURIE, Level: "high", Reason: reason})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Concept < out[j].Concept })
+	return out
 }

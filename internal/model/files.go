@@ -55,12 +55,19 @@ type Config struct {
 	Owns     map[string]*NamespaceDecl `yaml:"owns" json:"owns"`
 	Imports  map[string]*ImportDecl    `yaml:"imports,omitempty" json:"imports,omitempty"`
 	Prefixes map[string]string         `yaml:"prefixes,omitempty" json:"prefixes,omitempty"`
-	Views    string                    `yaml:"views,omitempty" json:"views,omitempty"`
-	Policy   *Policy                   `yaml:"policy,omitempty" json:"policy,omitempty"`
-	Exclude  []string                  `yaml:"exclude,omitempty" json:"exclude,omitempty"`
+	// RepoIRI is the repository's own IRI. A boundary prefix not declared
+	// under prefixes: expands to <repo-iri>boundaries/<prefix>/ instead of a
+	// urn with a warning, so most repositories need no prefixes: at all.
+	RepoIRI string   `yaml:"repo-iri,omitempty" json:"repo-iri,omitempty"`
+	Views   string   `yaml:"views,omitempty" json:"views,omitempty"`
+	Policy  *Policy  `yaml:"policy,omitempty" json:"policy,omitempty"`
+	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
 	// CommentStyles maps a file extension (".foo") to its comment tokens,
 	// extending the builtin table.
 	CommentStyles map[string][]string `yaml:"comment-styles,omitempty" json:"comment-styles,omitempty"`
+	// SourceURL links paths in the viewer to a code host:
+	// "https://github.com/o/r/blob/main/{path}#L{line}".
+	SourceURL string `yaml:"source-url,omitempty" json:"source-url,omitempty"`
 	// TestPaths are globs whose markers default to verifies when relation
 	// inference runs (pass "inferrers"). Default: common test layouts.
 	TestPaths []string `yaml:"test-paths,omitempty" json:"test-paths,omitempty"`
@@ -118,6 +125,7 @@ type Waiver struct {
 // DefaultPolicy returns the policy from the design when none is configured.
 func DefaultPolicy() *Policy {
 	return &Policy{
+		// @gloss publishes-value gmi:DefaultSoftThreshold scope=line
 		SoftConfThreshold: 0.7,
 		HardPaths:         []string{"ontology/**", "**/.gloss.yaml", "glossmark.yaml"},
 		CoverageFailUnder: 0,
@@ -289,6 +297,9 @@ type Concept struct {
 	Deprecated bool       `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	ReplacedBy string     `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	Value      any        `yaml:"value,omitempty" json:"value,omitempty"`
+	// ValueFrom binds value to the line of code it comes from, so a change to
+	// that line without a change to value is "published value drifted".
+	ValueFrom *ValueFrom `yaml:"value-from,omitempty" json:"value-from,omitempty"`
 	// Proposed marks an entry an agent (or anyone) added with the same semantics
 	// as `@gloss?`: it exists so links resolve, but a human accepts it
 	// (gloss accept --concept) before it counts as part of the ontology.
@@ -312,6 +323,15 @@ type Concept struct {
 	// becomes null keys, so both feed the GM304/GM305 lint. Not serialized.
 	NullKeys []string `yaml:"-" json:"-"`
 	Flow     bool     `yaml:"-" json:"-"`
+}
+
+// ValueFrom names the code a concept's value comes from: a file and either
+// a symbol (the first line that assigns or defaults it: "swr: float = 0.04")
+// or a 1-based line.
+type ValueFrom struct {
+	Path   string `yaml:"path" json:"path"`
+	Symbol string `yaml:"symbol,omitempty" json:"symbol,omitempty"`
+	Line   int    `yaml:"line,omitempty" json:"line,omitempty"`
 }
 
 // RelationNames returns the concept's generic relation keys, sorted.
@@ -394,7 +414,11 @@ type Manifest struct {
 	Subscribes StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
 	// Holds names the entities whose data lives in this boundary (tables,
 	// files, packages); the code's represents links on entities derive it.
-	Holds            StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
+	Holds StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
+	// Presents and Hosts name the concepts this boundary is a UI surface or a
+	// shell for; they are compared like realizes but never imply it.
+	Presents         StringList `yaml:"presents,omitempty" json:"presents,omitempty"`
+	Hosts            StringList `yaml:"hosts,omitempty" json:"hosts,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`
@@ -403,6 +427,10 @@ type Manifest struct {
 	// it is the highest criticality of the concepts the boundary realizes,
 	// else its parent's. See docs/GOVERNANCE.md.
 	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
+	// CriticalityFloor makes the boundary's level a floor for every artifact
+	// beneath it, including nested boundaries. Without it an artifact takes
+	// only the level of the concepts it links to. See docs/GOVERNANCE.md.
+	CriticalityFloor bool `yaml:"criticality-floor,omitempty" json:"criticality-floor,omitempty"`
 
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
@@ -412,6 +440,20 @@ type Manifest struct {
 // InheritMarker in a manifest's realizes: list means "what my nested
 // boundaries declare"; the manifest may list additions beside it.
 const InheritMarker = "inherit"
+
+// DerivedMarker in a manifest's allowed: list means "the derived set";
+// the other entries are added to it instead of replacing it.
+const DerivedMarker = "derived"
+
+// ExtendsDerivedAllowed reports whether allowed: starts from the derived set.
+func (m *Manifest) ExtendsDerivedAllowed() bool {
+	for _, a := range m.Allowed {
+		if a == DerivedMarker {
+			return true
+		}
+	}
+	return false
+}
 
 // InheritsRealizes reports whether the manifest wrote realizes: inherit.
 func (m *Manifest) InheritsRealizes() bool {
@@ -439,6 +481,8 @@ func (m *Manifest) DeclaredSets() map[string]StringList {
 		"publishes":  m.Publishes,
 		"subscribes": m.Subscribes,
 		"holds":      m.Holds,
+		"presents":   m.Presents,
+		"hosts":      m.Hosts,
 	}
 }
 
@@ -591,4 +635,8 @@ type LedgerEntry struct {
 	Rationale         string   `json:"rationale,omitempty"`
 	Gate              string   `json:"gate,omitempty"`
 	LastSeen          string   `json:"last_seen,omitempty"`
+	// Value and Live record, for a value binding (marker id value:<curie>),
+	// the ontology value and the bound code line when last accepted.
+	Value string `json:"value,omitempty"`
+	Live  string `json:"live,omitempty"`
 }

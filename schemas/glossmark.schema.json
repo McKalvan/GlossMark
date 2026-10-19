@@ -39,6 +39,15 @@
         "$ref": "#/$defs/iri"
       }
     },
+    "repo-iri": {
+      "description": "The repository's own IRI. A boundary prefix not declared under prefixes: expands to <repo-iri>boundaries/<prefix>/.",
+      "type": "string",
+      "format": "uri"
+    },
+    "source-url": {
+      "description": "Template linking viewer paths to a code host, with {path} and {line}: https://github.com/o/r/blob/main/{path}#L{line}.",
+      "type": "string"
+    },
     "views": {
       "description": "Path (relative to this file) of the views.yaml projections file. Default: ontology/views.yaml.",
       "type": "string",

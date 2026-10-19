@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/model"
@@ -34,7 +35,7 @@ type Backend interface {
 	// ProposeConcept adds a proposed concept to the owning ontology file.
 	ProposeConcept(p ConceptProposal) (any, error)
 	// Context renders the session briefing for a directory.
-	Context(dir string) (string, error)
+	Context(dir string, budget int, changed bool) (string, error)
 }
 
 // ConceptProposal is a new concept an agent wants to add with proposed: true.
@@ -150,17 +151,17 @@ var tools = []tool{
 		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
 	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
 		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
-	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files.",
+	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files. " + agents.ProposalSentence,
 		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str("implements | represents | verifies | ..."), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "relation", "target")},
 	{"impact_of", "Impact of a change. Pass proposals (links you intend to add) to get each link's gate; and/or pass paths (files you changed) or base (a git ref) to learn what those files touch: the concepts, whether they sit on the published seam, what constrains them, which boundaries declare them, their tests, and the other files sharing them. With base, the AUTO/SOFT/HARD classification of the whole working tree is included.",
 		obj(map[string]any{"proposals": map[string]any{"type": "array", "items": obj(map[string]any{"path": str(""), "relation": str(""), "target": str(""), "conf": map[string]any{"type": "number"}, "note": str("")}, "path", "relation", "target")},
 			"paths": map[string]any{"type": "array", "items": str("Repo-relative file you changed or will change")},
 			"base":  str("Git ref to diff the working tree against (e.g. origin/main)")})},
-	{"propose_concept", "Add a concept to the owning ontology file with proposed: true (the ontology's @gloss?). Links may target it at once; a human accepts it with gloss accept --concept. Implementation concepts need realizes (a core concept) or internal.",
+	{"propose_concept", "Add a concept to the owning ontology file with proposed: true (the ontology's @gloss?) and rewrite ns:NEW:Name markers to it. Implementation concepts need realizes (a core concept), presents/hosts, or internal. " + agents.ProposalSentence,
 		obj(map[string]any{"curie": str("ns:Name in a namespace this repo owns"), "kind": str("entity | process | capability | event | measure | constraint | resource | system-type"), "doc": str("One sentence: what it is and why it is needed"),
 			"realizes": map[string]any{"type": "array", "items": str("core concept CURIE")}, "is_a": map[string]any{"type": "array", "items": str("parent CURIE")}, "internal": map[string]any{"type": "boolean"}, "aliases": map[string]any{"type": "array", "items": str("")}}, "curie", "kind")},
-	{"context", "The compact briefing for a directory: its boundary, allowed targets, agent remits, the concept list and current state. Call it once when you start working in a directory.",
-		obj(map[string]any{"dir": str("Repo-relative directory (default: repo root)")})},
+	{"context", "The compact briefing for a directory: its boundary, allowed targets, your remit, the concepts most relevant to the directory first, and current state. Call it once when you start working in a directory.",
+		obj(map[string]any{"dir": str("Repo-relative directory (default: repo root)"), "budget": map[string]any{"type": "integer", "description": "Approximate token budget (default 2000)"}, "changed": map[string]any{"type": "boolean", "description": "Open with what the uncommitted changes touch"}})},
 	{"drift", "Run the drift comparison on the current tree and return violations, gaps, orphans, rogues and metrics.", obj(map[string]any{})},
 }
 
@@ -171,7 +172,7 @@ func (s *Server) handle(req request) (any, *rpcError) {
 			"protocolVersion": ProtocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "glossmark", "version": s.version},
-			"instructions":    "GlossMark serves the repository's code ontology. Call concepts_for_path before writing code in a directory, search_concepts to find the right concept, propose_link to get the exact @gloss? line and its gate. Never invent concepts: use ns:NEW:Name proposals.",
+			"instructions":    "GlossMark serves the repository's code ontology. Call concepts_for_path before writing code in a directory, search_concepts to find the right concept, propose_link to get the exact @gloss? line and its gate. " + agents.ProposalSentence,
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -271,10 +272,15 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 		return s.backend.ProposeConcept(cp)
 	case "context":
 		var a struct {
-			Dir string `json:"dir"`
+			Dir     string `json:"dir"`
+			Budget  int    `json:"budget"`
+			Changed bool   `json:"changed"`
 		}
 		json.Unmarshal(args, &a)
-		txt, err := s.backend.Context(a.Dir)
+		if a.Budget <= 0 {
+			a.Budget = 2000
+		}
+		txt, err := s.backend.Context(a.Dir, a.Budget, a.Changed)
 		if err != nil {
 			return nil, err
 		}

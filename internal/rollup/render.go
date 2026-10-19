@@ -7,20 +7,22 @@ import (
 	"strings"
 )
 
-var kindOrder = []string{KindViolation, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindUntested}
+var kindOrder = []string{KindViolation, KindValueDrift, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested}
 
 var kindTitle = map[string]string{
-	KindViolation: "Violations (boundary exceeds its declared capability)",
-	KindGap:       "Gaps (declared, not implemented)",
-	KindRogue:     "Rogue concepts (decision requests)",
-	KindProposed:  "Proposed concepts (awaiting acceptance)",
-	KindDangling:  "Dangling references",
-	KindStale:     "Stale links (anchor changed)",
-	KindOrphan:    "Orphan concepts (no artifacts)",
-	KindUntested:  "Implemented but untested",
+	KindViolation:     "Violations (boundary exceeds its declared capability)",
+	KindValueDrift:    "Published values drifted (the bound code changed, the value did not)",
+	KindGap:           "Gaps (declared, not implemented)",
+	KindRogue:         "Rogue concepts (decision requests)",
+	KindProposed:      "Proposed concepts (awaiting acceptance)",
+	KindDangling:      "Dangling references",
+	KindStale:         "Stale links (anchor changed)",
+	KindOrphan:        "Orphan concepts (no artifacts)",
+	KindUntested:      "Implemented but untested",
+	KindPresentedOnly: "Presented but not implemented (a surface with no mechanism)",
 }
 
-var kindGlyph = map[string]string{KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindConsistent: "✓"}
+var kindGlyph = map[string]string{KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
 
 // RenderText renders the report for a terminal.
 func RenderText(r *Report, all bool) string {

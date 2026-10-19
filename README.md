@@ -27,11 +27,13 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
+| `cmd/gloss` | The CLI: `init`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
+| `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers |
+| `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`) |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
@@ -57,7 +59,7 @@ go build -o gloss ./cmd/gloss
 cd examples/horse-factory
 ../../gloss check          # 0 errors, 1 warning: the Donkey link is outside the boundary's allowed list
 ../../gloss drift          # the drift report above
-../../gloss view           # .glossmark/viewer.html — open it in a browser: boundaries are boxes, click to drill in
+../../gloss view           # .glossmark/viewer.html + views.js — open it in a browser: boundaries are boxes, click to drill in, click a concept for its code, tests and findings
 cd ../payments
 ../../gloss landscape payments-api settlement-worker   # cross-repo context map and drift
 ```
@@ -70,7 +72,7 @@ cd ../payments
 
 ## GlossMark on GlossMark
 
-This repository is its own first user. `glossmark.yaml` at the root owns two namespaces: `gm:` is the core tier (what a comment-native code ontology is about: links, concepts, namespaces, boundaries, extraction, lint, drift, review, gating) and `gmi:` is the implementation tier (the Go packages and commands that realize it). Every package and command carries a marker, the JSON Schemas have sidecars, the docs `documents` what they describe, and `.gloss.yaml` manifests at the root, `cmd/` and `internal/` declare what `gloss drift` compares with the code. `go test ./internal/e2e/` includes a self-host test that fails on any lint error, violation, gap or dangling reference in this tree.
+This repository is its own first user. `glossmark.yaml` at the root owns two namespaces: `gm:` is the core tier (what a comment-native code ontology is about: links, concepts, namespaces, boundaries, extraction, lint, drift, review, gating) and `gmi:` is the implementation tier (the Go packages and commands that realize it). Every package and command carries a marker, the JSON Schemas have sidecars, the docs `documents` what they describe, and `.gloss.yaml` manifests at the root, `cmd/` and `internal/` declare what `gloss drift` compares with the code. The self-description uses the whole syntax: the root manifest says `realizes: [inherit, gm:Onboarding]` instead of repeating its children, the library declares the entities it `holds` and widens its derived allowed set with `allowed: [derived, gm:Confidence, gm:GlossMark]`, the HTML viewer `presents` `gm:View` rather than realizing it, the graph format version is bound to `internal/version/version.go` with `value-from` and the default confidence threshold with a `publishes-value` marker (so bumping either in code without the ontology fails `gloss drift`), and `ontology/views.yaml` adds a curated `constraints` view. `go test ./internal/e2e/` includes a self-host test that fails on any lint warning or error, violation, gap, dangling reference, orphan or unbound value in this tree.
 
 ```sh
 go build -o gloss ./cmd/gloss
@@ -87,7 +89,7 @@ Two tiers plus instances: core is implementation-independent by construction; ev
 
 ## Governance
 
-Not every subsystem carries the same risk. `criticality: low | medium | high | critical` on a concept or a boundary flows through `realizes` to the code, tags every change in the PR comment and `gloss impact`, raises the gate by policy (`critical` is HARD by default), colours the viewer and gives agents a reason to flag what they touch. See [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
+Not every subsystem carries the same risk. `criticality: low | medium | high | critical` on a concept or a boundary flows through `realizes` to the code that implements it (a boundary's level reaches its files only with `criticality-floor: true`; `gloss criticality suggest` drafts a first classification), tags every change in the PR comment and `gloss impact`, raises the gate by policy (`critical` is HARD by default), colours the viewer and gives agents a reason to flag what they touch. See [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
 
 ## Versions
 

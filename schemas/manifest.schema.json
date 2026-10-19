@@ -30,7 +30,19 @@
       "$ref": "#/$defs/stringOrList"
     },
     "realizes": {
-      "description": "Concepts this boundary realizes, as CURIEs.",
+      "description": "Concepts this boundary realizes, as CURIEs. The entry inherit means the union of what the nested boundaries declare; other entries add to it.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "holds": {
+      "description": "Entities whose data lives in this boundary (tables, files, packages); derived from represents on entity concepts and compared by gloss drift.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "presents": {
+      "description": "Concepts this boundary is a UI surface for; compared like realizes, never implies it (docs/adr/0001-presents-and-hosts.md).",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "hosts": {
+      "description": "Concepts this boundary is a shell or container for; compared like realizes, never implies it.",
       "$ref": "#/$defs/stringOrList"
     },
     "produces": {
@@ -55,7 +67,7 @@
       "pattern": "^[A-Za-z][\\w-]*$"
     },
     "allowed": {
-      "description": "Concepts that markers under this directory may reference: CURIEs or CURIE globs (impl:Foal*). When empty, everything is allowed.",
+      "description": "Concepts that markers under this directory may reference: CURIEs or CURIE globs (impl:Foal*). Optional: when absent the set is derived from what the manifest declares (gloss check --explain). The entry derived keeps the derived set and adds the other entries to it.",
       "anyOf": [
         { "$ref": "#/$defs/curieGlob" },
         {
@@ -76,6 +88,10 @@
       "description": "Governance level of the boundary (docs/GOVERNANCE.md). When unset it is the highest level of the concepts the boundary's code realizes, else its parent's.",
       "type": "string",
       "enum": ["low", "medium", "high", "critical"]
+    },
+    "criticality-floor": {
+      "description": "Make the boundary's criticality a floor for every artifact beneath it, nested boundaries included. Without it an artifact takes only the level of the concepts it links to.",
+      "type": "boolean"
     }
   },
   "$defs": {
@@ -90,9 +106,9 @@
       ]
     },
     "curieGlob": {
-      "description": "A CURIE (zoo:Horse) or a CURIE glob where * matches any run of characters (impl:Foal*, impl:*).",
+      "description": "A CURIE (zoo:Horse), a CURIE glob where * matches any run of characters (impl:Foal*, impl:*), or derived (the derived set).",
       "type": "string",
-      "pattern": "^[A-Za-z][\\w-]*:[\\w.*-]+$"
+      "pattern": "^([A-Za-z][\\w-]*:[\\w.*-]+|derived)$"
     }
   }
 }

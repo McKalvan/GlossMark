@@ -415,3 +415,138 @@ func RewriteNewMarkers(files []string, curie string) (int, error) {
 	}
 	return n, nil
 }
+
+// Get returns the scalar value of key on a concept ("" when absent), and
+// whether the concept exists.
+func Get(path, name, key string) (string, bool, error) {
+	f, err := open(path)
+	if err != nil {
+		return "", false, err
+	}
+	k, v := f.entry(name)
+	if k == nil {
+		return "", false, nil
+	}
+	_, val := mapGet(v, key)
+	if val == nil {
+		return "", true, nil
+	}
+	if val.Kind == yaml.SequenceNode {
+		var parts []string
+		for _, c := range val.Content {
+			parts = append(parts, c.Value)
+		}
+		return strings.Join(parts, ", "), true, nil
+	}
+	return val.Value, true, nil
+}
+
+// SetField sets key to an already-rendered YAML value (use Quote or List) on
+// an existing concept, editing only that key's line: replaced in place when
+// present, added as the entry's last field otherwise. Flow and block entries
+// keep their style, alignment and comments.
+func SetField(path, name, key, rendered string) error {
+	f, err := open(path)
+	if err != nil {
+		return err
+	}
+	k, v := f.entry(name)
+	if k == nil {
+		return fmt.Errorf("%s: no concept %s", path, name)
+	}
+	start, end := f.extent(k, v)
+	if v == nil || v.Kind != yaml.MappingNode {
+		f.lines[start] = f.lines[start][:k.Column-1] + plain(name) + ":"
+		f.lines = append(f.lines[:start+1], append([]string{strings.Repeat(" ", k.Column+1) + key + ": " + rendered}, f.lines[start+1:]...)...)
+		return f.save()
+	}
+	kn, vn := mapGet(v, key)
+	flow := v.Style&yaml.FlowStyle != 0
+	switch {
+	case kn != nil && vn != nil && vn.Line == kn.Line:
+		// Replace the value on its line: from after "key:" to the next field
+		// separator (flow) or the comment / end of line (block).
+		i := kn.Line - 1
+		line := f.lines[i]
+		col := kn.Column - 1 + len(key)
+		rest := line[col:]
+		if !strings.HasPrefix(rest, ":") {
+			return fmt.Errorf("%s:%d: cannot locate %s", path, kn.Line, key)
+		}
+		valStart := col + 1
+		for valStart < len(line) && line[valStart] == ' ' {
+			valStart++
+		}
+		valEnd := scalarEnd(line, valStart, flow)
+		f.lines[i] = line[:valStart] + rendered + line[valEnd:]
+	case kn != nil:
+		return fmt.Errorf("%s:%d: %s spans several lines; edit it by hand", path, kn.Line, key)
+	case flow:
+		for i := end; i >= start; i-- {
+			if j := strings.LastIndex(f.lines[i], "}"); j >= 0 {
+				f.lines[i] = strings.TrimRight(f.lines[i][:j], " ") + ", " + key + ": " + rendered + " " + f.lines[i][j:]
+				break
+			}
+		}
+	default:
+		pad := strings.Repeat(" ", v.Content[0].Column-1)
+		f.lines = append(f.lines[:end+1], append([]string{pad + key + ": " + rendered}, f.lines[end+1:]...)...)
+	}
+	return f.save()
+}
+
+// scalarEnd finds where a YAML value that starts at i ends on its line.
+func scalarEnd(line string, i int, flow bool) int {
+	if i >= len(line) {
+		return i
+	}
+	switch line[i] {
+	case '"', '\'':
+		q := line[i]
+		for j := i + 1; j < len(line); j++ {
+			if line[j] == '\\' && q == '"' {
+				j++
+				continue
+			}
+			if line[j] == q {
+				return j + 1
+			}
+		}
+		return len(line)
+	case '[', '{':
+		depth := 0
+		for j := i; j < len(line); j++ {
+			switch line[j] {
+			case '[', '{':
+				depth++
+			case ']', '}':
+				depth--
+				if depth == 0 {
+					return j + 1
+				}
+			}
+		}
+		return len(line)
+	}
+	for j := i; j < len(line); j++ {
+		if flow && (line[j] == ',' || line[j] == '}') {
+			return strings.LastIndexFunc(line[:j], func(r rune) bool { return r != ' ' }) + 1
+		}
+		if line[j] == '#' && j > 0 && line[j-1] == ' ' {
+			return strings.LastIndexFunc(line[:j], func(r rune) bool { return r != ' ' }) + 1
+		}
+	}
+	return len(strings.TrimRight(line, " "))
+}
+
+// Quote renders a string as a double-quoted YAML scalar.
+func Quote(s string) string { return strconv.Quote(s) }
+
+// List renders a flow sequence of plain-or-quoted scalars.
+func List(vals []string) string {
+	var out []string
+	for _, v := range vals {
+		out = append(out, plain(v))
+	}
+	return "[" + strings.Join(out, ", ") + "]"
+}

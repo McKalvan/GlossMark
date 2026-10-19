@@ -32,9 +32,29 @@ func TestSelfHost(t *testing.T) {
 			t.Errorf("gloss drift: %s: %s", kind, f.Msg)
 		}
 	}
-	for _, curie := range []string{"gm:GlossMark", "gm:Extraction", "gmi:MarkerGrammar", "gmi:GlossCli"} {
+	for _, curie := range []string{"gm:GlossMark", "gm:Extraction", "gmi:MarkerGrammar", "gmi:GlossCli", "gm:Onboarding", "gmi:Scaffolder"} {
 		if g.Node(mustIRI(t, g, curie)) == nil {
 			t.Errorf("%s missing from the self-hosted graph", curie)
 		}
+	}
+	// Orphans and presented-only pages would mean the self-description has a hole.
+	for _, kind := range []string{rollup.KindOrphan, rollup.KindPresentedOnly} {
+		for _, f := range findings(rep, kind) {
+			t.Errorf("gloss drift: %s: %s", kind, f.Msg)
+		}
+	}
+	// The two published-value bindings resolve: value-from in the ontology and
+	// a publishes-value marker in the code.
+	for curie, want := range map[string]string{
+		"gmi:GraphFormatVersion":   "const GraphFormat = 1",
+		"gmi:DefaultSoftThreshold": "SoftConfThreshold: 0.7,",
+	} {
+		if n := g.NodeByCurie(curie); n == nil || n.LiveValue != want {
+			t.Errorf("%s should be bound to %q, got %+v", curie, want, n)
+		}
+	}
+	// The page presents views and does not realize them.
+	if r := rollup.RealizesStar(g, mustIRI(t, g, "gmi:HtmlViewer")); has(curies(g, r), "gm:View") {
+		t.Errorf("HtmlViewer presents gm:View; it must not realize it: %v", curies(g, r))
 	}
 }

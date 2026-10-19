@@ -9,15 +9,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/internal/store"
 )
 
 func init() {
-	register(command{"export", "export the graph: --sqlite path | --prov path (PROV-O JSON-LD ledger)", cmdExport})
+	register(command{"export", "export the graph: --sqlite path | --prov path (PROV-O JSON-LD ledger) | --status (implemented/untested/orphan/proposed per concept, JSON)", cmdExport})
 	register(command{"publish", "write per-namespace ontology.jsonld and graph.jsonl for importers (default dist/glossmark/)", cmdPublish})
 	register(command{"agents", "print the AGENTS.md vocabulary snippet for the repo or a directory (--dir)", cmdAgents})
 }
@@ -26,16 +28,31 @@ func cmdExport(args []string) int {
 	fs, root := newFlags("export")
 	sqlitePath := fs.String("sqlite", "", "write a SQLite database with closure views")
 	provPath := fs.String("prov", "", "write the ledger as PROV-O JSON-LD")
+	status := fs.Bool("status", false, "write implemented / untested / orphan / proposed per owned concept as JSON (for an external checker)")
+	out := fs.String("o", "", "with --status: write to this file instead of stdout")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if *sqlitePath == "" && *provPath == "" {
-		fmt.Fprintln(os.Stderr, "usage: gloss export --sqlite graph.db | --prov ledger.prov.jsonld")
+	if *sqlitePath == "" && *provPath == "" && !*status {
+		fmt.Fprintln(os.Stderr, "usage: gloss export --sqlite graph.db | --prov ledger.prov.jsonld | --status [-o status.json]")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
+	}
+	if *status {
+		rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
+		b, err := json.MarshalIndent(rollup.ConceptStatus(p.Graph, rep), "", "  ")
+		if err != nil {
+			return fail(err)
+		}
+		b = append(b, '\n')
+		if *out == "" {
+			os.Stdout.Write(b)
+		} else if err := os.WriteFile(*out, b, 0o644); err != nil {
+			return fail(err)
+		}
 	}
 	if *sqlitePath != "" {
 		if err := store.Export(p.Graph, *sqlitePath); err != nil {

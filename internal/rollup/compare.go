@@ -24,10 +24,14 @@ const (
 	KindStale      = "stale"     // anchor fingerprint changed
 	KindDangling   = "dangling"  // unresolved reference
 	KindProposed   = "proposed"  // proposed concept awaiting acceptance
+	// KindPresentedOnly: something presents the concept but nothing implements it.
+	KindPresentedOnly = "presented-only"
+	// KindValueDrift: the code a published value is bound to changed and the value did not.
+	KindValueDrift = "value-drift"
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
-var ComparedRelations = []string{"realizes", "holds", "produces", "consumes", "publishes", "subscribes"}
+var ComparedRelations = []string{"realizes", "holds", "presents", "hosts", "produces", "consumes", "publishes", "subscribes"}
 
 // Finding is one drift result.
 type Finding struct {
@@ -121,6 +125,7 @@ func Compare(g *graph.Graph, ws *load.Workspace, opt Options) *Report {
 	c.orphans()
 	c.rogues()
 	c.untested()
+	c.presentedOnly()
 	c.stale()
 	c.metrics()
 	c.waive()
@@ -150,6 +155,10 @@ func rank(kind string) int {
 		return 5
 	case KindUntested:
 		return 6
+	case KindPresentedOnly:
+		return 7
+	case KindValueDrift:
+		return 1
 	}
 	return 9
 }
@@ -348,6 +357,10 @@ func verb(rel string) string {
 		return "subscribes to"
 	case "holds":
 		return "represents"
+	case "presents":
+		return "presents"
+	case "hosts":
+		return "hosts"
 	}
 	return rel
 }
@@ -446,6 +459,9 @@ func (c *comparer) orphans() {
 		if ok, _ := c.reachedByArtifact(n.ID); ok {
 			continue
 		}
+		if n.ValueFrom != "" {
+			continue // value-from binds it to a line of code
+		}
 		what := "no artifact links to it"
 		if n.Tier == model.TierImpl {
 			what = "implementation concept has no artifacts"
@@ -527,6 +543,48 @@ func StripNewCurie(cur string) string { return strings.Replace(cur, ":NEW:", ":"
 
 func nsOf(cur string) string   { return strings.SplitN(cur, ":", 2)[0] }
 func nameOf(cur string) string { p := strings.SplitN(cur, ":", 2); return p[len(p)-1] }
+
+// presentedOnly reports concepts a UI surface presents while nothing
+// implements (or, for data, represents) them: a page with no engine behind it.
+func (c *comparer) presentedOnly() {
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		if n.Imported || n.Internal || n.Deprecated || n.Kind == "event" {
+			continue
+		}
+		var by []string
+		// hosts is excluded: a shell hosting a whole system-type is expected to
+		// have no single implementation.
+		for _, rel := range []string{"presents"} {
+			for _, e := range c.g.In(n.ID, rel) {
+				if e.Source == graph.SourceDerived {
+					continue
+				}
+				if s := c.g.Node(e.S); s != nil && s.NodeType != model.NodeBoundary {
+					by = append(by, c.g.Curie(e.S))
+				}
+			}
+		}
+		if len(by) == 0 || c.implemented(n.ID, 0) || c.represented(n.ID) {
+			continue
+		}
+		by = uniq(by)
+		c.add(Finding{Kind: KindPresentedOnly, Severity: "warning", Concept: n.CURIE, Path: n.File, Line: n.Line, Via: by,
+			Msg: fmt.Sprintf("%s is presented (%s) but nothing implements it: a surface with no mechanism behind it", n.CURIE, strings.Join(by, ", "))})
+	}
+}
+
+// represented reports whether an artifact represents the concept (or a
+// concept that realizes it): an entity's mechanism is its data shape.
+func (c *comparer) represented(id string) bool {
+	for _, x := range append([]string{id}, c.g.Subjects(id, "realizes")...) {
+		for _, e := range c.g.In(x, "represents") {
+			if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func (c *comparer) untested() {
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
@@ -621,6 +679,16 @@ func (c *comparer) tested(id string, depth int) bool {
 func (c *comparer) stale() {
 	for id, e := range c.opt.Ledger {
 		if e.Status != model.StatusStale {
+			continue
+		}
+		if strings.HasPrefix(id, "value:") {
+			cur := strings.TrimPrefix(id, "value:")
+			live := ""
+			if n := c.g.NodeByCurie(cur); n != nil {
+				live = n.LiveValue
+			}
+			c.add(Finding{ID: KindValueDrift + ":" + cur, Kind: KindValueDrift, Severity: "error", Path: e.Path, Concept: cur,
+				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, e.Path, e.Live, live, cur)})
 			continue
 		}
 		c.add(Finding{ID: KindStale + ":" + id, Kind: KindStale, Severity: "warning", Path: e.Path, Relation: e.Relation, Concept: strings.Join(e.Targets, ", "),

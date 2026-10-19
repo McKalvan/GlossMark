@@ -107,6 +107,13 @@ func TestDoctor(t *testing.T) {
 			t.Errorf("%s = %+v, want ok", name, c)
 		}
 	}
+	// A graph written by another release (different generator in the header) is still current.
+	gp := ws.StatePath("graph.jsonl")
+	gb, _ := os.ReadFile(gp)
+	os.WriteFile(gp, []byte(strings.Replace(string(gb), "gloss 0.0.0-dev", "gloss 0.1.0", 1)), 0o644)
+	if c := run("agent:claude-code", true)["graph"]; c.Status != OK {
+		t.Errorf("graph from another release = %+v, want ok", c)
+	}
 	// A stale graph is caught: change a marker without rebuilding.
 	write("a.py", "# @gloss represents z:Thing\nclass T2: pass\n")
 	if c := run("agent:claude-code", true)["graph"]; c.Status != Fail || !strings.Contains(c.Msg, "stale") {

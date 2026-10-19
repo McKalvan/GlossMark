@@ -12,6 +12,16 @@ gloss version                                                                   
 
 Pin a release everywhere the tool runs (`@v0.1.0`, never `@latest` or `@main`): binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/mckalvan/glossmark/releases), and `go install ...@v0.1.0` reports the same version. See [VERSIONING.md](VERSIONING.md).
 
+## 0. Scaffold
+
+```sh
+gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per top-level source directory
+gloss init               # write it, install the agent hook, build the first graph
+gloss check              # passes on the empty scaffold
+```
+
+`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. The sections below explain what it wrote.
+
 ## 1. Declare the namespaces
 
 `glossmark.yaml` at the repo root:
@@ -37,6 +47,16 @@ concepts:
 ```
 
 Litmus test: if a domain expert would nod at the term, it is core; if only an engineer would, it is implementation.
+
+If the repository already keeps its vocabulary, import it instead of retyping it, and feed the result back to whatever checks it:
+
+```sh
+gloss import --from markdown-glossary docs/glossary.md --namespace pay   # headings → concepts, Def. → doc, Aliases, Status (not implemented → proposed: true)
+gloss import --from enums enums.yaml --namespace pay [--values]          # each enum an entity; --values adds each value as is-a the enum
+gloss export --status -o status.json                                     # implemented / untested / orphan / proposed per concept
+```
+
+Imports are re-runnable: new terms are appended, a changed definition or alias list updates that one line, everything else in the file (kinds you fixed, comments, alignment) is left alone. Kinds are guessed when the source has none; review them.
 
 ## 3. Write the implementation that realizes it
 
@@ -85,7 +105,19 @@ def test_authorize_declines_expired_cards(): ...
 
 Mark one public surface per concept, not every helper; add `scope=file` when a whole file is about one concept, and then no symbol markers in it. The marker goes above the declaration and its decorators.
 
-Agents write `@gloss?` for links they propose and `ns:NEW:Name` for concepts that do not exist yet. Generate the vocabulary they should see first:
+Agents write `@gloss?` for links they propose. The one proposal workflow, which the briefing, `AGENTS.md` and the MCP server state in the same words:
+
+> If no concept fits, write `@gloss? <relation> <ns>:NEW:<Name> note="why"`, then run `gloss propose --from-new --doc "what it is"` (MCP: propose_concept) so the concept ships in the same PR with `proposed: true`; a human accepts it with `gloss accept --concept <ns>:<Name>`. Never invent a concept name any other way, and never hand-edit an ontology file to make a link resolve.
+
+On an existing codebase, let the tool draft the first pass and review it rather than writing every marker by hand:
+
+```sh
+gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public declarations, matched by name and docstring
+git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
+gloss hook install --skill           # installs the adopt-glossmark skill: the whole adoption as a step-by-step agent workflow
+```
+
+Generate the vocabulary agents should see first:
 
 ```sh
 gloss agents --dir services/api --write AGENTS.md
@@ -101,7 +133,7 @@ gloss drift                      # violations, gaps, orphans, rogues, stale, unt
 gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
-gloss view                       # .glossmark/viewer.html, static, no server: boundaries are boxes, click to drill in, double-click to focus
+gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings
 gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
@@ -122,8 +154,9 @@ The actor belongs to a marker's first appearance, not to whoever runs the last b
 Four commands exist so an agent can work the ontology without a human in the loop until the review:
 
 ```sh
-gloss hook install                      # SessionStart hook → 'gloss context' briefing; MCP server in .mcp.json
-gloss context --dir services/api        # the briefing: boundary, allowed targets, remits, concepts, state
+gloss hook install                      # SessionStart hook → 'gloss context --changed --budget 2000'; MCP server in .mcp.json
+gloss context --dir services/api        # the briefing: boundary, allowed targets, your remit, concepts most relevant to the directory first, state
+gloss context --changed --budget 2000   # open with what the uncommitted changes touch; fit the whole briefing in ~2 000 tokens
 gloss impact --base origin/main         # what the working tree touches: published seam, constraints, tests, blast radius
 gloss impact services/api/handlers/refund.py
 gloss propose concept pa:RefundHandler --kind process --realizes pay:Refunding --doc "Handles refund requests"
@@ -131,6 +164,8 @@ gloss propose --from-new                # lift every ns:NEW:Name marker into a p
 gloss accept --concept pa:RefundHandler # a human accepts the proposal (drops proposed: true)
 gloss reject --concept pa:RefundHandler --reason "duplicate of pa:RefundFlow" --remove
 ```
+
+The briefing ranks concepts by relevance: those linked by code under the directory, then those its manifest declares, then its default namespace, then the rest. When `GLOSS_ACTOR` names an agent with an agent file (`agent:breeding-planner` and `.claude/agents/breeding-planner.md`), it shows only that agent's remit.
 
 A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [chargeback]` on `pay:Refund`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "settlement cutoff" finds `sw:CutoffClock`.
 

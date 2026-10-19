@@ -296,6 +296,49 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			g.AddNode(&graph.Node{NodeType: model.NodeActor, ID: "urn:gloss:actor:" + e.Actor, CURIE: e.Actor, Label: e.Actor, Kind: strings.SplitN(e.Actor, ":", 2)[0]})
 		}
 	}
+	// Published value bindings are tracked keyed value:<curie>: the first
+	// build records the bound line and the ontology value as the baseline; a
+	// later change to the line alone is drift (stale) until accepted, and a
+	// change to both together moves the baseline.
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if n.ValueFP == "" || n.Imported {
+			continue
+		}
+		id := "value:" + n.CURIE
+		seen[id] = true
+		val := fmt.Sprint(n.Value)
+		if n.Value == nil {
+			val = ""
+		}
+		e, ok := l.Entries[id]
+		switch {
+		case !ok:
+			l.Entries[id] = &model.LedgerEntry{MarkerID: id, Path: strings.SplitN(n.ValueFrom, ":", 2)[0], Relation: "value", Targets: []string{n.CURIE}, Actor: actor,
+				Created: ts, Status: model.StatusAccepted, AnchorFingerprint: n.ValueFP, Value: val, Live: n.LiveValue, LastSeen: ts}
+			l.dirty = true
+		case e.AnchorFingerprint == n.ValueFP:
+			if e.Status == model.StatusStale || e.Status == model.StatusRemoved {
+				e.Status = model.StatusAccepted // the code went back to the published value
+				l.dirty = true
+			}
+			if e.Value != val {
+				e.Value = val // the published text changed, the code did not: a doc edit
+				l.dirty = true
+			}
+			e.LastSeen = ts
+		case e.Value != val:
+			// Code and published value moved together: the new baseline.
+			e.AnchorFingerprint, e.Value, e.Live, e.Status = n.ValueFP, val, n.LiveValue, model.StatusAccepted
+			e.ReviewedBy, e.ReviewedAt, e.LastSeen = actor, ts, ts
+			l.dirty = true
+		default:
+			if e.Status != model.StatusStale {
+				e.Status = model.StatusStale
+				l.dirty = true
+			}
+			e.LastSeen = ts
+		}
+	}
 	// Proposed concepts are tracked like markers, keyed concept:<curie>.
 	for _, n := range g.NodesOf(model.NodeConcept) {
 		if n.Imported {

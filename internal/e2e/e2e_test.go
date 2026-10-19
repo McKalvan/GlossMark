@@ -1,4 +1,4 @@
-// @gloss verifies gmi:Extractor, gmi:Linter, gmi:RollupEngine, gmi:DriftComparator, gmi:Gate, gmi:ReviewLedger, gmi:ViewProjector, gmi:WorkspaceLoader, gmi:LandscapeAssembler, gmi:CriticalityStamper, gmi:McpServer, gmi:OntologyEditor, gmi:ImportLock scope=file
+// @gloss verifies gmi:Extractor, gmi:Linter, gmi:RollupEngine, gmi:DriftComparator, gmi:Gate, gmi:ReviewLedger, gmi:ViewProjector, gmi:WorkspaceLoader, gmi:LandscapeAssembler, gmi:CriticalityStamper, gmi:McpServer, gmi:OntologyEditor, gmi:ImportLock, gmi:AgentsSnippet, gmi:ValueBinder scope=file
 
 // Package e2e runs the whole pipeline on the example repositories and asserts
 // the findings the design document's worked examples call for.
@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/gate"
@@ -232,8 +233,10 @@ func TestHorseFactory(t *testing.T) {
 		}
 	}
 	for _, a := range g.NodesOf(model.NodeArtifact) {
-		if a.Path == "services/horse-factory/breeding/metrics.py" && a.Criticality != "medium" {
-			t.Errorf("metrics.py takes its boundary's level: %+v", a)
+		// An artifact takes the level of what it implements, not its boundary's
+		// (no criticality-floor here): the low-criticality metrics module.
+		if a.Path == "services/horse-factory/breeding/metrics.py" && (a.Criticality != "low" || a.CriticalityFrom != "impl:FoalingPipelineThroughput") {
+			t.Errorf("metrics.py takes its concept's level: %+v", a)
 		}
 	}
 	for _, n := range eng.Nodes {
@@ -733,8 +736,8 @@ func TestTouched(t *testing.T) {
 	}
 	// settler.go implements sw:BatchSettler, which inherits critical from pay:Settlement;
 	// the default policy makes anything critical HARD (docs/GOVERNANCE.md).
-	if ts[1].Gate != gate.HARD || ts[1].Criticality != "critical" || ts[1].CriticalityFrom != "acme:settlement-worker" {
-		t.Errorf("settler.go should be HARD with criticality critical via its boundary: %+v", ts[1])
+	if ts[1].Gate != gate.HARD || ts[1].Criticality != "critical" || ts[1].CriticalityFrom != "sw:BatchSettler" {
+		t.Errorf("settler.go should be HARD with criticality critical via the concept it implements: %+v", ts[1])
 	}
 	for _, c := range ts[1].Concepts {
 		if c.Curie == "sw:BatchSettler" && (c.Criticality != "critical" || c.CriticalityFrom != "pay:Settlement") {
@@ -977,7 +980,9 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n  Thing: { kind: entity }\n")
 	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Helper: { kind: process, realizes: z:Doing }\n  Store: { kind: resource, realizes: z:Thing }\n  Q: { kind: resource, internal: true }\n")
 	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
-	write("app.py", "# @gloss implements .Doer scope=file\n\n# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Helper, .Store\ndef a(): pass\n\n# @gloss implements .Store, .Helper\ndef b(): pass\n\n# @gloss represents .Store\nclass S: pass\n")
+	write("app.py", "# @gloss implements .Doer scope=file\n\n# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Helper, .Store\ndef a(): pass\n\n# @gloss implements .Store, .Helper\ndef b(): pass\n\n# @gloss implements .Helper, .Store\ndef c(): pass\n\n# @gloss represents .Store\nclass S: pass\n")
+	// Two in a row is honest and stays silent.
+	write("pair.py", "# @gloss implements .Helper\ndef settle_batch(): pass\n\n# @gloss implements .Helper\ndef settle_single(): pass\n")
 	write("tests/test_app.py", "# @gloss verifies .Doer\ndef test_go(): pass\n")
 	ws, g, _, lg := build(t, root)
 	codes := map[string][]int{}
@@ -987,8 +992,8 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	if len(codes["GM130"]) != 1 || codes["GM130"][0] != 3 {
 		t.Errorf("GM130 lines = %v, want [3]", codes["GM130"])
 	}
-	if len(codes["GM131"]) != 1 || codes["GM131"][0] != 9 {
-		t.Errorf("GM131 lines = %v, want [9] (same targets in another order)", codes["GM131"])
+	if len(codes["GM131"]) != 1 || codes["GM131"][0] != 6 {
+		t.Errorf("GM131 lines = %v, want [6]: one finding at the start of the three-marker run (targets in any order), none for the pair", codes["GM131"])
 	}
 	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
 	m := rep.Metrics
@@ -996,8 +1001,8 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	if m.ConceptsInScope != 3 || m.ConceptsCovered != 1 || m.ConceptCoveragePct < 33 || m.ConceptCoveragePct > 34 {
 		t.Errorf("concept coverage = %d/%d (%.1f%%)", m.ConceptsCovered, m.ConceptsInScope, m.ConceptCoveragePct)
 	}
-	// Six marker lines state eight targets; every one is accepted.
-	if m.Markers != 6 || m.Targets != 8 || m.Accepted != 6 || m.Proposed != 0 {
+	// Nine marker lines state twelve targets; every one is accepted.
+	if m.Markers != 9 || m.Targets != 12 || m.Accepted != 9 || m.Proposed != 0 {
 		t.Errorf("markers=%d targets=%d accepted=%d proposed=%d", m.Markers, m.Targets, m.Accepted, m.Proposed)
 	}
 }
@@ -1098,6 +1103,17 @@ func TestDerivedAllowed(t *testing.T) {
 			}
 		}
 	}
+	// allowed: [derived, z:Elsewhere] keeps the derived set and adds one concept.
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:Doer]\nproduces: [z:Thing]\nallowed: [derived, z:Elsewhere]\n")
+	ws, g, _, _ = build(t, root)
+	if a := rollup.AllowedFor(g, ws, ws.ManifestFor("svc/a.py")); !a.Derived || !has(a.Patterns, "z:Elsewhere") || !has(a.Patterns, "z:Part") {
+		t.Errorf("derived plus extras = %+v", a)
+	}
+	for _, d := range check.Run(ws, g) {
+		if d.Code == "GM503" || d.Code == "GM502" || d.Code == "GM501" {
+			t.Errorf("allowed: [derived, ...]: %s", d)
+		}
+	}
 	// A written list narrows: only i:* now, so z:Part becomes GM502.
 	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:Doer]\nproduces: [z:Thing]\nallowed: [i:*]\n")
 	ws, g, _, _ = build(t, root)
@@ -1121,7 +1137,7 @@ func TestAdoptionDiff(t *testing.T) {
 	empty := graph.New(ws.Prefixes)
 	im := gate.Classify(empty, head, ws, gate.Options{Base: "main (no graph)", Policy: pol, HeadLedger: lg.Entries, AfterReport: after, Adoption: true})
 	a := im.Adoption
-	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 3 || len(a.PerBoundary) < 2 || len(a.PerView) != 2 || a.Hidden == 0 {
+	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 3 || len(a.PerBoundary) < 2 || len(a.PerView) != len(ws.Views.Views) || a.Hidden == 0 {
 		t.Fatalf("adoption summary = %+v", a)
 	}
 	for _, ch := range im.Changes {
@@ -1279,5 +1295,343 @@ func TestRealizesInheritance(t *testing.T) {
 	}
 	if !has(libViol, "pfi:Pipeline") {
 		t.Errorf("o:lib should report pfi:Pipeline as a violation (nobody declares it): %v", libViol)
+	}
+}
+
+// TestPresentsAndHosts: a page presents a concept and a shell hosts one;
+// neither lifts to realizes or carries criticality. untested tells the
+// tested engine from the untested page, and a surface with no mechanism
+// behind it is reported (presented-only).
+func TestPresentsAndHosts(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n  pfi: { iri: https://x/pfi/, tier: implementation }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n  Finance: { kind: system-type }\n  FirePlanning: { kind: process, criticality: critical }\n  Budgeting: { kind: process }\n")
+	write("ontology/pfi.gloss.yaml", "concepts:\n"+
+		"  FireEngine: { kind: process, realizes: pf:FirePlanning }\n"+
+		"  FirePage: { kind: process, presents: pf:FirePlanning }\n"+
+		"  BudgetPage: { kind: process, presents: pf:Budgeting }\n"+
+		"  WebApp: { kind: system-type, hosts: pf:Finance }\n")
+	write("engine/.gloss.yaml", "boundary: o:engine\nlevel: container\ndefault-namespace: pfi\nrealizes: [pfi:FireEngine]\n")
+	write("engine/fire.py", "# @gloss implements .FireEngine\ndef fire(): pass\n")
+	write("engine/tests/test_fire.py", "# @gloss verifies .FireEngine\ndef test_fire(): pass\n")
+	write("web/.gloss.yaml", "boundary: o:web\nlevel: container\ndefault-namespace: pfi\npresents: [pf:FirePlanning, pf:Budgeting]\nhosts: [pf:Finance]\n")
+	write("web/FirePage.tsx", "// @gloss implements .FirePage\nexport function FirePage() {}\n")
+	write("web/BudgetPage.tsx", "// @gloss implements .BudgetPage\nexport function BudgetPage() {}\n")
+	write("web/main.tsx", "// @gloss implements .WebApp scope=file\nrender(App)\n")
+	ws, g, _, lg := build(t, root)
+	for _, d := range check.Run(ws, g) {
+		if d.Severity == "error" || d.Code == "GM320" {
+			t.Errorf("check: %s", d)
+		}
+	}
+	web := g.NodeByCurie("o:web")
+	if r := curies(g, g.Objects(web.ID, "realizes")); has(r, "pf:FirePlanning") || has(r, "pf:Finance") {
+		t.Errorf("web must not realize what it presents or hosts: %v", r)
+	}
+	if p := curies(g, g.Objects(web.ID, "presents")); !has(p, "pf:FirePlanning") || !has(p, "pf:Budgeting") {
+		t.Errorf("web presents = %v", p)
+	}
+	if h := curies(g, g.Objects(web.ID, "hosts")); !has(h, "pf:Finance") {
+		t.Errorf("web hosts = %v", h)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
+		t.Errorf("violations: %+v", v)
+	}
+	if gp := findings(rep, rollup.KindGap); len(gp) != 0 {
+		t.Errorf("gaps: %+v", gp)
+	}
+	untested := concepts(findings(rep, rollup.KindUntested))
+	if !has(untested, "pfi:FirePage") || has(untested, "pfi:FireEngine") || has(untested, "pf:FirePlanning") {
+		t.Errorf("untested = %v: the engine is tested, the page is not", untested)
+	}
+	if po := concepts(findings(rep, rollup.KindPresentedOnly)); len(po) != 1 || po[0] != "pf:Budgeting" {
+		t.Errorf("presented-only = %v, want [pf:Budgeting]", po)
+	}
+	// Criticality follows the mechanism, not the page.
+	rollup.Criticality(g)
+	for _, a := range g.NodesOf(model.NodeArtifact) {
+		switch a.Path {
+		case "engine/fire.py":
+			if a.Criticality != "critical" {
+				t.Errorf("engine artifact criticality = %q", a.Criticality)
+			}
+		case "web/FirePage.tsx":
+			if a.Criticality == "critical" {
+				t.Errorf("page artifact inherited critical from what it presents (via %s)", a.CriticalityFrom)
+			}
+		}
+	}
+}
+
+// TestBriefingV2: the briefing ranks concepts by relevance to the directory,
+// respects a token budget, shows only the acting agent's remit, and states
+// the one proposal sentence that AGENTS.md and the MCP server also use.
+func TestBriefingV2(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	var core strings.Builder
+	core.WriteString("concepts:\n  Grading: { kind: process }\n  Gate: { kind: constraint }\n  Admin: { kind: entity }\n  Agent: { kind: entity }\n  AgentArena: { kind: system-type }\n")
+	for i := 0; i < 150; i++ {
+		fmt.Fprintf(&core, "  Filler%03d: { kind: entity, doc: \"A filler concept that pads the alphabetical list well past any budget.\" }\n", i)
+	}
+	write("glossmark.yaml", "owns:\n  arena: { iri: https://x/arena/, tier: core }\n  aa: { iri: https://x/aa/, tier: implementation }\n")
+	write("ontology/arena.gloss.yaml", core.String())
+	write("ontology/aa.gloss.yaml", "concepts:\n  GradingPipeline: { kind: process, realizes: arena:Grading }\n  Console: { kind: process, realizes: arena:Admin }\n")
+	write(".gloss.yaml", "boundary: o:arena\nlevel: system\n")
+	write("grading/.gloss.yaml", "boundary: o:grading\nlevel: container\npart-of: o:arena\ndefault-namespace: aa\nrealizes: [aa:GradingPipeline]\nallowed: [arena:*, aa:*]\n")
+	write("grading/pipeline.py", "# @gloss implements .GradingPipeline\ndef grade(): pass\n\n# @gloss implements arena:Gate\ndef gate(): pass\n")
+	write("admin/console.py", "# @gloss implements aa:Console\ndef console(): pass\n")
+	write(".claude/agents/grader.md", "<!-- @gloss may-modify aa:Grading*, arena:Grading scope=file -->\n# Grader\n")
+	write(".claude/agents/admin-bot.md", "<!-- @gloss may-modify arena:Admin scope=file -->\n# Admin bot\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	m := ws.ManifestFor("grading/x")
+	out := agents.Context(ws, g, m, rep, agents.ContextOptions{Dir: "grading", Budget: 2000, Actor: "agent:grader@m"})
+	idx := func(c string) int {
+		i := strings.Index(out, "- "+c+" (")
+		if i < 0 {
+			return 1 << 30
+		}
+		return i
+	}
+	if !(idx("arena:Grading") < idx("arena:Admin") && idx("arena:Gate") < idx("arena:Admin") && idx("aa:GradingPipeline") < idx("arena:Admin")) {
+		t.Errorf("grading concepts should come before arena:Admin:\n%s", out)
+	}
+	if len(out) > 2000*4 {
+		t.Errorf("briefing is %d chars, over the 2000-token budget", len(out))
+	}
+	if !strings.Contains(out, "use search_concepts for the rest") {
+		t.Errorf("the budget should cut the 150 filler concepts")
+	}
+	if !strings.Contains(out, "Your remit as agent:grader@m") || strings.Contains(out, "admin-bot") {
+		t.Errorf("remit should be the grader's only:\n%s", out)
+	}
+	if !strings.Contains(out, agents.ProposalSentence) || !strings.Contains(agents.Snippet(ws, g, m), agents.ProposalSentence) {
+		t.Error("briefing and AGENTS.md snippet must state the same proposal sentence")
+	}
+	// Without a named agent every remit is listed.
+	if all := agents.Context(ws, g, m, rep, agents.ContextOptions{Dir: "grading", Budget: 2000}); !strings.Contains(all, "admin-bot") || !strings.Contains(all, "grader") {
+		t.Errorf("all remits expected without GLOSS_ACTOR")
+	}
+}
+
+// TestViewContainment: a concept goes into the boundary whose own code links
+// to it, not the common parent of every boundary that reaches it by lifting;
+// a curated view (one that names concepts) is flagged for the viewer to open
+// expanded and keeps only the artifacts and edges around what it names.
+func TestViewContainment(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Thing: { kind: process }\n  Other: { kind: entity }\n  Elsewhere: { kind: entity, part-of: Other }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Engine: { kind: process, realizes: z:Thing }\n  Step: { kind: process, part-of: Engine }\n")
+	write("ontology/views.yaml", "views:\n  all:\n    include: [z:*, i:*]\n    zoom: code\n  thing:\n    include: [z:Thing, i:Engine]\n    zoom: code\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
+	write("a/.gloss.yaml", "boundary: o:a\nlevel: container\npart-of: o:root\n")
+	write("a/engine.py", "# @gloss implements i:Engine\ndef run(): pass\n")
+	write("b/.gloss.yaml", "boundary: o:b\nlevel: container\npart-of: o:root\n")
+	write("b/step.py", "# @gloss implements i:Step\ndef step(): pass\n\n# @gloss represents z:Other\nclass O: pass\n\n# @gloss represents z:Elsewhere\nclass E: pass\n")
+	ws, g, _, _ := build(t, root)
+	ps := views.ProjectAll(g, ws.Views)
+	byName := map[string]*views.Projection{}
+	for _, p := range ps {
+		byName[p.Name] = p
+	}
+	node := func(p *views.Projection, id string) *views.PNode {
+		for i := range p.Nodes {
+			if p.Nodes[i].ID == id {
+				return &p.Nodes[i]
+			}
+		}
+		return nil
+	}
+	all := byName["all"]
+	if all.Curated {
+		t.Error("a glob-only view is not curated")
+	}
+	// b reaches i:Engine only by lifting through i:Step; a implements it directly.
+	if n := node(all, "i:Engine"); n == nil || n.Boundary != "o:a" {
+		t.Errorf("i:Engine boundary = %+v, want o:a", n)
+	}
+	th := byName["thing"]
+	if !th.Curated {
+		t.Error("a view naming concepts is curated")
+	}
+	for _, n := range th.Nodes {
+		if n.Type == "artifact" && n.Path != "a/engine.py" {
+			t.Errorf("curated view kept an unrelated artifact: %s", n.ID)
+		}
+	}
+	for _, e := range th.Edges {
+		if e.S == "z:Elsewhere" || e.O == "z:Other" {
+			t.Errorf("curated view kept an edge between concepts it does not name: %+v", e)
+		}
+	}
+	if n := node(th, "a/engine.py#run"); n == nil || n.Line != 2 {
+		t.Errorf("artifact line = %+v", n)
+	}
+}
+
+// TestValueFrom: a published value bound to code with value-from (or a
+// publishes-value marker) is baselined on first build; changing the code
+// line alone is a value-drift finding and a HARD change in the diff;
+// changing both together moves the baseline; accept --value confirms.
+func TestValueFrom(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n  pfi: { iri: https://x/pfi/, tier: implementation }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n  Withdrawal: { kind: constraint }\n  Ceiling: { kind: constraint }\n")
+	ont := "concepts:\n  DefaultSafeWithdrawalRate:\n    kind: measure\n    realizes: pf:Withdrawal\n    published: { as: pf:Withdrawal }\n    value: \"4% (25x annual expenses)\"\n    value-from: { path: pfinance/fire.py, symbol: swr }\n" +
+		"  SpendingCeiling: { kind: measure, realizes: pf:Ceiling, value: \"10000\" }\n"
+	write("ontology/pfi.gloss.yaml", ont)
+	write(".gloss.yaml", "boundary: o:pf\nlevel: system\ndefault-namespace: pfi\n")
+	code := "def plan(years: int, swr: float = 0.04):\n    return years\n\n# @gloss publishes-value .SpendingCeiling scope=line\nCEILING = 10000\n"
+	write("pfinance/fire.py", code)
+	lgPath := filepath.Join(root, ".glossmark", "ledger.jsonl")
+	run := func() (*load.Workspace, *graph.Graph, *ledger.Ledger) {
+		t.Helper()
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		for _, d := range res.Diags {
+			if d.Severity == "error" {
+				t.Errorf("extract: %s", d)
+			}
+		}
+		rollup.Derive(res.Graph, ws.Vocab)
+		lg, _ := ledger.Open(lgPath)
+		lg.Sync(res.Graph, res.Markers, "human:alice", time.Now())
+		lg.Save()
+		return ws, res.Graph, lg
+	}
+	drift := func(ws *load.Workspace, g *graph.Graph, lg *ledger.Ledger) []string {
+		return concepts(findings(rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries}), rollup.KindValueDrift))
+	}
+	ws, base, lg := run()
+	n := base.NodeByCurie("pfi:DefaultSafeWithdrawalRate")
+	if n.ValueFrom != "pfinance/fire.py:1" || n.LiveValue != "def plan(years: int, swr: float = 0.04):" {
+		t.Fatalf("binding = %q %q", n.ValueFrom, n.LiveValue)
+	}
+	if c := base.NodeByCurie("pfi:SpendingCeiling"); c.ValueFrom != "pfinance/fire.py:5" || c.LiveValue != "CEILING = 10000" {
+		t.Fatalf("marker binding = %q %q", c.ValueFrom, c.LiveValue)
+	}
+	if d := drift(ws, base, lg); len(d) != 0 {
+		t.Errorf("baseline drift = %v", d)
+	}
+	// Code changes, ontology does not: drift, and HARD in the diff.
+	write("pfinance/fire.py", strings.Replace(code, "0.04", "0.035", 1))
+	ws, head, lg := run()
+	if d := drift(ws, head, lg); len(d) != 1 || d[0] != "pfi:DefaultSafeWithdrawalRate" {
+		t.Errorf("drift = %v", d)
+	}
+	im := gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: ws.Config.EffectivePolicy()})
+	hard := false
+	for _, ch := range im.Changes {
+		if ch.Kind == "published-value-drifted" && ch.Gate == gate.HARD && ch.Subject == "pfi:DefaultSafeWithdrawalRate" {
+			hard = true
+		}
+	}
+	if !hard || im.Gate != gate.HARD {
+		t.Errorf("diff should be HARD published-value-drifted: %+v", im.Changes)
+	}
+	// Confirming the code as is clears the drift.
+	lg.Accept("value:pfi:DefaultSafeWithdrawalRate", "human:bob", head.NodeByCurie("pfi:DefaultSafeWithdrawalRate").ValueFP, time.Now())
+	lg.Save()
+	ws, head, lg = run()
+	if d := drift(ws, head, lg); len(d) != 0 {
+		t.Errorf("after accept drift = %v", d)
+	}
+	// Code and value move together: no drift, a new baseline.
+	write("pfinance/fire.py", strings.Replace(strings.Replace(code, "0.04", "0.035", 1), "10000", "12000", 1))
+	write("ontology/pfi.gloss.yaml", strings.Replace(ont, `value: "10000"`, `value: "12000"`, 1))
+	ws, head, lg = run()
+	if d := drift(ws, head, lg); len(d) != 0 {
+		t.Errorf("moving together should not drift: %v", d)
+	}
+	// A symbol that is never assigned is an error.
+	write("ontology/pfi.gloss.yaml", strings.Replace(ont, "symbol: swr", "symbol: nope", 1))
+	ws2, _ := load.Load(root)
+	res, _ := extract.Build(ws2)
+	gm360 := false
+	for _, d := range res.Diags {
+		if d.Code == "GM360" {
+			gm360 = true
+		}
+	}
+	if !gm360 {
+		t.Error("expected GM360 for an unassigned symbol")
+	}
+}
+
+// TestCriticalityFloorAndSuggest: an artifact takes the level of the concept
+// it implements; a boundary's level reaches its artifacts only with
+// criticality-floor: true; suggest proposes high for constraints, published
+// concepts and concepts verified only by security tests.
+func TestCriticalityFloorAndSuggest(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pay: { iri: https://x/pay/, tier: core }\n  pa: { iri: https://x/pa/, tier: implementation }\n")
+	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint }\n  Login: { kind: process }\n")
+	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n")
+	write("platform/.gloss.yaml", "boundary: o:platform\nlevel: system\ncriticality: critical\n")
+	write("platform/metrics/.gloss.yaml", "boundary: o:metrics\nlevel: container\npart-of: o:platform\n")
+	write("platform/metrics/export.py", "# @gloss implements pa:Exporter\ndef export(): pass\n")
+	write("platform/auth/session.py", "# @gloss implements pa:Session\ndef login(): pass\n")
+	write("platform/auth/tests/test_auth_security.py", "# @gloss verifies pa:Session\ndef test_csrf_token(): pass\n")
+	level := func(g *graph.Graph, path string) (string, string) {
+		for _, a := range g.NodesOf(model.NodeArtifact) {
+			if a.Path == path {
+				return a.Criticality, a.CriticalityFrom
+			}
+		}
+		return "", ""
+	}
+	_, g, _, _ := build(t, root)
+	if l, from := level(g, "platform/metrics/export.py"); l != "low" || from != "pa:Exporter" {
+		t.Errorf("without a floor the metrics exporter is low via pa:Exporter (which inherits it from pay:Metrics), got %q via %q", l, from)
+	}
+	write("platform/.gloss.yaml", "boundary: o:platform\nlevel: system\ncriticality: critical\ncriticality-floor: true\n")
+	_, g, _, _ = build(t, root)
+	if l, from := level(g, "platform/metrics/export.py"); l != "critical" || from != "o:platform" {
+		t.Errorf("with the floor the exporter is critical via o:platform, got %q via %q", l, from)
+	}
+	sugg := map[string]string{}
+	for _, s := range rollup.SuggestCriticality(g) {
+		sugg[s.Concept] = s.Reason
+	}
+	for _, c := range []string{"pay:Cutoff", "pa:Clock", "pa:Session"} {
+		if sugg[c] == "" {
+			t.Errorf("expected a high suggestion for %s, got %v", c, sugg)
+		}
+	}
+	if _, ok := sugg["pay:Payment"]; ok {
+		t.Error("an unremarkable entity stays unclassified")
+	}
+	if _, ok := sugg["pay:Metrics"]; ok {
+		t.Error("a declared level is never overridden")
 	}
 }

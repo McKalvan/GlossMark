@@ -379,6 +379,10 @@ func (c *classifier) ontology() {
 		}
 		if fmt.Sprint(b.Value) != fmt.Sprint(h.Value) {
 			diffs = append(diffs, fmt.Sprintf("value %v → %v", orNone(b.Value), orNone(h.Value)))
+		} else if b.ValueFP != "" && h.ValueFP != "" && b.ValueFP != h.ValueFP {
+			c.add(Change{Gate: HARD, Kind: "published-value-drifted", Glyph: "≠", Subject: h.CURIE, Path: strings.SplitN(h.ValueFrom, ":", 2)[0],
+				Reasons: []string{"published value drifted: the bound code changed and value: did not"},
+				Msg:     fmt.Sprintf("published value of %s drifted: %s changed from %q to %q while value: stays %v", h.CURIE, h.ValueFrom, b.LiveValue, h.LiveValue, orNone(h.Value))})
 		}
 		if b.Published != h.Published {
 			diffs = append(diffs, fmt.Sprintf("published %s → %s", orNone(b.Published), orNone(h.Published)))
@@ -500,12 +504,13 @@ func (c *classifier) governance() {
 				consider(c.base.NodeByCurie(cu))
 			}
 		}
-		// A link lives in a file, so its boundary's level applies; an ontology,
-		// manifest or policy edit is judged by the thing it edits.
+		// A link is judged by what it links to; its boundary's level applies
+		// only as a floor (criticality-floor: true). An ontology, manifest or
+		// policy edit is judged by the thing it edits.
 		if ch.Path != "" && linkKinds[ch.Kind] {
 			if m := c.ws.ManifestFor(ch.Path); m != nil {
 				if b := c.head.NodeByCurie(m.Boundary); b != nil {
-					consider(b)
+					consider(rollup.FloorFor(c.head, b.ID))
 				}
 			}
 		}

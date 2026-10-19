@@ -19,7 +19,7 @@ Add `scope=file` when the whole file is about one concept and nothing inside it 
 
 ## One marker per public surface
 
-Mark the thing a reader would look for: the handler, the pipeline entry point, the model, the table, the test file. Do not mark every helper. Five consecutive helpers that each say `implements .AmountObfuscation` add five edges and no knowledge; `gloss check` reports the run (GM131) and suggests one marker with `scope=block` above it, or one on the public function that calls them.
+Mark the thing a reader would look for: the handler, the pipeline entry point, the model, the table, the test file. Do not mark every helper. Five consecutive helpers that each say `implements .AmountObfuscation` add five edges and no knowledge; `gloss check` reports any run of three or more (GM131) and suggests one marker with `scope=block` above it, or one on the public function that calls them.
 
 Coverage counts concepts, not markers: an implementation concept is covered when at least one artifact links to it and at least one test verifies it (`gloss coverage`). Adding markers to raise the file percentage is the wrong lever; adding a test that `verifies` the concept is the right one.
 
@@ -43,6 +43,10 @@ The declaration detector skips the decorator stack, including multi-line argumen
 ## Core or implementation target?
 
 Target the implementation concept when the artifact is a mechanism (`implements impl:AuthorizeHandler`), and the core concept directly when the artifact *is* the domain thing (`represents pay:Payment` on the Payment model, `verifies pay:Authorization` on the test of the business rule). The implementation concept's `realizes:` line carries the link to core; you do not repeat it in the marker.
+
+## Pages and shells
+
+A page, screen or report that *shows* a concept is not its mechanism. Model the page as `presents` (`pfi:FirePage: { kind: process, presents: pf:FirePlanning }`, or `// @gloss presents pf:FirePlanning` on the component) and the app frame as `hosts`. Neither makes the boundary realize the concept or inherit its criticality, so the engine's tests and the page's tests are counted apart ([ADR 0001](adr/0001-presents-and-hosts.md)).
 
 ## Proposals
 

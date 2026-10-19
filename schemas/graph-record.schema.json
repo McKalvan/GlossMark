@@ -162,6 +162,22 @@
           "type": "string",
           "enum": ["low", "medium", "high", "critical"]
         },
+        "criticality-floor": {
+          "description": "Boundary: its level is a floor for the artifacts beneath it.",
+          "type": "boolean"
+        },
+        "value-from": {
+          "description": "path:line of the code a published value is bound to.",
+          "type": "string"
+        },
+        "live-value": {
+          "description": "The bound code line, as it reads in this tree.",
+          "type": "string"
+        },
+        "value-fp": {
+          "description": "Fingerprint of the bound line (sha256: prefix).",
+          "type": "string"
+        },
         "criticality-from": {
           "description": "Where the level comes from: \"declared\", or the CURIE of the node it was inherited from.",
           "type": "string"

@@ -42,11 +42,16 @@ type Node struct {
 	Label    string         `json:"label,omitempty"`
 	Doc      string         `json:"doc,omitempty"`
 	// Concept attributes.
-	Published  string   `json:"published-as,omitempty"`
-	Internal   bool     `json:"internal,omitempty"`
-	Deprecated bool     `json:"deprecated,omitempty"`
-	ReplacedBy string   `json:"replaced-by,omitempty"`
-	Value      any      `json:"value,omitempty"`
+	Published  string `json:"published-as,omitempty"`
+	Internal   bool   `json:"internal,omitempty"`
+	Deprecated bool   `json:"deprecated,omitempty"`
+	ReplacedBy string `json:"replaced-by,omitempty"`
+	Value      any    `json:"value,omitempty"`
+	// ValueFrom is path:line of the code a published value is bound to;
+	// LiveValue is that line, ValueFP its fingerprint (see model.ValueFrom).
+	ValueFrom  string   `json:"value-from,omitempty"`
+	LiveValue  string   `json:"live-value,omitempty"`
+	ValueFP    string   `json:"value-fp,omitempty"`
 	Imported   bool     `json:"imported,omitempty"`
 	Proposed   bool     `json:"proposed,omitempty"`
 	ProposedBy string   `json:"proposed-by,omitempty"`
@@ -56,6 +61,8 @@ type Node struct {
 	// it came from: "declared", or the CURIE it was inherited from.
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticality-from,omitempty"`
+	// CriticalityFloor: the boundary's level is a floor for its artifacts.
+	CriticalityFloor bool `json:"criticality-floor,omitempty"`
 	// Namespace attributes.
 	Version string `json:"version,omitempty"`
 	Owner   string `json:"owner,omitempty"`

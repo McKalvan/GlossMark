@@ -13,3 +13,7 @@ views:
     include: [zoo:*, impl:*]
     expand: { part-of: 2 }
     zoom: container
+  capacity:
+    doc: A curated view (it names its concepts, so it opens expanded) of the capacity constraint, what it constrains and the code behind it.
+    include: [zoo:ProductionCapacity, zoo:HorseOrder, impl:FoalingPipelineThroughput]
+    zoom: code

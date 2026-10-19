@@ -23,6 +23,10 @@ const (
 // LiftedRelations are the artifact relations that lift to boundaries.
 var LiftedRelations = []string{"produces", "consumes", "publishes", "subscribes"}
 
+// SurfaceRelations lift to boundaries as themselves and never to realizes:
+// a page presents a concept, an app shell hosts one; neither computes it.
+var SurfaceRelations = []string{"presents", "hosts"}
+
 // InfraRelations lift to realizes when their target is a resource or a system-type.
 var InfraRelations = []string{"provisions", "configures", "deploys"}
 
@@ -75,8 +79,17 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 					add("realizes", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
 				}
 				// Intended relations declared on the implemented concept, and on the
-				// core concepts it realizes, lift to the boundary.
+				// core concepts it realizes, lift to the boundary. So do the surface
+				// relations: code implementing pfi:FirePage, which presents
+				// pf:FirePlanning, makes the boundary present it, not realize it.
 				for _, c := range append([]string{e.O}, RealizesStar(g, e.O)...) {
+					for _, rel := range SurfaceRelations {
+						for _, x := range g.Objects(c, rel) {
+							if IsConcrete(x) {
+								g.AddEdge(&graph.Edge{S: b.ID, P: rel, O: x, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: []string{g.Curie(a.ID), g.Curie(c)}, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
+							}
+						}
+					}
 					for _, rel := range LiftedRelations {
 						for _, x := range g.Objects(c, rel) {
 							if IsConcrete(x) {
@@ -101,6 +114,13 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 					add("holds", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
 					for _, core := range RealizesStar(g, e.O) {
 						add("holds", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+					}
+				}
+			}
+			for _, rel := range SurfaceRelations {
+				for _, e := range g.Out(a.ID, rel) {
+					if IsConcrete(e.O) {
+						add(rel, e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
 					}
 				}
 			}

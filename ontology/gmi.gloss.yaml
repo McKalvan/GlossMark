@@ -19,10 +19,28 @@ concepts:
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
   # Outputs
   ViewProjector:      { kind: process, realizes: gm:Projection }
-  HtmlViewer:         { kind: process, internal: true, part-of: ViewProjector }
+  HtmlViewer:         { kind: process, part-of: ViewProjector, presents: gm:View, doc: "The static page that shows a projection: a UI surface for views, not their mechanism." }
   Publisher:          { kind: process, realizes: gm:Publication, doc: "Per-namespace ontology.jsonld and graph.jsonl for importers." }
   SqliteExport:       { kind: process, internal: true }
   LandscapeAssembler: { kind: process, realizes: gm:Landscape, doc: "Unions sibling repositories' graphs by IRI; realizes the landscape itself, there is no separate federation process yet." }
+  ValueBinder:        { kind: process, realizes: gm:ValueBinding, doc: "Resolves value-from and publishes-value to a line of code; the ledger baselines it and the comparator reports drift." }
+  DefaultSoftThreshold:
+    kind: measure
+    realizes: gm:Confidence
+    value: 0.7
+    doc: "The default soft-conf-threshold: proposals at or above it are SOFT. Bound to DefaultPolicy by a publishes-value marker."
+  GraphFormatVersion:
+    kind: measure
+    internal: true
+    value: 1
+    value-from: { path: internal/version/version.go, symbol: GraphFormat }
+    doc: "The graph.jsonl record format docs/VERSIONING.md documents; bumping it in code without here is value drift."
+  TextDiff:           { kind: process, internal: true, doc: "Unified diffs of ontology files, so a suggested edit is reviewable before it is written." }
+  # Onboarding
+  Scaffolder:         { kind: process, realizes: gm:Onboarding, doc: "gloss init: config, tier files, manifests, views, CI job and hook in one command." }
+  MarkerSuggester:    { kind: process, realizes: gm:Onboarding, doc: "gloss suggest: proposed links for unmarked declarations, matched by name and docstring." }
+  VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
+  AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark Claude Code skill, shipped in the binary." }
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed] }
   AgentsSnippet:      { kind: process, realizes: gm:Vocabulary, doc: "The AGENTS.md vocabulary snippet and the session-start briefing." }

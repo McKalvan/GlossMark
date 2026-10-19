@@ -21,7 +21,7 @@ func init() {
 func cmdDrift(args []string) int {
 	fs, root := newFlags("drift")
 	format := fs.String("format", "text", "text | json | markdown")
-	failOn := fs.String("fail-on", "violation,gap,dangling", "comma-separated finding kinds that fail the command")
+	failOn := fs.String("fail-on", "violation,value-drift,gap,dangling", "comma-separated finding kinds that fail the command")
 	all := fs.Bool("all", false, "also list consistent pairs")
 	if err := fs.Parse(args); err != nil {
 		return 2

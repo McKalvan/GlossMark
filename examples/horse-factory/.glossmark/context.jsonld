@@ -49,6 +49,10 @@
       "@id": "gm:holds",
       "@type": "@id"
     },
+    "hosts": {
+      "@id": "gm:hosts",
+      "@type": "@id"
+    },
     "id": "@id",
     "impl": "https://onto.acme.dev/horse-factory/",
     "implements": {
@@ -92,6 +96,10 @@
       "@type": "@id"
     },
     "path": "gm:path",
+    "presents": {
+      "@id": "gm:presents",
+      "@type": "@id"
+    },
     "produces": {
       "@id": "gm:produces",
       "@type": "@id"
@@ -107,6 +115,10 @@
     },
     "publishes": {
       "@id": "gm:publishes",
+      "@type": "@id"
+    },
+    "publishes-value": {
+      "@id": "gm:publishes-value",
       "@type": "@id"
     },
     "realizes": {

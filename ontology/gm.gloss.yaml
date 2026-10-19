@@ -28,6 +28,7 @@ concepts:
   Projection:      { kind: process, consumes: [Graph], produces: [View] }
   Publication:     { kind: process, consumes: [Namespace], doc: "Exposing a namespace's published concepts to importing repositories." }
   Vocabulary:      { kind: capability, doc: "The concepts and relations served to coding agents while they write, as an AGENTS.md snippet or over MCP." }
+  Onboarding:      { kind: process, produces: [ProposedLink], doc: "Bringing a repository under GlossMark: scaffolding it, importing the vocabulary it already keeps, and drafting its first links for review." }
   # Events
   LinkProposed:    { kind: event }
   LinkAccepted:    { kind: event }
@@ -37,7 +38,7 @@ concepts:
   DriftDetected:   { kind: event }
   # Measures
   Drift:           { kind: measure, doc: "Disagreement between what a boundary declares and what its code derives." }
-  Coverage:        { kind: measure, doc: "The share of in-scope files that carry an accepted link." }
+  Coverage:        { kind: measure, doc: "The share of implementation concepts with at least one artifact and one verifier; the share of files with an accepted link is secondary." }
   Confidence:      { kind: measure, doc: "How sure the author of a proposal is, in [0, 1]." }
   Impact:          { kind: measure, doc: "Which views a change alters, and therefore how hard its gate is." }
   # Constraints
@@ -45,7 +46,8 @@ concepts:
   PublishedSeam:   { kind: constraint, constrains: [Concept], doc: "Only published concepts cross repositories, and touching one is HARD." }
   OwnSubjectRule:  { kind: constraint, constrains: [Namespace], doc: "Importers extend, never mutate; a repo only asserts facts whose subject it owns." }
   DeclaredCapability: { kind: constraint, constrains: [Boundary], doc: "What a boundary's code derives must stay within what its manifest declares." }
-  AllowedList:     { kind: constraint, constrains: [Boundary], doc: "Inline links inside a boundary may only target the concepts its manifest allows; stepping outside is HARD." }
+  AllowedList:     { kind: constraint, constrains: [Boundary], doc: "Inline links inside a boundary may only target the concepts its manifest allows, written or derived from what it declares; stepping outside is HARD." }
+  ValueBinding:    { kind: constraint, constrains: [Concept], doc: "A published value follows the code it is bound to; a change to that code alone is drift." }
   # The system
   GlossMark:       { kind: system-type, produces: [Graph, View, Drift, Impact, Landscape] }
   Criticality:

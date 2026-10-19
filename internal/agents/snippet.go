@@ -22,7 +22,7 @@ func Snippet(ws *load.Workspace, g *graph.Graph, m *model.Manifest) string {
 	sb.WriteString("Link what you write to the ontology with one comment line per declaration, in the file's own comment syntax:\n\n")
 	sb.WriteString("```\n@gloss[?] <relation> <target>[, <target>...] [scope=file|symbol|block|line|range] [conf=0.0-1.0] [note=\"...\"]\n```\n\n")
 	sb.WriteString("- Write `@gloss?` for links you are proposing; a human accepts them with `gloss accept`. Never write a bare `@gloss` for a link you are not sure of.\n")
-	sb.WriteString("- Never invent concepts inline. If no concept fits, write `@gloss? <relation> <ns>:NEW:<Name> note=\"why\"`; CI turns it into a decision request.\n")
+	sb.WriteString("- " + ProposalSentence + "\n")
 	sb.WriteString("- Relations you may use inline: ")
 	var inl []string
 	for _, r := range ws.Vocab.Names() {
