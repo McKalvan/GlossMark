@@ -1,3 +1,5 @@
+// @gloss implements gmi:McpServer scope=file
+
 // Package mcp serves the graph to agents over the Model Context Protocol
 // (JSON-RPC 2.0 on stdio): lookup_concept, search_concepts, concepts_for_path,
 // propose_link and impact_of.

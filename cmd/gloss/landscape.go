@@ -1,3 +1,5 @@
+// @gloss implements gmi:LandscapeAssembler scope=file
+
 package main
 
 import (

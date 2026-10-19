@@ -1,3 +1,5 @@
+// @gloss implements gmi:ImportLock scope=file
+
 package main
 
 import (

@@ -1,3 +1,4 @@
+# @gloss represents gmi:CanonicalGraph scope=file
 # LinkML schema for the GlossMark graph metamodel: the node and edge records
 # written to .glossmark/graph.jsonl. Derived from internal/graph/graph.go,
 # internal/marker/anchor.go and internal/model/vocab.go, which remain the

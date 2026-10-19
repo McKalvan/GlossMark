@@ -1,3 +1,5 @@
+// @gloss implements gmi:Linter scope=file
+
 package rollup
 
 import (

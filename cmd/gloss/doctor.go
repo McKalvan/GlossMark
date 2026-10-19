@@ -1,3 +1,5 @@
+// @gloss implements gmi:Doctor scope=file
+
 package main
 
 import (

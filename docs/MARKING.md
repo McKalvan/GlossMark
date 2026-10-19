@@ -1,3 +1,4 @@
+<!-- @gloss documents gm:Link scope=file -->
 # When to mark, and with what
 
 Five relations cover almost every marker in a real repository. Learn these first; the rest are on the [advanced page](ADVANCED.md).

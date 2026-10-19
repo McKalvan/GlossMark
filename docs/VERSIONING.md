@@ -1,3 +1,4 @@
+<!-- @gloss documents gmi:ImportLock, gmi:FormatVersions scope=file -->
 # Versioning and stability
 
 GlossMark has four version numbers. Each answers a different question, and `gloss version` prints all of them.

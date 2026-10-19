@@ -1,3 +1,5 @@
+// @gloss implements gmi:Linter scope=file
+
 // Package check lints the graph: syntax, dangling references, domain/range,
 // the own-subject rule, tier rules, the published seam and manifest allowed lists.
 package check

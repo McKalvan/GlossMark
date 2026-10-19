@@ -1,3 +1,4 @@
+<!-- @gloss documents arch:glossmark scope=file -->
 # GlossMark: ontology and UX review of the tool and its first two adoptions
 
 Reviewed on 2026-10-18 against GlossMark `main` (first at 6a9377f, then re-run at 681517a after `main` moved), `pfinance` branch `claude/glossmark-ontology` (e3d15fe) and `AiArena` branch `claude/glossmark-ontology` (2b6f07f). Everything below was reproduced by building `gloss` from the checkout and running it on all three trees; the viewer was rendered in headless Chromium. Section 5.2 and 3.11 were rewritten for 681517a (boundaries as containers, drill-in, filters, criticality governance).

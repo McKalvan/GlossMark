@@ -1,3 +1,5 @@
+// @gloss implements gmi:Doctor scope=file
+
 // Package doctor checks that a repository's GlossMark setup works end to end:
 // the hook can find gloss, agents are attributed, the committed graph matches
 // the tree, the review record is in git, imports are locked, CI pins a

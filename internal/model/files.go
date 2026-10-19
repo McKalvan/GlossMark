@@ -1,3 +1,6 @@
+// @gloss represents gmi:FileFormats scope=file
+// @gloss represents gm:Namespace, gm:Boundary scope=file
+
 package model
 
 import (
@@ -46,7 +49,7 @@ func (s *StringList) UnmarshalYAML(n *yaml.Node) error {
 
 // Config is the repository-level file: namespaces owned and imported.
 type Config struct {
-	// Grammar pins the @gloss grammar version the repository is written in
+	// Grammar pins the `@gloss` grammar version the repository is written in
 	// (like Go's `go 1.24` directive). Default 1.
 	Grammar  int                       `yaml:"grammar,omitempty" json:"grammar,omitempty"`
 	Owns     map[string]*NamespaceDecl `yaml:"owns" json:"owns"`
@@ -287,7 +290,7 @@ type Concept struct {
 	ReplacedBy string     `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	Value      any        `yaml:"value,omitempty" json:"value,omitempty"`
 	// Proposed marks an entry an agent (or anyone) added with the same semantics
-	// as @gloss?: it exists so links resolve, but a human accepts it
+	// as `@gloss?`: it exists so links resolve, but a human accepts it
 	// (gloss accept --concept) before it counts as part of the ontology.
 	Proposed   bool   `yaml:"proposed,omitempty" json:"proposed,omitempty"`
 	ProposedBy string `yaml:"proposed-by,omitempty" json:"proposed-by,omitempty"`

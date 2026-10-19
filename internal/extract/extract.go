@@ -1,3 +1,5 @@
+// @gloss implements gmi:Extractor scope=file
+
 // Package extract is pass 1 of the extractor: ontology files, manifests and
 // inline markers become nodes and edges of the canonical graph. Derived edges
 // are added afterwards by the rollup package.

@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# @gloss deploys gmi:GlossCli scope=file
 # Install a released gloss binary (Linux or macOS, amd64 or arm64).
 #
 #   curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh              # latest release

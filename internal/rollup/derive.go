@@ -1,3 +1,5 @@
+// @gloss implements gmi:RollupEngine scope=file
+
 // Package rollup derives higher-level facts from the code-level graph and
 // compares them with what manifests declare. The comparison is the drift signal.
 package rollup

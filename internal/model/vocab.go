@@ -1,3 +1,5 @@
+// @gloss represents gm:Relation scope=file
+
 // Package model holds the GlossMark file formats (glossmark.yaml, *.gloss.yaml,
 // .gloss.yaml manifests, views.yaml, the ledger) and the relation vocabulary.
 package model

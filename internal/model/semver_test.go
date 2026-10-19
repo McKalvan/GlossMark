@@ -1,3 +1,5 @@
+// @gloss verifies gmi:ImportLock scope=file
+
 package model
 
 import "testing"

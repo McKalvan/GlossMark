@@ -31,6 +31,13 @@
   "testdata/deploy.yml": [
     {"line": 2, "relation": "deploys", "targets": ["acme:payments-api"], "keys": {"scope": "file"}, "scope": "file"}
   ],
+  "testdata/quoted.md": [
+    {"line": 1, "relation": "documents", "targets": ["zoo:Breeding"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 19, "relation": "documents", "targets": ["zoo:Foaling"], "scope": "symbol", "symbol": "Foaling"}
+  ],
+  "testdata/quoted.go": [
+    {"line": 5, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "Parse"}
+  ],
   "testdata/agent.md": [
     {"line": 1, "relation": "instructs", "targets": ["impl:BreedingPlanner"], "keys": {"scope": "file"}, "scope": "file"},
     {"line": 2, "relation": "may-modify", "targets": ["zoo:Foal", "zoo:Foaling", "impl:*"], "keys": {"scope": "file"}, "scope": "file"},

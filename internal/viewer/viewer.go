@@ -1,3 +1,5 @@
+// @gloss implements gmi:HtmlViewer scope=file
+
 // Package viewer renders the static HTML viewer: one self-contained page with
 // every view's projection embedded, no server, no external assets.
 package viewer
