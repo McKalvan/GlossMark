@@ -16,7 +16,11 @@ Releases are git tags `vX.Y.Z`; `docs/VERSIONING.md` says what MINOR and PATCH m
 - `gloss hook install --guards` registers the three guard hooks next to the SessionStart hook, replacing an earlier install's guard entries and keeping every other hook.
 - `gloss hook install --skills name,...` installs named shipped skills; `--skill` still installs all of them.
 - Policy keys `guard-stop` (`block`, the default, or `report`) and `guard-ask` (criticality levels and `remit`, for which the pre-edit guard returns `permissionDecision: "ask"`) in `glossmark.yaml` and its JSON Schema.
-- Proposed concepts `gmi:Diagnostics` and `gmi:HookGuard` (`proposed: true`).
+- Five shipped skills next to `adopt-glossmark`: `gloss-link` (keep links correct while changing code), `gloss-resolve-drift` (handle each drift finding kind), `gloss-review` (help a human review proposals, then run only their decisions), `gloss-criticality` and `gloss-upgrade-import`. Every skill quotes the proposal sentence verbatim, and a contract test checks it.
+- A Claude Code plugin at the repository root: `.claude-plugin/plugin.json` and `marketplace.json`, `hooks/hooks.json` with the SessionStart and guard hooks, and `.mcp.json` with `gloss mcp`. Install it with `/plugin marketplace add mckalvan/glossmark` and `/plugin install glossmark@glossmark`. It serves the same `skills/` files the binary embeds, and it does not ship the `gloss` binary.
+- `gloss init --role <name> --may-modify "<targets>" [--instructs <concept>] [--description "..."]` writes a role agent file, `.claude/agents/<name>.md`, with its remit. It never overwrites a file.
+- The hook command lines live in `internal/agents/hooks.go`; `gloss hook install`, the plugin's `hooks/hooks.json` and the contract test all use them.
+- Proposed concepts `gmi:Diagnostics`, `gmi:HookGuard` and `gmi:ClaudeCodePlugin` (`proposed: true`).
 - Contributor and agent documentation: `AGENTS.md`, `CLAUDE.md` and `CONTRIBUTING.md` at the root, `docs/AGENT-HARNESS.md` (setting up an agent) and `docs/AGENT-CONTRACT.md` (everything an agent reads, as API), contributor skills in `.claude/skills/gm-*`, and Claude Code hooks for this repository in `.claude/settings.json`.
 - End-to-end tests for `gloss publish` and for `gloss accept`, `reject` and `status` (`gmi:Publisher`, `gmi:ReviewCommands`), and a test that pins the MCP server's tool names and required arguments.
 
@@ -31,6 +35,7 @@ Releases are git tags `vX.Y.Z`; `docs/VERSIONING.md` says what MINOR and PATCH m
 - Linked git worktrees inside a repository, such as `.claude/worktrees/<name>/` created by an agent harness, are skipped when walking a workspace. `gloss` read every file twice, so `gloss check` and the self-host test failed on the second copy. Git submodules are still walked.
 - `gloss accept` and `gloss reject` read flags after a positional argument: `gloss reject --concept pa:RefundHandler --reason "..." --remove`, as `docs/QUICKSTART.md` shows it, stopped parsing at the CURIE and failed with "--reason is required".
 - `gloss publish` wrote a published implementation concept's `published-as` twice in `ontology.jsonld`, as a two-element array.
+- `gloss accept <id|path:line>` re-accepts a stale link against its current declaration, recording the reviewer. It used to refuse with "is not proposed", so a stale link could only be cleared by editing the marker.
 
 ## v0.1.0
 

@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Onboarding, gm:Vocabulary scope=file -->
 # Proposal: agent rules, skills and harness docs
 
-Status: proposed, 2026-10-19, against `main` at 5d20c47. Open questions decided the same day (section 6).
+Status: implemented on branch `claude/agent-harness-proposal`, 2026-10-19, against `main` at 5d20c47. Open questions decided the same day (section 6); what was built and where it differs is in section 7.
 
 GlossMark's real users are coding agents: both adoptions were done by an agent reading `QUICKSTART.md`, and the design assumes agents write the links while humans review novelty. This proposal sets out what an agent should read, run and be stopped by, for two audiences:
 
@@ -452,3 +452,50 @@ Taken by the maintainer on 2026-10-19. The sections above already reflect them.
 | Subagent remits at edit time | Warn, and gate in the PR | A3, A4: the guard tells a subagent it is outside its remit; the PR gate makes the link HARD, as today. `policy.guard-ask` opts a repository into asking first |
 | Self-host marking | Keep the contributor exception | B1: agents working on GlossMark write bare `@gloss` links to existing `gm:` and `gmi:` concepts; new concepts still ship with `proposed: true` |
 | Skill distribution | Both | A2, A5: one set of `skills/` files, embedded in the binary for `gloss hook install --skill` and served by the Claude Code plugin |
+
+## 7. Implementation status
+
+Built on `claude/agent-harness-proposal` by five agents in two waves, merged and verified after each wave: `gofmt`, `go vet`, `go test ./...` including `TestSelfHost`, `gloss check` at 0 errors and 0 warnings, `gloss drift` at 0 violations and 0 gaps, and the example checks CI runs. `CHANGELOG.md` lists every change.
+
+| Item | Status | Where |
+| --- | --- | --- |
+| A1 rules block | Done | `internal/agents/rules.go`, `gloss agents --rules`, `gloss init`, `gloss doctor`, MCP `instructions` |
+| A2 skills | Done: all six | `skills/`, embedded by `skills/skills.go` |
+| A3 guard | Done | `gloss hook guard`, `gloss hook install --guards`, `internal/guard`, policy `guard-stop` and `guard-ask` |
+| A4 role agents | Done, except the SubagentStart briefing | `gloss init --role`; the guard reads `agent_type` |
+| A5 plugin | Done; passes `claude plugin validate` | `.claude-plugin/`, `hooks/hooks.json`, `.mcp.json` |
+| A6 harness doc | Done | `docs/AGENT-HARNESS.md` |
+| A7 diagnostics | Done: 66 codes | `internal/diag`, `gloss explain`, `docs/DIAGNOSTICS.md` |
+| A8 briefing fixes | Done | `internal/agents/context.go` |
+| B1 contributor rules | Done | `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md` |
+| B2 contributor skills | Done: all eight | `.claude/skills/gm-*` |
+| B3 contributor guards | Done | `.claude/settings.json`, using `./gloss` when built |
+| B4 contract and changelog | Done | `docs/AGENT-CONTRACT.md`, `CHANGELOG.md` |
+| B5.1 contract test | Done | `internal/e2e/contract_test.go`, `internal/mcp/tools_test.go` |
+| B5.2 review stale links and proposed concepts | Not done: a human decision | `gloss status`; the `gloss-review` skill prepares it |
+| B5.3 dogfood the hook | Done | `.claude/settings.json`, `.mcp.json` |
+| B5.4 untested concepts | Done | `internal/e2e/publish_review_test.go` |
+
+### Where the build differs from the proposal
+
+- **The rules block is about 700 tokens, not 600.** The approved wording was kept, and a test caps the block at 3 000 characters.
+- **The briefing collapses allowed sets above 12 patterns, not 8.** At 8, a useful nine-pattern list in `examples/payments` was hidden.
+- **Diagnostic ranges follow the code.** 4xx is the own-subject rule, 5xx is manifests and allowed lists, 1xx includes marker redundancy, and 9xx exists. `gm-add-diagnostic` uses the real ranges.
+- **`--skills a,b` replaces `--skill <name>`,** so the boolean `--skill` keeps working.
+- **`guard-ask` levels match exactly.** Unlike `criticality-gates`, listing `high` does not also cover `critical`.
+- **The contributor Stop hook leaves out `./gloss check`,** because the dogfooded Stop guard already blocks on check errors and a stale graph. Its `gofmt` check ignores `.claude/`.
+
+### Found and fixed while building
+
+- `gloss` walked linked git worktrees, such as `.claude/worktrees/<name>`, as part of the repository, so `gloss check` failed whenever an agent harness had worktrees open.
+- `gloss accept` and `gloss reject` stopped reading flags at the first positional argument.
+- `gloss publish` wrote `published-as` twice.
+- `gloss accept` refused stale links, so the re-acceptance path the `gloss-resolve-drift` and `gloss-review` skills describe did not work.
+
+### Left for a maintainer
+
+- **Proposed concepts.** `gmi:Diagnostics`, `gmi:HookGuard` and `gmi:ClaudeCodePlugin` are new, and the six from before are still open. Each needs `gloss accept --concept` or `gloss reject --concept`.
+- **Stale links.** Their count rose from 43 to 55, because the work edited files that carry accepted links. Run `gloss status`, then `gloss accept <id>` for each link that still holds.
+- **Two concept docs describe less than the code now does.** `gmi:AgentsSnippet` now also covers the rules block. `gmi:AdoptionSkill` names only one skill. Both are ontology edits for a human.
+- **The SubagentStart briefing from A4** was not built. Claude Code's documentation does not confirm how a SubagentStart hook adds context.
+- **The v0.1.0 tag** that every doc pins still does not exist.
