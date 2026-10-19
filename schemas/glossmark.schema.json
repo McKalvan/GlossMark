@@ -176,7 +176,7 @@
       }
     },
     "policy": {
-      "description": "The configurable gate policy (model.Policy). Omitted fields take the defaults from the design: soft-conf-threshold 0.7, hard-paths [ontology/**, **/.gloss.yaml, glossmark.yaml].",
+      "description": "The configurable gate policy (model.Policy). Omitted fields take the defaults from the design: soft-conf-threshold 0.7, hard-paths [ontology/**, **/.gloss.yaml, glossmark.yaml], criticality-gates {critical: HARD}, guard-stop block, guard-ask [].",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -224,6 +224,19 @@
           "propertyNames": { "enum": ["low", "medium", "high", "critical"] },
           "additionalProperties": { "type": "string", "enum": ["AUTO", "SOFT", "HARD"] },
           "default": { "critical": "HARD" }
+        },
+        "guard-stop": {
+          "description": "What the Stop guard (gloss hook guard --event stop) does when gloss check reports errors or .glossmark/graph.jsonl is stale: block keeps the agent working with the reason, report prints the reason to stderr and lets it stop (docs/GOVERNANCE.md).",
+          "type": "string",
+          "enum": ["block", "report"],
+          "default": "block"
+        },
+        "guard-ask": {
+          "description": "Criticality levels, and remit, for which the pre-edit guard asks before an Edit or Write (permissionDecision ask) instead of only adding context. A level matches files at exactly that level; remit matches files outside the acting agent's may-modify remit (docs/GOVERNANCE.md).",
+          "type": "array",
+          "items": { "type": "string", "enum": ["low", "medium", "high", "critical", "remit"] },
+          "uniqueItems": true,
+          "default": []
         }
       }
     },

@@ -25,12 +25,15 @@ policy:
   hard-paths: ["ontology/**", "**/.gloss.yaml", "glossmark.yaml"]
   coverage-fail-under: 0
   criticality-gates: { critical: HARD }         # minimum gate by criticality (docs/GOVERNANCE.md)
+  guard-stop: block                             # Stop guard on check errors or a stale graph: block (default) | report
+  guard-ask: []                                 # pre-edit guard asks first for these criticality levels and/or remit
   waivers:
     - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }
 ```
 
 - `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`.
 - `imports.<prefix>`: a namespace defined elsewhere. `source` is a local path (file or directory) today; `git+` and `https://` sources are parsed and rejected with a message until the fetcher lands (vendor the directory, or point at a sibling checkout). `version` is a range (`^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0`) enforced against the resolved ontology's version; `gloss lock` pins the result in `glossmark.lock`. Only **published** concepts of an imported implementation namespace are referenceable.
+- `policy.guard-stop` and `policy.guard-ask` tune `gloss hook guard` (see [QUICKSTART.md](QUICKSTART.md#guards-feedback-between-the-edit-and-the-commit)). `guard-stop: report` stops the Stop guard from blocking; it prints the reason instead. `guard-ask` lists criticality levels (exact match) and `remit`; the pre-edit guard asks before an edit to a file at a listed level or outside the acting agent's `may-modify` remit. `gloss` rejects any other value.
 - Authoring uses CURIEs; the graph stores IRIs. Concept IDs are permanent: a rename is `deprecated: true` plus `replaced-by:`.
 - Versions are semver: MAJOR removes or retypes a concept or changes is-a/part-of; MINOR adds; PATCH touches labels and docs. `gloss diff` classifies the bump.
 

@@ -114,6 +114,24 @@ policy:
 Bookkeeping changes (an accepted proposal, a stale fingerprint) are reported
 with their level but never raised by it.
 
+**`gloss hook guard`** brings the same levels to edit time
+(`gloss hook install --guards`). Before an Edit or Write, it tells the agent
+the file's level and where it comes from when the level is `high` or
+`critical`, and whether the file is outside the acting agent's `may-modify`
+remit. It only adds context by default. `guard-ask` makes it ask the user
+first for the levels it lists, each matched exactly, and for edits outside
+the remit:
+
+```yaml
+policy:
+  guard-ask: [critical, remit]
+  guard-stop: block     # default; report turns off blocking at Stop
+```
+
+The Stop guard blocks an agent from finishing while `gloss check` reports
+errors or the committed graph is stale. It never blocks on proposals:
+deciding them is the reviewer's job, in the PR.
+
 **`gloss impact`** and the MCP `impact_of` tool report a level per changed
 file (`criticality`, `criticality_from`) and per concept, with a hint when a
 file touches a `high` or `critical` area so an agent knows to flag it.

@@ -20,7 +20,7 @@ import (
 func init() {
 	register(command{"impact", "what a change touches: concepts, constraints, published seam, boundaries, tests and blast radius for changed files (or the given paths)", cmdImpact})
 	register(command{"context", "compact session-start briefing for an agent working in a directory (--dir); meant for a SessionStart hook", cmdContext})
-	register(command{"hook", "gloss hook install: register the SessionStart hook in .claude/settings.json and the MCP server in .mcp.json", cmdHook})
+	register(command{"hook", "gloss hook install: register the SessionStart hook in .claude/settings.json and the MCP server in .mcp.json (--guards: edit and stop guards; --skill/--skills: shipped skills); gloss hook guard --event pre-edit|post-edit|stop: the guard those hooks run", cmdHook})
 }
 
 func cmdImpact(args []string) int {
@@ -147,17 +147,38 @@ func briefing(p *pipeline, dir string, max, budget int, changed bool) string {
 }
 
 func cmdHook(args []string) int {
+	if len(args) > 0 && args[0] == "guard" {
+		return cmdHookGuard(args[1:])
+	}
 	fs, root := newFlags("hook")
 	noMCP := fs.Bool("no-mcp", false, "do not register the MCP server in .mcp.json")
 	noHook := fs.Bool("no-hook", false, "do not register the SessionStart hook")
 	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it")
-	skill := fs.Bool("skill", false, "also install the adopt-glossmark Claude Code skill into .claude/skills/")
+	guards := fs.Bool("guards", false, "also register the guards: PreToolUse and PostToolUse on Edit|Write and Stop, each running gloss hook guard")
+	skill := fs.Bool("skill", false, "also install every shipped Claude Code skill into .claude/skills/ ("+strings.Join(skills.Names, ", ")+")")
+	named := fs.String("skills", "", "also install the named shipped skills, comma-separated (one of "+strings.Join(skills.Names, ", ")+")")
 	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "install" {
-		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--skill] [--actor agent:name]")
+		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--guards] [--skill | --skills name,...] [--actor agent:name]\n       "+guardUsage)
 		return 2
+	}
+	var want []string
+	if *skill {
+		want = skills.Names
+	} else if *named != "" {
+		for _, n := range strings.Split(*named, ",") {
+			n = strings.TrimSpace(n)
+			if n == "" {
+				continue
+			}
+			if !containsStr(skills.Names, n) {
+				fmt.Fprintf(os.Stderr, "gloss hook: unknown skill %q (shipped: %s)\n", n, strings.Join(skills.Names, ", "))
+				return 2
+			}
+			want = append(want, n)
+		}
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
@@ -166,17 +187,26 @@ func cmdHook(args []string) int {
 	if err := installHooks(p.WS.Root, *actor, !*noHook, !*noMCP); err != nil {
 		return fail(err)
 	}
-	if *skill {
-		if err := installSkills(p.WS.Root); err != nil {
+	if *guards {
+		if err := installGuards(p.WS.Root, *actor); err != nil {
+			return fail(err)
+		}
+	}
+	if len(want) > 0 {
+		if err := installSkills(p.WS.Root, uniqStrings(want)...); err != nil {
 			return fail(err)
 		}
 	}
 	return 0
 }
 
-// installSkills copies the shipped skills into .claude/skills/.
-func installSkills(root string) error {
-	for _, name := range skills.Names {
+// installSkills copies the named shipped skills (every one when none is
+// named) into .claude/skills/.
+func installSkills(root string, names ...string) error {
+	if len(names) == 0 {
+		names = skills.Names
+	}
+	for _, name := range names {
 		b, err := skills.FS.ReadFile(name + "/SKILL.md")
 		if err != nil {
 			return err

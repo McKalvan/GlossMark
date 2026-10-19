@@ -111,6 +111,35 @@ type Policy struct {
 	// boundary at or above a criticality level: level → AUTO | SOFT | HARD.
 	// Default: critical → HARD. See docs/GOVERNANCE.md.
 	CriticalityGates map[string]string `yaml:"criticality-gates,omitempty" json:"criticality-gates,omitempty"`
+	// GuardStop is what the Stop guard (gloss hook guard --event stop) does
+	// when gloss check reports errors or the graph is stale: block (default)
+	// keeps the agent working, report only prints the reason.
+	GuardStop string `yaml:"guard-stop,omitempty" json:"guard-stop,omitempty"`
+	// GuardAsk lists criticality levels, and optionally "remit", for which the
+	// pre-edit guard asks before an edit instead of only adding context.
+	// Default: empty (never ask). See docs/GOVERNANCE.md.
+	GuardAsk []string `yaml:"guard-ask,omitempty" json:"guard-ask,omitempty"`
+}
+
+// Guard policy values.
+const (
+	GuardStopBlock  = "block"
+	GuardStopReport = "report"
+	// GuardAskRemit in guard-ask asks before an edit outside the acting agent's may-modify remit.
+	GuardAskRemit = "remit"
+)
+
+// GuardAsks reports whether guard-ask lists the entry (a criticality level or "remit").
+func (p *Policy) GuardAsks(entry string) bool {
+	if p == nil || entry == "" {
+		return false
+	}
+	for _, x := range p.GuardAsk {
+		if x == entry {
+			return true
+		}
+	}
+	return false
 }
 
 // Waiver suppresses one finding until it expires.
@@ -130,6 +159,7 @@ func DefaultPolicy() *Policy {
 		HardPaths:         []string{"ontology/**", "**/.gloss.yaml", "glossmark.yaml"},
 		CoverageFailUnder: 0,
 		CriticalityGates:  map[string]string{"critical": "HARD"},
+		GuardStop:         GuardStopBlock,
 	}
 }
 
@@ -180,6 +210,9 @@ func (c *Config) EffectivePolicy() *Policy {
 	}
 	if p.CriticalityGates == nil {
 		p.CriticalityGates = d.CriticalityGates
+	}
+	if p.GuardStop == "" {
+		p.GuardStop = d.GuardStop
 	}
 	return &p
 }
@@ -248,6 +281,14 @@ func LoadConfig(path string) (*Config, error) {
 			}
 			if gateRank(gate) < 0 {
 				return nil, fmt.Errorf("%s: policy.criticality-gates.%s: gate must be AUTO, SOFT or HARD, got %q", path, lvl, gate)
+			}
+		}
+		if g := c.Policy.GuardStop; g != "" && g != GuardStopBlock && g != GuardStopReport {
+			return nil, fmt.Errorf("%s: policy.guard-stop must be %s or %s, got %q", path, GuardStopBlock, GuardStopReport, g)
+		}
+		for _, x := range c.Policy.GuardAsk {
+			if x != GuardAskRemit && CriticalityRank(x) < 0 {
+				return nil, fmt.Errorf("%s: policy.guard-ask: unknown entry %q (a criticality level, one of %s, or %s)", path, x, strings.Join(CriticalityLevels, ", "), GuardAskRemit)
 			}
 		}
 	}

@@ -34,7 +34,8 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 | `internal/diag` | Every GM diagnostic code in one table: `gloss explain` and [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers |
-| `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`) |
+| `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`, or by name with `--skills`) |
+| `internal/guard` | `gloss hook guard`: criticality, remit and lint feedback at edit time, a clean-tree check at stop |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md rules block, vocabulary snippet and session briefing |
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
@@ -69,7 +70,7 @@ cd ../payments
 
 ## For agents
 
-`gloss init` writes the GlossMark rules into `AGENTS.md`, and `gloss agents --rules --write AGENTS.md` keeps them current: how to mark, that agents propose and humans accept, and what to run before finishing. `gloss agents` without `--rules` prints the vocabulary of the repository or of one directory. `gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+`gloss init` writes the GlossMark rules into `AGENTS.md`, and `gloss agents --rules --write AGENTS.md` keeps them current: how to mark, that agents propose and humans accept, and what to run before finishing. `gloss agents` without `--rules` prints the vocabulary of the repository or of one directory. `gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. `gloss hook install --guards` adds `gloss hook guard` on edits and at stop: before an edit it names the file's criticality, published-seam concepts and whether the file is outside the agent's `may-modify` remit; after an edit it reports that file's `gloss check` findings; at stop it blocks while `gloss check` has errors or the graph is stale (`policy.guard-stop: report` turns blocking off). See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## GlossMark on GlossMark
 
