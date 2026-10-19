@@ -961,7 +961,9 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n  Thing: { kind: entity }\n")
 	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Helper: { kind: process, realizes: z:Doing }\n  Store: { kind: resource, realizes: z:Thing }\n  Q: { kind: resource, internal: true }\n")
 	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
-	write("app.py", "# @gloss implements .Doer scope=file\n\n# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Helper, .Store\ndef a(): pass\n\n# @gloss implements .Store, .Helper\ndef b(): pass\n\n# @gloss represents .Store\nclass S: pass\n")
+	write("app.py", "# @gloss implements .Doer scope=file\n\n# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Helper, .Store\ndef a(): pass\n\n# @gloss implements .Store, .Helper\ndef b(): pass\n\n# @gloss implements .Helper, .Store\ndef c(): pass\n\n# @gloss represents .Store\nclass S: pass\n")
+	// Two in a row is honest and stays silent.
+	write("pair.py", "# @gloss implements .Helper\ndef settle_batch(): pass\n\n# @gloss implements .Helper\ndef settle_single(): pass\n")
 	write("tests/test_app.py", "# @gloss verifies .Doer\ndef test_go(): pass\n")
 	ws, g, _, lg := build(t, root)
 	codes := map[string][]int{}
@@ -971,8 +973,8 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	if len(codes["GM130"]) != 1 || codes["GM130"][0] != 3 {
 		t.Errorf("GM130 lines = %v, want [3]", codes["GM130"])
 	}
-	if len(codes["GM131"]) != 1 || codes["GM131"][0] != 9 {
-		t.Errorf("GM131 lines = %v, want [9] (same targets in another order)", codes["GM131"])
+	if len(codes["GM131"]) != 1 || codes["GM131"][0] != 6 {
+		t.Errorf("GM131 lines = %v, want [6]: one finding at the start of the three-marker run (targets in any order), none for the pair", codes["GM131"])
 	}
 	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
 	m := rep.Metrics
@@ -980,8 +982,8 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	if m.ConceptsInScope != 3 || m.ConceptsCovered != 1 || m.ConceptCoveragePct < 33 || m.ConceptCoveragePct > 34 {
 		t.Errorf("concept coverage = %d/%d (%.1f%%)", m.ConceptsCovered, m.ConceptsInScope, m.ConceptCoveragePct)
 	}
-	// Six marker lines state eight targets; every one is accepted.
-	if m.Markers != 6 || m.Targets != 8 || m.Accepted != 6 || m.Proposed != 0 {
+	// Nine marker lines state twelve targets; every one is accepted.
+	if m.Markers != 9 || m.Targets != 12 || m.Accepted != 9 || m.Proposed != 0 {
 		t.Errorf("markers=%d targets=%d accepted=%d proposed=%d", m.Markers, m.Targets, m.Accepted, m.Proposed)
 	}
 }
