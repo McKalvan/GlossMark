@@ -11,6 +11,16 @@ gloss version                                                                   
 
 Pin a release everywhere the tool runs (`@v0.1.0`, never `@latest` or `@main`): binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/mckalvan/glossmark/releases), and `go install ...@v0.1.0` reports the same version. See [VERSIONING.md](VERSIONING.md).
 
+## 0. Scaffold
+
+```sh
+gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per top-level source directory
+gloss init               # write it, install the agent hook, build the first graph
+gloss check              # passes on the empty scaffold
+```
+
+`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. The sections below explain what it wrote.
+
 ## 1. Declare the namespaces
 
 `glossmark.yaml` at the repo root:

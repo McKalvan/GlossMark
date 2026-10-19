@@ -11,8 +11,9 @@ owns:
   impl: { iri: https://onto.acme.dev/horse-factory/, file: ontology/impl.gloss.yaml, tier: implementation, version: 0.3.0 }
 imports:
   billing: { iri: https://onto.acme.dev/billing/, version: "^2.1", source: ../billing-svc/ontology/ }
+repo-iri: https://arch.acme.dev/horse-factory/  # an undeclared boundary prefix p: expands to <repo-iri>boundaries/p/
 prefixes:
-  acme: https://arch.acme.dev/boundaries/      # non-ontology prefixes (boundaries)
+  acme: https://arch.acme.dev/boundaries/      # non-ontology prefixes (boundaries); optional with repo-iri
 views: ontology/views.yaml                      # default
 exclude: ["vendor/**"]
 comment-styles: { ".pkl": ["//"] }              # extend the comment table

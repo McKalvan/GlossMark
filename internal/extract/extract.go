@@ -158,6 +158,13 @@ func (ex *extractor) boundaryIRI(curie, path string, line int) string {
 		return "urn:gloss:boundary::" + curie
 	}
 	prefix := curie[:i]
+	if _, ok := ex.g.Prefixes[prefix]; !ok && ex.ws.Config.RepoIRI != "" {
+		base := ex.ws.Config.RepoIRI
+		if !strings.HasSuffix(base, "/") && !strings.HasSuffix(base, "#") {
+			base += "/"
+		}
+		ex.g.Prefixes[prefix] = base + "boundaries/" + prefix + "/"
+	}
 	if _, ok := ex.g.Prefixes[prefix]; !ok {
 		ex.g.Prefixes[prefix] = "urn:gloss:boundary:" + prefix + ":"
 		ex.diag(path, line, "warning", "GM112", fmt.Sprintf("boundary prefix %q is not declared under prefixes: in %s; using urn:gloss:boundary:%s:", prefix, load.ConfigName, prefix))

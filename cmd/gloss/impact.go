@@ -159,8 +159,17 @@ func cmdHook(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if !*noHook {
-		path := filepath.Join(p.WS.Root, ".claude", "settings.json")
+	if err := installHooks(p.WS.Root, *actor, !*noHook, !*noMCP); err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+// installHooks registers the SessionStart hook and the MCP server for a
+// repository, both running with GLOSS_ACTOR=actor.
+func installHooks(root, actor string, hook, mcp bool) error {
+	if hook {
+		path := filepath.Join(root, ".claude", "settings.json")
 		settings := map[string]any{}
 		if b, err := os.ReadFile(path); err == nil {
 			json.Unmarshal(b, &settings)
@@ -169,7 +178,7 @@ func cmdHook(args []string) int {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", *actor)}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor)}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
 		for i, it := range list {
@@ -185,12 +194,12 @@ func cmdHook(args []string) int {
 		hooks["SessionStart"] = list
 		settings["hooks"] = hooks
 		if err := writeJSON(path, settings); err != nil {
-			return fail(err)
+			return err
 		}
-		fmt.Printf("gloss hook: SessionStart hook registered in %s\n", relOrAbs(p.WS.Root, path))
+		fmt.Printf("gloss hook: SessionStart hook registered in %s\n", relOrAbs(root, path))
 	}
-	if !*noMCP {
-		path := filepath.Join(p.WS.Root, ".mcp.json")
+	if mcp {
+		path := filepath.Join(root, ".mcp.json")
 		cfg := map[string]any{}
 		if b, err := os.ReadFile(path); err == nil {
 			json.Unmarshal(b, &cfg)
@@ -207,18 +216,18 @@ func cmdHook(args []string) int {
 		if env == nil {
 			env = map[string]any{}
 		}
-		env["GLOSS_ACTOR"] = *actor
+		env["GLOSS_ACTOR"] = actor
 		srv["env"] = env
 		servers["glossmark"] = srv
 		cfg["mcpServers"] = servers
 		if err := writeJSON(path, cfg); err != nil {
-			return fail(err)
+			return err
 		}
-		fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(p.WS.Root, path))
+		fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(root, path))
 	}
-	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of\n", *actor)
+	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of\n", actor)
 	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
-	return 0
+	return nil
 }
 
 func writeJSON(path string, v any) error {

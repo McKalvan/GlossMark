@@ -52,9 +52,13 @@ type Config struct {
 	Owns     map[string]*NamespaceDecl `yaml:"owns" json:"owns"`
 	Imports  map[string]*ImportDecl    `yaml:"imports,omitempty" json:"imports,omitempty"`
 	Prefixes map[string]string         `yaml:"prefixes,omitempty" json:"prefixes,omitempty"`
-	Views    string                    `yaml:"views,omitempty" json:"views,omitempty"`
-	Policy   *Policy                   `yaml:"policy,omitempty" json:"policy,omitempty"`
-	Exclude  []string                  `yaml:"exclude,omitempty" json:"exclude,omitempty"`
+	// RepoIRI is the repository's own IRI. A boundary prefix not declared
+	// under prefixes: expands to <repo-iri>boundaries/<prefix>/ instead of a
+	// urn with a warning, so most repositories need no prefixes: at all.
+	RepoIRI string   `yaml:"repo-iri,omitempty" json:"repo-iri,omitempty"`
+	Views   string   `yaml:"views,omitempty" json:"views,omitempty"`
+	Policy  *Policy  `yaml:"policy,omitempty" json:"policy,omitempty"`
+	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
 	// CommentStyles maps a file extension (".foo") to its comment tokens,
 	// extending the builtin table.
 	CommentStyles map[string][]string `yaml:"comment-styles,omitempty" json:"comment-styles,omitempty"`
