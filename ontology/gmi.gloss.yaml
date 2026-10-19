@@ -74,3 +74,9 @@ concepts:
     doc: "The tool release, grammar and on-disk format versions."
     proposed: true
     proposed-by: agent:claude
+  Diagnostics:
+    kind: process
+    realizes: gm:Lint
+    doc: "One table of every GM diagnostic code with its severity, meaning, fix and doc page: gloss explain prints it and docs/DIAGNOSTICS.md is generated from it."
+    proposed: true
+    proposed-by: agent:claude

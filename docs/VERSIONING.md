@@ -65,10 +65,4 @@ Ranges accept `1.2.3`, `^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0` and `*`. A resolved
 
 ## Diagnostics
 
-| Code | Meaning |
-| --- | --- |
-| GM105 | imported ontology has no version, or a non-semver one; the range cannot be checked |
-| GM106 | resolved import version is outside the declared range |
-| GM107 | lockfile disagrees with the resolved imports |
-| GM108 | imports exist but no lockfile; run `gloss lock` |
-| GM109 | lockfile unreadable or written by a newer tool |
+Import and lockfile codes are GM105–GM109; their meanings and fixes are in [DIAGNOSTICS.md](DIAGNOSTICS.md#gm1xx-workspace-imports-and-targets), and `gloss explain GM107` prints one in the terminal.
