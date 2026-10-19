@@ -162,6 +162,10 @@
           "type": "string",
           "enum": ["low", "medium", "high", "critical"]
         },
+        "criticality-floor": {
+          "description": "Boundary: its level is a floor for the artifacts beneath it.",
+          "type": "boolean"
+        },
         "value-from": {
           "description": "path:line of the code a published value is bound to.",
           "type": "string"

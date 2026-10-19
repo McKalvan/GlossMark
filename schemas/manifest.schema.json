@@ -88,6 +88,10 @@
       "description": "Governance level of the boundary (docs/GOVERNANCE.md). When unset it is the highest level of the concepts the boundary's code realizes, else its parent's.",
       "type": "string",
       "enum": ["low", "medium", "high", "critical"]
+    },
+    "criticality-floor": {
+      "description": "Make the boundary's criticality a floor for every artifact beneath it, nested boundaries included. Without it an artifact takes only the level of the concepts it links to.",
+      "type": "boolean"
     }
   },
   "$defs": {

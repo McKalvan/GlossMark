@@ -423,6 +423,10 @@ type Manifest struct {
 	// it is the highest criticality of the concepts the boundary realizes,
 	// else its parent's. See docs/GOVERNANCE.md.
 	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
+	// CriticalityFloor makes the boundary's level a floor for every artifact
+	// beneath it, including nested boundaries. Without it an artifact takes
+	// only the level of the concepts it links to. See docs/GOVERNANCE.md.
+	CriticalityFloor bool `yaml:"criticality-floor,omitempty" json:"criticality-floor,omitempty"`
 
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`

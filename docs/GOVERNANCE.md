@@ -52,8 +52,10 @@ declared level always wins.
 - **Boundary.** Without its own level, a boundary takes the highest level of
   the concepts its code realizes or represents (declared in the manifest or
   derived from the markers beneath it), else its parent boundary's.
-- **Artifact.** The highest level of its boundary and of the concepts it links
-  to, except concepts it `presents` or `hosts`.
+- **Artifact.** The highest level of the concepts it links to, except concepts
+  it `presents` or `hosts`. Its boundary's level is a **floor** only when the
+  boundary's manifest says so with `criticality-floor: true`; then every
+  artifact beneath it, nested boundaries included, is at least that level.
 
 Criticality follows the mechanism, never the surface: a page that `presents`
 a critical concept, or the app shell that `hosts` it, inherits nothing from it
@@ -61,7 +63,26 @@ a critical concept, or the app shell that `hosts` it, inherits nothing from it
 
 Inheritance never goes *down* from a boundary to a concept: a critical
 platform may contain a low-criticality metrics module, and the module's
-concepts keep their own level.
+concepts, and the files that implement them, keep their own level. Set
+`criticality-floor: true` on a boundary when that is wrong for it: a payments
+service where every file touches money, a compliance boundary where every
+change needs the owning reviewer. In the PR comment a link change is judged
+by what it links to, plus the floor when one applies.
+
+## Getting started: `gloss criticality suggest`
+
+Nothing is classified in a fresh adoption, and the viewer says so. `gloss
+criticality suggest` proposes a first pass from facts already in the graph,
+printed as a diff of the ontology files (`--write` applies it):
+
+- every `constraint` concept: a rule the business relies on;
+- every published concept: it crosses the seam into the business view;
+- every concept whose only verifiers are security tests (paths or names with
+  auth, permission, csrf, crypto, pii, token and the like).
+
+Each is `high`. Concepts that already have a declared level, or inherit `high`
+or above, are left alone; everything else stays unclassified. Treat the diff
+as a draft: raise money movement to `critical`, lower what does not matter.
 
 `gloss check` warns (GM600) when a boundary declares a level **below** a
 concept its code realizes: the manifest understates its risk, and reviews use

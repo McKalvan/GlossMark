@@ -231,8 +231,10 @@ func TestHorseFactory(t *testing.T) {
 		}
 	}
 	for _, a := range g.NodesOf(model.NodeArtifact) {
-		if a.Path == "services/horse-factory/breeding/metrics.py" && a.Criticality != "medium" {
-			t.Errorf("metrics.py takes its boundary's level: %+v", a)
+		// An artifact takes the level of what it implements, not its boundary's
+		// (no criticality-floor here): the low-criticality metrics module.
+		if a.Path == "services/horse-factory/breeding/metrics.py" && (a.Criticality != "low" || a.CriticalityFrom != "impl:FoalingPipelineThroughput") {
+			t.Errorf("metrics.py takes its concept's level: %+v", a)
 		}
 	}
 	for _, n := range eng.Nodes {
@@ -732,8 +734,8 @@ func TestTouched(t *testing.T) {
 	}
 	// settler.go implements sw:BatchSettler, which inherits critical from pay:Settlement;
 	// the default policy makes anything critical HARD (docs/GOVERNANCE.md).
-	if ts[1].Gate != gate.HARD || ts[1].Criticality != "critical" || ts[1].CriticalityFrom != "acme:settlement-worker" {
-		t.Errorf("settler.go should be HARD with criticality critical via its boundary: %+v", ts[1])
+	if ts[1].Gate != gate.HARD || ts[1].Criticality != "critical" || ts[1].CriticalityFrom != "sw:BatchSettler" {
+		t.Errorf("settler.go should be HARD with criticality critical via the concept it implements: %+v", ts[1])
 	}
 	for _, c := range ts[1].Concepts {
 		if c.Curie == "sw:BatchSettler" && (c.Criticality != "critical" || c.CriticalityFrom != "pay:Settlement") {
@@ -1565,5 +1567,58 @@ func TestValueFrom(t *testing.T) {
 	}
 	if !gm360 {
 		t.Error("expected GM360 for an unassigned symbol")
+	}
+}
+
+// TestCriticalityFloorAndSuggest: an artifact takes the level of the concept
+// it implements; a boundary's level reaches its artifacts only with
+// criticality-floor: true; suggest proposes high for constraints, published
+// concepts and concepts verified only by security tests.
+func TestCriticalityFloorAndSuggest(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pay: { iri: https://x/pay/, tier: core }\n  pa: { iri: https://x/pa/, tier: implementation }\n")
+	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint }\n  Login: { kind: process }\n")
+	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n")
+	write("platform/.gloss.yaml", "boundary: o:platform\nlevel: system\ncriticality: critical\n")
+	write("platform/metrics/.gloss.yaml", "boundary: o:metrics\nlevel: container\npart-of: o:platform\n")
+	write("platform/metrics/export.py", "# @gloss implements pa:Exporter\ndef export(): pass\n")
+	write("platform/auth/session.py", "# @gloss implements pa:Session\ndef login(): pass\n")
+	write("platform/auth/tests/test_auth_security.py", "# @gloss verifies pa:Session\ndef test_csrf_token(): pass\n")
+	level := func(g *graph.Graph, path string) (string, string) {
+		for _, a := range g.NodesOf(model.NodeArtifact) {
+			if a.Path == path {
+				return a.Criticality, a.CriticalityFrom
+			}
+		}
+		return "", ""
+	}
+	_, g, _, _ := build(t, root)
+	if l, from := level(g, "platform/metrics/export.py"); l != "low" || from != "pa:Exporter" {
+		t.Errorf("without a floor the metrics exporter is low via pa:Exporter (which inherits it from pay:Metrics), got %q via %q", l, from)
+	}
+	write("platform/.gloss.yaml", "boundary: o:platform\nlevel: system\ncriticality: critical\ncriticality-floor: true\n")
+	_, g, _, _ = build(t, root)
+	if l, from := level(g, "platform/metrics/export.py"); l != "critical" || from != "o:platform" {
+		t.Errorf("with the floor the exporter is critical via o:platform, got %q via %q", l, from)
+	}
+	sugg := map[string]string{}
+	for _, s := range rollup.SuggestCriticality(g) {
+		sugg[s.Concept] = s.Reason
+	}
+	for _, c := range []string{"pay:Cutoff", "pa:Clock", "pa:Session"} {
+		if sugg[c] == "" {
+			t.Errorf("expected a high suggestion for %s, got %v", c, sugg)
+		}
+	}
+	if _, ok := sugg["pay:Payment"]; ok {
+		t.Error("an unremarkable entity stays unclassified")
+	}
+	if _, ok := sugg["pay:Metrics"]; ok {
+		t.Error("a declared level is never overridden")
 	}
 }

@@ -88,6 +88,7 @@ allowed: [zoo:Horse, zoo:Mare, impl:Breeding*, impl:Foal*]   # optional narrowin
 generated: ["gen/**"]
 owner: horse-platform
 criticality: high                # optional; else the highest of what the code realizes, else the parent's
+criticality-floor: true          # optional: the level above is a floor for every artifact beneath this directory
 ```
 
 The nearest ancestor manifest applies to every file beneath it, as with CODEOWNERS; manifests are optional at every level. `realizes`, `holds`, `produces`, `consumes`, `publishes` and `subscribes` are the declared intents that `gloss drift` compares with what the code derives: `implements` (and `provisions`, `configures`, `deploys` on a resource or system-type) derive `realizes`; `represents` on an entity derives `holds`; the rest lift as themselves. A relation the manifest does not declare is not compared. A container that only contains its components writes `realizes: inherit` (optionally with additions, `realizes: [inherit, impl:Gateway]`): its declared set is the union of what the boundaries nested inside it declare, so the list is not repeated at every level; gaps in inherited entries are reported by the child that declared them. A concept inherits `realizes` through `is-a` and a part realizes its whole, so `CsvImporter: { is-a: Importer }` needs no `realizes:` line of its own and code that implements a part of a pipeline satisfies a manifest that declares the pipeline.

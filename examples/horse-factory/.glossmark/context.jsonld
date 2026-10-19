@@ -117,6 +117,10 @@
       "@id": "gm:publishes",
       "@type": "@id"
     },
+    "publishes-value": {
+      "@id": "gm:publishes-value",
+      "@type": "@id"
+    },
     "realizes": {
       "@id": "gm:realizes",
       "@type": "@id"

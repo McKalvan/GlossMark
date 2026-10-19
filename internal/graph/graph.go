@@ -58,6 +58,8 @@ type Node struct {
 	// it came from: "declared", or the CURIE it was inherited from.
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticality-from,omitempty"`
+	// CriticalityFloor: the boundary's level is a floor for its artifacts.
+	CriticalityFloor bool `json:"criticality-floor,omitempty"`
 	// Namespace attributes.
 	Version string `json:"version,omitempty"`
 	Owner   string `json:"owner,omitempty"`

@@ -71,8 +71,10 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 		ft := FileTouch{Path: f, Gate: AUTO}
 		if m := ws.ManifestFor(f); m != nil {
 			ft.Boundary, ft.Manifest, ft.Allowed = m.Boundary, m.Path, rollup.AllowedFor(g, ws, m).Patterns
-			if b := g.NodeByCurie(m.Boundary); b != nil && b.Criticality != "" {
-				ft.Criticality, ft.CriticalityFrom = b.Criticality, b.CURIE
+			if b := g.NodeByCurie(m.Boundary); b != nil {
+				if f := rollup.FloorFor(g, b.ID); f != nil {
+					ft.Criticality, ft.CriticalityFrom = f.Criticality, f.CURIE
+				}
 			}
 		}
 		seen := map[string]bool{}

@@ -186,6 +186,7 @@ func (ex *extractor) manifests() {
 		if m.Criticality != "" {
 			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
 		}
+		n.CriticalityFloor = m.CriticalityFloor
 		if i := strings.Index(m.Boundary, ":"); i > 0 {
 			n.NS = m.Boundary[:i]
 		}

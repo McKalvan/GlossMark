@@ -26,7 +26,7 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `init`, `suggest`, `import`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
+| `cmd/gloss` | The CLI: `init`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
@@ -74,7 +74,7 @@ Two tiers plus instances: core is implementation-independent by construction; ev
 
 ## Governance
 
-Not every subsystem carries the same risk. `criticality: low | medium | high | critical` on a concept or a boundary flows through `realizes` to the code, tags every change in the PR comment and `gloss impact`, raises the gate by policy (`critical` is HARD by default), colours the viewer and gives agents a reason to flag what they touch. See [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
+Not every subsystem carries the same risk. `criticality: low | medium | high | critical` on a concept or a boundary flows through `realizes` to the code that implements it (a boundary's level reaches its files only with `criticality-floor: true`; `gloss criticality suggest` drafts a first classification), tags every change in the PR comment and `gloss impact`, raises the gate by policy (`critical` is HARD by default), colours the viewer and gives agents a reason to flag what they touch. See [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
 
 ## Versions
 
