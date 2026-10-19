@@ -188,7 +188,8 @@ func (c *checker) concepts() {
 // markers lints redundancy between inline markers. A symbol-level marker
 // that repeats a file-level marker's relation and target states the same
 // fact twice and makes two edges (GM130); the same marker on consecutive
-// declarations usually wants one scope=block marker above the run (GM131).
+// declarations, three or more in a row, usually wants one scope=block
+// marker above the run (GM131).
 // Both passed silently and inflated file coverage in the first adoptions.
 func (c *checker) markers() {
 	type fact struct{ path, rel, obj string }
@@ -227,15 +228,25 @@ func (c *checker) markers() {
 			}
 			m.objs = append(m.objs, e.O)
 		}
-		for i := 1; i < len(ms); i++ {
-			a, b := ms[i-1], ms[i]
-			if a.scope != "symbol" || b.scope != "symbol" || a.rel != b.rel || !sameSet(a.objs, b.objs) {
-				continue
+		// A run is the same symbol-level marker on consecutive declarations.
+		// Two in a row is often honest (two handlers for one concept); three
+		// or more is the helper-by-helper noise the first adoptions produced.
+		for i := 0; i < len(ms); {
+			j := i + 1
+			for j < len(ms) && ms[i].scope == "symbol" && ms[j].scope == "symbol" && ms[j].rel == ms[i].rel && sameSet(ms[j].objs, ms[i].objs) {
+				j++
 			}
-			c.add(path, b.line, "warning", "GM131", fmt.Sprintf("%s %s repeats the marker at line %d on the previous declaration; one marker with scope=block above the run says the same with one edge", b.rel, c.g.Curie(b.objs[0]), a.line))
+			if n := j - i; n >= minRun {
+				a := ms[i]
+				c.add(path, a.line, "warning", "GM131", fmt.Sprintf("%s %s is repeated on %d consecutive declarations (lines %d-%d); one marker with scope=block above the run, or one on the public entry point, says the same with one edge", a.rel, c.g.Curie(a.objs[0]), n, a.line, ms[j-1].line))
+			}
+			i = j
 		}
 	}
 }
+
+// minRun is the shortest run of identical markers GM131 reports.
+const minRun = 3
 
 func sameSet(a, b []string) bool {
 	if len(a) != len(b) {
