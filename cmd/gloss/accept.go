@@ -82,16 +82,41 @@ func cmdAccept(args []string) int {
 	byPolicy := fs.Bool("policy", false, "accept every proposed link the policy classifies SOFT")
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
+	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
 	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 && !*all && !*byPolicy {
-		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy | --concept <ns:Name>...")
+		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy | --concept <ns:Name>... | --value <ns:Name>...")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
+	}
+	if *value {
+		rev, now, n := reviewer(p.WS.Root), time.Now().UTC(), 0
+		for _, c := range fs.Args() {
+			node := p.Graph.NodeByCurie(c)
+			e := p.Ledger.Entry("value:" + c)
+			if node == nil || e == nil || node.ValueFP == "" {
+				return fail(fmt.Errorf("%s has no value-from binding", c))
+			}
+			fmt.Printf("%s value of %s: %s is now the baseline for %v\n", map[bool]string{true: "would confirm", false: "confirm"}[*dry], c, node.LiveValue, node.Value)
+			if *dry {
+				continue
+			}
+			p.Ledger.Accept("value:"+c, rev, node.ValueFP, now)
+			e.Live = node.LiveValue
+			n++
+		}
+		if !*dry {
+			if err := p.Ledger.Save(); err != nil {
+				return fail(err)
+			}
+			fmt.Printf("gloss accept: %s confirmed by %s\n", plural(n, "published value"), rev)
+		}
+		return 0
 	}
 	if *concept {
 		n, err := acceptConcepts(p, fs.Args(), reviewer(p.WS.Root), *dry)

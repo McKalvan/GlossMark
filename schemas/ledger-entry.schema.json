@@ -114,6 +114,14 @@
           "description": "When the marker was last found in the source (RFC 3339, UTC).",
           "type": "string",
           "format": "date-time"
+        },
+        "value": {
+          "description": "For a value:<curie> entry: the ontology value when the binding was last accepted.",
+          "type": "string"
+        },
+        "live": {
+          "description": "For a value:<curie> entry: the bound code line when last accepted.",
+          "type": "string"
         }
       }
     }

@@ -1470,3 +1470,100 @@ func TestViewContainment(t *testing.T) {
 		t.Errorf("artifact line = %+v", n)
 	}
 }
+
+// TestValueFrom: a published value bound to code with value-from (or a
+// publishes-value marker) is baselined on first build; changing the code
+// line alone is a value-drift finding and a HARD change in the diff;
+// changing both together moves the baseline; accept --value confirms.
+func TestValueFrom(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n  pfi: { iri: https://x/pfi/, tier: implementation }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n  Withdrawal: { kind: constraint }\n  Ceiling: { kind: constraint }\n")
+	ont := "concepts:\n  DefaultSafeWithdrawalRate:\n    kind: measure\n    realizes: pf:Withdrawal\n    published: { as: pf:Withdrawal }\n    value: \"4% (25x annual expenses)\"\n    value-from: { path: pfinance/fire.py, symbol: swr }\n" +
+		"  SpendingCeiling: { kind: measure, realizes: pf:Ceiling, value: \"10000\" }\n"
+	write("ontology/pfi.gloss.yaml", ont)
+	write(".gloss.yaml", "boundary: o:pf\nlevel: system\ndefault-namespace: pfi\n")
+	code := "def plan(years: int, swr: float = 0.04):\n    return years\n\n# @gloss publishes-value .SpendingCeiling scope=line\nCEILING = 10000\n"
+	write("pfinance/fire.py", code)
+	lgPath := filepath.Join(root, ".glossmark", "ledger.jsonl")
+	run := func() (*load.Workspace, *graph.Graph, *ledger.Ledger) {
+		t.Helper()
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		for _, d := range res.Diags {
+			if d.Severity == "error" {
+				t.Errorf("extract: %s", d)
+			}
+		}
+		rollup.Derive(res.Graph, ws.Vocab)
+		lg, _ := ledger.Open(lgPath)
+		lg.Sync(res.Graph, res.Markers, "human:alice", time.Now())
+		lg.Save()
+		return ws, res.Graph, lg
+	}
+	drift := func(ws *load.Workspace, g *graph.Graph, lg *ledger.Ledger) []string {
+		return concepts(findings(rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries}), rollup.KindValueDrift))
+	}
+	ws, base, lg := run()
+	n := base.NodeByCurie("pfi:DefaultSafeWithdrawalRate")
+	if n.ValueFrom != "pfinance/fire.py:1" || n.LiveValue != "def plan(years: int, swr: float = 0.04):" {
+		t.Fatalf("binding = %q %q", n.ValueFrom, n.LiveValue)
+	}
+	if c := base.NodeByCurie("pfi:SpendingCeiling"); c.ValueFrom != "pfinance/fire.py:5" || c.LiveValue != "CEILING = 10000" {
+		t.Fatalf("marker binding = %q %q", c.ValueFrom, c.LiveValue)
+	}
+	if d := drift(ws, base, lg); len(d) != 0 {
+		t.Errorf("baseline drift = %v", d)
+	}
+	// Code changes, ontology does not: drift, and HARD in the diff.
+	write("pfinance/fire.py", strings.Replace(code, "0.04", "0.035", 1))
+	ws, head, lg := run()
+	if d := drift(ws, head, lg); len(d) != 1 || d[0] != "pfi:DefaultSafeWithdrawalRate" {
+		t.Errorf("drift = %v", d)
+	}
+	im := gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: ws.Config.EffectivePolicy()})
+	hard := false
+	for _, ch := range im.Changes {
+		if ch.Kind == "published-value-drifted" && ch.Gate == gate.HARD && ch.Subject == "pfi:DefaultSafeWithdrawalRate" {
+			hard = true
+		}
+	}
+	if !hard || im.Gate != gate.HARD {
+		t.Errorf("diff should be HARD published-value-drifted: %+v", im.Changes)
+	}
+	// Confirming the code as is clears the drift.
+	lg.Accept("value:pfi:DefaultSafeWithdrawalRate", "human:bob", head.NodeByCurie("pfi:DefaultSafeWithdrawalRate").ValueFP, time.Now())
+	lg.Save()
+	ws, head, lg = run()
+	if d := drift(ws, head, lg); len(d) != 0 {
+		t.Errorf("after accept drift = %v", d)
+	}
+	// Code and value move together: no drift, a new baseline.
+	write("pfinance/fire.py", strings.Replace(strings.Replace(code, "0.04", "0.035", 1), "10000", "12000", 1))
+	write("ontology/pfi.gloss.yaml", strings.Replace(ont, `value: "10000"`, `value: "12000"`, 1))
+	ws, head, lg = run()
+	if d := drift(ws, head, lg); len(d) != 0 {
+		t.Errorf("moving together should not drift: %v", d)
+	}
+	// A symbol that is never assigned is an error.
+	write("ontology/pfi.gloss.yaml", strings.Replace(ont, "symbol: swr", "symbol: nope", 1))
+	ws2, _ := load.Load(root)
+	res, _ := extract.Build(ws2)
+	gm360 := false
+	for _, d := range res.Diags {
+		if d.Code == "GM360" {
+			gm360 = true
+		}
+	}
+	if !gm360 {
+		t.Error("expected GM360 for an unassigned symbol")
+	}
+}

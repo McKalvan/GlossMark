@@ -293,6 +293,9 @@ type Concept struct {
 	Deprecated bool       `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	ReplacedBy string     `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	Value      any        `yaml:"value,omitempty" json:"value,omitempty"`
+	// ValueFrom binds value to the line of code it comes from, so a change to
+	// that line without a change to value is "published value drifted".
+	ValueFrom *ValueFrom `yaml:"value-from,omitempty" json:"value-from,omitempty"`
 	// Proposed marks an entry an agent (or anyone) added with the same semantics
 	// as @gloss?: it exists so links resolve, but a human accepts it
 	// (gloss accept --concept) before it counts as part of the ontology.
@@ -316,6 +319,15 @@ type Concept struct {
 	// becomes null keys, so both feed the GM304/GM305 lint. Not serialized.
 	NullKeys []string `yaml:"-" json:"-"`
 	Flow     bool     `yaml:"-" json:"-"`
+}
+
+// ValueFrom names the code a concept's value comes from: a file and either
+// a symbol (the first line that assigns or defaults it: "swr: float = 0.04")
+// or a 1-based line.
+type ValueFrom struct {
+	Path   string `yaml:"path" json:"path"`
+	Symbol string `yaml:"symbol,omitempty" json:"symbol,omitempty"`
+	Line   int    `yaml:"line,omitempty" json:"line,omitempty"`
 }
 
 // RelationNames returns the concept's generic relation keys, sorted.
@@ -601,4 +613,8 @@ type LedgerEntry struct {
 	Rationale         string   `json:"rationale,omitempty"`
 	Gate              string   `json:"gate,omitempty"`
 	LastSeen          string   `json:"last_seen,omitempty"`
+	// Value and Live record, for a value binding (marker id value:<curie>),
+	// the ontology value and the bound code line when last accepted.
+	Value string `json:"value,omitempty"`
+	Live  string `json:"live,omitempty"`
 }

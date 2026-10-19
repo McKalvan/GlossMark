@@ -716,6 +716,7 @@ function nodeTip(n){
   if(n.owner)h+=`<br><span class="k">owner</span> ${esc(n.owner)}`;
   if(n.published)h+=`<br><span class="k">published as</span> ${esc(n.publishedAs||'')}`;
   if(n.value!=null)h+=`<br><span class="k">value</span> ${esc(typeof n.value==='object'?JSON.stringify(n.value):n.value)}`;
+  if(n.liveValue)h+=`<br><span class="k">live</span> <span class="mono">${esc(n.liveValue)}</span>`;
   if(n.doc)h+=`<br>${esc(n.doc)}`;
   if(n.path)h+=`<br><span class="k">path</span> ${esc(n.path)}`;
   if(n._c&&n.type!=='boundary')h+=`<br><span class="k">in</span> ${esc(n._c.label||n._c.id)}`;
@@ -764,6 +765,7 @@ function renderPanel(){
     else if(n.type!=='boundary'&&!n.ghost)row('in boundary','<span class="via">none: no boundary’s code realizes it</span>');
     row('published as',n.published?esc(n.publishedAs||'yes'):'');
     row('value',n.value!=null?esc(typeof n.value==='object'?JSON.stringify(n.value):n.value):'');
+    if(n.liveValue){const at=n.valueFrom||'',i=at.lastIndexOf(':');row('live value','<span class="mono">'+esc(n.liveValue)+'</span><br>'+srcLink(i>0?at.slice(0,i):at,i>0?+at.slice(i+1):0));}
     row('path',n.path?srcLink(n.path,n.line||0):'');
     row('flags',[n.internal&&'internal',n.imported&&'imported',n.ghost&&'removed in diff',n._diff&&!n.ghost&&n._diff].filter(Boolean).join(', '));
     row('doc',esc(n.doc));h+='</dl>';

@@ -57,7 +57,7 @@ runs:
     - name: gloss drift
       shell: bash
       working-directory: ${{ inputs.root }}
-      run: gloss drift --fail-on violation,dangling | tee "$RUNNER_TEMP/drift.txt"
+      run: gloss drift --fail-on violation,value-drift,dangling | tee "$RUNNER_TEMP/drift.txt"
     - name: gloss coverage
       shell: bash
       working-directory: ${{ inputs.root }}

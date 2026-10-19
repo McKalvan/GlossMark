@@ -186,6 +186,17 @@
         "shapes": {
           "description": "Reserved for SHACL-style instance validation (Phase 3). Any YAML value."
         },
+        "value-from": {
+          "description": "The code a published value comes from; a change to that line without a change to value is a HARD published-value drift.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "symbol": { "type": "string", "minLength": 1, "description": "The first line that assigns, annotates or defaults it." },
+            "line": { "type": "integer", "minimum": 1 }
+          }
+        },
         "proposed": {
           "type": "boolean",
           "description": "The entry is a proposal (the ontology's @gloss?): it exists so links resolve, and a human accepts it with gloss accept --concept."

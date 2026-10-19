@@ -107,6 +107,7 @@ var BuiltinRelations = []Relation{
 	{Name: "implements", Domain: a, Range: c, Inline: true, RangeKinds: []string{"process", "capability", "system-type", "event", "constraint", "measure"}, Doc: "Artifact implements the behaviour of a concept."},
 	{Name: "presents", Domain: acb, Range: c, Inline: true, Ontology: true, Manifest: true, Derived: true, Doc: "A UI surface for a concept (a page, a screen, a view): lifts to the boundary as presents, never as realizes, and carries no criticality. See docs/adr/0001-presents-and-hosts.md."},
 	{Name: "hosts", Domain: acb, Range: c, Inline: true, Ontology: true, Manifest: true, Derived: true, Doc: "A shell or container for a concept (the app frame, a router, a plugin host): lifts as hosts, never as realizes, and carries no criticality."},
+	{Name: "publishes-value", Domain: a, Range: c, Inline: true, RangeKinds: []string{"measure", "constraint"}, Doc: "The line below holds the concept's published value (scope=line): a change to it without a change to value: is a HARD published-value drift."},
 	{Name: "represents", Domain: a, Range: c, Inline: true, RangeKinds: []string{"entity", "event", "measure", "resource", "constraint"}, Doc: "Artifact is the data shape of a concept."},
 	{Name: "tests", Domain: a, Range: c, Inline: true, Derived: true, Doc: "Accepted alias of verifies (GM240 asks for verifies)."},
 	{Name: "verifies", Domain: a, Range: c, Inline: true, Derived: true, Doc: "Test artifact verifies a concept: the one test relation."},

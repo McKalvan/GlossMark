@@ -5,9 +5,12 @@ package extract
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -128,6 +131,9 @@ func (ex *extractor) ontologies() {
 			if c.Published != nil {
 				_, cur := ex.resolveRef(c.Published.As, ns)
 				n.Published = cur
+			}
+			if c.ValueFrom != nil && ex.ws.Owned[ns] {
+				ex.bindValue(n, c.ValueFrom, file, c.Line)
 			}
 			ex.g.AddNode(n)
 			add := func(p string, targets []string) {
@@ -302,6 +308,12 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		}
 		e := &graph.Edge{S: aid, P: mk.Relation, O: oiri, Source: graph.SourceInline, Prov: prov}
 		ex.g.AddEdge(e)
+		if mk.Relation == "publishes-value" {
+			if cn := ex.g.Node(oiri); cn != nil && cn.NodeType == model.NodeConcept && anchor.StartLine > 0 && anchor.StartLine <= len(lines) {
+				text := strings.TrimSpace(lines[anchor.StartLine-1])
+				cn.ValueFrom, cn.LiveValue, cn.ValueFP = fmt.Sprintf("%s:%d", target, anchor.StartLine), text, valueFP(text)
+			}
+		}
 		fm.Edges = append(fm.Edges, e)
 		// Inferrer: a test-path artifact that implements/represents also verifies the concept.
 		if (mk.Relation == "implements" || mk.Relation == "represents") && ex.ws.IsTestPath(rel) {
@@ -330,6 +342,54 @@ func (ex *extractor) resolveTarget(t string, m *model.Manifest, path string, lin
 	}
 	iri, _ := ex.g.Expand(t)
 	return iri, raw
+}
+
+// symbolLine matches the first line that assigns, annotates or defaults a
+// symbol: "swr: float = 0.04", "SWR = 0.04", "const swr = 0.04", "swr=0.04".
+func symbolLine(symbol string) *regexp.Regexp {
+	return regexp.MustCompile(`(^|[^\w.])` + regexp.QuoteMeta(symbol) + `\s*(:[^=,)]*)?\s*(=|:=)`)
+}
+
+// bindValue resolves a concept's value-from to a line of code and records it.
+func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, line int) {
+	rel := filepath.ToSlash(vf.Path)
+	b, err := os.ReadFile(ex.ws.Abs(rel))
+	if err != nil {
+		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from %s does not exist", n.CURIE, rel))
+		return
+	}
+	lines := strings.Split(string(b), "\n")
+	at := 0
+	switch {
+	case vf.Line > 0:
+		if vf.Line > len(lines) {
+			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from %s has no line %d", n.CURIE, rel, vf.Line))
+			return
+		}
+		at = vf.Line
+	case vf.Symbol != "":
+		re := symbolLine(vf.Symbol)
+		for i, l := range lines {
+			if re.MatchString(l) {
+				at = i + 1
+				break
+			}
+		}
+		if at == 0 {
+			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from symbol %q is not assigned anywhere in %s", n.CURIE, vf.Symbol, rel))
+			return
+		}
+	default:
+		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from needs symbol: or line:", n.CURIE))
+		return
+	}
+	text := strings.TrimSpace(lines[at-1])
+	n.ValueFrom, n.LiveValue, n.ValueFP = fmt.Sprintf("%s:%d", rel, at), text, valueFP(text)
+}
+
+func valueFP(text string) string {
+	h := sha256.Sum256([]byte(strings.Join(strings.Fields(text), " ")))
+	return "sha256:" + hex.EncodeToString(h[:])[:16]
 }
 
 // MarkerID derives a stable marker id from what the marker says and where it

@@ -45,7 +45,11 @@ type PNode struct {
 	Value       any      `json:"value,omitempty"`
 	Path        string   `json:"path,omitempty"`
 	Line        int      `json:"line,omitempty"` // first line of an artifact's anchor
-	Imported    bool     `json:"imported,omitempty"`
+	// LiveValue is the code line a published value is bound to (value-from),
+	// at ValueFrom (path:line).
+	LiveValue string `json:"liveValue,omitempty"`
+	ValueFrom string `json:"valueFrom,omitempty"`
+	Imported  bool   `json:"imported,omitempty"`
 	// Boundary is the boundary node (CURIE) this concept or artifact sits in,
 	// resolved from what the boundary's code realizes or represents; the
 	// viewer draws the boundary as a box around its members. Empty when no
@@ -255,7 +259,8 @@ func (p *projector) concepts() {
 		}
 		p.included[n.ID] = true
 		p.fold[n.ID] = []string{n.ID}
-		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom}
+		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom,
+			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom}
 		pn.Branch = p.branch(n.ID)
 		if n.Published != "" {
 			pn.Published = true

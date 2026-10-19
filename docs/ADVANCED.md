@@ -15,6 +15,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `verifies` (`tests`) | ✓ | | | test artifact checks a concept; `tests` is an accepted alias (GM240 asks for `verifies`) |
 | `documents` | ✓ | | | Markdown explains a concept or boundary |
 | `instructs` | ✓ | | | an agent file's instructions concern a concept or boundary |
+| `publishes-value` | ✓ | | | the line below holds a measure's or constraint's published value (`scope=line`); same as `value-from:` in the ontology |
 | `may-modify` | ✓ | | | an agent's change remit; targets may be globs (`pa:*`); links outside it by that agent are HARD |
 | `provisions` | ✓ | | | IaC artifact provisions a resource or boundary; on a resource or system-type it lifts to `realizes` |
 | `configures` | ✓ | | | config artifact configures a concept or boundary; same lift |
@@ -50,6 +51,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | --- | --- | :-: |
 | violation | a boundary's code realizes, holds, produces, consumes, publishes or subscribes something its manifest does not declare | ✓ |
 | gap | a manifest declares something nothing under it implements | ✓ |
+| value-drift | the code a published value is bound to (`value-from`, `publishes-value`) changed and the ontology `value` did not | ✓ |
 | dangling | a marker targets a concept that does not exist (write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |

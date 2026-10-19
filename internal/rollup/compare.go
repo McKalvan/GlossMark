@@ -24,6 +24,8 @@ const (
 	KindProposed   = "proposed"  // proposed concept awaiting acceptance
 	// KindPresentedOnly: something presents the concept but nothing implements it.
 	KindPresentedOnly = "presented-only"
+	// KindValueDrift: the code a published value is bound to changed and the value did not.
+	KindValueDrift = "value-drift"
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
@@ -153,6 +155,8 @@ func rank(kind string) int {
 		return 6
 	case KindPresentedOnly:
 		return 7
+	case KindValueDrift:
+		return 1
 	}
 	return 9
 }
@@ -657,6 +661,16 @@ func (c *comparer) tested(id string, depth int) bool {
 func (c *comparer) stale() {
 	for id, e := range c.opt.Ledger {
 		if e.Status != model.StatusStale {
+			continue
+		}
+		if strings.HasPrefix(id, "value:") {
+			cur := strings.TrimPrefix(id, "value:")
+			live := ""
+			if n := c.g.NodeByCurie(cur); n != nil {
+				live = n.LiveValue
+			}
+			c.add(Finding{ID: KindValueDrift + ":" + cur, Kind: KindValueDrift, Severity: "error", Path: e.Path, Concept: cur,
+				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, e.Path, e.Live, live, cur)})
 			continue
 		}
 		c.add(Finding{ID: KindStale + ":" + id, Kind: KindStale, Severity: "warning", Path: e.Path, Relation: e.Relation, Concept: strings.Join(e.Targets, ", "),

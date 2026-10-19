@@ -377,6 +377,10 @@ func (c *classifier) ontology() {
 		}
 		if fmt.Sprint(b.Value) != fmt.Sprint(h.Value) {
 			diffs = append(diffs, fmt.Sprintf("value %v → %v", orNone(b.Value), orNone(h.Value)))
+		} else if b.ValueFP != "" && h.ValueFP != "" && b.ValueFP != h.ValueFP {
+			c.add(Change{Gate: HARD, Kind: "published-value-drifted", Glyph: "≠", Subject: h.CURIE, Path: strings.SplitN(h.ValueFrom, ":", 2)[0],
+				Reasons: []string{"published value drifted: the bound code changed and value: did not"},
+				Msg:     fmt.Sprintf("published value of %s drifted: %s changed from %q to %q while value: stays %v", h.CURIE, h.ValueFrom, b.LiveValue, h.LiveValue, orNone(h.Value))})
 		}
 		if b.Published != h.Published {
 			diffs = append(diffs, fmt.Sprintf("published %s → %s", orNone(b.Published), orNone(h.Published)))
