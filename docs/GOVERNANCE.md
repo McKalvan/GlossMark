@@ -53,7 +53,11 @@ declared level always wins.
   the concepts its code realizes or represents (declared in the manifest or
   derived from the markers beneath it), else its parent boundary's.
 - **Artifact.** The highest level of its boundary and of the concepts it links
-  to.
+  to, except concepts it `presents` or `hosts`.
+
+Criticality follows the mechanism, never the surface: a page that `presents`
+a critical concept, or the app shell that `hosts` it, inherits nothing from it
+([ADR 0001](adr/0001-presents-and-hosts.md)).
 
 Inheritance never goes *down* from a boundary to a concept: a critical
 platform may contain a low-criticality metrics module, and the module's

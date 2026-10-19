@@ -10,6 +10,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | --- | :-: | :-: | :-: | --- |
 | `implements` | ✓ | | | artifact is the mechanism behind a concept; lifts to the boundary as `realizes` |
 | `represents` | ✓ | | | artifact is the data shape of a concept; on an entity it lifts to `holds` |
+| `presents` | ✓ | ✓ | ✓ | a UI surface (page, screen) for a concept; lifts as itself, never to `realizes`, carries no criticality ([ADR 0001](adr/0001-presents-and-hosts.md)) |
+| `hosts` | ✓ | ✓ | ✓ | a shell or container for a concept (the app frame, a router); lifts as itself, never to `realizes` |
 | `verifies` (`tests`) | ✓ | | | test artifact checks a concept; `tests` is an accepted alias (GM240 asks for `verifies`) |
 | `documents` | ✓ | | | Markdown explains a concept or boundary |
 | `instructs` | ✓ | | | an agent file's instructions concern a concept or boundary |
@@ -52,6 +54,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |
 | untested | an implemented concept nothing verifies | |
+| presented-only | a page presents the concept but nothing implements it | |
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
 

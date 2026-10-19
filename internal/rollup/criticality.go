@@ -122,7 +122,9 @@ func Criticality(g *graph.Graph) {
 		}
 		for _, e := range g.Out(a.ID, "") {
 			o := g.Node(e.O)
-			if o == nil || o.NodeType != model.NodeConcept || e.P == "part-of" {
+			// A page that presents a critical concept, or a shell that hosts
+			// it, is not itself critical: criticality follows the mechanism.
+			if o == nil || o.NodeType != model.NodeConcept || e.P == "part-of" || e.P == "presents" || e.P == "hosts" {
 				continue
 			}
 			if better(o.Criticality, o, best, bestNode) {

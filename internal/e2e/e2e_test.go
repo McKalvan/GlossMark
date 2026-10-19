@@ -1281,3 +1281,74 @@ func TestRealizesInheritance(t *testing.T) {
 		t.Errorf("o:lib should report pfi:Pipeline as a violation (nobody declares it): %v", libViol)
 	}
 }
+
+// TestPresentsAndHosts: a page presents a concept and a shell hosts one;
+// neither lifts to realizes or carries criticality. untested tells the
+// tested engine from the untested page, and a surface with no mechanism
+// behind it is reported (presented-only).
+func TestPresentsAndHosts(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n  pfi: { iri: https://x/pfi/, tier: implementation }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n  Finance: { kind: system-type }\n  FirePlanning: { kind: process, criticality: critical }\n  Budgeting: { kind: process }\n")
+	write("ontology/pfi.gloss.yaml", "concepts:\n"+
+		"  FireEngine: { kind: process, realizes: pf:FirePlanning }\n"+
+		"  FirePage: { kind: process, presents: pf:FirePlanning }\n"+
+		"  BudgetPage: { kind: process, presents: pf:Budgeting }\n"+
+		"  WebApp: { kind: system-type, hosts: pf:Finance }\n")
+	write("engine/.gloss.yaml", "boundary: o:engine\nlevel: container\ndefault-namespace: pfi\nrealizes: [pfi:FireEngine]\n")
+	write("engine/fire.py", "# @gloss implements .FireEngine\ndef fire(): pass\n")
+	write("engine/tests/test_fire.py", "# @gloss verifies .FireEngine\ndef test_fire(): pass\n")
+	write("web/.gloss.yaml", "boundary: o:web\nlevel: container\ndefault-namespace: pfi\npresents: [pf:FirePlanning, pf:Budgeting]\nhosts: [pf:Finance]\n")
+	write("web/FirePage.tsx", "// @gloss implements .FirePage\nexport function FirePage() {}\n")
+	write("web/BudgetPage.tsx", "// @gloss implements .BudgetPage\nexport function BudgetPage() {}\n")
+	write("web/main.tsx", "// @gloss implements .WebApp scope=file\nrender(App)\n")
+	ws, g, _, lg := build(t, root)
+	for _, d := range check.Run(ws, g) {
+		if d.Severity == "error" || d.Code == "GM320" {
+			t.Errorf("check: %s", d)
+		}
+	}
+	web := g.NodeByCurie("o:web")
+	if r := curies(g, g.Objects(web.ID, "realizes")); has(r, "pf:FirePlanning") || has(r, "pf:Finance") {
+		t.Errorf("web must not realize what it presents or hosts: %v", r)
+	}
+	if p := curies(g, g.Objects(web.ID, "presents")); !has(p, "pf:FirePlanning") || !has(p, "pf:Budgeting") {
+		t.Errorf("web presents = %v", p)
+	}
+	if h := curies(g, g.Objects(web.ID, "hosts")); !has(h, "pf:Finance") {
+		t.Errorf("web hosts = %v", h)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
+		t.Errorf("violations: %+v", v)
+	}
+	if gp := findings(rep, rollup.KindGap); len(gp) != 0 {
+		t.Errorf("gaps: %+v", gp)
+	}
+	untested := concepts(findings(rep, rollup.KindUntested))
+	if !has(untested, "pfi:FirePage") || has(untested, "pfi:FireEngine") || has(untested, "pf:FirePlanning") {
+		t.Errorf("untested = %v: the engine is tested, the page is not", untested)
+	}
+	if po := concepts(findings(rep, rollup.KindPresentedOnly)); len(po) != 1 || po[0] != "pf:Budgeting" {
+		t.Errorf("presented-only = %v, want [pf:Budgeting]", po)
+	}
+	// Criticality follows the mechanism, not the page.
+	rollup.Criticality(g)
+	for _, a := range g.NodesOf(model.NodeArtifact) {
+		switch a.Path {
+		case "engine/fire.py":
+			if a.Criticality != "critical" {
+				t.Errorf("engine artifact criticality = %q", a.Criticality)
+			}
+		case "web/FirePage.tsx":
+			if a.Criticality == "critical" {
+				t.Errorf("page artifact inherited critical from what it presents (via %s)", a.CriticalityFrom)
+			}
+		}
+	}
+}

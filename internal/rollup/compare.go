@@ -22,10 +22,12 @@ const (
 	KindStale      = "stale"     // anchor fingerprint changed
 	KindDangling   = "dangling"  // unresolved reference
 	KindProposed   = "proposed"  // proposed concept awaiting acceptance
+	// KindPresentedOnly: something presents the concept but nothing implements it.
+	KindPresentedOnly = "presented-only"
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
-var ComparedRelations = []string{"realizes", "holds", "produces", "consumes", "publishes", "subscribes"}
+var ComparedRelations = []string{"realizes", "holds", "presents", "hosts", "produces", "consumes", "publishes", "subscribes"}
 
 // Finding is one drift result.
 type Finding struct {
@@ -119,6 +121,7 @@ func Compare(g *graph.Graph, ws *load.Workspace, opt Options) *Report {
 	c.orphans()
 	c.rogues()
 	c.untested()
+	c.presentedOnly()
 	c.stale()
 	c.metrics()
 	c.waive()
@@ -148,6 +151,8 @@ func rank(kind string) int {
 		return 5
 	case KindUntested:
 		return 6
+	case KindPresentedOnly:
+		return 7
 	}
 	return 9
 }
@@ -346,6 +351,10 @@ func verb(rel string) string {
 		return "subscribes to"
 	case "holds":
 		return "represents"
+	case "presents":
+		return "presents"
+	case "hosts":
+		return "hosts"
 	}
 	return rel
 }
@@ -525,6 +534,35 @@ func StripNewCurie(cur string) string { return strings.Replace(cur, ":NEW:", ":"
 
 func nsOf(cur string) string   { return strings.SplitN(cur, ":", 2)[0] }
 func nameOf(cur string) string { p := strings.SplitN(cur, ":", 2); return p[len(p)-1] }
+
+// presentedOnly reports concepts a UI surface presents while nothing
+// implements them: a page with no engine behind it.
+func (c *comparer) presentedOnly() {
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		if n.Imported || n.Internal || n.Deprecated || n.Kind == "event" {
+			continue
+		}
+		var by []string
+		// hosts is excluded: a shell hosting a whole system-type is expected to
+		// have no single implementation.
+		for _, rel := range []string{"presents"} {
+			for _, e := range c.g.In(n.ID, rel) {
+				if e.Source == graph.SourceDerived {
+					continue
+				}
+				if s := c.g.Node(e.S); s != nil && s.NodeType != model.NodeBoundary {
+					by = append(by, c.g.Curie(e.S))
+				}
+			}
+		}
+		if len(by) == 0 || c.implemented(n.ID, 0) {
+			continue
+		}
+		by = uniq(by)
+		c.add(Finding{Kind: KindPresentedOnly, Severity: "warning", Concept: n.CURIE, Path: n.File, Line: n.Line, Via: by,
+			Msg: fmt.Sprintf("%s is presented (%s) but nothing implements it: a surface with no mechanism behind it", n.CURIE, strings.Join(by, ", "))})
+	}
+}
 
 func (c *comparer) untested() {
 	for _, n := range c.g.NodesOf(model.NodeConcept) {

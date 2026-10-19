@@ -43,6 +43,10 @@ The declaration detector skips the decorator stack, including multi-line argumen
 
 Target the implementation concept when the artifact is a mechanism (`implements impl:AuthorizeHandler`), and the core concept directly when the artifact *is* the domain thing (`represents pay:Payment` on the Payment model, `verifies pay:Authorization` on the test of the business rule). The implementation concept's `realizes:` line carries the link to core; you do not repeat it in the marker.
 
+## Pages and shells
+
+A page, screen or report that *shows* a concept is not its mechanism. Model the page as `presents` (`pfi:FirePage: { kind: process, presents: pf:FirePlanning }`, or `// @gloss presents pf:FirePlanning` on the component) and the app frame as `hosts`. Neither makes the boundary realize the concept or inherit its criticality, so the engine's tests and the page's tests are counted apart ([ADR 0001](adr/0001-presents-and-hosts.md)).
+
 ## Proposals
 
 Write `@gloss?` when you are not sure, and `conf=0.8` with an agent's confidence. A human accepts it by deleting the `?` (`gloss accept <id>`). When the concept does not exist yet, write `ns:NEW:Name` and let `gloss propose --from-new` lift it into the ontology file as a proposed entry; never invent a concept name inline without `NEW:`.
