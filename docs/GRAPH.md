@@ -1,3 +1,4 @@
+<!-- @gloss documents gm:Graph scope=file -->
 # The canonical graph
 
 Everything downstream reads `.glossmark/graph.jsonl`, never the source. Adding a consumer never touches the extractor.

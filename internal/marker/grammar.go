@@ -1,4 +1,7 @@
-// Package marker implements the @gloss comment grammar: parsing one marker
+// @gloss implements gmi:MarkerGrammar scope=file
+// @gloss represents gm:Link, gm:Confidence scope=file
+
+// Package marker implements the `@gloss` comment grammar: parsing one marker
 // line, the per-extension comment table, SPDX-style header sugar, and the
 // lightweight declaration detector used for anchoring in pass 1.
 package marker
@@ -31,17 +34,17 @@ var keyPat = regexp.MustCompile(`([a-z]+)=("([^"]*)"|[^\s]+)`)
 // loosePat finds anything that looks like an attempted marker, for diagnostics.
 var loosePat = regexp.MustCompile(`@gloss\b`)
 
-// spdxPat matches the SPDX-style header sugar: Gloss-Implements: impl:X
+// spdxPat matches the SPDX-style header sugar: `Gloss-Implements: impl:X`
 var spdxPat = regexp.MustCompile(`Gloss-([A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*):\s*(` + targetPat + `(?:\s*,\s*` + targetPat + `)*)\s*$`)
 
-// Marker is one parsed @gloss line.
+// Marker is one parsed `@gloss` line.
 type Marker struct {
 	Proposed bool              `json:"proposed,omitempty"`
 	Relation string            `json:"relation"`
 	Targets  []string          `json:"targets"`
 	Keys     map[string]string `json:"keys,omitempty"`
 	Line     int               `json:"line"` // 1-based physical line
-	Col      int               `json:"col"`  // 1-based physical column of '@gloss' (or 'Gloss-')
+	Col      int               `json:"col"`  // 1-based physical column of `@gloss` (or `Gloss-`)
 	Raw      string            `json:"raw,omitempty"`
 	// Sugar is true when the marker came from an SPDX-style header.
 	Sugar bool `json:"sugar,omitempty"`

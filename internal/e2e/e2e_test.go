@@ -1,3 +1,5 @@
+// @gloss verifies gmi:Extractor, gmi:Linter, gmi:RollupEngine, gmi:DriftComparator, gmi:Gate, gmi:ReviewLedger, gmi:ViewProjector, gmi:WorkspaceLoader, gmi:LandscapeAssembler, gmi:CriticalityStamper, gmi:McpServer, gmi:OntologyEditor, gmi:ImportLock scope=file
+
 // Package e2e runs the whole pipeline on the example repositories and asserts
 // the findings the design document's worked examples call for.
 package e2e

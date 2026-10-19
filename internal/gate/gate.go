@@ -1,3 +1,5 @@
+// @gloss implements gmi:Gate scope=file
+
 // Package gate classifies ontology changes into AUTO, SOFT and HARD, computes
 // per-view impact between a base and a head graph, and renders the PR comment.
 package gate

@@ -1,3 +1,4 @@
+# @gloss configures gmi:GlossCli scope=file
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 LDFLAGS := -X github.com/mckalvan/glossmark/internal/version.Version=$(VERSION)
 

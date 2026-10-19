@@ -1,3 +1,5 @@
+// @gloss implements gmi:Extractor scope=file
+
 package main
 
 import (

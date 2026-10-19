@@ -1,3 +1,5 @@
+// @gloss implements gmi:ViewProjector scope=file
+
 // Package views projects the one graph into what a given observer sees: a
 // declared view over tier × zoom, with implementation folded into what it
 // realizes, part-of expanded to a depth, and sets lifted to their least

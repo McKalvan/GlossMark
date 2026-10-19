@@ -1,0 +1,9 @@
+# .gloss.yaml (repo root): the GlossMark toolchain as one system. What it declares
+# here is compared by `gloss drift` with what the markers in the code derive.
+boundary: arch:glossmark
+level: system
+label: GlossMark
+realizes: [gm:GlossMark, gm:Extraction, gm:Lint, gm:Rollup, gm:DriftComparison, gm:Gating, gm:Review, gm:Projection, gm:Publication, gm:Landscape, gm:Vocabulary, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:Criticality]
+produces: [gm:Graph, gm:View, gm:Drift, gm:Impact, gm:Landscape, gm:Coverage, gm:DecisionRequest]
+publishes: [gm:LinkProposed, gm:LinkAccepted, gm:LinkRejected, gm:LinkStale, gm:DecisionRequested, gm:DriftDetected]
+owner: glossmark

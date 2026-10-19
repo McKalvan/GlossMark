@@ -1,3 +1,5 @@
+// @gloss implements gmi:AgentsSnippet scope=file
+
 // Package agents generates the AGENTS.md vocabulary snippet: the concepts an
 // agent may link to in a boundary, before it writes code.
 package agents

@@ -1,3 +1,5 @@
+// @gloss verifies gmi:Doctor scope=file
+
 package doctor
 
 import (

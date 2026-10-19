@@ -1,3 +1,5 @@
+// @gloss verifies gmi:OntologyEditor scope=file
+
 package ontoedit
 
 import (

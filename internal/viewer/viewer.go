@@ -1,3 +1,5 @@
+// @gloss implements gmi:HtmlViewer scope=file
+
 // Package viewer renders the static HTML viewer. By default the page and its
 // data are two files, viewer.html and views.js (plus views.json for tools),
 // so the page stays small and the data can be regenerated alone; --inline

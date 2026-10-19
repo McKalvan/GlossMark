@@ -1,3 +1,4 @@
+<!-- @gloss documents gm:Link scope=file -->
 # The `@gloss` marker grammar
 
 A gloss mark is one line, inside whatever comment syntax the file already uses.
@@ -34,6 +35,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 ## Rules
 
 - Only text inside a comment is a marker. `"@gloss implements x"` in a string literal, a docstring or prose is ignored. Comment tokens come from a per-extension table (`#`, `//`, `/* */`, `--`, `<!-- -->`, `;`) that `comment-styles:` in `glossmark.yaml` can extend.
+- Inside a comment, text between a pair of backticks is quoted prose, so a comment can talk about `` `@gloss` `` or quote a whole marker without being one. In Markdown the body of a fenced code block (```` ``` ```` or `~~~`) is quoted as well. This is a scanner rule; the reference regex is unchanged.
 - Malformed markers are build warnings at `file:line:col` (codes `GM001`–`GM007`), never silent drops. Positions are physical columns.
 - Multi-line YAML-in-comment blocks are not supported; one marker, one line.
 - JSON has no comments: use a sidecar `foo.json.gloss` holding one marker per line, with JSON Pointers in `note=` and `scope=range`.
