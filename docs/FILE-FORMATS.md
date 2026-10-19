@@ -72,7 +72,7 @@ Concept keys:
 
 Write `doc` quoted (`doc: "One account (checking, savings)."`) or in block style. Inside a `{ }` flow mapping an unquoted doc ends at its first comma: the rest of the sentence becomes null-valued keys that add no edge, and nothing downstream notices. `gloss check` reports the cut doc (GM305) and any other null key (GM304); `gloss propose` writes quoted docs.
 
-Tier rules: a core file may not reference any implementation namespace (GM310); core concepts realize nothing (GM312). The own-subject rule: a repo may only add edges whose subject is in a namespace it owns, so `mine:Pony is-a zoo:Horse` is allowed and `zoo:Horse has-part mine:Saddle` is rejected (GM400).
+Tier rules: a core file may not reference any implementation namespace (GM310); core concepts realize nothing (GM312). The own-subject rule: a repo may only add edges whose subject is in a namespace it owns, so `mine:Pony is-a zoo:Horse` is allowed and `zoo:Horse has-part mine:Saddle` is rejected (GM400). Every code `gloss check` reports for these files, with its fix, is in [DIAGNOSTICS.md](DIAGNOSTICS.md).
 
 ## `.gloss.yaml` (boundary manifest, any directory)
 

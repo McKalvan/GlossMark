@@ -27,10 +27,11 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `init`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
+| `cmd/gloss` | The CLI: `init`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `explain`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
+| `internal/diag` | Every GM diagnostic code in one table: `gloss explain` and [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md) |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`) |
@@ -40,7 +41,7 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
 | `examples/payments` | The worked example: two repos sharing one core, with the published seam, extension, remits and a landscape |
-| `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) |
+| `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Diagnostics](docs/DIAGNOSTICS.md) · [Plan](docs/PLAN.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
 ## Install

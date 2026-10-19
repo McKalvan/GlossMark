@@ -85,7 +85,7 @@ Each is `high`. Concepts that already have a declared level, or inherit `high`
 or above, are left alone; everything else stays unclassified. Treat the diff
 as a draft: raise money movement to `critical`, lower what does not matter.
 
-`gloss check` warns (GM600) when a boundary declares a level **below** a
+`gloss check` warns ([GM600](DIAGNOSTICS.md#gm6xx-governance)) when a boundary declares a level **below** a
 concept its code realizes: the manifest understates its risk, and reviews use
 the higher level regardless.
 
