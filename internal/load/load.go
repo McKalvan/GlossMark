@@ -235,6 +235,25 @@ var defaultSkipDirs = map[string]bool{".git": true, "node_modules": true, StateD
 
 const maxFileSize = 4 << 20
 
+// isLinkedWorktree reports whether dir is the root of a linked git worktree
+// (git worktree add, or an agent harness's .claude/worktrees/<name>): a
+// second checkout of a repository, whose files would otherwise be read twice.
+// Its .git is a file that points into a .../worktrees/<name> git directory.
+// Submodules also have a .git file, pointing into .../modules/<name>, and
+// stay part of the walk as before.
+func isLinkedWorktree(dir string) bool {
+	b, err := os.ReadFile(filepath.Join(dir, ".git"))
+	if err != nil {
+		return false
+	}
+	line := strings.TrimSpace(string(b))
+	if !strings.HasPrefix(line, "gitdir:") {
+		return false
+	}
+	gitdir := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(line, "gitdir:")))
+	return strings.Contains(gitdir, "/worktrees/")
+}
+
 func (ws *Workspace) walk() error {
 	var manifests []*model.Manifest
 	var files []string
@@ -249,6 +268,9 @@ func (ws *Workspace) walk() error {
 		}
 		if d.IsDir() {
 			if rel != "" && (defaultSkipDirs[d.Name()] || model.MatchAnyGlob(ws.Config.Exclude, rel) || model.MatchAnyGlob(ws.Config.Exclude, rel+"/")) {
+				return filepath.SkipDir
+			}
+			if rel != "" && isLinkedWorktree(path) {
 				return filepath.SkipDir
 			}
 			return nil
