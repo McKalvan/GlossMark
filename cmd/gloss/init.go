@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	register(command{"init", "scaffold a repository: glossmark.yaml, tier files, manifests, views, .gitignore, task target, CI job, hook (--dry-run prints the plan)", cmdInit})
+	register(command{"init", "scaffold a repository: glossmark.yaml, tier files, manifests, views, .gitignore, task target, CI job, AGENTS.md rules block, hook (--dry-run prints the plan)", cmdInit})
 }
 
 func cmdInit(args []string) int {

@@ -21,7 +21,7 @@ import (
 func init() {
 	register(command{"export", "export the graph: --sqlite path | --prov path (PROV-O JSON-LD ledger) | --status (implemented/untested/orphan/proposed per concept, JSON)", cmdExport})
 	register(command{"publish", "write per-namespace ontology.jsonld and graph.jsonl for importers (default dist/glossmark/)", cmdPublish})
-	register(command{"agents", "print the AGENTS.md vocabulary snippet for the repo or a directory (--dir)", cmdAgents})
+	register(command{"agents", "print the AGENTS.md vocabulary snippet for the repo or a directory (--dir), or the rules block (--rules); --write AGENTS.md updates it in place between its markers", cmdAgents})
 }
 
 func cmdExport(args []string) int {
@@ -209,9 +209,37 @@ func cmdPublish(args []string) int {
 func cmdAgents(args []string) int {
 	fs, root := newFlags("agents")
 	dir := fs.String("dir", "", "directory whose nearest manifest scopes the vocabulary (default: whole repo)")
-	write := fs.String("write", "", "write into this file between <!-- gloss:begin --> and <!-- gloss:end --> markers (e.g. AGENTS.md)")
+	write := fs.String("write", "", "write into this file between <!-- gloss:begin --> and <!-- gloss:end --> markers (e.g. AGENTS.md); with --rules, between the gloss:rules:begin and gloss:rules:end markers")
+	rules := fs.Bool("rules", false, "print the rules block (how to mark, what never to do, what done means) instead of the vocabulary")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if *rules {
+		if *dir != "" {
+			fmt.Fprintln(os.Stderr, "gloss agents: --rules is the same for every directory; drop --dir")
+			return 2
+		}
+		if *write == "" {
+			fmt.Println(agents.RulesBlock())
+			return 0
+		}
+		existing, err := os.ReadFile(*write)
+		if err != nil && !os.IsNotExist(err) {
+			return fail(err)
+		}
+		out, err := agents.UpsertRules(string(existing))
+		if err != nil {
+			return fail(fmt.Errorf("%s: %w", *write, err))
+		}
+		if out == string(existing) {
+			fmt.Printf("gloss agents: rules block in %s is current\n", *write)
+			return 0
+		}
+		if err := os.WriteFile(*write, []byte(out), 0o644); err != nil {
+			return fail(err)
+		}
+		fmt.Printf("gloss agents: rules block written to %s\n", *write)
+		return 0
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {

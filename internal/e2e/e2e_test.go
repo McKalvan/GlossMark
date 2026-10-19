@@ -1423,6 +1423,63 @@ func TestBriefingV2(t *testing.T) {
 	if all := agents.Context(ws, g, m, rep, agents.ContextOptions{Dir: "grading", Budget: 2000}); !strings.Contains(all, "admin-bot") || !strings.Contains(all, "grader") {
 		t.Errorf("all remits expected without GLOSS_ACTOR")
 	}
+	if strings.Contains(out, "Skills for longer tasks") {
+		t.Errorf("no skills are installed; the briefing must not name any:\n%s", out)
+	}
+}
+
+// TestAgentRulesBriefing: the AGENTS.md rules block is inert to the scanner
+// (its markers are in backticks) and passes gloss check; a long derived
+// allowed set collapses to its globs and a count, which leaves the budget to
+// concepts; installed GlossMark skills are named in the first paragraph.
+func TestAgentRulesBriefing(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	var core, impl, decl strings.Builder
+	core.WriteString("concepts:\n")
+	impl.WriteString("concepts:\n")
+	for i := 0; i < 12; i++ {
+		fmt.Fprintf(&core, "  Thing%02d: { kind: process }\n", i)
+		fmt.Fprintf(&impl, "  Engine%02d: { kind: process, realizes: z:Thing%02d }\n", i, i)
+		if i > 0 {
+			decl.WriteString(", ")
+		}
+		fmt.Fprintf(&decl, "i:Engine%02d", i)
+	}
+	write("glossmark.yaml", "repo-iri: https://x/\nowns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", core.String())
+	write("ontology/i.gloss.yaml", impl.String())
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\ndefault-namespace: i\nrealizes: ["+decl.String()+"]\n")
+	write("engine.py", "# @gloss implements i:Engine00\ndef run(): pass\n")
+	write("AGENTS.md", "# Agents\n\nBe kind.\n\n"+agents.RulesBlock()+"\n")
+	write(".claude/skills/gloss-link/SKILL.md", "---\nname: gloss-link\n---\n")
+	write(".claude/skills/adopt-glossmark/SKILL.md", "---\nname: adopt-glossmark\n---\n")
+	write(".claude/skills/unrelated/SKILL.md", "---\nname: unrelated\n---\n")
+	ws, g, res, lg := build(t, root)
+	for _, d := range append(res.Diags, check.Run(ws, g)...) {
+		t.Errorf("gloss check: %s", d)
+	}
+	for _, mk := range res.Markers {
+		if mk.Path == "AGENTS.md" {
+			t.Errorf("the rules block must not create links: %+v", mk)
+		}
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	out := agents.Context(ws, g, ws.ManifestFor("x"), rep, agents.ContextOptions{Budget: 600})
+	first := out[:strings.Index(out, "\n\n")]
+	if !strings.Contains(first, "Skills for longer tasks, in .claude/skills/: adopt-glossmark, gloss-link.") || strings.Contains(out, "unrelated") {
+		t.Errorf("the first paragraph should name the installed GlossMark skills only:\n%s", out)
+	}
+	if !strings.Contains(out, "Allowed targets: i:*, everything this boundary and the boundaries inside it declare, with their parts and realized cores (24 concepts).") || strings.Contains(out, "z:Thing05,") {
+		t.Errorf("a 25-pattern allowed set should collapse:\n%s", out)
+	}
+	if len(out) > 600*4 {
+		t.Errorf("briefing is %d chars, over budget", len(out))
+	}
 }
 
 // TestViewContainment: a concept goes into the boundary whose own code links

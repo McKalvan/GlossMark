@@ -34,7 +34,7 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`) |
-| `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
+| `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md rules block, vocabulary snippet and session briefing |
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
@@ -68,7 +68,7 @@ cd ../payments
 
 ## For agents
 
-`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+`gloss init` writes the GlossMark rules into `AGENTS.md`, and `gloss agents --rules --write AGENTS.md` keeps them current: how to mark, that agents propose and humans accept, and what to run before finishing. `gloss agents` without `--rules` prints the vocabulary of the repository or of one directory. `gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## GlossMark on GlossMark
 

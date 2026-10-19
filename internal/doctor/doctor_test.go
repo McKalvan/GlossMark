@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/graph"
@@ -70,7 +71,7 @@ func TestDoctor(t *testing.T) {
 		return out
 	}
 	by := run("", false)
-	want := map[string]string{"gloss on PATH": Fail, "agent hook": Warn, "graph": Fail, "ledger": Warn, "lockfile": OK, "CI pins": Fail, "ontology docs": Fail}
+	want := map[string]string{"gloss on PATH": Fail, "agent hook": Warn, "agent rules": Warn, "graph": Fail, "ledger": Warn, "lockfile": OK, "CI pins": Fail, "ontology docs": Fail}
 	for name, st := range want {
 		if by[name].Status != st {
 			t.Errorf("%s = %+v, want %s", name, by[name], st)
@@ -85,6 +86,8 @@ func TestDoctor(t *testing.T) {
 	write(".github/workflows/gloss.yml", "jobs:\n  g:\n    steps:\n      - uses: mckalvan/glossmark@v0.1.0\n")
 	write(".claude/settings.json", `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"GLOSS_ACTOR=agent:claude-code gloss context"}]}]}}`)
 	write(".mcp.json", `{"mcpServers":{"glossmark":{"command":"gloss","args":["mcp"],"env":{"GLOSS_ACTOR":"agent:claude-code"}}}}`)
+	write("AGENTS.md", "# Agents\n\n"+agents.RulesBlock()+"\n")
+	write("CLAUDE.md", "# Claude\n@AGENTS.md\n")
 	ws, _ := load.Load(root)
 	res, _ := extract.Build(ws)
 	rollup.Derive(res.Graph, ws.Vocab)
@@ -113,6 +116,21 @@ func TestDoctor(t *testing.T) {
 	os.WriteFile(gp, []byte(strings.Replace(string(gb), "gloss 0.0.0-dev", "gloss 0.1.0", 1)), 0o644)
 	if c := run("agent:claude-code", true)["graph"]; c.Status != OK {
 		t.Errorf("graph from another release = %+v, want ok", c)
+	}
+	// The rules check: a block that differs from this build, a CLAUDE.md
+	// that does not import AGENTS.md, and a file without the block.
+	for _, tc := range []struct{ agentsMD, claudeMD, msg string }{
+		{"# Agents\n\n" + strings.Replace(agents.RulesBlock(), "Leave it clean", "Leave it tidy", 1) + "\n", "@AGENTS.md\n", "differs"},
+		{"# Agents\n\n" + agents.RulesBlock() + "\n", "# Claude\nRead AGENTS.md.\n", "does not import"},
+		{"# Agents\n", "@AGENTS.md\n", "no GlossMark rules block"},
+	} {
+		write("AGENTS.md", tc.agentsMD)
+		write("CLAUDE.md", tc.claudeMD)
+		if c := run("agent:claude-code", true)["agent rules"]; c.Status != Warn || !strings.Contains(c.Msg, tc.msg) {
+			t.Errorf("agent rules = %+v, want a warning saying %q", c, tc.msg)
+		} else if tc.msg != "does not import" && c.Fix != "gloss agents --rules --write AGENTS.md" {
+			t.Errorf("agent rules fix = %q", c.Fix)
+		}
 	}
 	// A stale graph is caught: change a marker without rebuilding.
 	write("a.py", "# @gloss represents z:Thing\nclass T2: pass\n")

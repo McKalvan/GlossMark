@@ -172,7 +172,7 @@ func (s *Server) handle(req request) (any, *rpcError) {
 			"protocolVersion": ProtocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "glossmark", "version": s.version},
-			"instructions":    "GlossMark serves the repository's code ontology. Call concepts_for_path before writing code in a directory, search_concepts to find the right concept, propose_link to get the exact @gloss? line and its gate. " + agents.ProposalSentence,
+			"instructions":    agents.MCPInstructions(),
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
