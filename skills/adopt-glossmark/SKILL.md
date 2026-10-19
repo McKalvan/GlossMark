@@ -28,9 +28,20 @@ You are adding GlossMark to this repository: a two-tier ontology (a **core** tie
 
 ```sh
 gloss init --dry-run        # check the guessed prefixes; override with --core/--impl if they read badly
-gloss init                  # writes glossmark.yaml, tier files, manifests, views, CI job, agent hook
+gloss init                  # writes glossmark.yaml, tier files, manifests, views, CI job, AGENTS.md rules block, agent hook
+gloss hook install --skill --guards   # Claude Code: the shipped skills and the edit and stop guards
 gloss check                 # must pass on the empty scaffold
 ```
+
+`gloss init` writes the GlossMark rules block into `AGENTS.md`, creating the file when there is none and keeping the rest of an existing one. When the repository has a `CLAUDE.md`, it adds the line `@AGENTS.md` to it, because Claude Code reads `AGENTS.md` on its own only when there is no `CLAUDE.md`. It also registers the SessionStart briefing and the MCP server. `gloss hook install --skill --guards` adds the shipped skills under `.claude/skills/` and the guards that run `gloss hook guard` before and after each edit and when the agent stops. Teams on the GlossMark Claude Code plugin get the skills and guards from the plugin instead. A role agent with a remit is one more command: `gloss init --role <name> --may-modify "<targets>"`.
+
+### Whole repository or one boundary at a time
+
+A small repository is adopted in one PR, as the steps below describe. A large one can be adopted one boundary per PR:
+
+1. Run steps 1 to 4 once for the whole repository, so the ontology exists.
+2. Each PR fills one manifest and marks the code under it (steps 5 to 7 for that directory only).
+3. Turn on the coverage ratchet in CI: `gloss coverage --fail-under current --changed-only`. Concept coverage never drops below the base branch's, and file coverage is scored only over the files the PR changes, so unmarked boundaries do not fail it.
 
 ## 3. Draft the core tier
 
@@ -80,4 +91,8 @@ Violations and gaps must be zero, or each one explained in the PR description. O
 
 ## 8. One PR
 
-Commit the ontology, manifests, markers, `.glossmark/graph.jsonl`, `.glossmark/ledger.jsonl`, the CI job and the hook config in one PR. The description lists: the core concepts and why each is core; any `NEW:` proposals and proposed concepts; the drift summary; and what is deliberately left unmarked. The diff comment will show counts per boundary because the base has no graph; that is expected.
+Commit the ontology, manifests, markers, `.glossmark/graph.jsonl`, `.glossmark/ledger.jsonl`, `AGENTS.md`, the CI job and the hook config in one PR (one PR per boundary on the incremental path). The description lists: the core concepts and why each is core; any `NEW:` proposals and proposed concepts; the drift summary; and what is deliberately left unmarked. The diff comment will show counts per boundary because the base has no graph; that is expected.
+
+## After adoption
+
+Day-2 work has its own skills: `gloss-link` while changing code, `gloss-resolve-drift` when `gloss drift` reports findings, `gloss-review` when a human reviews proposals, `gloss-criticality` to classify what deserves the most review, and `gloss-upgrade-import` when an imported namespace releases a new version.

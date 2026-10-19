@@ -1,0 +1,16 @@
+{
+  "name": "glossmark",
+  "owner": {
+    "name": "mckalvan"
+  },
+  "metadata": {
+    "description": "The GlossMark plugin for Claude Code, from the GlossMark repository."
+  },
+  "plugins": [
+    {
+      "name": "glossmark",
+      "source": "./",
+      "description": "Link code to its domain ontology with @gloss markers: skills, briefing, guards and the gloss MCP server for Claude Code."
+    }
+  ]
+}

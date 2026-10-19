@@ -1,0 +1,2 @@
+# Sidecar for plugin.json (JSON has no comments): the Claude Code plugin manifest.
+@gloss configures gmi:ClaudeCodePlugin scope=file

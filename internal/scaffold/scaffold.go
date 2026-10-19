@@ -352,13 +352,18 @@ func (p *Plan) String() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "repository %s: core %s:, implementation %s:, boundaries %s:\n", p.Name, p.Core, p.Impl, p.Boundary)
 	for _, f := range p.Files {
-		fmt.Fprintf(&sb, "  %-6s %s", f.Action, f.Path)
-		if f.Note != "" {
-			fmt.Fprintf(&sb, "  (%s)", f.Note)
-		}
-		sb.WriteString("\n")
+		sb.WriteString(f.String())
 	}
 	return sb.String()
+}
+
+// String renders one planned write as a line of the plan.
+func (f File) String() string {
+	s := fmt.Sprintf("  %-6s %s", f.Action, f.Path)
+	if f.Note != "" {
+		s += fmt.Sprintf("  (%s)", f.Note)
+	}
+	return s + "\n"
 }
 
 // Apply writes the plan.

@@ -20,7 +20,7 @@ gloss init               # write it, install the agent hook, build the first gra
 gloss check              # passes on the empty scaffold
 ```
 
-`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, the GlossMark rules block in `AGENTS.md` (an `@AGENTS.md` line in `CLAUDE.md` when the repository has one), and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. The sections below explain what it wrote.
+`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, the GlossMark rules block in `AGENTS.md` (an `@AGENTS.md` line in `CLAUDE.md` when the repository has one), and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. `gloss init --role <name> --may-modify "<targets>"` writes a role agent instead (see [Role agents](#role-agents-a-remit-per-subagent)). The sections below explain what it wrote.
 
 ## 1. Declare the namespaces
 
@@ -114,7 +114,7 @@ On an existing codebase, let the tool draft the first pass and review it rather 
 ```sh
 gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public declarations, matched by name and docstring
 git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
-gloss hook install --skill           # installs the adopt-glossmark skill: the whole adoption as a step-by-step agent workflow
+gloss hook install --skill           # installs every shipped skill; adopt-glossmark is the whole adoption as a step-by-step agent workflow
 ```
 
 `gloss init` writes the rules agents follow into `AGENTS.md`. To add or refresh them by hand, and to print the vocabulary of one boundary:
@@ -181,7 +181,7 @@ Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base
 
 ```sh
 gloss hook install --guards                 # SessionStart, MCP, and the three guards below
-gloss hook install --skills gloss-link      # install named shipped skills; --skill installs all of them
+gloss hook install --skills gloss-link      # install named shipped skills; --skill installs all six
 ```
 
 | Event | Hook | What the guard does |
@@ -213,6 +213,41 @@ policy:
 `guard-ask` lists criticality levels, each matching files at exactly that level, and `remit`. For a listed case the pre-edit guard returns `permissionDecision: "ask"`, so Claude Code asks the user before the edit.
 
 The guard fails open. When `gloss` cannot find `glossmark.yaml`, cannot read the payload or cannot build the graph, it prints nothing and exits 0. `gloss doctor` reports a broken setup. The guard reads the tree and writes no files; it takes about 0.2 s on GlossMark's own repository.
+
+### Skills: one per recurring task
+
+GlossMark ships six Claude Code skills. They are embedded in the `gloss` binary, which installs them under `.claude/skills/` (`gloss hook install --skill` for all, `--skills <name>,...` for some), and they are the skills of the Claude Code plugin below. Each one states the proposal sentence above verbatim and relies on the rules block for everything else.
+
+| Skill | Use it when |
+| --- | --- |
+| `adopt-glossmark` | adding GlossMark to a repository: scaffold, draft both tiers, propose markers, one reviewable PR (or one per boundary) |
+| `gloss-link` | changing code in a GlossMark repository: find the concept, write the proposal, move markers with their code, report the impact |
+| `gloss-resolve-drift` | `gloss drift` or CI reports a finding: what to fix yourself and what to leave for a human, per kind |
+| `gloss-review` | a human asks for help reviewing proposals: one decision table, then only the accepts and rejects they choose |
+| `gloss-criticality` | classifying what deserves the most review: `gloss criticality suggest`, the human's choices, the gate changes |
+| `gloss-upgrade-import` | bumping an imported namespace: read the changes, widen the range, `gloss lock`, fix what breaks |
+
+### Claude Code plugin
+
+The GlossMark repository is also a Claude Code plugin marketplace with one plugin, `glossmark`. It bundles the six skills, the SessionStart briefing, the three guards (the same command lines `gloss hook install --guards` writes) and the `gloss mcp` server, all running as `agent:claude-code`:
+
+```
+/plugin marketplace add mckalvan/glossmark
+/plugin install glossmark@glossmark
+```
+
+The plugin does not ship the `gloss` binary. Install it first (see Install above). Without `gloss` on `PATH` the hooks fail open: the briefing and the edit guards print nothing, and the Stop guard's shell exits 127, which Claude Code reports as a non-blocking error. `gloss doctor` names the missing binary. The plugin is the alternative to `gloss hook install --skill --guards` for teams that do not want the files in the repository. Use one or the other; with both, every skill is listed twice.
+
+### Role agents: a remit per subagent
+
+A role agent is a Claude Code subagent with a GlossMark remit: a `may-modify` marker that lists the concepts it may link to. `gloss init --role` writes one, `.claude/agents/<name>.md`, in the repository that holds `glossmark.yaml`, and writes nothing else:
+
+```sh
+gloss init --role refund-engineer --may-modify "pay:Refund, pay:Refunding, pa:*" --instructs pay:Refunding \
+  --description "Implements and fixes refund flows in services/api. Use for refund handlers, refund models and their tests."
+```
+
+The name is lower-case words joined by hyphens, never with `:` or `/`, because the role runs as `agent:<name>`. `--instructs` (optional) names the concept the role is about. `--description` tells Claude Code when to use the subagent; without it the remit describes the role. The file carries the subagent frontmatter, the `instructs` and `may-modify` markers, and two rules: a link outside the remit is HARD-gated, and the role runs with `GLOSS_ACTOR=agent:<name>`. `--dry-run` prints the plan, and an existing file is never overwritten. Inside the subagent the guard judges each edit against the remit (see Guards above); the briefing shows only the remit when `GLOSS_ACTOR=agent:<name>`. Run `gloss check` afterwards: a remit target that does not exist is a dangling reference.
 
 ## 7. Wire CI
 

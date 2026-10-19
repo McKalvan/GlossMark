@@ -236,7 +236,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor)}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": agents.SessionStartCommand(actor)}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
 		for i, it := range list {
