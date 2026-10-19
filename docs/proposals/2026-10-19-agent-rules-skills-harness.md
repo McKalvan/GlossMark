@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Onboarding, gm:Vocabulary scope=file -->
 # Proposal: agent rules, skills and harness docs
 
-Status: proposed, 2026-10-19, against `main` at 5d20c47.
+Status: proposed, 2026-10-19, against `main` at 5d20c47. Open questions decided the same day (section 6).
 
 GlossMark's real users are coding agents: both adoptions were done by an agent reading `QUICKSTART.md`, and the design assumes agents write the links while humans review novelty. This proposal sets out what an agent should read, run and be stopped by, for two audiences:
 
@@ -206,7 +206,7 @@ Accepting is a human decision. You prepare it and carry it out; you never make i
 | --- | --- | --- |
 | Before an edit or write | For the target file: criticality and where it comes from, published-seam concepts, and whether it is outside the current actor's `may-modify` remit. Returned as `additionalContext`, so the agent knows before it writes | No by default. With `policy.guard-ask` set, returns `permissionDecision: "ask"` for out-of-remit files or listed criticality levels |
 | After an edit or write | Markers that `check` now flags in that file, such as GM130, GM131 or GM502, as `additionalContext` | No |
-| Stop | `gloss check`; the count of proposals added in the working tree; whether `graph.jsonl` is current | Yes, on `check` errors or a stale graph, with the reason. Never when `stop_hook_active` is already true, and never on proposals |
+| Stop | `gloss check`; the count of proposals added in the working tree; whether `graph.jsonl` is current | Yes by default, on `check` errors or a stale graph, with the reason. `policy.guard-stop: report` turns blocking off. Never when `stop_hook_active` is already true, and never on proposals |
 
 Field names follow Claude Code's hook reference as of this writing: `hookSpecificOutput.additionalContext` on PreToolUse and PostToolUse, `permissionDecision` on PreToolUse, and `decision: "block"` with `reason` on Stop. The hook payload carries `tool_input.file_path` for Edit and Write, and `agent_type` when the hook fires inside a subagent. The matcher is `Edit|Write`. Add MultiEdit only after a logging hook confirms its name and input shape.
 
@@ -259,7 +259,7 @@ You change refund behaviour in `services/api`. The GlossMark rules in AGENTS.md 
 - Run with `GLOSS_ACTOR=agent:refund-engineer` so the briefing shows only your remit and the ledger attributes your links to you.
 ````
 
-*Needs code (S), open question 3.* `GLOSS_ACTOR` is fixed per session by the SessionStart hook, so a Claude Code subagent runs as `agent:claude-code` and its remit is neither shown nor gated. Claude Code passes the subagent's name as `agent_type` to every hook that fires inside it, and it has a SubagentStart event. So the fix is in the guard: when `agent_type` names a file in `.claude/agents/`, treat the actor as `agent:<agent_type>`. A SubagentStart hook then gives the subagent its own briefing, scoped to its remit. Links the subagent writes are still attributed to the session's actor at `gloss build`, unless the subagent runs with its own `GLOSS_ACTOR`.
+*Needs code (S); behaviour decided in section 6.* `GLOSS_ACTOR` is fixed per session by the SessionStart hook, so a Claude Code subagent runs as `agent:claude-code` and its remit is neither shown nor gated. Claude Code passes the subagent's name as `agent_type` to every hook that fires inside it, and it has a SubagentStart event. So the fix is in the guard: when `agent_type` names a file in `.claude/agents/`, treat the actor as `agent:<agent_type>`. A SubagentStart hook then gives the subagent its own briefing, scoped to its remit. Links the subagent writes are still attributed to the session's actor at `gloss build`, unless the subagent runs with its own `GLOSS_ACTOR`.
 
 ### A5. Packaging for Claude Code: one plugin
 
@@ -280,7 +280,7 @@ Adopters install it with `/plugin marketplace add mckalvan/glossmark` and `/plug
 One page for the developer setting up an agent, not for the agent. The name avoids `docs/AGENTS.md`, which agents that read nested `AGENTS.md` files would load as instructions. Outline:
 
 1. **The seven layers**, the table from section 2 of this proposal.
-2. **Setup per harness.** One row per harness: where its rules file lives, how it registers an MCP server, whether it has hooks and skills, and the `GLOSS_ACTOR` value to use. Rows: Claude Code (full support: `AGENTS.md` via `CLAUDE.md`, `.mcp.json`, hooks, skills, subagents, plugin), Codex, Cursor, GitHub Copilot, and "any other" (`AGENTS.md`, `gloss mcp`, pre-commit). Each row is checked against the harness's current docs before publishing, because these paths change.
+2. **Two setups, not one per tool.** *Claude Code*: the plugin, or `gloss hook install --skill --guards`, which brings rules, briefing, MCP, guards, skills and subagent remits. *Any other agent*: three steps that rely only on portable conventions. Keep the rules block in `AGENTS.md`, register `gloss mcp` with `GLOSS_ACTOR=agent:<tool>` wherever that tool registers MCP servers, and install the pre-commit hook. The page links to each tool's own MCP documentation instead of copying its config paths, because those change faster than GlossMark releases. A tool that reads neither `AGENTS.md` nor MCP still gets the pre-commit hook and the PR comment.
 3. **Actor naming.** `agent:<harness>` for a session, `agent:<harness>@<model>` when the model matters for audits, `agent:<role>` for a role agent with a remit file, `human:<name>` for anyone accepting or rejecting.
 4. **Token budgets.** Rules block ≤ 600 tokens, briefing 2 000 by default, skills loaded on demand, vocabulary never pasted.
 5. **Failure modes and what catches them**: `gloss` not on `PATH` makes every hook silently empty (doctor); `GLOSS_ACTOR` unset attributes agent links to a human (doctor, build warning); ledger not committed loses every decision (doctor); stale graph (pre-commit, Stop guard).
@@ -344,6 +344,7 @@ CI also runs `check` on every example and `gloss landscape` on the payments pair
 - Every new Go file carries `// @gloss implements gmi:<Concept> scope=file` in its header. Tests carry `// @gloss verifies <concept> scope=file`.
 - A new mechanism with no `gmi:` concept: `./gloss propose concept gmi:<Name> --kind process --realizes gm:<Core> --doc "<one sentence>"`. It ships with `proposed: true`.
 - A command or package that realizes a core concept its container does not declare yet: add it to `realizes:` in `cmd/.gloss.yaml` or `internal/.gloss.yaml`.
+- Links to existing `gm:` and `gmi:` concepts are written as bare `@gloss` here. This is the one place the adopter rule "propose, never accept" does not apply, because `TestSelfHost` checks every link in this tree. New concepts still ship with `proposed: true`.
 - Docs carry `<!-- @gloss documents <concept> scope=file -->`. To write about a marker in prose, put it in backticks or a fenced block; a bare marker in an HTML comment is a real link.
 
 ## Where things are
@@ -435,15 +436,19 @@ Sizes follow PLAN §10: S is a day, M a few days.
 | 4 | A7 diagnostics table and `gloss explain`; A8 briefing fixes | S | Agents can fix what they hit |
 | 5 | A3 `gloss hook guard`; B3 contributor guards | M | The only new runtime behaviour; built on `impact` and `check` |
 | 6 | A6 `AGENT-HARNESS.md`, B4 `AGENT-CONTRACT.md`, `CHANGELOG.md`, `CONTRIBUTING.md` | S | Written once the surfaces above are settled |
-| 7 | A5 plugin; A4 subagent actor | M | Depends on the guard and on open question 3 |
+| 7 | A5 plugin; A4 subagent actor | M | Depends on the guard |
 | 8 | Remaining skills and B5.2, B5.4 | S | Cleanup |
 
 Each step is testable the way PLAN §10 asks: run the rendered rules, briefing and skills on the pfinance and AgentArena adoption branches, and on this repository, and check that an agent following them leaves `gloss check` clean and `gloss drift` no worse.
 
-## 6. Open questions
+## 6. Decisions
 
-1. **Harnesses.** Which harnesses besides Claude Code must be first-class in `AGENT-HARNESS.md`? The proposal assumes Codex, Cursor and GitHub Copilot.
-2. **Stop guard strictness.** Should the Stop guard block on `check` errors by default, or only when the repository opts in?
-3. **Subagent remits.** The guard can now tell which subagent is editing. Should it ask for confirmation on an out-of-remit edit by default, or only show the remit and leave the gate to the PR, as today?
-4. **Self-host marking.** Links in this repository are written as bare `@gloss` by agents and recorded as accepted without a reviewer, while adopters will be told never to write a bare marker. Keep that exception for contributors, which is less review work, or follow the adopter rule here too, which is more faithful dogfooding?
-5. **Distribution.** Ship skills only inside the binary (`gloss hook install --skill`), only as a Claude Code plugin, or both, as proposed?
+Taken by the maintainer on 2026-10-19. The sections above already reflect them.
+
+| Question | Decision | Effect |
+| --- | --- | --- |
+| Which harnesses get first-class docs | Claude Code only. Every other harness gets one generic path | A6 has two setups, not five. The generic path uses only what is portable: `AGENTS.md`, `gloss mcp` and pre-commit. It links to each tool's own docs for where an MCP server is registered, so GlossMark does not maintain per-tool config paths that change every quarter |
+| Stop guard strictness | Block by default | A3: the Stop guard blocks on `check` errors and a stale graph. A repository turns blocking off with `policy.guard-stop: report` |
+| Subagent remits at edit time | Warn, and gate in the PR | A3, A4: the guard tells a subagent it is outside its remit; the PR gate makes the link HARD, as today. `policy.guard-ask` opts a repository into asking first |
+| Self-host marking | Keep the contributor exception | B1: agents working on GlossMark write bare `@gloss` links to existing `gm:` and `gmi:` concepts; new concepts still ship with `proposed: true` |
+| Skill distribution | Both | A2, A5: one set of `skills/` files, embedded in the binary for `gloss hook install --skill` and served by the Claude Code plugin |
