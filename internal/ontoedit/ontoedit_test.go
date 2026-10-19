@@ -156,3 +156,34 @@ func TestRemoveMultiLineEntries(t *testing.T) {
 		t.Errorf("multi-line extents wrong:\n%s", got)
 	}
 }
+
+func TestSetField(t *testing.T) {
+	src := "concepts:\n" +
+		"  A:          { kind: entity, doc: \"Old, with comma.\" }   # keep\n" +
+		"  B:          { kind: entity }\n" +
+		"  C:\n    kind: process\n    doc: Old block doc.   # note\n" +
+		"  D:\n    kind: process\n"
+	p := tmp(t, src)
+	for _, c := range []struct{ name, key, val string }{
+		{"A", "doc", Quote("New, also with comma.")},
+		{"B", "doc", Quote("Added.")},
+		{"B", "aliases", List([]string{"bee", "big b"})},
+		{"C", "doc", Quote("New block doc.")},
+		{"D", "aliases", List([]string{"dee"})},
+	} {
+		if err := SetField(p, c.name, c.key, c.val); err != nil {
+			t.Fatalf("%s.%s: %v", c.name, c.key, err)
+		}
+	}
+	want := "concepts:\n" +
+		"  A:          { kind: entity, doc: \"New, also with comma.\" }   # keep\n" +
+		"  B:          { kind: entity, doc: \"Added.\", aliases: [bee, big b] }\n" +
+		"  C:\n    kind: process\n    doc: \"New block doc.\"   # note\n" +
+		"  D:\n    kind: process\n    aliases: [dee]\n"
+	if got := read(t, p); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	if v, ok, _ := Get(p, "B", "aliases"); !ok || v != "bee, big b" {
+		t.Errorf("Get = %q %v", v, ok)
+	}
+}

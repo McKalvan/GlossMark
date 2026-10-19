@@ -1,0 +1,93 @@
+package rollup
+
+import (
+	"sort"
+
+	"github.com/mckalvan/glossmark/internal/graph"
+	"github.com/mckalvan/glossmark/internal/model"
+)
+
+// Status values for ConceptStatus, in precedence order.
+const (
+	StatusProposed    = "proposed"    // proposed: true, awaiting a human
+	StatusOrphan      = "orphan"      // no artifact links to it
+	StatusUntested    = "untested"    // implemented, nothing verifies it
+	StatusImplemented = "implemented" // linked, and verified where it applies
+)
+
+// ConceptStatusRow is one concept in gloss export --status.
+type ConceptStatusRow struct {
+	Concept   string   `json:"concept"`
+	Tier      string   `json:"tier"`
+	Kind      string   `json:"kind,omitempty"`
+	Status    string   `json:"status"`
+	Artifacts int      `json:"artifacts"`
+	Verifiers int      `json:"verifiers"`
+	Findings  []string `json:"findings,omitempty"` // every finding kind on it (presented-only, stale, ...)
+	Doc       string   `json:"doc,omitempty"`
+}
+
+// ConceptStatus summarizes every owned concept for an external checker (a
+// glossary's Status column, an ontology linter): proposed, orphan, untested
+// or implemented, plus counts and the finding kinds that apply.
+func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
+	kinds := map[string][]string{}
+	for _, f := range rep.Findings {
+		if f.Concept != "" && f.Kind != KindConsistent {
+			kinds[f.Concept] = append(kinds[f.Concept], f.Kind)
+		}
+	}
+	var out []ConceptStatusRow
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if n.Imported {
+			continue
+		}
+		r := ConceptStatusRow{Concept: n.CURIE, Tier: n.Tier, Kind: n.Kind, Doc: n.Doc, Findings: uniq(kinds[n.CURIE])}
+		// The concept and the implementation concepts that realize it.
+		ids := []string{n.ID}
+		for _, s := range g.Subjects(n.ID, "realizes") {
+			if sn := g.Node(s); sn != nil && sn.NodeType == model.NodeConcept {
+				ids = append(ids, s)
+			}
+		}
+		for _, id := range ids {
+			for _, e := range g.In(id, "") {
+				if e.Source != graph.SourceInline && e.Source != graph.SourceInferred {
+					continue
+				}
+				if a := g.Node(e.S); a == nil || a.NodeType != model.NodeArtifact {
+					continue
+				}
+				if e.P == "documents" || e.P == "instructs" || e.P == "may-modify" {
+					continue // prose and agent files are not the concept's code
+				}
+				if e.P == "verifies" || e.P == "tests" {
+					r.Verifiers++
+				} else {
+					r.Artifacts++
+				}
+			}
+		}
+		has := func(k string) bool {
+			for _, x := range r.Findings {
+				if x == k {
+					return true
+				}
+			}
+			return false
+		}
+		switch {
+		case n.Proposed:
+			r.Status = StatusProposed
+		case has(KindOrphan):
+			r.Status = StatusOrphan
+		case has(KindUntested):
+			r.Status = StatusUntested
+		default:
+			r.Status = StatusImplemented
+		}
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Concept < out[j].Concept })
+	return out
+}
