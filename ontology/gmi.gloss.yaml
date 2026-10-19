@@ -48,47 +48,31 @@ concepts:
     kind: process
     realizes: gm:Criticality
     doc: "Stamps every concept, boundary and artifact with its effective criticality and reports boundaries that understate it."
-    proposed: true
-    proposed-by: agent:claude
   OntologyEditor:
     kind: process
     realizes: gm:Review
     doc: "Formatting-preserving edits to ontology files: add, accept or remove a proposed concept and rewrite NEW markers once it exists."
-    proposed: true
-    proposed-by: agent:claude
   ImportLock:
     kind: process
     realizes: gm:Publication
     doc: "Resolving import version ranges and pinning each import's version and content hash in glossmark.lock: the importer's side of the published seam."
-    proposed: true
-    proposed-by: agent:claude
   Doctor:
     kind: process
     internal: true
     doc: "One-line setup checks, each with its fix."
-    proposed: true
-    proposed-by: agent:claude
   FormatVersions:
     kind: resource
     internal: true
     doc: "The tool release, grammar and on-disk format versions."
-    proposed: true
-    proposed-by: agent:claude
   Diagnostics:
     kind: process
     realizes: gm:Lint
     doc: "One table of every GM diagnostic code with its severity, meaning, fix and doc page: gloss explain prints it and docs/DIAGNOSTICS.md is generated from it."
-    proposed: true
-    proposed-by: agent:claude
   HookGuard:
     kind: process
     realizes: [gm:Gating, gm:Lint]
     doc: "The gloss hook guard: criticality, published-seam and remit context before an edit, the file's lint findings after it, and a clean-tree check when the agent stops."
-    proposed: true
-    proposed-by: agent:claude-code
   ClaudeCodePlugin:
     kind: process
     realizes: gm:Vocabulary
     doc: "The GlossMark Claude Code plugin: the shipped skills, the briefing and guard hooks and the gloss MCP server, installed with /plugin install from this repository."
-    proposed: true
-    proposed-by: agent:claude-code

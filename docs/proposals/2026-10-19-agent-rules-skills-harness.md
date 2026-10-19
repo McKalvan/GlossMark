@@ -472,7 +472,7 @@ Built on `claude/agent-harness-proposal` by five agents in two waves, merged and
 | B3 contributor guards | Done | `.claude/settings.json`, using `./gloss` when built |
 | B4 contract and changelog | Done | `docs/AGENT-CONTRACT.md`, `CHANGELOG.md` |
 | B5.1 contract test | Done | `internal/e2e/contract_test.go`, `internal/mcp/tools_test.go` |
-| B5.2 review stale links and proposed concepts | Not done: a human decision | `gloss status`; the `gloss-review` skill prepares it |
+| B5.2 review stale links and proposed concepts | Done by the maintainer | `gloss-review` prepared the table; 9 concepts and 56 links accepted |
 | B5.3 dogfood the hook | Done | `.claude/settings.json`, `.mcp.json` |
 | B5.4 untested concepts | Done | `internal/e2e/publish_review_test.go` |
 
@@ -494,8 +494,7 @@ Built on `claude/agent-harness-proposal` by five agents in two waves, merged and
 
 ### Left for a maintainer
 
-- **Proposed concepts.** `gmi:Diagnostics`, `gmi:HookGuard` and `gmi:ClaudeCodePlugin` are new, and the six from before are still open. Each needs `gloss accept --concept` or `gloss reject --concept`.
-- **Stale links.** Their count rose from 43 to 55, because the work edited files that carry accepted links. Run `gloss status`, then `gloss accept <id>` for each link that still holds.
+- **Proposed concepts and stale links: done.** On 2026-10-19 the maintainer accepted all nine proposed concepts and re-accepted all 56 stale links, recorded as `human:mckalvan`, using the `gloss-review` skill. Writing this note made this document's own file-scope link stale again; it waits for the next review.
 - **Two concept docs describe less than the code now does.** `gmi:AgentsSnippet` now also covers the rules block. `gmi:AdoptionSkill` names only one skill. Both are ontology edits for a human.
 - **The SubagentStart briefing from A4** was not built. Claude Code's documentation does not confirm how a SubagentStart hook adds context.
 - **The v0.1.0 tag** that every doc pins still does not exist.
