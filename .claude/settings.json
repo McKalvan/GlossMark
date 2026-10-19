@@ -1,0 +1,50 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$CLAUDE_PROJECT_DIR/gloss\" ] && PATH=\"$CLAUDE_PROJECT_DIR:$PATH\"; GLOSS_ACTOR=agent:claude-code gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$CLAUDE_PROJECT_DIR/gloss\" ] && PATH=\"$CLAUDE_PROJECT_DIR:$PATH\"; GLOSS_ACTOR=agent:claude-code gloss hook guard --event pre-edit 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$CLAUDE_PROJECT_DIR/gloss\" ] && PATH=\"$CLAUDE_PROJECT_DIR:$PATH\"; GLOSS_ACTOR=agent:claude-code gloss hook guard --event post-edit 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$CLAUDE_PROJECT_DIR/gloss\" ] && PATH=\"$CLAUDE_PROJECT_DIR:$PATH\"; GLOSS_ACTOR=agent:claude-code gloss hook guard --event stop"
+          },
+          {
+            "type": "command",
+            "command": "grep -q '\"stop_hook_active\": *true' && exit 0; cd \"${CLAUDE_PROJECT_DIR:-.}\" || exit 0; f=$(gofmt -l . 2>/dev/null | grep -v '^\\.claude/'); [ -z \"$f\" ] && exit 0; echo \"gofmt: not formatted:\" $f \"- run gofmt -w on these files before you finish.\" >&2; exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}

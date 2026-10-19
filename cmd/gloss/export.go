@@ -151,9 +151,13 @@ func cmdPublish(args []string) int {
 				case nil:
 					item[key] = cur
 				case string:
-					item[key] = []string{v, cur}
+					if v != cur { // published-as is both a node field and an edge
+						item[key] = []string{v, cur}
+					}
 				case []string:
-					item[key] = append(v, cur)
+					if !containsStr(v, cur) {
+						item[key] = append(v, cur)
+					}
 				}
 			}
 			items = append(items, item)

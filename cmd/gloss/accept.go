@@ -3,6 +3,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -19,6 +20,40 @@ func init() {
 	register(command{"accept", "accept proposed links: the one-character diff @gloss? → @gloss plus the ledger entry", cmdAccept})
 	register(command{"reject", "reject a proposed link with a reason (optionally remove the marker line)", cmdReject})
 	register(command{"status", "list proposed, stale and rejected links from the ledger", cmdStatus})
+}
+
+// flagsFirst moves every flag (with its value) ahead of the positional
+// arguments, wherever they appear, so `gloss reject --concept pay:X --reason
+// "..." --remove` parses --reason and --remove. A flag that is not a boolean
+// takes the next argument as its value unless written --name=value.
+func flagsFirst(fs *flag.FlagSet, args []string) []string {
+	var flags, pos []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			pos = append(pos, args[i+1:]...)
+			break
+		}
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			pos = append(pos, a)
+			continue
+		}
+		flags = append(flags, a)
+		name := strings.TrimLeft(a, "-")
+		if strings.Contains(name, "=") {
+			continue
+		}
+		if f := fs.Lookup(name); f != nil {
+			if b, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && b.IsBoolFlag() {
+				continue
+			}
+			if i+1 < len(args) {
+				i++
+				flags = append(flags, args[i])
+			}
+		}
+	}
+	return append(append(flags, "--"), pos...)
 }
 
 func reviewer(root string) string {
@@ -85,7 +120,7 @@ func cmdAccept(args []string) int {
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
 	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := fs.Parse(flagsFirst(fs, args)); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 && !*all && !*byPolicy {
@@ -201,7 +236,7 @@ func cmdReject(args []string) int {
 	reason := fs.String("reason", "", "why the link is wrong (recorded in the ledger)")
 	remove := fs.Bool("remove", false, "also delete the marker line from the source file (or the concept entry with --concept)")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := fs.Parse(flagsFirst(fs, args)); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 {

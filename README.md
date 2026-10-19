@@ -42,7 +42,7 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
 | `examples/payments` | The worked example: two repos sharing one core, with the published seam, extension, remits and a landscape |
-| `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Diagnostics](docs/DIAGNOSTICS.md) · [Plan](docs/PLAN.md) |
+| `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Diagnostics](docs/DIAGNOSTICS.md) · [Agent harness](docs/AGENT-HARNESS.md) · [Agent contract](docs/AGENT-CONTRACT.md) · [Plan](docs/PLAN.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
 ## Install
