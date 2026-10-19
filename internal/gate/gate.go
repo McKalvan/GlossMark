@@ -714,6 +714,12 @@ func agentName(actor string) string {
 	return n
 }
 
+// AgentRemit returns the may-modify patterns of the agent file named like the
+// actor (agent:<name>[@model]), and whether that agent has a remit at all.
+func AgentRemit(g *graph.Graph, actor string) ([]string, bool) {
+	return agentRemit(g, actor)
+}
+
 // agentRemit finds the may-modify patterns of the agent file named like the actor.
 func agentRemit(g *graph.Graph, actor string) ([]string, bool) {
 	name := agentName(actor)

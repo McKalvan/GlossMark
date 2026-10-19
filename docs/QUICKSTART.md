@@ -171,6 +171,45 @@ A proposed concept carries `proposed: true` and `proposed-by:` in the ontology f
 
 Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept` and `drift`.
 
+### Guards: feedback between the edit and the commit
+
+`gloss hook install --guards` also registers three Claude Code hooks that run `gloss hook guard`. Each reads the hook payload on stdin and prints at most a few short lines.
+
+```sh
+gloss hook install --guards                 # SessionStart, MCP, and the three guards below
+gloss hook install --skills gloss-link      # install named shipped skills; --skill installs all of them
+```
+
+| Event | Hook | What the guard does |
+| --- | --- | --- |
+| `pre-edit` | PreToolUse on `Edit\|Write` | Names the file's criticality when it is `high` or `critical` and where it comes from, the published-seam concepts it touches, and whether it is outside the acting agent's `may-modify` remit. Says nothing about an unmarked, low-risk file. |
+| `post-edit` | PostToolUse on `Edit\|Write` | Reports the `gloss check` findings that point at the edited file, such as GM130, GM131 or GM502. Says nothing when the file is clean. |
+| `stop` | Stop | Blocks the agent from finishing while `gloss check` reports errors or `.glossmark/graph.jsonl` does not match the tree, and names the fix (`gloss check`, `gloss build -q`). It never blocks on proposals, and never when Claude Code reports that a Stop hook is already active. |
+
+The hooks it writes, with the default actor:
+
+```
+PreToolUse  (Edit|Write)  GLOSS_ACTOR=agent:claude-code gloss hook guard --event pre-edit 2>/dev/null || true
+PostToolUse (Edit|Write)  GLOSS_ACTOR=agent:claude-code gloss hook guard --event post-edit 2>/dev/null || true
+Stop                      GLOSS_ACTOR=agent:claude-code gloss hook guard --event stop
+```
+
+Re-running `gloss hook install --guards` replaces these entries and keeps every other hook in `.claude/settings.json`.
+
+Inside a subagent, Claude Code passes the subagent's name as `agent_type`. When `.claude/agents/<agent_type>.md` exists, the guard judges the edit for `agent:<agent_type>` and that file's `may-modify` remit; otherwise it uses `GLOSS_ACTOR`. An edit outside the remit gets a warning, and the PR gate makes any link written there HARD.
+
+Two policy keys in `glossmark.yaml` tune the guards:
+
+```yaml
+policy:
+  guard-stop: report          # default block; report prints the reason to stderr and lets the agent stop
+  guard-ask: [critical, remit]  # default []; ask before an edit to a critical file or one outside the agent's remit
+```
+
+`guard-ask` lists criticality levels, each matching files at exactly that level, and `remit`. For a listed case the pre-edit guard returns `permissionDecision: "ask"`, so Claude Code asks the user before the edit.
+
+The guard fails open. When `gloss` cannot find `glossmark.yaml`, cannot read the payload or cannot build the graph, it prints nothing and exits 0. `gloss doctor` reports a broken setup. The guard reads the tree and writes no files; it takes about 0.2 s on GlossMark's own repository.
+
 ## 7. Wire CI
 
 `.github/workflows/gloss.yml`:

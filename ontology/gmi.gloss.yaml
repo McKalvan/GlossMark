@@ -74,3 +74,9 @@ concepts:
     doc: "The tool release, grammar and on-disk format versions."
     proposed: true
     proposed-by: agent:claude
+  HookGuard:
+    kind: process
+    realizes: [gm:Gating, gm:Lint]
+    doc: "The gloss hook guard: criticality, published-seam and remit context before an edit, the file's lint findings after it, and a clean-tree check when the agent stops."
+    proposed: true
+    proposed-by: agent:claude-code
