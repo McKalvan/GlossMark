@@ -1,0 +1,3 @@
+# Sidecar for .mcp.json (JSON has no comments): the gloss MCP server, for the plugin and for contributors working here.
+@gloss configures gmi:ClaudeCodePlugin scope=file
+@gloss configures gmi:McpServer scope=file

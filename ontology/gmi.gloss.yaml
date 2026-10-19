@@ -86,3 +86,9 @@ concepts:
     doc: "The gloss hook guard: criticality, published-seam and remit context before an edit, the file's lint findings after it, and a clean-tree check when the agent stops."
     proposed: true
     proposed-by: agent:claude-code
+  ClaudeCodePlugin:
+    kind: process
+    realizes: gm:Vocabulary
+    doc: "The GlossMark Claude Code plugin: the shipped skills, the briefing and guard hooks and the gloss MCP server, installed with /plugin install from this repository."
+    proposed: true
+    proposed-by: agent:claude-code

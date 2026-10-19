@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "glossmark": {
+      "command": "gloss",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "GLOSS_ACTOR": "agent:claude-code"
+      }
+    }
+  }
+}
