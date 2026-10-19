@@ -227,7 +227,7 @@ func TestReviewCommands(t *testing.T) {
 	if e := entry("a.py"); e.Status != model.StatusAccepted || e.ReviewedBy != "human:alice" || e.Actor != "agent:bot" || e.Gate == "" {
 		t.Errorf("ledger after accept: %+v", e)
 	}
-	if r := run(alice, "accept", "a.py:1"); r.code != 0 || !strings.Contains(r.stderr, "is not proposed; nothing to accept") {
+	if r := run(alice, "accept", "a.py:1"); r.code != 0 || !strings.Contains(r.stderr, "is not proposed or stale; nothing to accept") {
 		t.Errorf("accepting an accepted link should say so: %d %s %s", r.code, r.stdout, r.stderr)
 	}
 

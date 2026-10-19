@@ -199,7 +199,18 @@ func cmdAccept(args []string) int {
 	n := 0
 	for _, fm := range targets {
 		if !fm.Marker.Proposed {
-			fmt.Fprintf(os.Stderr, "%s:%d: %s is not proposed; nothing to accept\n", fm.Path, fm.Marker.Line, fm.ID)
+			// An accepted link whose declaration changed is stale; naming it
+			// re-accepts it against the current declaration. The source line
+			// already has no ?, so only the ledger changes.
+			if e := p.Ledger.Entry(fm.ID); e != nil && e.Status == model.StatusStale {
+				fmt.Printf("%s %s:%d %s %s [stale]\n", map[bool]string{true: "would re-accept", false: "re-accept"}[*dry], fm.Path, fm.Marker.Line, fm.Marker.Relation, join(fm.Marker.Targets))
+				if !*dry {
+					p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
+					n++
+				}
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "%s:%d: %s is not proposed or stale; nothing to accept\n", fm.Path, fm.Marker.Line, fm.ID)
 			continue
 		}
 		g := gate.SOFT
