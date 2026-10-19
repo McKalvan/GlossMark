@@ -11,7 +11,7 @@ Accepting is a human decision. You prepare it and carry it out; you never make i
 
 ## 1. Gather
 
-1. Run `gloss status` for every proposed, stale and rejected link with its id. `gloss status --format json` gives the same list for scripting.
+1. Run `gloss status` for every proposed, stale and rejected link with its id. For scripting, read `.glossmark/ledger.jsonl`: one JSON entry per link, with `marker_id`, `path`, `status` and `targets`.
 2. Run `gloss diff --base <base branch>` for the gate of each change: AUTO, SOFT or HARD, with its reasons and criticality.
 3. Run `gloss drift` for the proposed concepts (`proposed-concept`) and `ns:NEW:Name` markers (`rogue`) still waiting.
 
