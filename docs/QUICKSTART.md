@@ -98,6 +98,14 @@ Agents write `@gloss?` for links they propose. The one proposal workflow, which 
 
 > If no concept fits, write `@gloss? <relation> <ns>:NEW:<Name> note="why"`, then run `gloss propose --from-new --doc "what it is"` (MCP: propose_concept) so the concept ships in the same PR with `proposed: true`; a human accepts it with `gloss accept --concept <ns>:<Name>`. Never invent a concept name any other way, and never hand-edit an ontology file to make a link resolve.
 
+On an existing codebase, let the tool draft the first pass and review it rather than writing every marker by hand:
+
+```sh
+gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public declarations, matched by name and docstring
+git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
+gloss hook install --skill           # installs the adopt-glossmark skill: the whole adoption as a step-by-step agent workflow
+```
+
 Generate the vocabulary agents should see first:
 
 ```sh

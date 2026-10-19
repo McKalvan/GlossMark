@@ -12,6 +12,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/skills"
 )
 
 func init() {
@@ -148,11 +149,12 @@ func cmdHook(args []string) int {
 	noMCP := fs.Bool("no-mcp", false, "do not register the MCP server in .mcp.json")
 	noHook := fs.Bool("no-hook", false, "do not register the SessionStart hook")
 	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it")
+	skill := fs.Bool("skill", false, "also install the adopt-glossmark Claude Code skill into .claude/skills/")
 	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "install" {
-		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--actor agent:name]")
+		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--skill] [--actor agent:name]")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -162,7 +164,31 @@ func cmdHook(args []string) int {
 	if err := installHooks(p.WS.Root, *actor, !*noHook, !*noMCP); err != nil {
 		return fail(err)
 	}
+	if *skill {
+		if err := installSkills(p.WS.Root); err != nil {
+			return fail(err)
+		}
+	}
 	return 0
+}
+
+// installSkills copies the shipped skills into .claude/skills/.
+func installSkills(root string) error {
+	for _, name := range skills.Names {
+		b, err := skills.FS.ReadFile(name + "/SKILL.md")
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(root, ".claude", "skills", name, "SKILL.md")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, b, 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("gloss hook: skill %s installed in %s\n", name, relOrAbs(root, path))
+	}
+	return nil
 }
 
 // installHooks registers the SessionStart hook and the MCP server for a
