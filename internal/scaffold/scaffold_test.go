@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -45,6 +46,12 @@ func TestInitThenCheck(t *testing.T) {
 			write("package.json", "{\n  \"scripts\": {\n    \"build\": \"tsc\"\n  }\n}\n")
 		}
 		write("README.md", "keep me\n")
+		if tc.runner == "package.json" {
+			// Existing agent files: AGENTS.md gets the rules block appended,
+			// CLAUDE.md the import line.
+			write("AGENTS.md", "# Web shop agents\nUse pnpm.")
+			write("CLAUDE.md", "# Claude\nBe brief.")
+		}
 		p, err := Make(root, Options{})
 		if err != nil {
 			t.Fatal(err)
@@ -77,16 +84,36 @@ func TestInitThenCheck(t *testing.T) {
 		if !strings.Contains(string(rb), "gloss check") {
 			t.Errorf("%s: %s lacks the gloss target:\n%s", tc.name, tc.runner, rb)
 		}
+		am, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+		if st, err := agents.CheckRules(string(am)); st != agents.RulesCurrent || err != nil {
+			t.Errorf("%s: AGENTS.md lacks the current rules block:\n%s", tc.name, am)
+		}
+		cm, cmErr := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+		if tc.runner == "package.json" {
+			if !strings.HasPrefix(string(am), "# Web shop agents\nUse pnpm.\n\n"+agents.RulesBegin) {
+				t.Errorf("%s: existing AGENTS.md text must stay first:\n%s", tc.name, am)
+			}
+			if string(cm) != "# Claude\nBe brief.\n@AGENTS.md\n" {
+				t.Errorf("%s: CLAUDE.md = %q", tc.name, cm)
+			}
+		} else if cmErr == nil {
+			t.Errorf("%s: init must not create CLAUDE.md", tc.name)
+		}
 		gi, _ := os.ReadFile(filepath.Join(root, ".gitignore"))
 		if strings.Contains(string(gi), "ledger") && !strings.Contains(string(gi), "ledger.jsonl are committed") {
 			t.Errorf("the ledger must not be ignored:\n%s", gi)
 		}
-		// A second run changes nothing.
+		// A second run changes nothing, and a stale rules block is reported, not rewritten.
 		p2, _ := Make(root, Options{})
 		for _, f := range p2.Files {
 			if f.Action == Create || (f.Action == Append && f.Path != ".gitignore") {
 				t.Errorf("%s: second init would %s %s", tc.name, f.Action, f.Path)
 			}
+		}
+		write("AGENTS.md", strings.Replace(string(am), "Leave it clean", "Leave it tidy", 1))
+		p3, _ := Make(root, Options{})
+		if s := p3.String(); !strings.Contains(s, "skip   AGENTS.md  (rules block out of date; gloss agents --rules --write AGENTS.md replaces it)") {
+			t.Errorf("%s: plan for a stale block:\n%s", tc.name, s)
 		}
 	}
 }

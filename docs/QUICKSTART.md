@@ -20,7 +20,7 @@ gloss init               # write it, install the agent hook, build the first gra
 gloss check              # passes on the empty scaffold
 ```
 
-`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. The sections below explain what it wrote.
+`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, the GlossMark rules block in `AGENTS.md` (an `@AGENTS.md` line in `CLAUDE.md` when the repository has one), and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. The sections below explain what it wrote.
 
 ## 1. Declare the namespaces
 
@@ -117,10 +117,11 @@ git apply suggestions.patch          # or gloss suggest --write; then delete the
 gloss hook install --skill           # installs the adopt-glossmark skill: the whole adoption as a step-by-step agent workflow
 ```
 
-Generate the vocabulary agents should see first:
+`gloss init` writes the rules agents follow into `AGENTS.md`. To add or refresh them by hand, and to print the vocabulary of one boundary:
 
 ```sh
-gloss agents --dir services/api --write AGENTS.md
+gloss agents --rules --write AGENTS.md   # the rules block, between its own markers; the rest of the file is kept
+gloss agents --dir services/api          # the concepts services/api may link to, as a Markdown table
 ```
 
 ## 6. Run the tooling
@@ -140,7 +141,7 @@ gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
 gloss mcp                        # MCP server on stdio for agents
-gloss doctor                     # one line per setup check with its fix: gloss on PATH, GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
+gloss doctor                     # one line per setup check with its fix: gloss on PATH, GLOSS_ACTOR, hook, AGENTS.md rules, graph current, ledger in git, lockfile, CI pinned, docs intact
 ```
 
 ### Who wrote a link, and what was decided
@@ -151,9 +152,10 @@ The actor belongs to a marker's first appearance, not to whoever runs the last b
 
 ## Agent experience
 
-Four commands exist so an agent can work the ontology without a human in the loop until the review:
+These commands let an agent work the ontology without a human in the loop until the review:
 
 ```sh
+gloss agents --rules --write AGENTS.md  # the rules block: how to mark, what never to do, what done means
 gloss hook install                      # SessionStart hook → 'gloss context --changed --budget 2000'; MCP server in .mcp.json
 gloss context --dir services/api        # the briefing: boundary, allowed targets, your remit, concepts most relevant to the directory first, state
 gloss context --changed --budget 2000   # open with what the uncommitted changes touch; fit the whole briefing in ~2 000 tokens
@@ -165,7 +167,9 @@ gloss accept --concept pa:RefundHandler # a human accepts the proposal (drops pr
 gloss reject --concept pa:RefundHandler --reason "duplicate of pa:RefundFlow" --remove
 ```
 
-The briefing ranks concepts by relevance: those linked by code under the directory, then those its manifest declares, then its default namespace, then the rest. When `GLOSS_ACTOR` names an agent with an agent file (`agent:breeding-planner` and `.claude/agents/breeding-planner.md`), it shows only that agent's remit.
+The rules block in `AGENTS.md` is the same in every directory and every harness that reads `AGENTS.md`. It is generated: `gloss agents --rules` prints it from the constants in `internal/agents`, rule 5 is the proposal sentence above, and `gloss doctor` warns when the block is missing or differs from what the installed `gloss` renders. Claude Code reads `AGENTS.md` on its own only when there is no `CLAUDE.md`, so a `CLAUDE.md` needs the line `@AGENTS.md`; `gloss init` adds it. The MCP server's instructions quote the rules about the briefing, finding targets and proposing.
+
+The briefing ranks concepts by relevance: those linked by code under the directory, then those its manifest declares, then its default namespace, then the rest. An allowed set of more than twelve patterns is shown as its globs and a count; `gloss check --explain` lists it in full. The first paragraph names the GlossMark skills installed under `.claude/skills/`. When `GLOSS_ACTOR` names an agent with an agent file (`agent:breeding-planner` and `.claude/agents/breeding-planner.md`), it shows only that agent's remit.
 
 A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [chargeback]` on `pay:Refund`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "settlement cutoff" finds `sw:CutoffClock`.
 

@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	register(command{"doctor", "check the setup end to end: gloss on PATH, GLOSS_ACTOR, hook, committed graph current, ledger in git, lockfile, CI pinned, ontology docs; one line per check with its fix", cmdDoctor})
+	register(command{"doctor", "check the setup end to end: gloss on PATH, GLOSS_ACTOR, hook, AGENTS.md rules block, committed graph current, ledger in git, lockfile, CI pinned, ontology docs; one line per check with its fix", cmdDoctor})
 }
 
 func cmdDoctor(args []string) int {

@@ -2,8 +2,10 @@
 
 // Package scaffold plans and writes the files gloss init creates: the
 // config, two tier files, a root manifest and one per top-level source
-// directory, views, .gitignore lines, a task-runner target and a CI job.
-// It never overwrites a file; existing ones are skipped or appended to.
+// directory, views, .gitignore lines, a task-runner target, a CI job and
+// the AGENTS.md rules block (with an @AGENTS.md import in an existing
+// CLAUDE.md). It never overwrites a file; existing ones are skipped or
+// appended to.
 package scaffold
 
 import (
@@ -13,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/mckalvan/glossmark/internal/agents"
 )
 
 // Options tunes the plan.
@@ -313,6 +317,33 @@ jobs:
       - uses: mckalvan/glossmark@%s
         with: { fail-on: HARD, coverage-fail-under: current }
 `, version)})
+	// AGENTS.md: the rules block every harness reads. CLAUDE.md, when the
+	// repository has one, imports it, because Claude Code reads AGENTS.md on
+	// its own only when there is no CLAUDE.md.
+	am, amErr := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+	switch st, err := agents.CheckRules(string(am)); {
+	case amErr != nil:
+		add(File{Path: "AGENTS.md", Action: Create, Content: agents.AppendRules(""), Note: "the GlossMark rules block"})
+	case err != nil:
+		add(File{Path: "AGENTS.md", Action: Skip, Note: err.Error()})
+	case st == agents.RulesCurrent:
+		add(File{Path: "AGENTS.md", Action: Skip, Note: "rules block current"})
+	case st == agents.RulesStale:
+		add(File{Path: "AGENTS.md", Action: Skip, Note: "rules block out of date; gloss agents --rules --write AGENTS.md replaces it"})
+	default:
+		add(File{Path: "AGENTS.md", Action: Append, Content: agents.AppendRules(string(am)), Note: "the GlossMark rules block"})
+	}
+	if cm, err := os.ReadFile(filepath.Join(root, "CLAUDE.md")); err == nil {
+		if agents.HasClaudeImport(string(cm)) {
+			add(File{Path: "CLAUDE.md", Action: Skip, Note: "already imports AGENTS.md"})
+		} else {
+			pre := ""
+			if len(cm) > 0 && !strings.HasSuffix(string(cm), "\n") {
+				pre = "\n"
+			}
+			add(File{Path: "CLAUDE.md", Action: Append, Content: pre + agents.ClaudeImport + "\n", Note: "import AGENTS.md"})
+		}
+	}
 	return p, nil
 }
 

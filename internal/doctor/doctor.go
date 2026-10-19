@@ -3,7 +3,8 @@
 // Package doctor checks that a repository's GlossMark setup works end to end:
 // the hook can find gloss, agents are attributed, the committed graph matches
 // the tree, the review record is in git, imports are locked, CI pins a
-// release, and ontology docs are intact. Each check is one line with a fix.
+// release, ontology docs are intact, and AGENTS.md carries the current rules
+// block. Each check is one line with a fix.
 package doctor
 
 import (
@@ -16,6 +17,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -54,6 +56,7 @@ func Run(ws *load.Workspace, g *graph.Graph, diags []marker.Diagnostic, env Env)
 	d.binary()
 	d.actor()
 	d.hook()
+	d.rules()
 	d.graph()
 	d.ledger()
 	d.lock()
@@ -156,6 +159,31 @@ func (d *doctor) hook() {
 		}
 		d.add("agent hook", OK, "SessionStart hook and MCP server registered with GLOSS_ACTOR", "")
 	}
+}
+
+func (d *doctor) rules() {
+	const fix = "gloss agents --rules --write AGENTS.md"
+	am, err := os.ReadFile(filepath.Join(d.ws.Root, "AGENTS.md"))
+	if err != nil {
+		d.add("agent rules", Warn, "no AGENTS.md: agents get no GlossMark rules unless a hook briefs them", fix)
+		return
+	}
+	switch st, err := agents.CheckRules(string(am)); {
+	case err != nil:
+		d.add("agent rules", Fail, "AGENTS.md: "+err.Error(), "")
+		return
+	case st == agents.RulesMissing:
+		d.add("agent rules", Warn, "AGENTS.md has no GlossMark rules block", fix)
+		return
+	case st == agents.RulesStale:
+		d.add("agent rules", Warn, "the rules block in AGENTS.md differs from what this build renders", fix)
+		return
+	}
+	if cm, err := os.ReadFile(filepath.Join(d.ws.Root, "CLAUDE.md")); err == nil && !agents.HasClaudeImport(string(cm)) {
+		d.add("agent rules", Warn, "AGENTS.md is current, but CLAUDE.md does not import it: Claude Code reads AGENTS.md on its own only when there is no CLAUDE.md", "add a line "+agents.ClaudeImport+" to CLAUDE.md")
+		return
+	}
+	d.add("agent rules", OK, "AGENTS.md carries the current rules block", "")
 }
 
 func (d *doctor) graph() {

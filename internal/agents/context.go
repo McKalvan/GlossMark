@@ -15,8 +15,9 @@ import (
 )
 
 // ProposalSentence is the one proposal workflow, stated verbatim by the
-// briefing, the AGENTS.md snippet, the MCP server and QUICKSTART, so an agent
-// reading any of them gets the same instruction.
+// briefing, rule 5 of the AGENTS.md rules block, the vocabulary snippet, the
+// MCP server and QUICKSTART, so an agent reading any of them gets the same
+// instruction.
 const ProposalSentence = "If no concept fits, write `@gloss? <relation> <ns>:NEW:<Name> note=\"why\"`, then run `gloss propose --from-new --doc \"what it is\"` (MCP: propose_concept) so the concept ships in the same PR with `proposed: true`; a human accepts it with `gloss accept --concept <ns>:<Name>`. Never invent a concept name any other way, and never hand-edit an ontology file to make a link resolve."
 
 // ContextOptions tunes the briefing.
@@ -47,7 +48,11 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 	head.WriteString("This repository links code to a two-tier ontology with one-line `@gloss` comments. ")
 	head.WriteString("Write `@gloss? <relation> <target>` on declarations you add or change (`?` = proposal). ")
 	head.WriteString(ProposalSentence + " ")
-	head.WriteString("Ask the MCP server (`gloss mcp`) with search_concepts, concepts_for_path, propose_link and impact_of.\n")
+	head.WriteString("Ask the MCP server (`gloss mcp`) with search_concepts, concepts_for_path, propose_link and impact_of.")
+	if sk := InstalledSkills(ws.Root); len(sk) > 0 {
+		fmt.Fprintf(&head, " Skills for longer tasks, in .claude/skills/: %s.", strings.Join(sk, ", "))
+	}
+	head.WriteString("\n")
 	if opt.Changed != "" {
 		head.WriteString("\n## You are touching\n" + opt.Changed)
 	}
@@ -69,11 +74,7 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 		}
 		head.WriteString("\n")
 		if len(allowed.Patterns) > 0 {
-			how := ""
-			if allowed.Derived {
-				how = ", derived from what the manifest declares"
-			}
-			fmt.Fprintf(&head, "Allowed targets: %s (others are HARD-gated%s)\n", strings.Join(allowed.Patterns, ", "), how)
+			head.WriteString(allowedLine(allowed) + "\n")
 		}
 	}
 	head.WriteString(remits(g, opt.Actor))
@@ -128,6 +129,39 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 		out = out[:opt.Budget*4-4] + "...\n"
 	}
 	return out
+}
+
+// maxAllowedListed is the longest allowed set the briefing lists pattern by
+// pattern. A longer one is shown as its globs and a count, so it does not
+// crowd the concepts out of a small budget.
+const maxAllowedListed = 12
+
+// allowedLine renders the allowed-targets line of the briefing.
+func allowedLine(a rollup.Allowed) string {
+	if len(a.Patterns) <= maxAllowedListed {
+		how := ""
+		if a.Derived {
+			how = ", derived from what the manifest declares"
+		}
+		return fmt.Sprintf("Allowed targets: %s (others are HARD-gated%s)", strings.Join(a.Patterns, ", "), how)
+	}
+	var globs []string
+	n := 0
+	for _, p := range a.Patterns {
+		if strings.Contains(p, "*") {
+			globs = append(globs, p)
+		} else {
+			n++
+		}
+	}
+	rest := fmt.Sprintf("the %d concepts listed in allowed:", n)
+	if a.Derived {
+		rest = fmt.Sprintf("everything this boundary and the boundaries inside it declare, with their parts and realized cores (%d concepts)", n)
+	}
+	if len(globs) > 0 {
+		rest = strings.Join(globs, ", ") + ", " + rest
+	}
+	return "Allowed targets: " + rest + ". Others are HARD-gated; `gloss check --explain` lists the set."
 }
 
 type conceptRow struct {
