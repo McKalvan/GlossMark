@@ -84,7 +84,11 @@ def test_authorize_declines_expired_cards(): ...
 
 Mark one public surface per concept, not every helper; add `scope=file` when a whole file is about one concept, and then no symbol markers in it. The marker goes above the declaration and its decorators.
 
-Agents write `@gloss?` for links they propose and `ns:NEW:Name` for concepts that do not exist yet. Generate the vocabulary they should see first:
+Agents write `@gloss?` for links they propose. The one proposal workflow, which the briefing, `AGENTS.md` and the MCP server state in the same words:
+
+> If no concept fits, write `@gloss? <relation> <ns>:NEW:<Name> note="why"`, then run `gloss propose --from-new --doc "what it is"` (MCP: propose_concept) so the concept ships in the same PR with `proposed: true`; a human accepts it with `gloss accept --concept <ns>:<Name>`. Never invent a concept name any other way, and never hand-edit an ontology file to make a link resolve.
+
+Generate the vocabulary agents should see first:
 
 ```sh
 gloss agents --dir services/api --write AGENTS.md
@@ -121,8 +125,9 @@ The actor belongs to a marker's first appearance, not to whoever runs the last b
 Four commands exist so an agent can work the ontology without a human in the loop until the review:
 
 ```sh
-gloss hook install                      # SessionStart hook → 'gloss context' briefing; MCP server in .mcp.json
-gloss context --dir services/api        # the briefing: boundary, allowed targets, remits, concepts, state
+gloss hook install                      # SessionStart hook → 'gloss context --changed --budget 2000'; MCP server in .mcp.json
+gloss context --dir services/api        # the briefing: boundary, allowed targets, your remit, concepts most relevant to the directory first, state
+gloss context --changed --budget 2000   # open with what the uncommitted changes touch; fit the whole briefing in ~2 000 tokens
 gloss impact --base origin/main         # what the working tree touches: published seam, constraints, tests, blast radius
 gloss impact services/api/handlers/refund.py
 gloss propose concept pa:RefundHandler --kind process --realizes pay:Refunding --doc "Handles refund requests"
@@ -130,6 +135,8 @@ gloss propose --from-new                # lift every ns:NEW:Name marker into a p
 gloss accept --concept pa:RefundHandler # a human accepts the proposal (drops proposed: true)
 gloss reject --concept pa:RefundHandler --reason "duplicate of pa:RefundFlow" --remove
 ```
+
+The briefing ranks concepts by relevance: those linked by code under the directory, then those its manifest declares, then its default namespace, then the rest. When `GLOSS_ACTOR` names an agent with an agent file (`agent:breeding-planner` and `.claude/agents/breeding-planner.md`), it shows only that agent's remit.
 
 A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [chargeback]` on `pay:Refund`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "settlement cutoff" finds `sw:CutoffClock`.
 

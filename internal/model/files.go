@@ -391,11 +391,11 @@ type Manifest struct {
 	Subscribes StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
 	// Holds names the entities whose data lives in this boundary (tables,
 	// files, packages); the code's represents links on entities derive it.
-	Holds            StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
+	Holds StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
 	// Presents and Hosts name the concepts this boundary is a UI surface or a
 	// shell for; they are compared like realizes but never imply it.
-	Presents StringList `yaml:"presents,omitempty" json:"presents,omitempty"`
-	Hosts    StringList `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	Presents         StringList `yaml:"presents,omitempty" json:"presents,omitempty"`
+	Hosts            StringList `yaml:"hosts,omitempty" json:"hosts,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`

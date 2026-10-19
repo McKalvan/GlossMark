@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/gate"
@@ -1350,5 +1351,61 @@ func TestPresentsAndHosts(t *testing.T) {
 				t.Errorf("page artifact inherited critical from what it presents (via %s)", a.CriticalityFrom)
 			}
 		}
+	}
+}
+
+// TestBriefingV2: the briefing ranks concepts by relevance to the directory,
+// respects a token budget, shows only the acting agent's remit, and states
+// the one proposal sentence that AGENTS.md and the MCP server also use.
+func TestBriefingV2(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	var core strings.Builder
+	core.WriteString("concepts:\n  Grading: { kind: process }\n  Gate: { kind: constraint }\n  Admin: { kind: entity }\n  Agent: { kind: entity }\n  AgentArena: { kind: system-type }\n")
+	for i := 0; i < 150; i++ {
+		fmt.Fprintf(&core, "  Filler%03d: { kind: entity, doc: \"A filler concept that pads the alphabetical list well past any budget.\" }\n", i)
+	}
+	write("glossmark.yaml", "owns:\n  arena: { iri: https://x/arena/, tier: core }\n  aa: { iri: https://x/aa/, tier: implementation }\n")
+	write("ontology/arena.gloss.yaml", core.String())
+	write("ontology/aa.gloss.yaml", "concepts:\n  GradingPipeline: { kind: process, realizes: arena:Grading }\n  Console: { kind: process, realizes: arena:Admin }\n")
+	write(".gloss.yaml", "boundary: o:arena\nlevel: system\n")
+	write("grading/.gloss.yaml", "boundary: o:grading\nlevel: container\npart-of: o:arena\ndefault-namespace: aa\nrealizes: [aa:GradingPipeline]\nallowed: [arena:*, aa:*]\n")
+	write("grading/pipeline.py", "# @gloss implements .GradingPipeline\ndef grade(): pass\n\n# @gloss implements arena:Gate\ndef gate(): pass\n")
+	write("admin/console.py", "# @gloss implements aa:Console\ndef console(): pass\n")
+	write(".claude/agents/grader.md", "<!-- @gloss may-modify aa:Grading*, arena:Grading scope=file -->\n# Grader\n")
+	write(".claude/agents/admin-bot.md", "<!-- @gloss may-modify arena:Admin scope=file -->\n# Admin bot\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	m := ws.ManifestFor("grading/x")
+	out := agents.Context(ws, g, m, rep, agents.ContextOptions{Dir: "grading", Budget: 2000, Actor: "agent:grader@m"})
+	idx := func(c string) int {
+		i := strings.Index(out, "- "+c+" (")
+		if i < 0 {
+			return 1 << 30
+		}
+		return i
+	}
+	if !(idx("arena:Grading") < idx("arena:Admin") && idx("arena:Gate") < idx("arena:Admin") && idx("aa:GradingPipeline") < idx("arena:Admin")) {
+		t.Errorf("grading concepts should come before arena:Admin:\n%s", out)
+	}
+	if len(out) > 2000*4 {
+		t.Errorf("briefing is %d chars, over the 2000-token budget", len(out))
+	}
+	if !strings.Contains(out, "use search_concepts for the rest") {
+		t.Errorf("the budget should cut the 150 filler concepts")
+	}
+	if !strings.Contains(out, "Your remit as agent:grader@m") || strings.Contains(out, "admin-bot") {
+		t.Errorf("remit should be the grader's only:\n%s", out)
+	}
+	if !strings.Contains(out, agents.ProposalSentence) || !strings.Contains(agents.Snippet(ws, g, m), agents.ProposalSentence) {
+		t.Error("briefing and AGENTS.md snippet must state the same proposal sentence")
+	}
+	// Without a named agent every remit is listed.
+	if all := agents.Context(ws, g, m, rep, agents.ContextOptions{Dir: "grading", Budget: 2000}); !strings.Contains(all, "admin-bot") || !strings.Contains(all, "grader") {
+		t.Errorf("all remits expected without GLOSS_ACTOR")
 	}
 }

@@ -3,12 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/ontoedit"
 
 	"github.com/mckalvan/glossmark/internal/extract"
@@ -211,20 +209,12 @@ func (b *mcpBackend) ProposeConcept(cp mcp.ConceptProposal) (any, error) {
 		"next": "link to it with @gloss? ... " + curie + "; a human accepts it with: gloss accept --concept " + curie}, nil
 }
 
-func (b *mcpBackend) Context(dir string) (string, error) {
+func (b *mcpBackend) Context(dir string, budget int, changed bool) (string, error) {
 	p, err := buildGraph(b.root, false)
 	if err != nil {
 		return "", err
 	}
-	rel := filepath.ToSlash(filepath.Clean(dir))
-	var m *model.Manifest
-	if rel != "" && rel != "." {
-		m = p.WS.ManifestFor(rel + "/x")
-	} else {
-		m = p.WS.ManifestFor("x")
-	}
-	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy()})
-	return agents.Context(p.WS, p.Graph, m, rep, 60), nil
+	return briefing(p, dir, 0, budget, changed), nil
 }
 
 func containsStr(xs []string, x string) bool {

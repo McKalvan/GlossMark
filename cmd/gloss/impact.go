@@ -96,7 +96,9 @@ func uniqStrings(xs []string) []string {
 func cmdContext(args []string) int {
 	fs, root := newFlags("context")
 	dir := fs.String("dir", "", "directory whose nearest manifest scopes the briefing (default: current directory)")
-	max := fs.Int("max", 60, "maximum concepts to list")
+	max := fs.Int("max", 0, "maximum concepts to list (0: as many as the budget allows)")
+	budget := fs.Int("budget", 2000, "approximate token budget for the whole briefing (0: unlimited)")
+	changed := fs.Bool("changed", false, "open the briefing with what the uncommitted changes touch (gloss impact of the working tree)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -108,15 +110,37 @@ func cmdContext(args []string) int {
 	if d == "" {
 		d, _ = os.Getwd()
 	}
-	rel := d
+	fmt.Print(briefing(p, d, *max, *budget, *changed))
+	return 0
+}
+
+// briefing renders gloss context for a directory (absolute or repo-relative).
+func briefing(p *pipeline, dir string, max, budget int, changed bool) string {
+	rel := dir
 	if filepath.IsAbs(rel) {
 		rel, _ = filepath.Rel(p.WS.Root, rel)
 	}
-	rel = filepath.ToSlash(filepath.Clean(rel))
-	m := p.WS.ManifestFor(strings.TrimPrefix(rel+"/x", "./"))
+	rel = strings.TrimPrefix(filepath.ToSlash(filepath.Clean(rel)), "./")
+	if rel == "." {
+		rel = ""
+	}
+	probe := "x"
+	if rel != "" {
+		probe = rel + "/x"
+	}
+	m := p.WS.ManifestFor(probe)
 	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
-	fmt.Print(agents.Context(p.WS, p.Graph, m, rep, *max))
-	return 0
+	opt := agents.ContextOptions{Dir: rel, MaxConcepts: max, Budget: budget, Actor: os.Getenv("GLOSS_ACTOR")}
+	if changed {
+		if files, err := changedFiles(p.WS.Root, "HEAD"); err == nil && len(files) > 0 {
+			ts := gate.Touched(p.Graph, p.WS, uniqStrings(files))
+			if len(ts) > 8 {
+				ts = ts[:8]
+			}
+			opt.Changed = gate.RenderTouched(ts)
+		}
+	}
+	return agents.Context(p.WS, p.Graph, m, rep, opt)
 }
 
 func cmdHook(args []string) int {
@@ -145,7 +169,7 @@ func cmdHook(args []string) int {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" 2>/dev/null || true", *actor)}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", *actor)}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
 		for i, it := range list {
