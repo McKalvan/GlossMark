@@ -50,12 +50,12 @@ var Rules = []string{
 var RuleSkills = []string{"gloss-link", "gloss-resolve-drift", "gloss-review", "adopt-glossmark"}
 
 // knownSkills are every GlossMark skill name the briefing looks for under
-// .claude/skills/: the shipped ones, the ones the rules name, and the ones
-// planned for criticality and imports.
+// .claude/skills/: the shipped ones, then any the rules name that are not
+// shipped (none; the contract test checks that every rule skill ships).
 func knownSkills() []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, group := range [][]string{RuleSkills, skills.Names, {"gloss-criticality", "gloss-upgrade-import"}} {
+	for _, group := range [][]string{skills.Names, RuleSkills} {
 		for _, n := range group {
 			if !seen[n] {
 				seen[n] = true

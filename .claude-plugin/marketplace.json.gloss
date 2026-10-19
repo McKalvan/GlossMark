@@ -1,0 +1,2 @@
+# Sidecar for marketplace.json (JSON has no comments): this repository as a one-plugin Claude Code marketplace.
+@gloss configures gmi:ClaudeCodePlugin scope=file

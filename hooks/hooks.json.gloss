@@ -1,0 +1,3 @@
+# Sidecar for hooks.json (JSON has no comments): the plugin's hooks, the same lines gloss hook install --guards writes.
+@gloss configures gmi:ClaudeCodePlugin scope=file
+@gloss configures gmi:HookGuard scope=file

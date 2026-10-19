@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "GLOSS_ACTOR=agent:claude-code gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "GLOSS_ACTOR=agent:claude-code gloss hook guard --event pre-edit 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "GLOSS_ACTOR=agent:claude-code gloss hook guard --event post-edit 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "GLOSS_ACTOR=agent:claude-code gloss hook guard --event stop"
+          }
+        ]
+      }
+    ]
+  }
+}

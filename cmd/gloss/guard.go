@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/guard"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -124,17 +125,6 @@ func countProposals(p *pipeline) int {
 // guardMarker identifies the hook commands gloss hook install --guards owns.
 const guardMarker = "gloss hook guard"
 
-// guardCommand returns the hook command line for a Claude Code event.
-func guardCommand(event, actor string) string {
-	switch event {
-	case "PreToolUse":
-		return fmt.Sprintf("GLOSS_ACTOR=%s gloss hook guard --event pre-edit 2>/dev/null || true", actor)
-	case "PostToolUse":
-		return fmt.Sprintf("GLOSS_ACTOR=%s gloss hook guard --event post-edit 2>/dev/null || true", actor)
-	}
-	return fmt.Sprintf("GLOSS_ACTOR=%s gloss hook guard --event stop", actor)
-}
-
 // installGuards registers the edit and stop guards in .claude/settings.json.
 // Re-running replaces the guard commands an earlier install wrote and keeps
 // every other hook.
@@ -150,10 +140,10 @@ func installGuards(root, actor string) error {
 	if hooks == nil {
 		hooks = map[string]any{}
 	}
-	for _, event := range []string{"PreToolUse", "PostToolUse", "Stop"} {
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": guardCommand(event, actor)}}}
+	for _, event := range agents.GuardEvents {
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": agents.GuardCommand(event, actor)}}}
 		if event != "Stop" {
-			entry["matcher"] = "Edit|Write"
+			entry["matcher"] = agents.GuardMatcher
 		}
 		list, _ := hooks[event].([]any)
 		var kept []any

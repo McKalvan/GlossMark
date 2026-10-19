@@ -1,0 +1,10 @@
+{
+  "name": "glossmark",
+  "version": "0.1.0",
+  "description": "GlossMark for Claude Code: the shipped skills, the SessionStart briefing, the edit and stop guards, and the gloss MCP server. Needs the gloss binary on PATH.",
+  "author": {
+    "name": "mckalvan"
+  },
+  "homepage": "https://github.com/mckalvan/glossmark",
+  "repository": "https://github.com/mckalvan/glossmark"
+}
