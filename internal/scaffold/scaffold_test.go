@@ -1,3 +1,5 @@
+// @gloss verifies gmi:Scaffolder scope=file
+
 package scaffold
 
 import (

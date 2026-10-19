@@ -1,3 +1,5 @@
+// @gloss implements gmi:MarkerSuggester scope=file
+
 package main
 
 import (

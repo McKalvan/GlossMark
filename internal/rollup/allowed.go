@@ -39,7 +39,7 @@ func AllowedFor(g *graph.Graph, ws *load.Workspace, m *model.Manifest) Allowed {
 	if m == nil {
 		return Allowed{}
 	}
-	if len(m.Allowed) > 0 {
+	if len(m.Allowed) > 0 && !m.ExtendsDerivedAllowed() {
 		return Allowed{Patterns: []string(m.Allowed)}
 	}
 	set := map[string]bool{}
@@ -73,11 +73,17 @@ func derive(g *graph.Graph, ws *load.Workspace, m *model.Manifest, set map[strin
 		set[m.DefaultNamespace+":*"] = true
 	}
 	expandDeclared(g, m, set)
+	// allowed: [derived, x, y] adds x and y to the derived set.
+	for _, p := range m.Allowed {
+		if p != model.DerivedMarker {
+			set[p] = true
+		}
+	}
 	for _, c := range Children(ws, m) {
 		if seen[c] {
 			continue
 		}
-		if len(c.Allowed) > 0 {
+		if len(c.Allowed) > 0 && !c.ExtendsDerivedAllowed() {
 			for _, p := range c.Allowed {
 				set[p] = true
 			}

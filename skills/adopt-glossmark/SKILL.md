@@ -3,6 +3,8 @@ name: adopt-glossmark
 description: Adopt GlossMark in a repository - scaffold it, draft the core and implementation ontology from the code and docs, propose @gloss markers with gloss suggest, check and drift, and open one reviewable PR. Use when asked to "add GlossMark", "set up gloss", "adopt the ontology", or to link a codebase to its domain vocabulary.
 ---
 
+<!-- @gloss instructs gm:Onboarding scope=file -->
+
 # Adopt GlossMark
 
 You are adding GlossMark to this repository: a two-tier ontology (a **core** tier the business owns, an **implementation** tier engineering owns) and one-line `@gloss` comments that link code to it. The result is one PR a human can review in an hour. Work through the steps in order and do not skip the checks.

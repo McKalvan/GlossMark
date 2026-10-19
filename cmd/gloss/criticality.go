@@ -1,3 +1,5 @@
+// @gloss implements gmi:CriticalityStamper scope=file
+
 package main
 
 import (

@@ -1,3 +1,5 @@
+// @gloss implements gmi:Scaffolder scope=file
+
 // Package scaffold plans and writes the files gloss init creates: the
 // config, two tier files, a root manifest and one per top-level source
 // directory, views, .gitignore lines, a task-runner target and a CI job.

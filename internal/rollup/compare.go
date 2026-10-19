@@ -459,6 +459,9 @@ func (c *comparer) orphans() {
 		if ok, _ := c.reachedByArtifact(n.ID); ok {
 			continue
 		}
+		if n.ValueFrom != "" {
+			continue // value-from binds it to a line of code
+		}
 		what := "no artifact links to it"
 		if n.Tier == model.TierImpl {
 			what = "implementation concept has no artifacts"
@@ -542,7 +545,7 @@ func nsOf(cur string) string   { return strings.SplitN(cur, ":", 2)[0] }
 func nameOf(cur string) string { p := strings.SplitN(cur, ":", 2); return p[len(p)-1] }
 
 // presentedOnly reports concepts a UI surface presents while nothing
-// implements them: a page with no engine behind it.
+// implements (or, for data, represents) them: a page with no engine behind it.
 func (c *comparer) presentedOnly() {
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
 		if n.Imported || n.Internal || n.Deprecated || n.Kind == "event" {
@@ -561,13 +564,26 @@ func (c *comparer) presentedOnly() {
 				}
 			}
 		}
-		if len(by) == 0 || c.implemented(n.ID, 0) {
+		if len(by) == 0 || c.implemented(n.ID, 0) || c.represented(n.ID) {
 			continue
 		}
 		by = uniq(by)
 		c.add(Finding{Kind: KindPresentedOnly, Severity: "warning", Concept: n.CURIE, Path: n.File, Line: n.Line, Via: by,
 			Msg: fmt.Sprintf("%s is presented (%s) but nothing implements it: a surface with no mechanism behind it", n.CURIE, strings.Join(by, ", "))})
 	}
+}
+
+// represented reports whether an artifact represents the concept (or a
+// concept that realizes it): an entity's mechanism is its data shape.
+func (c *comparer) represented(id string) bool {
+	for _, x := range append([]string{id}, c.g.Subjects(id, "realizes")...) {
+		for _, e := range c.g.In(x, "represents") {
+			if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (c *comparer) untested() {

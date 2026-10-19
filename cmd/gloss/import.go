@@ -1,3 +1,5 @@
+// @gloss implements gmi:VocabularyImporter scope=file
+
 package main
 
 import (

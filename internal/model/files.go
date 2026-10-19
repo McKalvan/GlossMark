@@ -125,6 +125,7 @@ type Waiver struct {
 // DefaultPolicy returns the policy from the design when none is configured.
 func DefaultPolicy() *Policy {
 	return &Policy{
+		// @gloss publishes-value gmi:DefaultSoftThreshold scope=line
 		SoftConfThreshold: 0.7,
 		HardPaths:         []string{"ontology/**", "**/.gloss.yaml", "glossmark.yaml"},
 		CoverageFailUnder: 0,
@@ -439,6 +440,20 @@ type Manifest struct {
 // InheritMarker in a manifest's realizes: list means "what my nested
 // boundaries declare"; the manifest may list additions beside it.
 const InheritMarker = "inherit"
+
+// DerivedMarker in a manifest's allowed: list means "the derived set";
+// the other entries are added to it instead of replacing it.
+const DerivedMarker = "derived"
+
+// ExtendsDerivedAllowed reports whether allowed: starts from the derived set.
+func (m *Manifest) ExtendsDerivedAllowed() bool {
+	for _, a := range m.Allowed {
+		if a == DerivedMarker {
+			return true
+		}
+	}
+	return false
+}
 
 // InheritsRealizes reports whether the manifest wrote realizes: inherit.
 func (m *Manifest) InheritsRealizes() bool {

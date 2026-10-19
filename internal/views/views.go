@@ -16,6 +16,7 @@ import (
 )
 
 // Projection is one rendered view.
+// @gloss represents gm:View
 type Projection struct {
 	Name string `json:"name"`
 	Doc  string `json:"doc,omitempty"`

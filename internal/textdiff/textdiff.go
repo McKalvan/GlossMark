@@ -1,3 +1,5 @@
+// @gloss implements gmi:TextDiff scope=file
+
 // Package textdiff renders a unified diff of two small texts (ontology
 // files, manifests) so a tool can show a reviewable change before writing it.
 package textdiff

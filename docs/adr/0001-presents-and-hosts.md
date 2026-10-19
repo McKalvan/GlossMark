@@ -1,3 +1,4 @@
+<!-- @gloss documents gm:Relation scope=file -->
 # ADR 0001: `presents` and `hosts` take the UI and the shell out of `realizes`
 
 Status: accepted, 2026-10-19. Closes issue #8 (review findings 3.2 and 3.11).

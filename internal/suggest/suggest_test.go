@@ -1,3 +1,5 @@
+// @gloss verifies gmi:MarkerSuggester scope=file
+
 package suggest
 
 import (
@@ -62,7 +64,7 @@ func build(t *testing.T, root string) (*load.Workspace, *graph.Graph) {
 }
 
 // TestSuggestRecoversMarkers strips every code marker from horse-factory and
-// checks that suggest proposes reviewable @gloss? markers that pass check
+// checks that suggest proposes reviewable `@gloss?` markers that pass check
 // with no kind warnings, inserts above decorators, and stops once marked.
 func TestSuggestRecoversMarkers(t *testing.T) {
 	root := t.TempDir()

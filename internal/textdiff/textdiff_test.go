@@ -1,3 +1,5 @@
+// @gloss verifies gmi:TextDiff scope=file
+
 package textdiff
 
 import (

@@ -1,3 +1,5 @@
+// @gloss verifies gmi:VocabularyImporter scope=file
+
 package importers
 
 import (

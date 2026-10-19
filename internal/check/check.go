@@ -412,7 +412,7 @@ func (c *checker) manifests() {
 			}
 		}
 		for _, pat := range m.Allowed {
-			if !strings.Contains(pat, "*") && c.g.NodeByCurie(pat) == nil {
+			if pat != model.DerivedMarker && !strings.Contains(pat, "*") && c.g.NodeByCurie(pat) == nil {
 				c.add(m.Path, 1, "warning", "GM501", fmt.Sprintf("allowed lists %s, which does not exist", pat))
 			}
 		}

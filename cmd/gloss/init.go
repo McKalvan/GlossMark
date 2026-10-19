@@ -1,3 +1,5 @@
+// @gloss implements gmi:Scaffolder scope=file
+
 package main
 
 import (

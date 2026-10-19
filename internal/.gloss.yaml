@@ -3,9 +3,15 @@ boundary: arch:glossmark-lib
 level: container
 label: GlossMark library
 part-of: arch:glossmark
-realizes: [gm:Extraction, gm:Lint, gm:Rollup, gm:DriftComparison, gm:Gating, gm:Review, gm:Projection, gm:Publication, gm:Landscape, gm:Vocabulary, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:Criticality]
-produces: [gm:Graph, gm:View, gm:Drift, gm:Impact, gm:Coverage, gm:DecisionRequest]
+realizes: [gm:Extraction, gm:Lint, gm:Rollup, gm:DriftComparison, gm:Gating, gm:Review, gm:Projection, gm:Publication, gm:Landscape, gm:Vocabulary, gm:Onboarding, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:ValueBinding, gm:Criticality]
+produces: [gm:Graph, gm:View, gm:Drift, gm:Impact, gm:Coverage, gm:DecisionRequest, gm:ProposedLink]
 publishes: [gm:LinkProposed, gm:LinkAccepted, gm:LinkRejected, gm:LinkStale, gm:DecisionRequested, gm:DriftDetected]
+# holds: the core entities whose data shapes live here (represents on an entity
+# derives it, and gloss drift compares the two).
+holds: [gm:Artifact, gm:Concept, gm:Relation, gm:Namespace, gm:Boundary, gm:Link, gm:ProposedLink, gm:View]
 default-namespace: gmi
-allowed: [gm:*, gmi:*]
+# allowed: the derived set (gmi:*, everything declared above, their parts and
+# cores) plus two concepts the library links to without declaring them: the
+# conf= key represents gm:Confidence, and the self-host test verifies gm:GlossMark.
+allowed: [derived, gm:Confidence, gm:GlossMark]
 owner: glossmark

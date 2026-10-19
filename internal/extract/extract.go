@@ -354,6 +354,7 @@ func symbolLine(symbol string) *regexp.Regexp {
 }
 
 // bindValue resolves a concept's value-from to a line of code and records it.
+// @gloss implements gmi:ValueBinder
 func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, line int) {
 	rel := filepath.ToSlash(vf.Path)
 	b, err := os.ReadFile(ex.ws.Abs(rel))

@@ -1,3 +1,5 @@
+// @gloss implements gmi:VocabularyImporter scope=file
+
 // Package importers reads vocabularies a repository already keeps (a
 // markdown glossary, an enums file) into ontology entries, so a team that
 // already cares about its vocabulary does not type it twice.

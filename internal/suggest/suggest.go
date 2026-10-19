@@ -1,4 +1,6 @@
-// Package suggest proposes @gloss? markers for unmarked declarations by
+// @gloss implements gmi:MarkerSuggester scope=file
+
+// Package suggest proposes `@gloss?` markers for unmarked declarations by
 // matching their names and docstrings against the ontology, so the first
 // pass of an adoption is a reviewable patch instead of hand-written markers.
 package suggest

@@ -1,4 +1,4 @@
-// @gloss verifies gmi:Extractor, gmi:Linter, gmi:RollupEngine, gmi:DriftComparator, gmi:Gate, gmi:ReviewLedger, gmi:ViewProjector, gmi:WorkspaceLoader, gmi:LandscapeAssembler, gmi:CriticalityStamper, gmi:McpServer, gmi:OntologyEditor, gmi:ImportLock scope=file
+// @gloss verifies gmi:Extractor, gmi:Linter, gmi:RollupEngine, gmi:DriftComparator, gmi:Gate, gmi:ReviewLedger, gmi:ViewProjector, gmi:WorkspaceLoader, gmi:LandscapeAssembler, gmi:CriticalityStamper, gmi:McpServer, gmi:OntologyEditor, gmi:ImportLock, gmi:AgentsSnippet, gmi:ValueBinder scope=file
 
 // Package e2e runs the whole pipeline on the example repositories and asserts
 // the findings the design document's worked examples call for.
@@ -1101,6 +1101,17 @@ func TestDerivedAllowed(t *testing.T) {
 			if cls != gate.SOFT {
 				t.Errorf("Part: %s %v", cls, why)
 			}
+		}
+	}
+	// allowed: [derived, z:Elsewhere] keeps the derived set and adds one concept.
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:Doer]\nproduces: [z:Thing]\nallowed: [derived, z:Elsewhere]\n")
+	ws, g, _, _ = build(t, root)
+	if a := rollup.AllowedFor(g, ws, ws.ManifestFor("svc/a.py")); !a.Derived || !has(a.Patterns, "z:Elsewhere") || !has(a.Patterns, "z:Part") {
+		t.Errorf("derived plus extras = %+v", a)
+	}
+	for _, d := range check.Run(ws, g) {
+		if d.Code == "GM503" || d.Code == "GM502" || d.Code == "GM501" {
+			t.Errorf("allowed: [derived, ...]: %s", d)
 		}
 	}
 	// A written list narrows: only i:* now, so z:Part becomes GM502.

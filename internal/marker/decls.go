@@ -1,3 +1,5 @@
+// @gloss implements gmi:DeclarationAnchor, gmi:MarkerSuggester scope=file
+
 package marker
 
 import (

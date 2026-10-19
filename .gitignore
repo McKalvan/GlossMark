@@ -9,3 +9,6 @@ examples/*/*/.glossmark/views.js
 examples/*/*/.glossmark/viewer.html
 /.glossmark/viewer.html
 /.glossmark/views.json
+.glossmark/viewer.html
+.glossmark/views.js
+.glossmark/views.json
