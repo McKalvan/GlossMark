@@ -4,5 +4,6 @@ owns:
   impl: { iri: https://onto.acme.dev/horse-factory/, file: ontology/impl.gloss.yaml, tier: implementation, version: 0.3.0, owner: horse-platform }
 prefixes:
   acme: https://arch.acme.dev/boundaries/
+source-url: https://github.com/mckalvan/glossmark/blob/main/examples/horse-factory/{path}#L{line}
 policy:
   soft-conf-threshold: 0.7

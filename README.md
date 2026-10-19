@@ -55,7 +55,7 @@ go build -o gloss ./cmd/gloss
 cd examples/horse-factory
 ../../gloss check          # 0 errors, 1 warning: the Donkey link is outside the boundary's allowed list
 ../../gloss drift          # the drift report above
-../../gloss view           # .glossmark/viewer.html — open it in a browser: boundaries are boxes, click to drill in
+../../gloss view           # .glossmark/viewer.html + views.js — open it in a browser: boundaries are boxes, click to drill in, click a concept for its code, tests and findings
 cd ../payments
 ../../gloss landscape payments-api settlement-worker   # cross-repo context map and drift
 ```

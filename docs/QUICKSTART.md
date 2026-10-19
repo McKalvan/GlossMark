@@ -104,7 +104,7 @@ gloss drift                      # violations, gaps, orphans, rogues, stale, unt
 gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
-gloss view                       # .glossmark/viewer.html, static, no server: boundaries are boxes, click to drill in, double-click to focus
+gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings
 gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db

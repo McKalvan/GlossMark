@@ -3,4 +3,7 @@
 *.db
 examples/*/.glossmark/viewer.html
 examples/*/.glossmark/views.json
+examples/*/.glossmark/views.js
+examples/*/*/.glossmark/views.json
+examples/*/*/.glossmark/views.js
 examples/*/*/.glossmark/viewer.html

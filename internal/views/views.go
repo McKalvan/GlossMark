@@ -15,11 +15,15 @@ import (
 
 // Projection is one rendered view.
 type Projection struct {
-	Name  string  `json:"name"`
-	Doc   string  `json:"doc,omitempty"`
-	Zoom  string  `json:"zoom"`
-	Nodes []PNode `json:"nodes"`
-	Edges []PEdge `json:"edges"`
+	Name string `json:"name"`
+	Doc  string `json:"doc,omitempty"`
+	Zoom string `json:"zoom"`
+	// Curated is true when the view names concepts in include: (not only
+	// namespace globs). The viewer opens such a view expanded, and only
+	// edges with at least one named end are kept.
+	Curated bool    `json:"curated,omitempty"`
+	Nodes   []PNode `json:"nodes"`
+	Edges   []PEdge `json:"edges"`
 }
 
 // PNode is a node as the view shows it.
@@ -40,6 +44,7 @@ type PNode struct {
 	Doc         string   `json:"doc,omitempty"`
 	Value       any      `json:"value,omitempty"`
 	Path        string   `json:"path,omitempty"`
+	Line        int      `json:"line,omitempty"` // first line of an artifact's anchor
 	Imported    bool     `json:"imported,omitempty"`
 	// Boundary is the boundary node (CURIE) this concept or artifact sits in,
 	// resolved from what the boundary's code realizes or represents; the
@@ -92,7 +97,8 @@ func Project(g *graph.Graph, name string, v *model.View) *Projection {
 	if zoom == "" {
 		zoom = "component"
 	}
-	pr := &Projection{Name: name, Doc: v.Doc, Zoom: zoom}
+	pr := &Projection{Name: name, Doc: v.Doc, Zoom: zoom, Curated: curated(v)}
+	p.curated = pr.Curated
 	p.zoom = zoomIndex[zoom]
 	p.concepts()
 	p.boundaries()
@@ -117,6 +123,17 @@ type projector struct {
 	nodes    []PNode
 	byID     map[string]int
 	outEdges []PEdge
+	curated  bool
+}
+
+// curated reports whether a view's include list names at least one concept.
+func curated(v *model.View) bool {
+	for _, pat := range v.Include {
+		if !strings.Contains(pat, "*") {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *projector) matchesInclude(curie string) bool {
@@ -329,9 +346,15 @@ func (p *projector) boundaries() {
 
 func (p *projector) artifacts() {
 	for _, a := range p.g.NodesOf(model.NodeArtifact) {
+		if p.curated && !p.linksNamed(a.ID) {
+			continue // a curated view shows only the code behind the concepts it names
+		}
 		p.included[a.ID] = true
 		p.fold[a.ID] = []string{a.ID}
 		pn := PNode{ID: p.g.Curie(a.ID), Label: a.Label, Type: "artifact", Kind: a.Kind, Depth: 4, Path: a.Path, Branch: "artifact", Criticality: a.Criticality, CriticalityFrom: a.CriticalityFrom}
+		if a.Anchor != nil && a.Anchor.Scope != "file" {
+			pn.Line = a.Anchor.StartLine
+		}
 		if a.Boundary != "" {
 			if t := p.fold[a.Boundary]; len(t) > 0 {
 				pn.Parent = p.g.Curie(t[0])
@@ -351,7 +374,12 @@ func (p *projector) artifacts() {
 // enclosing boundary, or stays unplaced when there is none. A part-of tree
 // moves as one: its root takes the common boundary of its parts.
 func (p *projector) house() {
-	cand := map[string]map[string]bool{} // concept CURIE → boundary CURIEs
+	// Tie-break: a boundary whose own code implements or represents the
+	// concept (a direct link) beats one whose manifest declares it, which beats
+	// one that only reaches it by lifting through another concept. Only the
+	// strongest candidates go to resolveBoundary, so a concept many boundaries
+	// touch indirectly still lands in the box that computes it.
+	cand := map[string]map[string]int{} // concept CURIE → boundary CURIE → strength
 	for _, b := range p.g.NodesOf(model.NodeBoundary) {
 		bt := p.fold[b.ID]
 		if len(bt) == 0 || !p.included[bt[0]] {
@@ -360,6 +388,13 @@ func (p *projector) house() {
 		bc := p.g.Curie(bt[0])
 		for _, rel := range rollup.HousingRelations {
 			for _, e := range p.g.Out(b.ID, rel) {
+				strength := 0
+				switch {
+				case e.Source == graph.SourceDerived && e.Prov != nil && len(e.Prov.Via) == 1:
+					strength = 2
+				case e.Source == graph.SourceDeclared:
+					strength = 1
+				}
 				for _, t := range p.target(e.O, 0) {
 					if !p.included[t] {
 						continue
@@ -369,14 +404,28 @@ func (p *projector) house() {
 						continue
 					}
 					if cand[tc] == nil {
-						cand[tc] = map[string]bool{}
+						cand[tc] = map[string]int{}
 					}
-					cand[tc][bc] = true
+					if old, ok := cand[tc][bc]; !ok || strength > old {
+						cand[tc][bc] = strength
+					}
 				}
 			}
 		}
 	}
-	for cu, set := range cand {
+	for cu, byB := range cand {
+		best := -1
+		for _, st := range byB {
+			if st > best {
+				best = st
+			}
+		}
+		set := map[string]bool{}
+		for b, st := range byB {
+			if st == best {
+				set[b] = true
+			}
+		}
 		p.nodes[p.byID[cu]].Boundary = p.resolveBoundary(set)
 	}
 	// Part-of trees: the root adopts the common boundary of its descendants
@@ -486,6 +535,28 @@ func (p *projector) resolveBoundary(set map[string]bool) string {
 	return ""
 }
 
+// linksNamed reports whether an artifact links to a concept the view names.
+func (p *projector) linksNamed(id string) bool {
+	for _, e := range p.g.Out(id, "") {
+		if n := p.g.Node(e.O); n != nil && n.NodeType == model.NodeConcept && p.matchesInclude(n.CURIE) {
+			return true
+		}
+	}
+	return false
+}
+
+// namesEnd reports whether a curated view's include list names either end of
+// an edge (before folding), so a closed box does not carry edges between
+// concepts the view never asked for.
+func (p *projector) namesEnd(e *graph.Edge) bool {
+	for _, id := range []string{e.S, e.O} {
+		if n := p.g.Node(id); n != nil && n.NodeType == model.NodeConcept && p.matchesInclude(n.CURIE) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *projector) relationShown(rel string) bool {
 	if len(p.v.Relations) == 0 {
 		return true
@@ -515,6 +586,9 @@ func (p *projector) edges() {
 		}
 		if e.P == "part-of" && e.Source == graph.SourceDerived {
 			continue // containment is carried by Parent
+		}
+		if p.curated && !p.namesEnd(e) {
+			continue // neither end is something the view names
 		}
 		ss := p.target(e.S, 0)
 		if p.fold[e.S] != nil {

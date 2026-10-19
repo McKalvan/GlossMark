@@ -1122,7 +1122,7 @@ func TestAdoptionDiff(t *testing.T) {
 	empty := graph.New(ws.Prefixes)
 	im := gate.Classify(empty, head, ws, gate.Options{Base: "main (no graph)", Policy: pol, HeadLedger: lg.Entries, AfterReport: after, Adoption: true})
 	a := im.Adoption
-	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 3 || len(a.PerBoundary) < 2 || len(a.PerView) != 2 || a.Hidden == 0 {
+	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 3 || len(a.PerBoundary) < 2 || len(a.PerView) != len(ws.Views.Views) || a.Hidden == 0 {
 		t.Fatalf("adoption summary = %+v", a)
 	}
 	for _, ch := range im.Changes {
@@ -1407,5 +1407,66 @@ func TestBriefingV2(t *testing.T) {
 	// Without a named agent every remit is listed.
 	if all := agents.Context(ws, g, m, rep, agents.ContextOptions{Dir: "grading", Budget: 2000}); !strings.Contains(all, "admin-bot") || !strings.Contains(all, "grader") {
 		t.Errorf("all remits expected without GLOSS_ACTOR")
+	}
+}
+
+// TestViewContainment: a concept goes into the boundary whose own code links
+// to it, not the common parent of every boundary that reaches it by lifting;
+// a curated view (one that names concepts) is flagged for the viewer to open
+// expanded and keeps only the artifacts and edges around what it names.
+func TestViewContainment(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Thing: { kind: process }\n  Other: { kind: entity }\n  Elsewhere: { kind: entity, part-of: Other }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Engine: { kind: process, realizes: z:Thing }\n  Step: { kind: process, part-of: Engine }\n")
+	write("ontology/views.yaml", "views:\n  all:\n    include: [z:*, i:*]\n    zoom: code\n  thing:\n    include: [z:Thing, i:Engine]\n    zoom: code\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
+	write("a/.gloss.yaml", "boundary: o:a\nlevel: container\npart-of: o:root\n")
+	write("a/engine.py", "# @gloss implements i:Engine\ndef run(): pass\n")
+	write("b/.gloss.yaml", "boundary: o:b\nlevel: container\npart-of: o:root\n")
+	write("b/step.py", "# @gloss implements i:Step\ndef step(): pass\n\n# @gloss represents z:Other\nclass O: pass\n\n# @gloss represents z:Elsewhere\nclass E: pass\n")
+	ws, g, _, _ := build(t, root)
+	ps := views.ProjectAll(g, ws.Views)
+	byName := map[string]*views.Projection{}
+	for _, p := range ps {
+		byName[p.Name] = p
+	}
+	node := func(p *views.Projection, id string) *views.PNode {
+		for i := range p.Nodes {
+			if p.Nodes[i].ID == id {
+				return &p.Nodes[i]
+			}
+		}
+		return nil
+	}
+	all := byName["all"]
+	if all.Curated {
+		t.Error("a glob-only view is not curated")
+	}
+	// b reaches i:Engine only by lifting through i:Step; a implements it directly.
+	if n := node(all, "i:Engine"); n == nil || n.Boundary != "o:a" {
+		t.Errorf("i:Engine boundary = %+v, want o:a", n)
+	}
+	th := byName["thing"]
+	if !th.Curated {
+		t.Error("a view naming concepts is curated")
+	}
+	for _, n := range th.Nodes {
+		if n.Type == "artifact" && n.Path != "a/engine.py" {
+			t.Errorf("curated view kept an unrelated artifact: %s", n.ID)
+		}
+	}
+	for _, e := range th.Edges {
+		if e.S == "z:Elsewhere" || e.O == "z:Other" {
+			t.Errorf("curated view kept an edge between concepts it does not name: %+v", e)
+		}
+	}
+	if n := node(th, "a/engine.py#run"); n == nil || n.Line != 2 {
+		t.Errorf("artifact line = %+v", n)
 	}
 }

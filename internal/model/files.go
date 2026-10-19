@@ -58,6 +58,9 @@ type Config struct {
 	// CommentStyles maps a file extension (".foo") to its comment tokens,
 	// extending the builtin table.
 	CommentStyles map[string][]string `yaml:"comment-styles,omitempty" json:"comment-styles,omitempty"`
+	// SourceURL links paths in the viewer to a code host:
+	// "https://github.com/o/r/blob/main/{path}#L{line}".
+	SourceURL string `yaml:"source-url,omitempty" json:"source-url,omitempty"`
 	// TestPaths are globs whose markers default to verifies when relation
 	// inference runs (pass "inferrers"). Default: common test layouts.
 	TestPaths []string `yaml:"test-paths,omitempty" json:"test-paths,omitempty"`

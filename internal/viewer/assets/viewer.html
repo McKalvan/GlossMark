@@ -137,6 +137,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
   <aside id="panel"></aside>
 </main>
 <script id="gloss-data" type="application/json">__GLOSS_DATA__</script>
+<!--GLOSS_DATA_SCRIPT-->
 <script>
 (function(){
 'use strict';
@@ -149,11 +150,22 @@ function hideMsg(){msgEl.classList.remove('on');}
 /* ---- data ---- */
 let data;
 try{
-  data=JSON.parse($('gloss-data').textContent);
-  if(!data||typeof data!=='object')throw new Error('not an object');
+  // Split output (default): views.js sets window.GLOSS_DATA. Inline output: the JSON is embedded.
+  data=window.GLOSS_DATA||JSON.parse($('gloss-data').textContent);
+  if(!data||typeof data!=='object')throw new Error('no data: is views.js next to viewer.html? Re-run gloss view.');
 }catch(e){
-  showMsg('Could not read the embedded view data.\n'+e.message);
+  showMsg('Could not read the view data.\n'+e.message);
   return;
+}
+const details=(data.concepts&&typeof data.concepts==='object')?data.concepts:{};
+const findings=Array.isArray(data.findings)?data.findings:[];
+const srcURL=typeof data.sourceUrl==='string'?data.sourceUrl:'';
+/* A path:line, linked to the code host when glossmark.yaml sets source-url. */
+function srcLink(path,line){
+  const txt=esc(path)+(line?':'+esc(line):'');
+  if(!srcURL||!path)return `<span class="mono">${txt}</span>`;
+  const url=srcURL.split('{path}').join(path.split('/').map(encodeURIComponent).join('/')).split('{line}').join(String(line||1));
+  return `<a class="mono" href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
 }
 const views=Array.isArray(data.views)?data.views:[];
 const diff=(data.diff&&typeof data.diff==='object')?data.diff:null;
@@ -235,6 +247,8 @@ function loadView(i){
   rng=mulberry(hash(V.name||'view')+1);
   buildFilters();
   rebuild(true);
+  // A curated view (one that names its concepts) opens with every box open.
+  if(V.curated){V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(true);}
   fit();
   renderCrumbs();
   renderPanel();
@@ -750,9 +764,18 @@ function renderPanel(){
     else if(n.type!=='boundary'&&!n.ghost)row('in boundary','<span class="via">none: no boundary’s code realizes it</span>');
     row('published as',n.published?esc(n.publishedAs||'yes'):'');
     row('value',n.value!=null?esc(typeof n.value==='object'?JSON.stringify(n.value):n.value):'');
-    row('path',n.path?'<span class="mono">'+esc(n.path)+'</span>':'');
+    row('path',n.path?srcLink(n.path,n.line||0):'');
     row('flags',[n.internal&&'internal',n.imported&&'imported',n.ghost&&'removed in diff',n._diff&&!n.ghost&&n._diff].filter(Boolean).join(', '));
     row('doc',esc(n.doc));h+='</dl>';
+    const dt=n.type==='concept'?details[n.id]:null;
+    if(dt){
+      const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="via">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="via">proposed</span>':''}${l.via?' <span class="via">via '+esc(l.via)+'</span>':''}</li>`;
+      if(dt.realizes&&dt.realizes.length)h+=`<h2>Realizes</h2><div class="mono">${dt.realizes.map(esc).join(' → ')}</div>`;
+      h+=`<h2>Artifacts (${(dt.artifacts||[]).length})</h2><ul>${(dt.artifacts||[]).map(linkLi).join('')||'<li class="via">no code links to it</li>'}</ul>`;
+      h+=`<h2>Verified by (${(dt.verifiers||[]).length})</h2><ul>${(dt.verifiers||[]).map(linkLi).join('')||'<li class="via">nothing verifies it</li>'}</ul>`;
+      if(dt.more)h+=`<div class="via">… ${dt.more} more links</div>`;
+      if(dt.findings&&dt.findings.length)h+=`<h2>Findings (${dt.findings.length})</h2><ul>${dt.findings.map(f=>'<li>'+esc(f)+'</li>').join('')}</ul>`;
+    }
     const kids=(kidsOf.get(n.id)||[]).slice().sort((a,b)=>(a.type===b.type?0:a.type==='boundary'?-1:1)||critRank(b.criticality)-critRank(a.criticality)||(a.label||a.id).localeCompare(b.label||b.id));
     if(kids.length)h+=`<div><span style="color:var(--muted)">inside (${kids.length}) · ${S.expanded.has(n.id)?'open':'closed'}</span><ul>${kids.map(k=>'<li>'+nodeLink(k)+(k.type==='boundary'?' <span class="badge">'+esc(k.kind||'boundary')+'</span>':'')+(k.criticality?' '+critPill(k.criticality):'')+(k.internal?' <span class="via">internal</span>':'')+'</li>').join('')}</ul></div>`;
     if(n.folded&&n.folded.length)h+=`<div><span style="color:var(--muted)">folded into this node (${n.folded.length})</span><ul>${n.folded.map(f=>'<li class="mono">'+esc(f)+'</li>').join('')}</ul></div>`;
@@ -775,6 +798,18 @@ function renderPanel(){
     if(tops.length){
       const sorted=tops.slice().sort((a,b)=>critRank(b.criticality)-critRank(a.criticality)||(a.label||a.id).localeCompare(b.label||b.id));
       h+=`<ul>${sorted.map(b=>'<li>'+nodeLink(b)+' <span class="badge">'+esc(b.kind||'boundary')+'</span>'+(b._hidden?' <span class="via">'+b._hidden+' inside</span>':'')+(b.criticality?' '+critPill(b.criticality):'')+'</li>').join('')}</ul>`;
+    }
+    if(data.classified===0)h+=`<div class="via" style="margin-top:6px">Nothing is classified by criticality yet, so ordering by criticality has no effect. Run <span class="mono">gloss criticality suggest</span> for a first pass.</div>`;
+    if(findings.length){
+      const kinds=[...new Set(findings.map(f=>f.kind))];
+      h+=`<h2>Drift (${findings.length})</h2>`;
+      kinds.forEach(k=>{
+        const list=findings.filter(f=>f.kind===k);
+        h+=`<details${k==='violation'||k==='gap'||k==='dangling'?' open':''}><summary><b>${esc(k)}</b> <span class="badge">${list.length}</span></summary><ul>${list.slice(0,25).map(f=>{
+          const c=f.concept&&byId.has(f.concept)?nodeLink(byId.get(f.concept)):(f.concept?'<span class="mono">'+esc(f.concept)+'</span>':'');
+          return '<li>'+(f.boundary?esc(f.boundary)+' ':'')+c+' <div class="via">'+esc(f.msg||'')+'</div>'+(f.path?'<div>'+srcLink(f.path,f.line)+'</div>':'')+'</li>';
+        }).join('')}${list.length>25?'<li class="via">… '+(list.length-25)+' more</li>':''}</ul></details>`;
+      });
     }
   }
   h+=`<h2>Legend</h2><div class="legend"><span><i class="sw r"></i>closed boundary</span><span><i class="sw o"></i>open boundary</span><span><i class="sw c"></i>concept</span><span><i class="sw a"></i>artifact</span><br>
@@ -906,6 +941,8 @@ window.glossViewer={
   containerOf(id){const n=byId.get(id);return n&&n._c?n._c.id:null;},
   rect(id){const n=byId.get(id);if(!n||!n._vis||!n._open)return null;RC=new Map();return rectOf(n);},
   edges(){return VE.filter(e=>!e.contain).map(e=>({s:e.s.id,p:e.p,o:e.o.id}));},
+  select(id){const n=byId.get(id);if(!n)return false;reveal(n);return true;},
+  panel(){return $('panel').innerText;},
   filter(group,value){if(!S.f[group])return false;S.f[group].has(value)?S.f[group].delete(value):S.f[group].add(value);buildFilters();rebuild(false);renderPanel();draw();return true;},
   state(){return {view:V.name,focus:S.focus,expanded:[...S.expanded],nodes:VN.length,edges:VE.filter(e=>!e.contain).length};}
 };
