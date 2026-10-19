@@ -1,3 +1,4 @@
+<!-- @gloss documents gm:Criticality scope=file -->
 # Governance: criticality
 
 Not every file is worth the same review. A metrics exporter and the handler

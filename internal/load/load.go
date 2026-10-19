@@ -1,3 +1,5 @@
+// @gloss implements gmi:WorkspaceLoader scope=file
+
 // Package load reads a GlossMark workspace: glossmark.yaml, the owned and
 // imported ontologies, every boundary manifest, views.yaml, and the list of
 // files to scan for markers.

@@ -1,3 +1,4 @@
+<!-- @gloss documents gmi:FileFormats scope=file -->
 # GlossMark schemas
 
 Machine-readable descriptions of every file GlossMark reads or writes. The JSON

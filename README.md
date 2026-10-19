@@ -1,3 +1,4 @@
+<!-- @gloss documents arch:glossmark scope=file -->
 # GlossMark
 
 GlossMark is a comment-native code ontology. One grammar, `@gloss`, links any artifact (code, tests, Terraform, configs, CI, Markdown, agent files) to concepts in two ontology tiers: a platonic **core** the business owns and a concrete **implementation** engineering owns. Agents write the links while they write the code; humans own the core and review only novelty. Everything compiles into one graph that tools diff, gate, project into views and serve to agents.
@@ -34,6 +35,7 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`) |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
+| `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
@@ -67,6 +69,19 @@ cd ../payments
 ## For agents
 
 `gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+
+## GlossMark on GlossMark
+
+This repository is its own first user. `glossmark.yaml` at the root owns two namespaces: `gm:` is the core tier (what a comment-native code ontology is about: links, concepts, namespaces, boundaries, extraction, lint, drift, review, gating) and `gmi:` is the implementation tier (the Go packages and commands that realize it). Every package and command carries a marker, the JSON Schemas have sidecars, the docs `documents` what they describe, and `.gloss.yaml` manifests at the root, `cmd/` and `internal/` declare what `gloss drift` compares with the code. `go test ./internal/e2e/` includes a self-host test that fails on any lint error, violation, gap or dangling reference in this tree.
+
+```sh
+go build -o gloss ./cmd/gloss
+./gloss check     # 0 errors, 0 warnings
+./gloss drift     # what is left is honest: proposed concepts awaiting a human, and three mechanisms nothing tests yet
+./gloss view      # .glossmark/viewer.html
+```
+
+The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger records them as accepted without a reviewer until a human reviews them. Concepts the agent added after the first pass carry `proposed: true`; `gloss status` lists them and `gloss accept --concept` accepts each one.
 
 ## Design in one paragraph
 

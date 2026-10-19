@@ -1,3 +1,4 @@
+<!-- @gloss documents arch:glossmark scope=file -->
 # Beyond the starter five
 
 [MARKING.md](MARKING.md) covers `implements`, `represents`, `verifies`, `documents`, `instructs` and `scope=file`, which is most of what a repository writes. This page is the rest, for when a marker needs it.

@@ -1,3 +1,5 @@
+// @gloss implements gmi:DriftComparator scope=file
+
 package rollup
 
 import (

@@ -1,3 +1,5 @@
+// @gloss implements gmi:OntologyEditor scope=file
+
 package main
 
 import (

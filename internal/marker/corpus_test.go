@@ -1,3 +1,5 @@
+// @gloss verifies gmi:MarkerGrammar, gmi:DeclarationAnchor scope=file
+
 package marker
 
 import (

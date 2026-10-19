@@ -1,3 +1,5 @@
+// @gloss implements gmi:Gate, gmi:AgentsSnippet scope=file
+
 package main
 
 import (

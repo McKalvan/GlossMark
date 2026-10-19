@@ -1,3 +1,5 @@
+// @gloss implements gmi:OntologyEditor scope=file
+
 // Package ontoedit makes small, formatting-preserving edits to *.gloss.yaml
 // files: add a proposed concept, accept it (drop proposed:), remove it, and
 // rewrite ns:NEW:Name markers once the concept exists.

@@ -1,3 +1,5 @@
+// @gloss implements gmi:GlossCli scope=file
+
 // Command gloss is the GlossMark CLI: build the canonical graph from markers,
 // manifests and ontology files, then check, drift, diff, accept, view and serve it.
 package main

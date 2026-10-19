@@ -1,3 +1,4 @@
+# @gloss deploys gmi:GlossCli scope=file
 name: release
 on:
   push:

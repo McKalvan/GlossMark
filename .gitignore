@@ -7,3 +7,5 @@ examples/*/.glossmark/views.js
 examples/*/*/.glossmark/views.json
 examples/*/*/.glossmark/views.js
 examples/*/*/.glossmark/viewer.html
+/.glossmark/viewer.html
+/.glossmark/views.json

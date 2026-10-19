@@ -1,3 +1,5 @@
+// @gloss represents gmi:FormatVersions scope=file
+
 // Package version holds the three version numbers GlossMark exposes: the tool
 // release (semver, injected at build time), the grammar version a repository
 // opts into with the `grammar:` directive, and the on-disk format versions of
@@ -19,7 +21,7 @@ var pseudo = regexp.MustCompile(`-\d{14}-[0-9a-f]{12}|\+dirty$`)
 // -ldflags "-X github.com/mckalvan/glossmark/internal/version.Version=v0.2.0".
 var Version = ""
 
-// Grammar is the newest @gloss grammar version this tool understands. A
+// Grammar is the newest `@gloss` grammar version this tool understands. A
 // repository pins one with `grammar: N` in glossmark.yaml; markers that parse
 // under grammar N keep parsing under every later tool release that lists N.
 const Grammar = 1
