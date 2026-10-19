@@ -20,14 +20,14 @@ $ gloss drift
   services/horse-factory/breeding/engine.py:22 implements impl:NEW:Gelding: rogue concept; becomes a decision request
 · Orphan concepts (no artifacts)
   impl:TailQueue: orphan concept, implementation concept has no artifacts
-Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   Stale: 0   Untested: 6   Proposed: 3
+Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   Stale: 0   Untested: 3   Proposed links: 3   Proposed concepts: 0
 ```
 
 ## What is in this repository
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `coverage`, `accept`, `reject`, `status`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp` |
+| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
@@ -38,8 +38,17 @@ Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   S
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
 | `examples/payments` | The worked example: two repos sharing one core, with the published seam, extension, remits and a landscape |
-| `docs/` | [Plan](docs/PLAN.md) · [Quickstart](docs/QUICKSTART.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) |
+| `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0   # Linux/macOS binary into ~/.local/bin
+go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0                                          # with a Go toolchain
+```
+
+Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.1.0` downloads the same binary.
 
 ## Try it
 
@@ -48,12 +57,16 @@ go build -o gloss ./cmd/gloss
 cd examples/horse-factory
 ../../gloss check          # 0 errors, 1 warning: the Donkey link is outside the boundary's allowed list
 ../../gloss drift          # the drift report above
-../../gloss view           # .glossmark/viewer.html — open it in a browser
+../../gloss view           # .glossmark/viewer.html — open it in a browser: boundaries are boxes, click to drill in
 cd ../payments
 ../../gloss landscape payments-api settlement-worker   # cross-repo context map and drift
 ```
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.
+
+## For agents
+
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## GlossMark on GlossMark
 
@@ -62,15 +75,23 @@ This repository is its own first user. `glossmark.yaml` at the root owns two nam
 ```sh
 go build -o gloss ./cmd/gloss
 ./gloss check     # 0 errors, 0 warnings
-./gloss drift     # the remaining findings are honest: four core processes nothing tests yet
+./gloss drift     # what is left is honest: proposed concepts awaiting a human, and three mechanisms nothing tests yet
 ./gloss view      # .glossmark/viewer.html
 ```
 
-The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger records them as accepted without a reviewer until a human reviews them.
+The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger records them as accepted without a reviewer until a human reviews them. Concepts the agent added after the first pass carry `proposed: true`; `gloss status` lists them and `gloss accept --concept` accepts each one.
 
 ## Design in one paragraph
 
 Two tiers plus instances: core is implementation-independent by construction; every implementation concept `realizes` a core concept or is `internal`; instances live outside both. The **namespace** is the unit of modularity, with one repo as the default layout and imports by path (git ref and URL to come). The **published** flag is the only seam between tiers and the only thing importable across repos; touching a published concept is HARD. Importers **extend, never mutate** (own-subject rule). **Views are projections** over tier × zoom; PR impact is "which views changed". Five deterministic rollup rules derive higher-level facts from code and compare them with what manifests declare; the comparison is the drift signal.
+
+## Governance
+
+Not every subsystem carries the same risk. `criticality: low | medium | high | critical` on a concept or a boundary flows through `realizes` to the code, tags every change in the PR comment and `gloss impact`, raises the gate by policy (`critical` is HARD by default), colours the viewer and gives agents a reason to flag what they touch. See [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
+
+## Versions
+
+`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.1.0`), pre-commit (`rev: v0.1.0`), `install.sh v0.1.0` or `go install ...@v0.1.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Status
 

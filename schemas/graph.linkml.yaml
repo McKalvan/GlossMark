@@ -35,6 +35,17 @@ imports:
 # Enums
 
 enums:
+  Criticality:
+    description: Governance levels, lowest first (model.CriticalityLevels; docs/GOVERNANCE.md).
+    permissible_values:
+      low:
+        description: A mistake is an annoyance (telemetry, internal tooling).
+      medium:
+        description: A mistake degrades the product.
+      high:
+        description: A mistake costs money, trust or compliance (PII, access control).
+      critical:
+        description: A mistake moves money, breaks the law or stops the business.
   NodeType:
     description: The five node types of the metamodel (model.NodeType).
     permissible_values:
@@ -242,6 +253,11 @@ slots:
     slot_uri: owl:versionInfo
   owner:
     description: Owning team or actor.
+  criticality:
+    description: Effective governance level of a concept, boundary or artifact (docs/GOVERNANCE.md).
+    range: Criticality
+  criticality_from:
+    description: Where the level comes from, "declared" or the CURIE it was inherited from.
   path:
     description: Repo-relative file path.
   anchor:
@@ -343,6 +359,14 @@ slots:
 # ---------------------------------------------------------------------------
 # Classes
 
+  proposed_by:
+    range: string
+    description: Actor that proposed the concept.
+  aliases:
+    range: string
+    multivalued: true
+    description: Other names used for the concept; matched by search.
+
 classes:
   Any:
     class_uri: linkml:Any
@@ -367,6 +391,9 @@ classes:
     class_uri: skos:Concept
     description: An ontology concept from a *.gloss.yaml file.
     slots:
+      - proposed
+      - proposed_by
+      - aliases
       - tier
       - published_as
       - internal
@@ -374,6 +401,8 @@ classes:
       - replaced_by
       - value
       - imported
+      - criticality
+      - criticality_from
     slot_usage:
       node:
         equals_string: concept
@@ -387,6 +416,8 @@ classes:
     slots:
       - owner
       - dir
+      - criticality
+      - criticality_from
     slot_usage:
       node:
         equals_string: boundary
@@ -401,6 +432,8 @@ classes:
       - path
       - anchor
       - boundary
+      - criticality
+      - criticality_from
     slot_usage:
       node:
         equals_string: artifact

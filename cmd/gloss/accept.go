@@ -83,16 +83,30 @@ func cmdAccept(args []string) int {
 	all := fs.Bool("all", false, "accept every proposed link")
 	byPolicy := fs.Bool("policy", false, "accept every proposed link the policy classifies SOFT")
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
-	if err := fs.Parse(args); err != nil {
+	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
+	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 && !*all && !*byPolicy {
-		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy")
+		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy | --concept <ns:Name>...")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
+	}
+	if *concept {
+		n, err := acceptConcepts(p, fs.Args(), reviewer(p.WS.Root), *dry)
+		if err != nil {
+			return fail(err)
+		}
+		if !*dry {
+			if err := p.Ledger.Save(); err != nil {
+				return fail(err)
+			}
+			fmt.Printf("gloss accept: %s accepted by %s\n", plural(n, "concept"), reviewer(p.WS.Root))
+		}
+		return 0
 	}
 	pol := p.WS.Config.EffectivePolicy()
 	var targets []extract.FoundMarker
@@ -160,12 +174,13 @@ func cmdAccept(args []string) int {
 func cmdReject(args []string) int {
 	fs, root := newFlags("reject")
 	reason := fs.String("reason", "", "why the link is wrong (recorded in the ledger)")
-	remove := fs.Bool("remove", false, "also delete the marker line from the source file")
-	if err := fs.Parse(args); err != nil {
+	remove := fs.Bool("remove", false, "also delete the marker line from the source file (or the concept entry with --concept)")
+	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs")
+	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: gloss reject <marker-id|path:line>... --reason '...' [--remove]")
+		fmt.Fprintln(os.Stderr, "usage: gloss reject <marker-id|path:line>... --reason '...' [--remove]\n       gloss reject --concept <ns:Name>... --reason '...' [--remove]")
 		return 2
 	}
 	if *reason == "" {
@@ -175,6 +190,18 @@ func cmdReject(args []string) int {
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
+	}
+	if *concept {
+		for _, c := range fs.Args() {
+			if err := rejectConcept(p, c, reviewer(p.WS.Root), *reason, *remove); err != nil {
+				return fail(err)
+			}
+			fmt.Printf("reject concept %s — %s\n", c, *reason)
+		}
+		if err := p.Ledger.Save(); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	targets, err := selectMarkers(p, fs.Args())
 	if err != nil {

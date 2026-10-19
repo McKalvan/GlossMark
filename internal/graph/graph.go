@@ -16,6 +16,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 // ArtifactPrefix is the IRI scheme for artifacts: urn:gloss:artifact:<path>[#<symbol>].
@@ -41,12 +42,20 @@ type Node struct {
 	Label    string         `json:"label,omitempty"`
 	Doc      string         `json:"doc,omitempty"`
 	// Concept attributes.
-	Published  string `json:"published-as,omitempty"`
-	Internal   bool   `json:"internal,omitempty"`
-	Deprecated bool   `json:"deprecated,omitempty"`
-	ReplacedBy string `json:"replaced-by,omitempty"`
-	Value      any    `json:"value,omitempty"`
-	Imported   bool   `json:"imported,omitempty"`
+	Published  string   `json:"published-as,omitempty"`
+	Internal   bool     `json:"internal,omitempty"`
+	Deprecated bool     `json:"deprecated,omitempty"`
+	ReplacedBy string   `json:"replaced-by,omitempty"`
+	Value      any      `json:"value,omitempty"`
+	Imported   bool     `json:"imported,omitempty"`
+	Proposed   bool     `json:"proposed,omitempty"`
+	ProposedBy string   `json:"proposed-by,omitempty"`
+	Aliases    []string `json:"aliases,omitempty"`
+	// Criticality is the effective governance level (low | medium | high |
+	// critical) of a concept, boundary or artifact; CriticalityFrom says where
+	// it came from: "declared", or the CURIE it was inherited from.
+	Criticality     string `json:"criticality,omitempty"`
+	CriticalityFrom string `json:"criticality-from,omitempty"`
 	// Namespace attributes.
 	Version string `json:"version,omitempty"`
 	Owner   string `json:"owner,omitempty"`
@@ -106,6 +115,7 @@ func (e *Edge) Key() string {
 // Header is the first JSONL line.
 type Header struct {
 	Type      string            `json:"type"`
+	Format    int               `json:"format"`
 	Generator string            `json:"generator"`
 	Prefixes  map[string]string `json:"prefixes"`
 	Context   string            `json:"@context,omitempty"`
@@ -199,6 +209,12 @@ func (g *Graph) AddNode(n *Node) *Node {
 		}
 		if ex.File == "" {
 			ex.File, ex.Line = n.File, n.Line
+		}
+		if ex.Owner == "" {
+			ex.Owner = n.Owner
+		}
+		if ex.Criticality == "" {
+			ex.Criticality, ex.CriticalityFrom = n.Criticality, n.CriticalityFrom
 		}
 		return ex
 	}
@@ -492,7 +508,7 @@ func (g *Graph) WriteJSONL(w io.Writer) error {
 		bw.Write(b)
 		return bw.WriteByte('\n')
 	}
-	if err := enc(Header{Type: "context", Generator: g.Generator, Prefixes: g.Prefixes, Context: "./context.jsonld"}); err != nil {
+	if err := enc(Header{Type: "context", Format: version.GraphFormat, Generator: g.Generator, Prefixes: g.Prefixes, Context: "./context.jsonld"}); err != nil {
 		return err
 	}
 	for _, n := range g.Nodes() {
@@ -533,6 +549,9 @@ func ReadJSONL(r io.Reader) (*Graph, error) {
 				return nil, err
 			}
 			g.Generator = h.Generator
+			if h.Format > version.GraphFormat {
+				return nil, fmt.Errorf("graph.jsonl: format %d was written by a newer gloss (%s); this release reads format %d. Upgrade gloss or rebuild with: gloss build", h.Format, h.Generator, version.GraphFormat)
+			}
 			for k, v := range h.Prefixes {
 				g.Prefixes[k] = v
 			}

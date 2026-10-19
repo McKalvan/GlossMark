@@ -1,18 +1,18 @@
 # payments-api/ontology/pay.gloss.yaml  (core: names only what the business recognizes, processes included)
 namespace: pay
 iri: https://onto.acme.dev/pay/
-version: 1.2.0
+version: 1.2.1
 concepts:
-  Payment:          { kind: entity }
-  Refund:           { kind: entity, reverses: Payment }
+  Payment:          { kind: entity, criticality: critical }          # money moves on this
+  Refund:           { kind: entity, reverses: Payment, aliases: [chargeback, reversal] }
   Refunding:        { kind: process, consumes: [Payment], produces: [Refund] }
-  Merchant:         { kind: entity }
-  Authorization:    { kind: process, produces: [Payment] }
-  Capture:          { kind: process, consumes: [Payment] }
-  Settlement:       { kind: process, consumes: [Payment], produces: [Payout] }
-  Payout:           { kind: entity }
-  CaptureConfirmed: { kind: event }
-  SettlementCutoff: { kind: constraint, constrains: [Settlement] }   # value comes from engineering
+  Merchant:         { kind: entity, criticality: high }              # holds PII
+  Authorization:    { kind: process, produces: [Payment], criticality: critical }
+  Capture:          { kind: process, consumes: [Payment], criticality: high }
+  Settlement:       { kind: process, consumes: [Payment], produces: [Payout], criticality: critical }
+  Payout:           { kind: entity, criticality: critical }
+  CaptureConfirmed: { kind: event, criticality: low }
+  SettlementCutoff: { kind: constraint, constrains: [Settlement], aliases: [cut-off time], criticality: medium, doc: The time of day after which captures settle the next day. }   # value comes from engineering
 relations:
   produces: { lift: range-lcs }
   consumes: { lift: range-lcs }

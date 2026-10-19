@@ -5,25 +5,39 @@
   "description": "The repo-level glossmark.yaml: the ontology namespaces this repository owns and imports, prefix aliases, the views file, scanning options and the gate policy. Mirrors model.Config in internal/model/files.go, which decodes with KnownFields(true), so unknown keys are errors.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["owns"],
+  "required": [
+    "owns"
+  ],
   "properties": {
     "owns": {
       "description": "Namespaces this repository owns, keyed by CURIE prefix. Each owned namespace has an ontology file (default ontology/<prefix>.gloss.yaml).",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/prefix" },
-      "additionalProperties": { "$ref": "#/$defs/namespaceDecl" }
+      "propertyNames": {
+        "$ref": "#/$defs/prefix"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/namespaceDecl"
+      }
     },
     "imports": {
       "description": "Namespaces imported from elsewhere, keyed by CURIE prefix.",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/prefix" },
-      "additionalProperties": { "$ref": "#/$defs/importDecl" }
+      "propertyNames": {
+        "$ref": "#/$defs/prefix"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/importDecl"
+      }
     },
     "prefixes": {
-      "description": "Extra CURIE prefix → IRI base mappings (for example boundary namespaces) that are neither owned nor imported ontologies.",
+      "description": "Extra CURIE prefix \u2192 IRI base mappings (for example boundary namespaces) that are neither owned nor imported ontologies.",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/prefix" },
-      "additionalProperties": { "$ref": "#/$defs/iri" }
+      "propertyNames": {
+        "$ref": "#/$defs/prefix"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/iri"
+      }
     },
     "views": {
       "description": "Path (relative to this file) of the views.yaml projections file. Default: ontology/views.yaml.",
@@ -31,25 +45,39 @@
       "minLength": 1,
       "default": "ontology/views.yaml"
     },
-    "policy": { "$ref": "#/$defs/policy" },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    },
     "exclude": {
       "description": "Globs of paths the scanner skips.",
       "type": "array",
-      "items": { "$ref": "#/$defs/glob" }
+      "items": {
+        "$ref": "#/$defs/glob"
+      }
     },
     "comment-styles": {
       "description": "Extends the builtin comment-token table. Keys are a lower-case file extension including the dot (\".foo\") or an exact file basename (\"Dockerfile\"); values are the comment tokens that may open an @gloss marker in such files.",
       "type": "object",
       "additionalProperties": {
         "type": "array",
-        "items": { "type": "string", "minLength": 1 },
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
         "minItems": 1
       }
     },
     "test-paths": {
       "description": "Globs whose markers default to the verifies relation when relation inference runs. Default: common test layouts.",
       "type": "array",
-      "items": { "$ref": "#/$defs/glob" }
+      "items": {
+        "$ref": "#/$defs/glob"
+      }
+    },
+    "grammar": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The @gloss grammar version the repository is written in (default 1). The tool refuses a grammar it does not support."
     }
   },
   "$defs": {
@@ -72,21 +100,31 @@
     "tier": {
       "description": "Ontology tier: core (the business ideal) or implementation (the concrete system).",
       "type": "string",
-      "enum": ["core", "implementation"]
+      "enum": [
+        "core",
+        "implementation"
+      ]
     },
     "namespaceDecl": {
       "description": "An owned namespace (model.NamespaceDecl).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["iri", "tier"],
+      "required": [
+        "iri",
+        "tier"
+      ],
       "properties": {
-        "iri": { "$ref": "#/$defs/iri" },
+        "iri": {
+          "$ref": "#/$defs/iri"
+        },
         "file": {
           "description": "The *.gloss.yaml ontology file, relative to the repo root. Default: ontology/<prefix>.gloss.yaml.",
           "type": "string",
           "minLength": 1
         },
-        "tier": { "$ref": "#/$defs/tier" },
+        "tier": {
+          "$ref": "#/$defs/tier"
+        },
         "version": {
           "description": "Semantic version of the namespace.",
           "type": "string",
@@ -102,9 +140,13 @@
       "description": "An imported namespace (model.ImportDecl).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["iri"],
+      "required": [
+        "iri"
+      ],
       "properties": {
-        "iri": { "$ref": "#/$defs/iri" },
+        "iri": {
+          "$ref": "#/$defs/iri"
+        },
         "version": {
           "description": "Version of the imported namespace.",
           "type": "string"
@@ -113,9 +155,15 @@
           "description": "Where to fetch the ontology: a local path (directory or file), a git+ URL (git+https://..., git+ssh://...) or an https URL.",
           "type": "string",
           "minLength": 1,
-          "examples": ["../platform-ontology", "git+https://github.com/acme/ontology.git", "https://onto.acme.dev/zoo/zoo.gloss.yaml"]
+          "examples": [
+            "../platform-ontology",
+            "git+https://github.com/acme/ontology.git",
+            "https://onto.acme.dev/zoo/zoo.gloss.yaml"
+          ]
         },
-        "tier": { "$ref": "#/$defs/tier" }
+        "tier": {
+          "$ref": "#/$defs/tier"
+        }
       }
     },
     "policy": {
@@ -133,8 +181,14 @@
         "hard-paths": {
           "description": "Globs whose changes are always HARD.",
           "type": "array",
-          "items": { "$ref": "#/$defs/glob" },
-          "default": ["ontology/**", "**/.gloss.yaml", "glossmark.yaml"]
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "default": [
+            "ontology/**",
+            "**/.gloss.yaml",
+            "glossmark.yaml"
+          ]
         },
         "auto-accept-soft": {
           "description": "When true, gloss accept --policy accepts SOFT proposals.",
@@ -144,7 +198,9 @@
         "waivers": {
           "description": "Time-boxed exceptions for known gaps.",
           "type": "array",
-          "items": { "$ref": "#/$defs/waiver" }
+          "items": {
+            "$ref": "#/$defs/waiver"
+          }
         },
         "coverage-fail-under": {
           "description": "Default for gloss coverage --fail-under, in percent.",
@@ -152,6 +208,13 @@
           "minimum": 0,
           "maximum": 100,
           "default": 0
+        },
+        "criticality-gates": {
+          "description": "Minimum gate for a change that touches a concept or boundary at or above a criticality level (docs/GOVERNANCE.md). Default: critical → HARD.",
+          "type": "object",
+          "propertyNames": { "enum": ["low", "medium", "high", "critical"] },
+          "additionalProperties": { "type": "string", "enum": ["AUTO", "SOFT", "HARD"] },
+          "default": { "critical": "HARD" }
         }
       }
     },
@@ -159,7 +222,11 @@
       "description": "Suppresses one finding until it expires (model.Waiver).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["finding", "owner", "expires"],
+      "required": [
+        "finding",
+        "owner",
+        "expires"
+      ],
       "properties": {
         "finding": {
           "description": "The drift finding id or a concept CURIE.",

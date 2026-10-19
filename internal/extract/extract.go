@@ -17,10 +17,8 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/version"
 )
-
-// Version is stamped into the graph header.
-var Version = "0.1.0"
 
 // Result is the extractor output.
 type Result struct {
@@ -44,7 +42,7 @@ type FoundMarker struct {
 // Build runs pass 1 over a loaded workspace.
 func Build(ws *load.Workspace) (*Result, error) {
 	g := graph.New(ws.Prefixes)
-	g.Generator = "gloss " + Version
+	g.Generator = version.Generator()
 	res := &Result{Graph: g}
 	res.Diags = append(res.Diags, ws.Diags...)
 	ex := &extractor{ws: ws, g: g, res: res}
@@ -120,7 +118,11 @@ func (ex *extractor) ontologies() {
 			curie := ns + ":" + name
 			iri, _ := ex.g.Expand(curie)
 			n := &graph.Node{NodeType: model.NodeConcept, ID: iri, CURIE: curie, NS: ns, Tier: o.Tier, Kind: c.Kind, Label: c.Label, Doc: c.Doc,
-				Internal: c.Internal, Deprecated: c.Deprecated, Value: c.Value, Imported: !ex.ws.Owned[ns], File: file, Line: c.Line}
+				Internal: c.Internal, Deprecated: c.Deprecated, Value: c.Value, Imported: !ex.ws.Owned[ns], File: file, Line: c.Line,
+				Proposed: c.Proposed, ProposedBy: c.ProposedBy, Aliases: []string(c.Aliases)}
+			if c.Criticality != "" {
+				n.Criticality, n.CriticalityFrom = c.Criticality, "declared"
+			}
 			if c.ReplacedBy != "" {
 				_, cur := ex.resolveRef(c.ReplacedBy, ns)
 				n.ReplacedBy = cur
@@ -170,6 +172,9 @@ func (ex *extractor) manifests() {
 	for _, m := range ex.ws.Manifests {
 		iri := ex.boundaryIRI(m.Boundary, m.Path, 1)
 		n := &graph.Node{NodeType: model.NodeBoundary, ID: iri, CURIE: m.Boundary, Kind: m.Level, Label: m.Label, Doc: m.Doc, Dir: m.Dir, File: m.Path, Line: 1, Owner: m.Owner}
+		if m.Criticality != "" {
+			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
+		}
 		if i := strings.Index(m.Boundary, ":"); i > 0 {
 			n.NS = m.Boundary[:i]
 		}
@@ -293,9 +298,9 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		e := &graph.Edge{S: aid, P: mk.Relation, O: oiri, Source: graph.SourceInline, Prov: prov}
 		ex.g.AddEdge(e)
 		fm.Edges = append(fm.Edges, e)
-		// Inferrer: a test-path artifact that implements/represents also tests the concept.
+		// Inferrer: a test-path artifact that implements/represents also verifies the concept.
 		if (mk.Relation == "implements" || mk.Relation == "represents") && ex.ws.IsTestPath(rel) {
-			ex.g.AddEdge(&graph.Edge{S: aid, P: "tests", O: oiri, Source: graph.SourceInferred, Prov: &graph.Prov{Path: rel, Line: mk.Line, Rule: "test-path", ID: id, Proposed: mk.Proposed}})
+			ex.g.AddEdge(&graph.Edge{S: aid, P: "verifies", O: oiri, Source: graph.SourceInferred, Prov: &graph.Prov{Path: rel, Line: mk.Line, Rule: "test-path", ID: id, Proposed: mk.Proposed}})
 		}
 	}
 	ex.res.Markers = append(ex.res.Markers, fm)

@@ -14,6 +14,7 @@ concepts:
   FoalRegistry:               { kind: resource, internal: true }
   FoalingPipelineThroughput:
     kind: measure
+    criticality: low                 # telemetry: a wrong number is annoying, not dangerous
     realizes: zoo:ProductionCapacity
     published: { as: zoo:ProductionCapacity }
     value: "12 foals/day"

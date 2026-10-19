@@ -32,6 +32,30 @@ var BoundaryLevels = []string{"domain", "system", "container", "component"}
 // ZoomLevels in order, coarsest first. "landscape" is above every boundary.
 var ZoomLevels = []string{"landscape", "system", "container", "component", "code"}
 
+// CriticalityLevels in increasing order. Empty means unclassified. See docs/GOVERNANCE.md.
+var CriticalityLevels = []string{"low", "medium", "high", "critical"}
+
+// CriticalityRank orders levels; unclassified is -1.
+func CriticalityRank(level string) int {
+	for i, l := range CriticalityLevels {
+		if l == level {
+			return i
+		}
+	}
+	return -1
+}
+
+// ValidCriticality reports whether level is empty or one of CriticalityLevels.
+func ValidCriticality(level string) bool { return level == "" || CriticalityRank(level) >= 0 }
+
+// MaxCriticality returns the higher of two levels.
+func MaxCriticality(a, b string) string {
+	if CriticalityRank(b) > CriticalityRank(a) {
+		return b
+	}
+	return a
+}
+
 // Scopes allowed on an inline marker.
 var Scopes = []string{"file", "symbol", "block", "line", "range"}
 
@@ -84,11 +108,12 @@ var BuiltinRelations = []Relation{
 	{Name: "published-as", Domain: c, Range: c, Ontology: true, Doc: "impl Concept → core Concept under which it surfaces in the business view."},
 	{Name: "implements", Domain: a, Range: c, Inline: true, RangeKinds: []string{"process", "capability", "system-type", "event", "constraint", "measure"}, Doc: "Artifact implements the behaviour of a concept."},
 	{Name: "represents", Domain: a, Range: c, Inline: true, RangeKinds: []string{"entity", "event", "measure", "resource", "constraint"}, Doc: "Artifact is the data shape of a concept."},
-	{Name: "tests", Domain: a, Range: c, Inline: true, Derived: true, Doc: "Test artifact exercises a concept."},
-	{Name: "verifies", Domain: a, Range: c, Inline: true, Derived: true, Doc: "Test artifact verifies a concept (stronger than tests)."},
-	{Name: "provisions", Domain: a, Range: cb, Inline: true, Doc: "IaC artifact provisions a resource or boundary."},
-	{Name: "configures", Domain: a, Range: cb, Inline: true, Doc: "Config artifact configures a concept or boundary."},
-	{Name: "deploys", Domain: a, Range: cb, Inline: true, Doc: "CI artifact deploys a system-type or boundary."},
+	{Name: "tests", Domain: a, Range: c, Inline: true, Derived: true, Doc: "Accepted alias of verifies (GM240 asks for verifies)."},
+	{Name: "verifies", Domain: a, Range: c, Inline: true, Derived: true, Doc: "Test artifact verifies a concept: the one test relation."},
+	{Name: "provisions", Domain: a, Range: cb, Inline: true, Doc: "IaC artifact provisions a resource or boundary. On a resource or system-type concept it lifts to the boundary as realizes."},
+	{Name: "configures", Domain: a, Range: cb, Inline: true, Doc: "Config artifact configures a concept or boundary. On a resource or system-type concept it lifts to the boundary as realizes."},
+	{Name: "deploys", Domain: a, Range: cb, Inline: true, Doc: "CI artifact deploys a system-type or boundary. On a resource or system-type concept it lifts to the boundary as realizes."},
+	{Name: "holds", Domain: []NodeType{NodeBoundary}, Range: c, Manifest: true, Derived: true, Doc: "Boundary holds the data of an entity: derived from represents on an entity concept, declared in a manifest, compared by gloss drift."},
 	{Name: "documents", Domain: a, Range: cb, Inline: true, Doc: "Markdown documents a concept or boundary."},
 	{Name: "instructs", Domain: a, Range: cb, Inline: true, Doc: "An agent file's instructions concern a concept."},
 	{Name: "may-modify", Domain: a, Range: cb, Inline: true, Doc: "An agent's change remit. Targets may be globs (pa:*)."},

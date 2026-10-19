@@ -29,6 +29,23 @@ type Backend interface {
 	Current() (*load.Workspace, *graph.Graph, map[string]*model.LedgerEntry, error)
 	// Impact classifies a proposed set of markers (as marker lines) against the current graph.
 	Impact(proposals []Proposal) (any, error)
+	// ImpactOfChange reports what changed files touch, optionally classified against a git base.
+	ImpactOfChange(base string, paths []string) (any, error)
+	// ProposeConcept adds a proposed concept to the owning ontology file.
+	ProposeConcept(p ConceptProposal) (any, error)
+	// Context renders the session briefing for a directory.
+	Context(dir string) (string, error)
+}
+
+// ConceptProposal is a new concept an agent wants to add with proposed: true.
+type ConceptProposal struct {
+	Curie    string   `json:"curie"`
+	Kind     string   `json:"kind,omitempty"`
+	Doc      string   `json:"doc,omitempty"`
+	Realizes []string `json:"realizes,omitempty"`
+	IsA      []string `json:"is_a,omitempty"`
+	Internal bool     `json:"internal,omitempty"`
+	Aliases  []string `json:"aliases,omitempty"`
 }
 
 // Proposal is a link an agent wants to add.
@@ -129,14 +146,21 @@ func str(desc string) map[string]any { return map[string]any{"type": "string", "
 var tools = []tool{
 	{"lookup_concept", "Return a concept (by CURIE such as zoo:Mare) with its kind, tier, doc, relations, realizations and the artifacts linking to it.",
 		obj(map[string]any{"curie": str("Concept CURIE, e.g. pay:Refunding")}, "curie")},
-	{"search_concepts", "Full-text search over concept names, labels and docs; optionally restricted to a namespace, kind or tier.",
+	{"search_concepts", "Search concepts by meaning: CamelCase names split into words, aliases, docs, stems, synonyms and small typos all match; a kind word in the query (event, constraint) boosts that kind; one hop through realizes/is-a is followed. Hits carry the doc, the artifact count and which field and terms matched. Optionally restrict to a namespace, kind or tier.",
 		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
 	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
 		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
 	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files.",
 		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str("implements | represents | verifies | ..."), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "relation", "target")},
-	{"impact_of", "Classify a set of proposed links as a batch: per-link gate, the overall gate, and the drift findings the current tree already has.",
-		obj(map[string]any{"proposals": map[string]any{"type": "array", "items": obj(map[string]any{"path": str(""), "relation": str(""), "target": str(""), "conf": map[string]any{"type": "number"}, "note": str("")}, "path", "relation", "target")}}, "proposals")},
+	{"impact_of", "Impact of a change. Pass proposals (links you intend to add) to get each link's gate; and/or pass paths (files you changed) or base (a git ref) to learn what those files touch: the concepts, whether they sit on the published seam, what constrains them, which boundaries declare them, their tests, and the other files sharing them. With base, the AUTO/SOFT/HARD classification of the whole working tree is included.",
+		obj(map[string]any{"proposals": map[string]any{"type": "array", "items": obj(map[string]any{"path": str(""), "relation": str(""), "target": str(""), "conf": map[string]any{"type": "number"}, "note": str("")}, "path", "relation", "target")},
+			"paths": map[string]any{"type": "array", "items": str("Repo-relative file you changed or will change")},
+			"base":  str("Git ref to diff the working tree against (e.g. origin/main)")})},
+	{"propose_concept", "Add a concept to the owning ontology file with proposed: true (the ontology's @gloss?). Links may target it at once; a human accepts it with gloss accept --concept. Implementation concepts need realizes (a core concept) or internal.",
+		obj(map[string]any{"curie": str("ns:Name in a namespace this repo owns"), "kind": str("entity | process | capability | event | measure | constraint | resource | system-type"), "doc": str("One sentence: what it is and why it is needed"),
+			"realizes": map[string]any{"type": "array", "items": str("core concept CURIE")}, "is_a": map[string]any{"type": "array", "items": str("parent CURIE")}, "internal": map[string]any{"type": "boolean"}, "aliases": map[string]any{"type": "array", "items": str("")}}, "curie", "kind")},
+	{"context", "The compact briefing for a directory: its boundary, allowed targets, agent remits, the concept list and current state. Call it once when you start working in a directory.",
+		obj(map[string]any{"dir": str("Repo-relative directory (default: repo root)")})},
 	{"drift", "Run the drift comparison on the current tree and return violations, gaps, orphans, rogues and metrics.", obj(map[string]any{})},
 }
 
@@ -198,7 +222,7 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 		if a.Limit <= 0 {
 			a.Limit = 20
 		}
-		return search(g, a.Query, a.Namespace, a.Kind, a.Tier, a.Limit), nil
+		return Search(g, a.Query, a.Namespace, a.Kind, a.Tier, a.Limit), nil
 	case "concepts_for_path":
 		var a struct {
 			Path string `json:"path"`
@@ -214,11 +238,47 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 	case "impact_of":
 		var a struct {
 			Proposals []Proposal `json:"proposals"`
+			Paths     []string   `json:"paths"`
+			Base      string     `json:"base"`
 		}
 		if err := json.Unmarshal(args, &a); err != nil {
 			return nil, err
 		}
-		return s.backend.Impact(a.Proposals)
+		out := map[string]any{}
+		if len(a.Proposals) > 0 {
+			r, err := s.backend.Impact(a.Proposals)
+			if err != nil {
+				return nil, err
+			}
+			out["proposals"] = r
+		}
+		if len(a.Paths) > 0 || a.Base != "" {
+			r, err := s.backend.ImpactOfChange(a.Base, a.Paths)
+			if err != nil {
+				return nil, err
+			}
+			out["change"] = r
+		}
+		if len(out) == 0 {
+			return nil, fmt.Errorf("pass proposals, paths or base")
+		}
+		return out, nil
+	case "propose_concept":
+		var cp ConceptProposal
+		if err := json.Unmarshal(args, &cp); err != nil {
+			return nil, err
+		}
+		return s.backend.ProposeConcept(cp)
+	case "context":
+		var a struct {
+			Dir string `json:"dir"`
+		}
+		json.Unmarshal(args, &a)
+		txt, err := s.backend.Context(a.Dir)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"context": txt}, nil
 	case "drift":
 		rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: ws.Config.EffectivePolicy()})
 		return rep, nil
@@ -239,6 +299,10 @@ func describe(g *graph.Graph, n *graph.Node) map[string]any {
 	}
 	if n.Internal {
 		out["internal"] = true
+	}
+	if n.Criticality != "" {
+		out["criticality"] = n.Criticality
+		out["criticality_from"] = n.CriticalityFrom
 	}
 	if n.Deprecated {
 		out["deprecated"] = true
@@ -304,59 +368,6 @@ func uniq(xs []string) []string {
 	return out
 }
 
-func search(g *graph.Graph, q, ns, kind, tier string, limit int) []map[string]any {
-	words := strings.Fields(strings.ToLower(q))
-	type hit struct {
-		n     *graph.Node
-		score int
-	}
-	var hits []hit
-	for _, n := range g.NodesOf(model.NodeConcept) {
-		if ns != "" && n.NS != ns || kind != "" && n.Kind != kind || tier != "" && n.Tier != tier {
-			continue
-		}
-		if n.Imported && n.Tier == model.TierImpl && n.Published == "" {
-			continue
-		}
-		hay := strings.ToLower(n.CURIE + " " + n.Label + " " + n.Doc)
-		score := 0
-		for _, w := range words {
-			if strings.Contains(strings.ToLower(n.CURIE), w) {
-				score += 3
-			} else if strings.Contains(hay, w) {
-				score++
-			}
-		}
-		if len(words) == 0 || score > 0 {
-			hits = append(hits, hit{n, score})
-		}
-	}
-	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].score != hits[j].score {
-			return hits[i].score > hits[j].score
-		}
-		return hits[i].n.CURIE < hits[j].n.CURIE
-	})
-	var out []map[string]any
-	for i, h := range hits {
-		if i >= limit {
-			break
-		}
-		item := map[string]any{"curie": h.n.CURIE, "kind": h.n.Kind, "tier": h.n.Tier}
-		if h.n.Doc != "" {
-			item["doc"] = h.n.Doc
-		}
-		if h.n.Published != "" {
-			item["published_as"] = h.n.Published
-		}
-		if r := g.Objects(h.n.ID, "realizes"); len(r) > 0 {
-			item["realizes"] = curies(g, r)
-		}
-		out = append(out, item)
-	}
-	return out
-}
-
 func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string]any {
 	out := map[string]any{"path": path}
 	var links []map[string]any
@@ -373,7 +384,8 @@ func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string
 	}
 	out["links"] = links
 	if m := ws.ManifestFor(path); m != nil {
-		b := map[string]any{"boundary": m.Boundary, "level": m.Level, "manifest": m.Path, "default_namespace": m.DefaultNamespace, "allowed": m.Allowed, "realizes": m.Realizes, "produces": m.Produces, "consumes": m.Consumes}
+		allowed := rollup.AllowedFor(g, ws, m)
+		b := map[string]any{"boundary": m.Boundary, "level": m.Level, "manifest": m.Path, "default_namespace": m.DefaultNamespace, "allowed": allowed.Patterns, "allowed_derived": allowed.Derived, "realizes": m.Realizes, "produces": m.Produces, "consumes": m.Consumes}
 		if bn := g.NodeByCurie(m.Boundary); bn != nil {
 			var derived []string
 			for _, e := range g.Out(bn.ID, "") {
@@ -391,7 +403,7 @@ func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string
 			if n.Deprecated || (n.Imported && n.Tier == model.TierImpl && n.Published == "") {
 				continue
 			}
-			if len(m.Allowed) == 0 || model.MatchAnyCurie(m.Allowed, n.CURIE) {
+			if allowed.Matches(n.CURIE) {
 				vocab = append(vocab, n.CURIE+" ("+n.Kind+")")
 			}
 		}

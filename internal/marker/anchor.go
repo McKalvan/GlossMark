@@ -158,7 +158,17 @@ func Resolve(path string, f Found, lines []string, style CommentStyle) Anchor {
 	for j := idx + 1; j < len(lines) && j <= idx+window; j++ {
 		ln := lines[j]
 		t := strings.TrimSpace(ln)
-		if t == "" || isCommentLine(ln, style) || strings.HasPrefix(t, "@") && !isYAML {
+		if t == "" || isCommentLine(ln, style) {
+			continue
+		}
+		if isDecorator(t, path) && !isYAML {
+			// A decorator or annotation stack sits between the marker and the
+			// declaration. Skip it whole, including arguments that span lines,
+			// without spending the look-ahead window on it.
+			if k := decoratorEnd(lines, j); k > j {
+				window += k - j
+				j = k
+			}
 			continue
 		}
 		if isYAML && t == "---" {
@@ -209,6 +219,48 @@ func Resolve(path string, f Found, lines []string, style CommentStyle) Anchor {
 		a.Scope = scope
 	}
 	return a
+}
+
+// isDecorator reports a Python/TS/Java-style @decorator line or a Rust #[attribute].
+func isDecorator(trimmed, path string) bool {
+	if strings.HasPrefix(trimmed, "@") {
+		return true
+	}
+	return strings.HasPrefix(trimmed, "#[") && strings.EqualFold(filepath.Ext(path), ".rs")
+}
+
+// decoratorEnd returns the index of the last line of the decorator that
+// starts at j: the line on which its brackets close, capped at 40 lines.
+func decoratorEnd(lines []string, j int) int {
+	depth := 0
+	for k := j; k < len(lines) && k < j+40; k++ {
+		var quote byte
+		for i := 0; i < len(lines[k]); i++ {
+			ch := lines[k][i]
+			if quote != 0 {
+				if ch == '\\' {
+					i++
+				} else if ch == quote {
+					quote = 0
+				}
+				continue
+			}
+			switch ch {
+			case '"', '\'':
+				quote = ch
+			case '#':
+				i = len(lines[k])
+			case '(', '[', '{':
+				depth++
+			case ')', ']', '}':
+				depth--
+			}
+		}
+		if depth <= 0 {
+			return k
+		}
+	}
+	return j
 }
 
 func yamlDocAnchor(lines []string, j int) (Anchor, bool) {

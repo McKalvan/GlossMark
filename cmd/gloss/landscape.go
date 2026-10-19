@@ -25,7 +25,7 @@ func init() {
 
 func cmdLandscape(args []string) int {
 	fs := newLandscapeFlags()
-	if err := fs.fs.Parse(args); err != nil {
+	if err := fs.fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	repos := append([]string{}, fs.repos...)

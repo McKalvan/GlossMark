@@ -13,22 +13,40 @@ inputs:
     description: Gate class that fails the job (HARD | SOFT | none)
     default: HARD
   coverage-fail-under:
-    description: Minimum coverage percentage (0 disables)
+    description: Minimum concept coverage percentage, implementation concepts with an artifact and a verifier (0 disables; "current" fails only when the PR lowers the base's coverage)
     default: "0"
   comment:
     description: Post the impact as a PR comment (needs pull-requests write permission)
     default: "true"
   version:
-    description: gloss version to install (go install ...@<version>)
-    default: latest
+    description: gloss release to install. A tag (vX.Y.Z) downloads the release binary; anything else (latest, a commit) is built with go install.
+    default: v0.1.0
 runs:
   using: composite
   steps:
-    - uses: actions/setup-go@v5
-      with: { go-version: "1.24" }
-    - name: Install gloss
+    - name: Install gloss (release binary)
+      id: binary
+      if: startsWith(inputs.version, 'v')
       shell: bash
-      run: go install github.com/mckalvan/glossmark/cmd/gloss@${{ inputs.version }}
+      env: { GLOSS_INSTALL_DIR: "${{ runner.temp }}/gloss-bin" }
+      run: |
+        if sh "${{ github.action_path }}/install.sh" "${{ inputs.version }}"; then
+          echo "$GLOSS_INSTALL_DIR" >> "$GITHUB_PATH"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::no release binary for ${{ inputs.version }}; building from source with go install instead"
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+        fi
+    - uses: actions/setup-go@v5
+      if: steps.binary.outputs.ok != 'true'
+      with: { go-version: "1.24" }
+    - name: Install gloss (go install)
+      if: steps.binary.outputs.ok != 'true'
+      shell: bash
+      run: |
+        V="${{ inputs.version }}"
+        case "$V" in v*) V=latest ;; esac
+        go install "github.com/mckalvan/glossmark/cmd/gloss@$V"
     - name: Fetch base
       if: github.event_name == 'pull_request'
       shell: bash

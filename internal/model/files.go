@@ -49,6 +49,9 @@ func (s *StringList) UnmarshalYAML(n *yaml.Node) error {
 
 // Config is the repository-level file: namespaces owned and imported.
 type Config struct {
+	// Grammar pins the `@gloss` grammar version the repository is written in
+	// (like Go's `go 1.24` directive). Default 1.
+	Grammar  int                       `yaml:"grammar,omitempty" json:"grammar,omitempty"`
 	Owns     map[string]*NamespaceDecl `yaml:"owns" json:"owns"`
 	Imports  map[string]*ImportDecl    `yaml:"imports,omitempty" json:"imports,omitempty"`
 	Prefixes map[string]string         `yaml:"prefixes,omitempty" json:"prefixes,omitempty"`
@@ -94,8 +97,13 @@ type Policy struct {
 	AutoAcceptSoft bool `yaml:"auto-accept-soft,omitempty" json:"auto-accept-soft,omitempty"`
 	// Waivers are time-boxed exceptions for known gaps.
 	Waivers []Waiver `yaml:"waivers,omitempty" json:"waivers,omitempty"`
-	// CoverageFailUnder is the default for gloss coverage --fail-under (percent).
+	// CoverageFailUnder is the default for gloss coverage --fail-under
+	// (percent of implementation concepts with an artifact and a verifier).
 	CoverageFailUnder float64 `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
+	// CriticalityGates raises the gate of any change that touches a concept or
+	// boundary at or above a criticality level: level → AUTO | SOFT | HARD.
+	// Default: critical → HARD. See docs/GOVERNANCE.md.
+	CriticalityGates map[string]string `yaml:"criticality-gates,omitempty" json:"criticality-gates,omitempty"`
 }
 
 // Waiver suppresses one finding until it expires.
@@ -113,7 +121,40 @@ func DefaultPolicy() *Policy {
 		SoftConfThreshold: 0.7,
 		HardPaths:         []string{"ontology/**", "**/.gloss.yaml", "glossmark.yaml"},
 		CoverageFailUnder: 0,
+		CriticalityGates:  map[string]string{"critical": "HARD"},
 	}
+}
+
+// GateForCriticality returns the minimum gate the policy demands for a change
+// touching something at the given criticality level ("" when none applies).
+// The strictest matching rule wins; a rule at a lower level covers every level above it.
+func (p *Policy) GateForCriticality(level string) string {
+	r := CriticalityRank(level)
+	if p == nil || r < 0 {
+		return ""
+	}
+	best, bestRank := "", -1
+	for lvl, gate := range p.CriticalityGates {
+		if CriticalityRank(lvl) < 0 || CriticalityRank(lvl) > r {
+			continue
+		}
+		if gr := gateRank(gate); gr > bestRank {
+			best, bestRank = gate, gr
+		}
+	}
+	return best
+}
+
+func gateRank(g string) int {
+	switch g {
+	case "AUTO":
+		return 0
+	case "SOFT":
+		return 1
+	case "HARD":
+		return 2
+	}
+	return -1
 }
 
 // EffectivePolicy merges the configured policy over the defaults.
@@ -128,6 +169,9 @@ func (c *Config) EffectivePolicy() *Policy {
 	}
 	if len(p.HardPaths) == 0 {
 		p.HardPaths = d.HardPaths
+	}
+	if p.CriticalityGates == nil {
+		p.CriticalityGates = d.CriticalityGates
 	}
 	return &p
 }
@@ -145,6 +189,12 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	c.Dir = filepath.Dir(path)
+	if c.Grammar == 0 {
+		c.Grammar = 1
+	}
+	if c.Grammar < 0 {
+		return nil, fmt.Errorf("%s: grammar must be a positive integer", path)
+	}
 	for prefix, ns := range c.Owns {
 		if ns == nil {
 			return nil, fmt.Errorf("%s: owns.%s is empty", path, prefix)
@@ -161,6 +211,11 @@ func LoadConfig(path string) (*Config, error) {
 		if ns.IRI == "" {
 			return nil, fmt.Errorf("%s: owns.%s: iri is required", path, prefix)
 		}
+		if ns.Version != "" {
+			if _, err := ParseSemver(ns.Version); err != nil {
+				return nil, fmt.Errorf("%s: owns.%s: version %q is not semver", path, prefix, ns.Version)
+			}
+		}
 	}
 	for prefix, im := range c.Imports {
 		if im == nil {
@@ -171,6 +226,21 @@ func LoadConfig(path string) (*Config, error) {
 		}
 		if im.Tier != "" && im.Tier != TierCore && im.Tier != TierImpl {
 			return nil, fmt.Errorf("%s: imports.%s: tier must be core or implementation, got %q", path, prefix, im.Tier)
+		}
+		if im.Version != "" {
+			if _, err := ParseConstraint(im.Version); err != nil {
+				return nil, fmt.Errorf("%s: imports.%s: version range %q: %v", path, prefix, im.Version, err)
+			}
+		}
+	}
+	if c.Policy != nil {
+		for lvl, gate := range c.Policy.CriticalityGates {
+			if CriticalityRank(lvl) < 0 {
+				return nil, fmt.Errorf("%s: policy.criticality-gates: unknown level %q (one of %s)", path, lvl, strings.Join(CriticalityLevels, ", "))
+			}
+			if gateRank(gate) < 0 {
+				return nil, fmt.Errorf("%s: policy.criticality-gates.%s: gate must be AUTO, SOFT or HARD, got %q", path, lvl, gate)
+			}
 		}
 	}
 	if c.Views == "" {
@@ -219,12 +289,29 @@ type Concept struct {
 	Deprecated bool       `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	ReplacedBy string     `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	Value      any        `yaml:"value,omitempty" json:"value,omitempty"`
+	// Proposed marks an entry an agent (or anyone) added with the same semantics
+	// as `@gloss?`: it exists so links resolve, but a human accepts it
+	// (gloss accept --concept) before it counts as part of the ontology.
+	Proposed   bool   `yaml:"proposed,omitempty" json:"proposed,omitempty"`
+	ProposedBy string `yaml:"proposed-by,omitempty" json:"proposed-by,omitempty"`
+	// Aliases are other names people and agents use for the concept; search matches them.
+	Aliases StringList `yaml:"aliases,omitempty" json:"aliases,omitempty"`
+	// Criticality classifies how much a change here matters (low | medium |
+	// high | critical). Implementation concepts inherit it from what they
+	// realize when unset. See docs/GOVERNANCE.md.
+	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
 	// Shapes is reserved for SHACL-style instance validation (Phase 3).
 	Shapes any `yaml:"shapes,omitempty" json:"shapes,omitempty"`
 	// Relations holds every other key: relation name → targets.
 	Relations map[string]StringList `yaml:",inline" json:"relations,omitempty"`
 
 	Line int `yaml:"-" json:"-"`
+	// NullKeys lists the entry's keys whose value is null in the file, in file
+	// order; Flow reports that the entry is written as a { } flow mapping. An
+	// unquoted doc with a comma inside { } ends at the comma and the rest
+	// becomes null keys, so both feed the GM304/GM305 lint. Not serialized.
+	NullKeys []string `yaml:"-" json:"-"`
+	Flow     bool     `yaml:"-" json:"-"`
 }
 
 // RelationNames returns the concept's generic relation keys, sorted.
@@ -261,7 +348,21 @@ func LoadOntology(path string) (*Ontology, error) {
 			if m.Content[i].Value == "concepts" && m.Content[i+1].Kind == yaml.MappingNode {
 				cm := m.Content[i+1]
 				for j := 0; j+1 < len(cm.Content); j += 2 {
-					o.Lines[cm.Content[j].Value] = cm.Content[j].Line
+					name := cm.Content[j].Value
+					o.Lines[name] = cm.Content[j].Line
+					c := o.Concepts[name]
+					if c == nil {
+						c = &Concept{}
+						o.Concepts[name] = c
+					}
+					if entry := cm.Content[j+1]; entry.Kind == yaml.MappingNode {
+						c.Flow = entry.Style&yaml.FlowStyle != 0
+						for k := 0; k+1 < len(entry.Content); k += 2 {
+							if v := entry.Content[k+1]; v.Kind == yaml.ScalarNode && v.Tag == "!!null" {
+								c.NullKeys = append(c.NullKeys, entry.Content[k].Value)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -281,34 +382,63 @@ func LoadOntology(path string) (*Ontology, error) {
 
 // Manifest is a per-directory boundary declaration.
 type Manifest struct {
-	Boundary         string     `yaml:"boundary" json:"boundary"`
-	Level            string     `yaml:"level,omitempty" json:"level,omitempty"`
-	Label            string     `yaml:"label,omitempty" json:"label,omitempty"`
-	Doc              string     `yaml:"doc,omitempty" json:"doc,omitempty"`
-	PartOf           StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`
-	Realizes         StringList `yaml:"realizes,omitempty" json:"realizes,omitempty"`
-	Produces         StringList `yaml:"produces,omitempty" json:"produces,omitempty"`
-	Consumes         StringList `yaml:"consumes,omitempty" json:"consumes,omitempty"`
-	Publishes        StringList `yaml:"publishes,omitempty" json:"publishes,omitempty"`
-	Subscribes       StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
+	Boundary   string     `yaml:"boundary" json:"boundary"`
+	Level      string     `yaml:"level,omitempty" json:"level,omitempty"`
+	Label      string     `yaml:"label,omitempty" json:"label,omitempty"`
+	Doc        string     `yaml:"doc,omitempty" json:"doc,omitempty"`
+	PartOf     StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`
+	Realizes   StringList `yaml:"realizes,omitempty" json:"realizes,omitempty"`
+	Produces   StringList `yaml:"produces,omitempty" json:"produces,omitempty"`
+	Consumes   StringList `yaml:"consumes,omitempty" json:"consumes,omitempty"`
+	Publishes  StringList `yaml:"publishes,omitempty" json:"publishes,omitempty"`
+	Subscribes StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
+	// Holds names the entities whose data lives in this boundary (tables,
+	// files, packages); the code's represents links on entities derive it.
+	Holds            StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`
 	Owner            string     `yaml:"owner,omitempty" json:"owner,omitempty"`
+	// Criticality of the boundary (low | medium | high | critical). When unset
+	// it is the highest criticality of the concepts the boundary realizes,
+	// else its parent's. See docs/GOVERNANCE.md.
+	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
 
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
 	Dir  string `yaml:"-" json:"-"`
 }
 
-// DeclaredSets returns the manifest's declared intent relations.
+// InheritMarker in a manifest's realizes: list means "what my nested
+// boundaries declare"; the manifest may list additions beside it.
+const InheritMarker = "inherit"
+
+// InheritsRealizes reports whether the manifest wrote realizes: inherit.
+func (m *Manifest) InheritsRealizes() bool {
+	for _, r := range m.Realizes {
+		if r == InheritMarker {
+			return true
+		}
+	}
+	return false
+}
+
+// DeclaredSets returns the manifest's declared intent relations (without
+// the inherit marker).
 func (m *Manifest) DeclaredSets() map[string]StringList {
+	var realizes StringList
+	for _, r := range m.Realizes {
+		if r != InheritMarker {
+			realizes = append(realizes, r)
+		}
+	}
 	return map[string]StringList{
-		"realizes":   m.Realizes,
+		"realizes":   realizes,
 		"produces":   m.Produces,
 		"consumes":   m.Consumes,
 		"publishes":  m.Publishes,
 		"subscribes": m.Subscribes,
+		"holds":      m.Holds,
 	}
 }
 
@@ -339,6 +469,9 @@ func LoadManifest(path string) (*Manifest, error) {
 	}
 	if !ok {
 		return nil, fmt.Errorf("%s: level must be one of %s, got %q", path, strings.Join(BoundaryLevels, ", "), m.Level)
+	}
+	if !ValidCriticality(m.Criticality) {
+		return nil, fmt.Errorf("%s: criticality must be one of %s, got %q", path, strings.Join(CriticalityLevels, ", "), m.Criticality)
 	}
 	return &m, nil
 }

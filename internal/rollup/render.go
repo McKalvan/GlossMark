@@ -7,19 +7,20 @@ import (
 	"strings"
 )
 
-var kindOrder = []string{KindViolation, KindGap, KindRogue, KindDangling, KindStale, KindOrphan, KindUntested}
+var kindOrder = []string{KindViolation, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindUntested}
 
 var kindTitle = map[string]string{
 	KindViolation: "Violations (boundary exceeds its declared capability)",
 	KindGap:       "Gaps (declared, not implemented)",
 	KindRogue:     "Rogue concepts (decision requests)",
+	KindProposed:  "Proposed concepts (awaiting acceptance)",
 	KindDangling:  "Dangling references",
 	KindStale:     "Stale links (anchor changed)",
 	KindOrphan:    "Orphan concepts (no artifacts)",
 	KindUntested:  "Implemented but untested",
 }
 
-var kindGlyph = map[string]string{KindViolation: "✗", KindGap: "○", KindRogue: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindConsistent: "✓"}
+var kindGlyph = map[string]string{KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindConsistent: "✓"}
 
 // RenderText renders the report for a terminal.
 func RenderText(r *Report, all bool) string {
@@ -70,6 +71,8 @@ func RenderText(r *Report, all bool) string {
 			switch d.Kind {
 			case "new-concept":
 				fmt.Fprintf(&sb, "  propose %s (%s at %s:%d)%s", d.Concept, d.Relation, d.Path, d.Line, owners)
+			case "proposed-concept":
+				fmt.Fprintf(&sb, "  accept or reject proposed %s (%s:%d)%s", d.Concept, d.Path, d.Line, owners)
 			default:
 				fmt.Fprintf(&sb, "  %s (%s:%d)%s", d.Note, d.Path, d.Line, owners)
 			}
@@ -80,8 +83,8 @@ func RenderText(r *Report, all bool) string {
 		}
 	}
 	m := r.Metrics
-	fmt.Fprintf(&sb, "\nCoverage %.0f%% (%d/%d files)   Orphans: %d   Rogue: %d   Violations: %d   Gaps: %d   Stale: %d   Untested: %d   Proposed: %d\n",
-		m.CoveragePct, m.CoveredFiles, m.InScopeFiles, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed)
+	fmt.Fprintf(&sb, "\nConcepts covered %.0f%% (%d/%d with an artifact and a verifier)   Files %.0f%% (%d/%d)   Orphans: %d   Rogue: %d   Violations: %d   Gaps: %d   Stale: %d   Untested: %d   Proposed links: %d   Proposed concepts: %d\n",
+		m.ConceptCoveragePct, m.ConceptsCovered, m.ConceptsInScope, m.CoveragePct, m.CoveredFiles, m.InScopeFiles, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
 	return sb.String()
 }
 
@@ -121,7 +124,7 @@ func RenderMarkdown(r *Report, all bool) string {
 		}
 	}
 	m := r.Metrics
-	fmt.Fprintf(&sb, "\nCoverage %.0f%% · Orphans %d · Rogue %d · Violations %d · Gaps %d · Stale %d · Untested %d · Proposed %d\n",
-		m.CoveragePct, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed)
+	fmt.Fprintf(&sb, "\nConcepts covered %.0f%% · Files %.0f%% · Orphans %d · Rogue %d · Violations %d · Gaps %d · Stale %d · Untested %d · Proposed links %d · Proposed concepts %d\n",
+		m.ConceptCoveragePct, m.CoveragePct, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
 	return sb.String()
 }

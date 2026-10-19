@@ -23,10 +23,11 @@ const (
 	KindUntested   = "untested"  // implemented but no tests/verifies
 	KindStale      = "stale"     // anchor fingerprint changed
 	KindDangling   = "dangling"  // unresolved reference
+	KindProposed   = "proposed"  // proposed concept awaiting acceptance
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
-var ComparedRelations = []string{"realizes", "produces", "consumes", "publishes", "subscribes"}
+var ComparedRelations = []string{"realizes", "holds", "produces", "consumes", "publishes", "subscribes"}
 
 // Finding is one drift result.
 type Finding struct {
@@ -59,26 +60,36 @@ type Decision struct {
 	Owners   []string `json:"owners,omitempty"`
 }
 
-// Metrics are the CI numbers from the design.
+// Metrics are the CI numbers from the design. The headline is concept
+// coverage: implementation concepts that have at least one artifact and one
+// verifier. File coverage (files carrying an accepted link) is secondary,
+// because one marker per helper raises it without adding knowledge.
 type Metrics struct {
-	InScopeFiles     int     `json:"in_scope_files"`
-	CoveredFiles     int     `json:"covered_files"`
-	CoveragePct      float64 `json:"coverage_pct"`
-	Markers          int     `json:"markers"`
-	Accepted         int     `json:"accepted"`
-	Proposed         int     `json:"proposed"`
-	Stale            int     `json:"stale"`
-	Rejected         int     `json:"rejected"`
-	Orphans          int     `json:"orphans"`
-	Rogues           int     `json:"rogues"`
-	Violations       int     `json:"violations"`
-	Gaps             int     `json:"gaps"`
-	Untested         int     `json:"untested"`
-	Dangling         int     `json:"dangling"`
-	BacklogOldestDay int     `json:"review_backlog_oldest_days"`
-	Concepts         int     `json:"concepts"`
-	Boundaries       int     `json:"boundaries"`
-	Artifacts        int     `json:"artifacts"`
+	ConceptsInScope    int     `json:"concepts_in_scope"`
+	ConceptsCovered    int     `json:"concepts_covered"`
+	ConceptCoveragePct float64 `json:"concept_coverage_pct"`
+	InScopeFiles       int     `json:"in_scope_files"`
+	CoveredFiles       int     `json:"covered_files"`
+	CoveragePct        float64 `json:"coverage_pct"`
+	// Markers counts marker lines; Targets the links they state (a marker
+	// may name several targets). The review-state counts are per marker.
+	Markers          int `json:"markers"`
+	Targets          int `json:"targets"`
+	Accepted         int `json:"accepted"`
+	Proposed         int `json:"proposed"`
+	Stale            int `json:"stale"`
+	Rejected         int `json:"rejected"`
+	Orphans          int `json:"orphans"`
+	Rogues           int `json:"rogues"`
+	Violations       int `json:"violations"`
+	Gaps             int `json:"gaps"`
+	Untested         int `json:"untested"`
+	ProposedConcepts int `json:"proposed_concepts"`
+	Dangling         int `json:"dangling"`
+	BacklogOldestDay int `json:"review_backlog_oldest_days"`
+	Concepts         int `json:"concepts"`
+	Boundaries       int `json:"boundaries"`
+	Artifacts        int `json:"artifacts"`
 }
 
 // Report is the drift output.
@@ -176,6 +187,17 @@ func (c *comparer) boundaries() {
 					declared = append(declared, e.O)
 				}
 			}
+			// realizes: inherit means "what my nested boundaries declare";
+			// their gaps are theirs to report, so inherited entries only cover.
+			inherited := map[string]bool{}
+			if rel == "realizes" {
+				if m := c.manifestOf(b.CURIE); m != nil && m.InheritsRealizes() {
+					for _, iri := range c.inheritedRealizes(m, map[*model.Manifest]bool{}) {
+						inherited[iri] = true
+						declared = append(declared, iri)
+					}
+				}
+			}
 			if len(declared) == 0 {
 				continue // no claim, nothing to compare
 			}
@@ -236,6 +258,9 @@ func (c *comparer) boundaries() {
 			}
 			// Gaps: declared not reached by any derived.
 			for _, s := range declared {
+				if inherited[s] {
+					continue
+				}
 				reached := false
 				for _, d := range derived {
 					if Covers(c.g, s, d) || c.g.Subsumes(s, d) {
@@ -260,6 +285,38 @@ func (c *comparer) boundaries() {
 }
 
 // lifted summarizes a derived set with the least common subsumer when the relation lifts.
+// manifestOf finds the manifest declaring a boundary CURIE.
+func (c *comparer) manifestOf(curie string) *model.Manifest {
+	for _, m := range c.ws.Manifests {
+		if m.Boundary == curie {
+			return m
+		}
+	}
+	return nil
+}
+
+// inheritedRealizes is the union of what m's nested boundaries declare under
+// realizes (following their own inherit markers), as IRIs.
+func (c *comparer) inheritedRealizes(m *model.Manifest, seen map[*model.Manifest]bool) []string {
+	if seen[m] {
+		return nil
+	}
+	seen[m] = true
+	set := map[string]bool{}
+	for _, child := range Children(c.ws, m) {
+		for _, t := range child.DeclaredSets()["realizes"] {
+			iri, _ := c.g.Expand(t)
+			set[iri] = true
+		}
+		if child.InheritsRealizes() {
+			for _, iri := range c.inheritedRealizes(child, seen) {
+				set[iri] = true
+			}
+		}
+	}
+	return sortedKeys(set)
+}
+
 func (c *comparer) lifted(rel string, derived []string) []string {
 	r := c.ws.Vocab.Get(rel)
 	var concepts []string
@@ -289,6 +346,8 @@ func verb(rel string) string {
 		return "publishes"
 	case "subscribes":
 		return "subscribes to"
+	case "holds":
+		return "represents"
 	}
 	return rel
 }
@@ -432,6 +491,23 @@ func (c *comparer) rogues() {
 			}
 		}
 	}
+	// Proposed concepts: in the ontology with proposed: true, awaiting a human.
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		if !n.Proposed || n.Imported {
+			continue
+		}
+		by := ""
+		if n.ProposedBy != "" {
+			by = " by " + n.ProposedBy
+		}
+		c.add(Finding{Kind: KindProposed, Severity: "info", Concept: n.CURIE, Path: n.File, Line: n.Line, Proposed: true,
+			Msg: fmt.Sprintf("%s is a proposed %s%s; accept with gloss accept --concept %s", n.CURIE, n.Kind, by, n.CURIE)})
+		var owners []string
+		if d, ok := c.ws.Config.Owns[n.NS]; ok && d.Owner != "" {
+			owners = []string{d.Owner}
+		}
+		c.r.Decisions = append(c.r.Decisions, Decision{Kind: "proposed-concept", Concept: n.CURIE, Path: n.File, Line: n.Line, Note: n.Doc, Actor: n.ProposedBy, Owners: owners})
+	}
 	// Extension proposals: owned concepts that is-a an imported core concept are candidates for upstreaming.
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
 		if n.Imported || n.Deprecated {
@@ -569,18 +645,24 @@ func (c *comparer) metrics() {
 			m.Rogues++
 		case KindUntested:
 			m.Untested++
-		case KindStale:
-			m.Stale++
 		case KindDangling:
 			m.Dangling++
+		case KindProposed:
+			m.ProposedConcepts++
 		}
 	}
-	// Coverage: files under a boundary with at least one accepted link.
+	// Review state per marker (not per target), and the files an accepted link covers.
 	accepted := map[string]bool{}
+	counted := map[string]bool{}
 	for _, e := range c.g.Edges() {
 		if e.Source != graph.SourceInline || e.Prov == nil {
 			continue
 		}
+		m.Targets++
+		if counted[e.Prov.ID] {
+			continue
+		}
+		counted[e.Prov.ID] = true
 		m.Markers++
 		status := model.StatusAccepted
 		if e.Prov.Proposed {
@@ -605,16 +687,24 @@ func (c *comparer) metrics() {
 			}
 		case model.StatusRejected:
 			m.Rejected++
+		case model.StatusStale:
+			m.Stale++
 		}
 	}
-	// Markers counted edges; count distinct marker ids instead.
-	ids := map[string]bool{}
-	for _, e := range c.g.Edges() {
-		if e.Source == graph.SourceInline && e.Prov != nil {
-			ids[e.Prov.ID] = true
+	// Concept coverage: owned implementation concepts (not internal,
+	// deprecated or still proposed) with an artifact and a verifier.
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		if n.Imported || n.Tier != model.TierImpl || n.Internal || n.Deprecated || n.Proposed {
+			continue
+		}
+		m.ConceptsInScope++
+		if ok, _ := c.reachedByArtifact(n.ID); ok && c.tested(n.ID, 0) {
+			m.ConceptsCovered++
 		}
 	}
-	m.Markers = len(ids)
+	if m.ConceptsInScope > 0 {
+		m.ConceptCoveragePct = 100 * float64(m.ConceptsCovered) / float64(m.ConceptsInScope)
+	}
 	files := c.opt.Files
 	if files == nil {
 		files = c.ws.Files

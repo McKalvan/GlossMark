@@ -22,16 +22,132 @@ import (
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 // FileName is the ledger file under .glossmark/.
 const FileName = "ledger.jsonl"
 
+// header is the first line of the ledger file.
+type header struct {
+	Type      string `json:"type"`
+	Format    int    `json:"format"`
+	Generator string `json:"generator"`
+}
+
 // Ledger is the in-memory ledger.
 type Ledger struct {
 	Path    string
 	Entries map[string]*model.LedgerEntry
-	dirty   bool
+	// Actors, when set, names the actor of a marker that has no entry yet.
+	// Without it every new entry is attributed to the actor passed to Sync.
+	Actors *Actors
+	dirty  bool
+}
+
+// Actors resolves the actor of a marker seen for the first time by this
+// ledger. The actor belongs to the marker's first appearance, not to whoever
+// runs the build, so the order is: the actor the last built graph recorded
+// for the same marker id, then the session's GLOSS_ACTOR, then the git blame
+// author of the marker line when it is committed, then the fallback
+// (human:<git user>). Existing ledger entries always keep their actor.
+type Actors struct {
+	// Previous maps marker id → actor from the last built graph.
+	Previous map[string]string
+	// Session is GLOSS_ACTOR, or "" when unset.
+	Session string
+	// Root is the repository root for git blame; "" disables blame.
+	Root string
+	// Fallback is used when nothing else applies.
+	Fallback string
+
+	blame map[string]map[int]string // path → line → actor, lazily filled
+}
+
+// PreviousActors collects marker id → actor from a built graph's inline edges.
+func PreviousActors(g *graph.Graph) map[string]string {
+	out := map[string]string{}
+	if g == nil {
+		return out
+	}
+	for _, e := range g.Edges() {
+		if e.Source == graph.SourceInline && e.Prov != nil && e.Prov.ID != "" && e.Prov.Actor != "" {
+			out[e.Prov.ID] = e.Prov.Actor
+		}
+	}
+	return out
+}
+
+// For returns the actor for a marker without a ledger entry.
+func (a *Actors) For(fm extract.FoundMarker) string {
+	if a == nil {
+		return ""
+	}
+	if prev := a.Previous[fm.ID]; prev != "" {
+		return prev
+	}
+	if a.Session != "" {
+		return a.Session
+	}
+	if b := a.blameActor(fm.Path, fm.Marker.Line); b != "" {
+		return b
+	}
+	return a.Fallback
+}
+
+// blameActor returns human:<author> for a committed line, "" otherwise.
+func (a *Actors) blameActor(path string, line int) string {
+	if a.Root == "" || line <= 0 {
+		return ""
+	}
+	if a.blame == nil {
+		a.blame = map[string]map[int]string{}
+	}
+	lines, ok := a.blame[path]
+	if !ok {
+		lines = blameFile(a.Root, path)
+		a.blame[path] = lines
+	}
+	return lines[line]
+}
+
+// blameFile runs git blame --line-porcelain once per file and maps every
+// committed line to its author. Uncommitted lines (hash 0000...) map to "".
+func blameFile(root, path string) map[int]string {
+	out := map[int]string{}
+	b, err := exec.Command("git", "-C", root, "blame", "--line-porcelain", "--", filepath.FromSlash(path)).Output()
+	if err != nil {
+		return out
+	}
+	line, uncommitted := 0, false
+	for _, l := range strings.Split(string(b), "\n") {
+		switch {
+		case strings.HasPrefix(l, "\t"):
+			continue
+		case strings.HasPrefix(l, "author "):
+			if !uncommitted && line > 0 {
+				out[line] = humanActor(strings.TrimPrefix(l, "author "))
+			}
+		default:
+			// Header: <hash> <orig> <final> [<count>]
+			f := strings.Fields(l)
+			if len(f) >= 3 && len(f[0]) == 40 {
+				n := 0
+				fmt.Sscanf(f[2], "%d", &n)
+				line = n
+				uncommitted = strings.Trim(f[0], "0") == ""
+			}
+		}
+	}
+	return out
+}
+
+func humanActor(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	return "human:" + strings.ReplaceAll(strings.ToLower(name), " ", "-")
 }
 
 // Open reads the ledger; a missing file is an empty ledger.
@@ -54,9 +170,19 @@ func Open(path string) (*Ledger, error) {
 		if line == "" {
 			continue
 		}
+		if n == 1 && strings.Contains(line, `"type":"ledger"`) {
+			var h header
+			if err := json.Unmarshal([]byte(line), &h); err == nil && h.Format > version.LedgerFormat {
+				return nil, fmt.Errorf("%s: format %d was written by a newer gloss (%s); this release reads format %d", path, h.Format, h.Generator, version.LedgerFormat)
+			}
+			continue
+		}
 		var e model.LedgerEntry
 		if err := json.Unmarshal([]byte(line), &e); err != nil {
 			return nil, fmt.Errorf("%s:%d: %w", path, n, err)
+		}
+		if e.MarkerID == "" {
+			continue
 		}
 		l.Entries[e.MarkerID] = &e
 	}
@@ -77,6 +203,9 @@ func (l *Ledger) Save() error {
 	}
 	sort.Strings(ids)
 	var sb strings.Builder
+	hb, _ := json.Marshal(header{Type: "ledger", Format: version.LedgerFormat, Generator: version.Generator()})
+	sb.Write(hb)
+	sb.WriteByte('\n')
 	for _, id := range ids {
 		b, err := json.Marshal(l.Entries[id])
 		if err != nil {
@@ -107,8 +236,12 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 		seen[fm.ID] = true
 		e, ok := l.Entries[fm.ID]
 		if !ok {
+			by := actor
+			if a := l.Actors.For(fm); a != "" {
+				by = a
+			}
 			e = &model.LedgerEntry{MarkerID: fm.ID, Path: fm.Path, Relation: fm.Marker.Relation, Targets: fm.Marker.Targets,
-				Actor: actor, Model: modelOf(actor), Created: ts, AnchorFingerprint: fm.Anchor.Fingerprint, Rationale: fm.Marker.Keys["note"]}
+				Actor: by, Model: modelOf(by), Created: ts, AnchorFingerprint: fm.Anchor.Fingerprint, Rationale: fm.Marker.Keys["note"]}
 			if c := fm.Marker.Conf(); c >= 0 {
 				e.Conf = c
 			}
@@ -161,6 +294,39 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 		}
 		if e.Actor != "" {
 			g.AddNode(&graph.Node{NodeType: model.NodeActor, ID: "urn:gloss:actor:" + e.Actor, CURIE: e.Actor, Label: e.Actor, Kind: strings.SplitN(e.Actor, ":", 2)[0]})
+		}
+	}
+	// Proposed concepts are tracked like markers, keyed concept:<curie>.
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if n.Imported {
+			continue
+		}
+		id := "concept:" + n.CURIE
+		e, ok := l.Entries[id]
+		switch {
+		case n.Proposed && !ok:
+			by := n.ProposedBy
+			if by == "" {
+				by = actor
+			}
+			l.Entries[id] = &model.LedgerEntry{MarkerID: id, Path: n.File, Relation: "concept", Targets: []string{n.CURIE}, Actor: by, Model: modelOf(by), Created: ts, Status: model.StatusProposed, Rationale: n.Doc, LastSeen: ts}
+			l.dirty = true
+		case n.Proposed && ok:
+			if e.Status == model.StatusRemoved {
+				e.Status = model.StatusProposed
+				l.dirty = true
+			}
+			e.LastSeen = ts
+		case !n.Proposed && ok && e.Status == model.StatusProposed:
+			e.Status = model.StatusAccepted
+			e.ReviewedBy, e.ReviewedAt = actor, ts
+			e.LastSeen = ts
+			l.dirty = true
+		case ok:
+			e.LastSeen = ts
+		}
+		if ok || n.Proposed {
+			seen[id] = true
 		}
 	}
 	for id, e := range l.Entries {
@@ -243,7 +409,29 @@ func DefaultActor(root string) string {
 		}
 		return "human:unknown"
 	}
-	return "human:" + strings.ReplaceAll(strings.ToLower(name), " ", "-")
+	return humanActor(name)
+}
+
+// ActorChange is a marker whose actor differs from what the last built graph recorded.
+type ActorChange struct {
+	MarkerID, Path, From, To string
+}
+
+// ActorChanges lists markers whose actor this build would rewrite compared
+// with previous (marker id → actor), sorted by marker id. A non-empty result
+// means the ledger and the committed graph disagree; the ledger wins, and the
+// disagreement usually means the ledger was not committed.
+func (l *Ledger) ActorChanges(previous map[string]string) []ActorChange {
+	var out []ActorChange
+	for id, was := range previous {
+		e, ok := l.Entries[id]
+		if !ok || e.Status == model.StatusRemoved || e.Actor == "" || e.Actor == was {
+			continue
+		}
+		out = append(out, ActorChange{MarkerID: id, Path: e.Path, From: was, To: e.Actor})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].MarkerID < out[j].MarkerID })
+	return out
 }
 
 // ExportPROV renders the ledger as PROV-O-shaped JSON-LD.

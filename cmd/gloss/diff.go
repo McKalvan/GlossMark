@@ -30,6 +30,7 @@ func cmdDiff(args []string) int {
 	format := fs.String("format", "text", "text | markdown | json")
 	failOn := fs.String("fail-on", "HARD", "gate class that fails the command: HARD | SOFT | none")
 	out := fs.String("o", "", "also write the output to this file")
+	baseline := fs.Bool("baseline", false, "report the whole tree as an adoption: counts per boundary and per view instead of per link (automatic when the base has no graph)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -45,7 +46,14 @@ func cmdDiff(args []string) int {
 	pol := head.WS.Config.EffectivePolicy()
 	after := rollup.Compare(head.Graph, head.WS, rollup.Options{Ledger: head.Ledger.Entries, Policy: pol, Now: time.Now()})
 	before := rollup.Compare(baseGraph, head.WS, rollup.Options{Policy: pol, Now: time.Now()})
-	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: *base, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after})
+	label := *base
+	adoption := *baseline
+	if baseGraph.Stats()["nodes"] == 0 {
+		// The base never ran gloss: this PR is the adoption.
+		adoption = true
+		label += " (no graph)"
+	}
+	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption})
 	var buf bytes.Buffer
 	switch *format {
 	case "json":
@@ -93,6 +101,10 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 		if err == nil {
 			return g, nil
 		}
+	}
+	// An empty tree (an orphan or --allow-empty base) has nothing to extract.
+	if ls, err := gitOut(ws.Root, "ls-tree", "-r", "--name-only", ref); err == nil && strings.TrimSpace(ls) == "" {
+		return graph.New(ws.Prefixes), nil
 	}
 	// Extract the base tree.
 	tmp, err := os.MkdirTemp("", "gloss-base-")

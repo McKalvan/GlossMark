@@ -1,4 +1,4 @@
-// @gloss implements gmi:WorkspaceLoader scope=file
+// @gloss implements gmi:LandscapeAssembler scope=file
 
 package load
 
