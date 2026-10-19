@@ -4,5 +4,3 @@
 examples/*/.glossmark/viewer.html
 examples/*/.glossmark/views.json
 examples/*/*/.glossmark/viewer.html
-examples/*/.glossmark/ledger.jsonl
-examples/*/*/.glossmark/ledger.jsonl

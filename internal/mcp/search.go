@@ -19,20 +19,44 @@ type Hit struct {
 	Realizes    []string `json:"realizes,omitempty"`
 	Aliases     []string `json:"aliases,omitempty"`
 	Proposed    bool     `json:"proposed,omitempty"`
-	Score       int      `json:"score"`
-	Matched     string   `json:"matched"` // what the query hit: name, alias, doc, fuzzy
+	// Artifacts is how many artifacts link to the concept; ties rank the
+	// better-connected concept first.
+	Artifacts int    `json:"artifacts"`
+	Score     int    `json:"score"`
+	Matched   string `json:"matched"` // field and terms the query hit: "name:foal,birth", "alias:chargeback", "doc:cutoff", "fuzzy"
+
+	dist int // edit distance between the query and the name, for ties
 }
 
 // Search ranks concepts by meaning rather than substring: it splits CamelCase
-// names into words, matches aliases and docs, strips common suffixes, and
-// tolerates small typos with edit distance. It also follows is-a and realizes
-// one hop so "settlement cutoff" finds sw:CutoffClock through its core concept.
+// names into words, matches aliases and docs, strips common suffixes, maps
+// synonyms (born/birth), and tolerates small typos with edit distance. A
+// query that names a kind ("event", "constraint") boosts concepts of that
+// kind; every query word matched beats one word matched; a whole-word match
+// beats a substring. It also follows is-a and realizes one hop so "settlement
+// cutoff" finds sw:CutoffClock through its core concept. Ties go to core
+// concepts, then to the one with more artifacts, then to the shorter name.
 func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
 	words := tokens(q)
 	if len(words) == 0 {
 		return nil
 	}
-	raw := rawJoin(q)
+	// A query word that names a kind is a filter hint, not a name term.
+	kindHint := ""
+	var terms []string
+	rawQ := q
+	for _, w := range words {
+		if k := kindFor(w); k != "" && kindHint == "" && len(words) > 1 {
+			kindHint = k
+			rawQ = dropWord(rawQ, k)
+			continue
+		}
+		terms = append(terms, w)
+	}
+	if len(terms) == 0 {
+		terms = words
+	}
+	raw := rawJoin(rawQ)
 	var hits []Hit
 	for _, n := range g.NodesOf(model.NodeConcept) {
 		if ns != "" && n.NS != ns || kind != "" && n.Kind != kind || tier != "" && n.Tier != tier {
@@ -41,14 +65,29 @@ func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
 		if n.Imported && n.Tier == model.TierImpl && n.Published == "" {
 			continue
 		}
-		score, how := scoreConcept(g, n, words, raw)
+		score, how := scoreConcept(g, n, terms, raw)
 		if score <= 0 {
 			continue
 		}
-		h := Hit{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, PublishedAs: n.Published, Aliases: n.Aliases, Proposed: n.Proposed, Score: score, Matched: how}
+		if kindHint != "" {
+			// The kind word is close to a filter: the named kind rises, others sink.
+			if n.Kind == kindHint {
+				score += 15
+				how += "+kind"
+			} else {
+				score -= 30
+			}
+		}
+		h := Hit{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, PublishedAs: n.Published, Aliases: n.Aliases, Proposed: n.Proposed, Score: score, Matched: how,
+			dist: lev(raw, strings.ToLower(n.CURIE[strings.Index(n.CURIE, ":")+1:]))}
 		if r := g.Objects(n.ID, "realizes"); len(r) > 0 {
 			for _, x := range r {
 				h.Realizes = append(h.Realizes, g.Curie(x))
+			}
+		}
+		for _, e := range g.In(n.ID, "") {
+			if a := g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
+				h.Artifacts++
 			}
 		}
 		hits = append(hits, h)
@@ -56,6 +95,16 @@ func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
 	sort.Slice(hits, func(i, j int) bool {
 		if hits[i].Score != hits[j].Score {
 			return hits[i].Score > hits[j].Score
+		}
+		if hits[i].Tier != hits[j].Tier {
+			return hits[i].Tier == model.TierCore
+		}
+		// The name closer to what was typed: refunds → Refund before Refunding.
+		if hits[i].dist != hits[j].dist {
+			return hits[i].dist < hits[j].dist
+		}
+		if hits[i].Artifacts != hits[j].Artifacts {
+			return hits[i].Artifacts > hits[j].Artifacts
 		}
 		// Shorter names first on ties: Capture before CaptureHandler.
 		if len(hits[i].Curie) != len(hits[j].Curie) {
@@ -84,34 +133,46 @@ func scoreConcept(g *graph.Graph, n *graph.Node, words []string, raw string) (in
 	qjoined := strings.Join(words, "")
 	switch {
 	case raw != "" && joined == raw:
-		add(110, "name")
+		add(110, "name:"+name)
 	case strings.Join(nameToks, "") == qjoined:
-		add(100, "name")
+		add(100, "name:"+name)
 	case strings.Contains(joined, raw) && raw != "", strings.Contains(strings.Join(nameToks, ""), qjoined):
-		add(60, "name")
+		add(60, "name:"+name)
 	}
-	// Token overlap with the name (all query words present → strong).
-	if s := overlap(words, nameToks); s > 0 {
-		add(40+s*10, "name")
+	// Words of the query found in the name: every word beats some words, and a
+	// whole word beats a substring (Foal in FoalBorn, not Foa).
+	if hit := matchedTerms(words, nameToks); len(hit) > 0 {
+		switch {
+		case len(hit) == len(words) && len(words) > 1:
+			add(90, "name:"+strings.Join(hit, ","))
+		case len(hit) == len(words):
+			add(70, "name:"+strings.Join(hit, ","))
+		default:
+			add(40+len(hit)*10, "name:"+strings.Join(hit, ","))
+		}
 	}
 	// Aliases.
 	for _, a := range n.Aliases {
 		at := tokens(a)
 		if rawJoin(a) == raw || strings.Join(at, "") == qjoined {
 			add(95, "alias:"+a)
-		} else if s := overlap(words, at); s > 0 {
-			add(35+s*10, "alias:"+a)
+		} else if hit := matchedTerms(words, at); len(hit) > 0 {
+			s := 35 + len(hit)*10
+			if len(hit) == len(words) && len(words) > 1 {
+				s = 85
+			}
+			add(s, "alias:"+a)
 		}
 	}
 	// Label and doc.
 	if n.Label != "" {
-		if s := overlap(words, tokens(n.Label)); s > 0 {
-			add(30+s*10, "label")
+		if hit := matchedTerms(words, tokens(n.Label)); len(hit) > 0 {
+			add(30+len(hit)*10, "label:"+strings.Join(hit, ","))
 		}
 	}
 	if n.Doc != "" {
-		if s := overlap(words, tokens(n.Doc)); s > 0 {
-			add(15+s*5, "doc")
+		if hit := matchedTerms(words, tokens(n.Doc)); len(hit) > 0 {
+			add(15+len(hit)*5, "doc:"+strings.Join(hit, ","))
 		}
 	}
 	// Fuzzy: each query word within edit distance 2 of a name/alias token.
@@ -167,18 +228,52 @@ func maxDist(w string) int {
 }
 
 // overlap counts query words that appear in the candidate tokens (after stemming).
-func overlap(q, cand []string) int {
+func overlap(q, cand []string) int { return len(matchedTerms(q, cand)) }
+
+// matchedTerms lists the query words found whole in the candidate tokens.
+func matchedTerms(q, cand []string) []string {
 	set := map[string]bool{}
 	for _, c := range cand {
 		set[c] = true
 	}
-	n := 0
+	var out []string
 	for _, w := range q {
 		if set[w] {
-			n++
+			out = append(out, w)
 		}
 	}
-	return n
+	return out
+}
+
+// dropWord removes the query word that named kind k (any inflection), keeping the rest as typed.
+func dropWord(q, k string) string {
+	var keep []string
+	for _, f := range strings.Fields(q) {
+		if kindFor(stem(strings.ToLower(f))) == k {
+			continue
+		}
+		keep = append(keep, f)
+	}
+	return strings.Join(keep, " ")
+}
+
+// kindFor maps a query word to the concept kind it names, or "".
+func kindFor(w string) string {
+	for _, k := range model.ConceptKinds {
+		if stem(k) == w || strings.ReplaceAll(k, "-", "") == w {
+			return k
+		}
+	}
+	return ""
+}
+
+// synonyms maps stems that name the same thing, so "birth" finds FoalBorn.
+var synonyms = map[string]string{
+	"born": "birth", "birth": "birth", "birthed": "birth",
+	"creat": "creat", "made": "creat", "build": "creat", "built": "creat",
+	"remov": "delet", "delet": "delet",
+	"updat": "updat", "modifi": "updat", "chang": "updat",
+	"cancel": "cancel", "revers": "revers", "undo": "revers",
 }
 
 // tokens splits CamelCase, snake_case, kebab-case and prose into lower-case
@@ -189,6 +284,9 @@ func tokens(s string) []string {
 	flush := func() {
 		if len(cur) > 0 {
 			w := stem(strings.ToLower(string(cur)))
+			if syn, ok := synonyms[w]; ok {
+				w = syn
+			}
 			if w != "" && !stop[w] {
 				out = append(out, w)
 			}

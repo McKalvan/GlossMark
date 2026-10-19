@@ -19,14 +19,14 @@ $ gloss drift
   services/horse-factory/breeding/engine.py:22 implements impl:NEW:Gelding: rogue concept; becomes a decision request
 · Orphan concepts (no artifacts)
   impl:TailQueue: orphan concept, implementation concept has no artifacts
-Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   Stale: 0   Untested: 6   Proposed: 3
+Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   Stale: 0   Untested: 3   Proposed links: 3   Proposed concepts: 0
 ```
 
 ## What is in this repository
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
+| `cmd/gloss` | The CLI: `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
@@ -36,8 +36,17 @@ Coverage 85% (11/13 files)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   S
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
 | `examples/payments` | The worked example: two repos sharing one core, with the published seam, extension, remits and a landscape |
-| `docs/` | [Plan](docs/PLAN.md) · [Quickstart](docs/QUICKSTART.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) |
+| `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0   # Linux/macOS binary into ~/.local/bin
+go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0                                          # with a Go toolchain
+```
+
+Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.1.0` downloads the same binary.
 
 ## Try it
 
@@ -67,7 +76,7 @@ Not every subsystem carries the same risk. `criticality: low | medium | high | c
 
 ## Versions
 
-`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@vX.Y.Z`), pre-commit (`rev:`) or `go install ...@vX.Y.Z`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
+`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.1.0`), pre-commit (`rev: v0.1.0`), `install.sh v0.1.0` or `go install ...@v0.1.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Status
 

@@ -11,13 +11,16 @@ GlossMark has four version numbers. Each answers a different question, and `glos
 
 ## Tool releases
 
-Releases are git tags `vX.Y.Z` on this repository. The release workflow builds static binaries for Linux, macOS and Windows with the version injected and attaches them to a GitHub release. The same version is what `go install github.com/mckalvan/glossmark/cmd/gloss@vX.Y.Z` reports, because `gloss version` falls back to the Go module version when nothing was injected.
+Releases are git tags `vX.Y.Z` on this repository. The release workflow builds static binaries for Linux, macOS and Windows with the version injected, attaches them with sha256 checksums to a GitHub release, and `install.sh` downloads and verifies one. The same version is what `go install github.com/mckalvan/glossmark/cmd/gloss@vX.Y.Z` reports, because `gloss version` falls back to the Go module version when nothing was injected. The current release is `v0.1.0`.
 
-Pin the tool where it runs:
+Cadence: a release is cut whenever `main` carries a change an adopter needs (a MINOR for new commands, flags, finding kinds or file fields; a PATCH for fixes), and at least whenever a file format or the grammar changes, since those ship with the release that needs them. There is no fixed calendar.
 
-- GitHub Action: `uses: mckalvan/glossmark@v0.2.0` and `with: { version: v0.2.0 }`.
-- pre-commit: `rev: v0.2.0`.
-- Local: `make build VERSION=v0.2.0` or `go install ...@v0.2.0`.
+Pin the tool where it runs; `@latest` and `@main` resolve to an unreleased build that reports `0.0.0-dev`:
+
+- GitHub Action: `uses: mckalvan/glossmark@v0.1.0` (its `version:` input defaults to the same tag and downloads the binary).
+- pre-commit: `rev: v0.1.0`.
+- Shell: `curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0`.
+- Local: `make build VERSION=v0.1.0` or `go install ...@v0.1.0`.
 
 Tool semver means: a PATCH never changes any output for the same input; a MINOR may add commands, flags, finding kinds, MCP tools and file fields; a MAJOR may remove or rename any of those. Before 1.0 a MINOR may also remove, and the changelog says so.
 

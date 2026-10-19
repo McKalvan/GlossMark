@@ -3,13 +3,13 @@
 ## Install
 
 ```sh
-go install github.com/mckalvan/glossmark/cmd/gloss@latest     # or @vX.Y.Z to pin a release
-# or, from a checkout
-make build                                                      # injects the git tag as the version
-gloss version                                                   # tool, grammar and file-format versions
+curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0   # binary into ~/.local/bin, sha256 verified
+go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0                                          # with a Go toolchain
+make build                                                                                         # from a checkout; injects the git tag as the version
+gloss version                                                                                      # tool, grammar and file-format versions
 ```
 
-Binaries for Linux, macOS and Windows are attached to each GitHub release.
+Pin a release everywhere the tool runs (`@v0.1.0`, never `@latest` or `@main`): binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/mckalvan/glossmark/releases), and `go install ...@v0.1.0` reports the same version. See [VERSIONING.md](VERSIONING.md).
 
 ## 1. Declare the namespaces
 
@@ -57,15 +57,32 @@ boundary: acme:payments-api
 level: container
 realizes: [pay:Authorization, pay:Capture]
 default-namespace: pa
-allowed: [pay:Payment, pa:*]
+# allowed: is optional. Without it, links may target pa:*, what the manifest declares, their parts and the cores they realize;
+# gloss check --explain prints the set. Write it only to narrow or to add a concept the boundary uses without declaring.
 ```
 
 ## 5. Mark the code
 
+Five relations cover almost every marker; learn these and ignore the rest until you need them ([MARKING.md](MARKING.md) says when to mark, [ADVANCED.md](ADVANCED.md) has everything else):
+
 ```python
-# @gloss implements .AuthorizeHandler
+# @gloss implements .AuthorizeHandler        # the code that does the work (handler, pipeline, module)
 def authorize(req): ...
 ```
+```python
+# @gloss represents pay:Payment              # the data shape: a model, a table, a schema
+class Payment: ...
+```
+```python
+# @gloss verifies pay:Authorization          # in tests
+def test_authorize_declines_expired_cards(): ...
+```
+```markdown
+<!-- @gloss documents pay:Authorization -->  # in docs
+<!-- @gloss instructs pa:AuthorizeHandler scope=file -->   # in agent files
+```
+
+Mark one public surface per concept, not every helper; add `scope=file` when a whole file is about one concept, and then no symbol markers in it. The marker goes above the declaration and its decorators.
 
 Agents write `@gloss?` for links they propose and `ns:NEW:Name` for concepts that do not exist yet. Generate the vocabulary they should see first:
 
@@ -80,18 +97,24 @@ gloss check                      # lint: syntax, dangling refs, domain/range, ow
 gloss lock                       # pin resolved import versions in glossmark.lock
 gloss build                      # .glossmark/graph.jsonl + context.jsonld + ledger.jsonl
 gloss drift                      # violations, gaps, orphans, rogues, stale, untested, metrics
-gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment
+gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html, static, no server: boundaries are boxes, click to drill in, double-click to focus
-gloss coverage --fail-under 80
+gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
+gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
 gloss mcp                        # MCP server on stdio for agents
+gloss doctor                     # one line per setup check with its fix: gloss on PATH, GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
 ```
 
-Set `GLOSS_ACTOR=agent:claude-code@claude-fable-5-1` (or `human:alice`) so the ledger attributes links correctly.
+### Who wrote a link, and what was decided
+
+`.glossmark/ledger.jsonl` is the review record: who wrote each marker, whether a human accepted or rejected it, and whether it went stale. **Commit it** together with `graph.jsonl`; without it a fresh clone or a CI run forgets every decision. `gloss hook install` says so, and the pre-commit hook stages it.
+
+The actor belongs to a marker's first appearance, not to whoever runs the last build. For a marker the ledger does not know yet, `gloss build` takes, in order: the actor the last built `graph.jsonl` recorded for it; `GLOSS_ACTOR` (`agent:claude-code@claude-fable-5-1`, `human:alice`); the `git blame` author of the marker line when it is committed; else `human:<git user.name>`. `gloss hook install` writes `GLOSS_ACTOR=agent:claude-code` into the SessionStart hook and the MCP server's env (`--actor` to change it), so links an agent writes are attributed to the agent and the agent-remit gate (`may-modify`) applies to them. Set `GLOSS_ACTOR` yourself in any other agent harness. `gloss build` warns when a rebuild would change the actor on an existing marker.
 
 ## Agent experience
 
@@ -125,11 +148,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: mckalvan/glossmark@main
+      - uses: mckalvan/glossmark@v0.1.0
         with: { fail-on: HARD, coverage-fail-under: "0" }
 ```
 
-Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hooks from `.pre-commit-hooks.yaml` to your `.pre-commit-config.yaml`.
+On the first PR (the base has no graph) the comment reports counts per boundary and per view plus the decision requests instead of one row per link; later PRs list changes grouped by boundary in collapsible sections, each capped. `coverage-fail-under: current` fails only when a PR lowers the base's concept coverage.
+
+The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
+
+Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hooks from `.pre-commit-hooks.yaml` to your `.pre-commit-config.yaml` with `rev: v0.1.0`.
 
 ## Review workflow
 

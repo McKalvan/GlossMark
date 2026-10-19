@@ -9,7 +9,7 @@ A gloss mark is one line, inside whatever comment syntax the file already uses.
 | Part | Meaning |
 | --- | --- |
 | `?` | The link is a proposal nobody has accepted yet. Accepting is the one-character diff `@gloss?` → `@gloss` (`gloss accept`). |
-| `relation` | kebab-case, one of the inline relations: `implements`, `represents`, `tests`, `verifies`, `provisions`, `configures`, `deploys`, `documents`, `instructs`, `may-modify`, `produces`, `consumes`, `publishes`, `subscribes`. |
+| `relation` | kebab-case, one of the inline relations: `implements`, `represents`, `verifies`, `provisions`, `configures`, `deploys`, `documents`, `instructs`, `may-modify`, `produces`, `consumes`, `publishes`, `subscribes`. `tests` is an accepted alias of `verifies` and means the same; `gloss check` asks for `verifies` (GM240). |
 | `target` | A CURIE (`zoo:Mare`, `impl:HoofStep`), or `.Local` resolved against the enclosing manifest's `default-namespace`, or `ns:NEW:Name` to propose a concept that does not exist yet. `may-modify` targets may be globs (`pa:*`). |
 | `key=value` | Only `scope` (`file`, `symbol`, `block`, `line`, `range`), `conf` (0–1), `id`, `note`. Values with spaces are double-quoted. Nothing else goes inline; provenance lives in the ledger. |
 
@@ -42,7 +42,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 
 ## Anchoring
 
-A marker binds, in order of precedence, to an explicit `scope=`, else to the next declaration (function, class, resource block, YAML document, Gherkin Feature, SQL `CREATE`, Markdown heading), else to the file when it sits in the header comment, else to the next block. Markers never contain code identifiers; the anchor is derived and stored three ways:
+A marker binds, in order of precedence, to an explicit `scope=`, else to the next declaration (function, class, resource block, YAML document, Gherkin Feature, SQL `CREATE`, Markdown heading), skipping any decorator or annotation stack above it (`@app.route(...)`, `@dataclass`, `@Override`, `#[derive]`, multi-line arguments included, so the marker goes above the decorators where formatters leave it), else to the file when it sits in the header comment, else to the next block. Markers never contain code identifiers; the anchor is derived and stored three ways:
 
 1. path plus line range;
 2. a symbol string (`breed_stallion`, `HorseBuilder.AttachHoof`, `resource.aws_sqs_queue.capture`, `Deployment/horse-factory`, `table.foals`, `feature:Stallion production`) — a SCIP symbol once an indexer is joined;
@@ -98,3 +98,7 @@ Feature: Stallion production
 | GM006 | conf outside [0,1] |
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected) |
+| GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
+| GM502 / GM503 | link outside the manifest's written `allowed` list (error) / outside the set derived from what it declares (warning); both are HARD in the gate |
+| GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
+| GM131 | the same marker on consecutive declarations: one `scope=block` marker above the run says the same with one edge |

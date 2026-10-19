@@ -61,6 +61,9 @@ type Change struct {
 	Reasons  []string `json:"reasons,omitempty"`
 	Msg      string   `json:"msg"`
 	MarkerID string   `json:"marker_id,omitempty"`
+	// Boundary is the boundary whose manifest encloses Path ("" for ontology
+	// files, manifests and glossmark.yaml); the PR comment groups by it.
+	Boundary string `json:"boundary,omitempty"`
 	// Criticality is the highest governance level among the change's subject,
 	// object and the boundary of its path; CriticalityFrom names the node that
 	// carries it. See docs/GOVERNANCE.md.
@@ -86,6 +89,43 @@ type Impact struct {
 	// nodes that carry the levels, highest first.
 	Criticality string             `json:"criticality,omitempty"`
 	Critical    []CriticalityTouch `json:"critical,omitempty"`
+	// Adoption is set when the base has no graph (or --baseline was given):
+	// the diff is the whole adoption, so it is reported as counts per
+	// boundary and per view, and Changes keeps only the decision requests.
+	Adoption *Adoption `json:"adoption,omitempty"`
+}
+
+// Adoption summarizes a first-PR diff as counts instead of links.
+type Adoption struct {
+	Namespaces  int             `json:"namespaces"`
+	Concepts    int             `json:"concepts"`
+	Boundaries  int             `json:"boundaries"`
+	Files       int             `json:"files"`
+	Markers     int             `json:"markers"`
+	Links       int             `json:"links"`
+	Proposed    int             `json:"proposed"`
+	Rogues      int             `json:"rogues"`
+	PerBoundary []BoundaryCount `json:"per_boundary"`
+	PerView     []ViewCount     `json:"per_view"`
+	// Hidden is how many per-link changes the summary replaced.
+	Hidden int `json:"hidden_changes"`
+}
+
+// BoundaryCount is one row of the adoption summary.
+type BoundaryCount struct {
+	Boundary string `json:"boundary"`
+	Files    int    `json:"files"`
+	Markers  int    `json:"markers"`
+	Links    int    `json:"links"`
+	Proposed int    `json:"proposed"`
+	Realizes int    `json:"realizes"` // concepts the boundary's code realizes
+}
+
+// ViewCount is the size of a view after the adoption.
+type ViewCount struct {
+	View  string `json:"view"`
+	Nodes int    `json:"nodes"`
+	Edges int    `json:"edges"`
 }
 
 // CriticalityTouch is one classified node a change touches.
@@ -114,6 +154,8 @@ type Options struct {
 	ChangedFiles []string
 	BeforeReport *rollup.Report
 	AfterReport  *rollup.Report
+	// Adoption reports counts instead of per-link changes (base without a graph).
+	Adoption bool
 }
 
 // Classify diffs base against head.
@@ -145,10 +187,108 @@ func Classify(base, head *graph.Graph, ws *load.Workspace, opt Options) *Impact 
 		}
 		return a.Line < b.Line
 	})
-	for _, ch := range im.Changes {
+	for i := range im.Changes {
+		ch := &im.Changes[i]
 		im.Gate = Max(im.Gate, ch.Gate)
+		if ch.Path != "" && ch.Kind != "concept-proposed" && !strings.HasPrefix(ch.Kind, "concept-") && !strings.HasPrefix(ch.Kind, "boundary-") && ch.Kind != "manifest-changed" && !strings.HasPrefix(ch.Kind, "ontology-") && !strings.HasPrefix(ch.Kind, "namespace-") && ch.Kind != "import-added" {
+			if m := ws.ManifestFor(ch.Path); m != nil {
+				ch.Boundary = m.Boundary
+			}
+		}
+	}
+	if opt.Adoption {
+		c.adoption()
 	}
 	return im
+}
+
+// adoption replaces the per-link changes with counts per boundary and per
+// view, keeping only the decision requests (rogue and proposed concepts).
+func (c *classifier) adoption() {
+	a := &Adoption{}
+	type agg struct {
+		files, markers  map[string]bool
+		links, proposed int
+	}
+	per := map[string]*agg{}
+	get := func(b string) *agg {
+		x, ok := per[b]
+		if !ok {
+			x = &agg{files: map[string]bool{}, markers: map[string]bool{}}
+			per[b] = x
+		}
+		return x
+	}
+	allFiles, allMarkers := map[string]bool{}, map[string]bool{}
+	for _, e := range c.head.Edges() {
+		if e.Source != graph.SourceInline || e.Prov == nil {
+			continue
+		}
+		b := ""
+		if m := c.ws.ManifestFor(e.Prov.Path); m != nil {
+			b = m.Boundary
+		}
+		x := get(b)
+		x.files[e.Prov.Path], x.markers[e.Prov.ID] = true, true
+		allFiles[e.Prov.Path], allMarkers[e.Prov.ID] = true, true
+		x.links++
+		a.Links++
+		if e.Prov.Proposed {
+			x.proposed++
+			a.Proposed++
+		}
+		if strings.HasPrefix(e.O, "urn:gloss:new:") {
+			a.Rogues++
+		}
+	}
+	a.Files, a.Markers = len(allFiles), len(allMarkers)
+	for _, n := range c.head.NodesOf(model.NodeNamespace) {
+		if !n.Imported {
+			a.Namespaces++
+		}
+	}
+	for _, n := range c.head.NodesOf(model.NodeConcept) {
+		if !n.Imported {
+			a.Concepts++
+		}
+	}
+	for _, n := range c.head.NodesOf(model.NodeBoundary) {
+		a.Boundaries++
+		x := get(n.CURIE)
+		realized := map[string]bool{}
+		for _, e := range c.head.Out(n.ID, "realizes") {
+			realized[e.O] = true
+		}
+		a.PerBoundary = append(a.PerBoundary, BoundaryCount{Boundary: n.CURIE, Files: len(x.files), Markers: len(x.markers), Links: x.links, Proposed: x.proposed, Realizes: len(realized)})
+		delete(per, n.CURIE)
+	}
+	for b, x := range per {
+		if b == "" {
+			b = "(no manifest)"
+		}
+		a.PerBoundary = append(a.PerBoundary, BoundaryCount{Boundary: b, Files: len(x.files), Markers: len(x.markers), Links: x.links, Proposed: x.proposed})
+	}
+	sort.Slice(a.PerBoundary, func(i, j int) bool {
+		if a.PerBoundary[i].Markers != a.PerBoundary[j].Markers {
+			return a.PerBoundary[i].Markers > a.PerBoundary[j].Markers
+		}
+		return a.PerBoundary[i].Boundary < a.PerBoundary[j].Boundary
+	})
+	for _, d := range c.im.Views {
+		a.PerView = append(a.PerView, ViewCount{View: d.View, Nodes: len(d.AddedNodes) - len(d.RemovedNodes), Edges: len(d.AddedEdges) - len(d.RemovedEdges)})
+	}
+	var keep []Change
+	for _, ch := range c.im.Changes {
+		if ch.Kind == "new-concept" || ch.Kind == "concept-proposed" {
+			keep = append(keep, ch)
+		} else {
+			a.Hidden++
+		}
+	}
+	c.im.Changes = keep
+	c.im.Adoption = a
+	// The whole ontology is new: a human reviews the adoption.
+	c.im.Gate = HARD
 }
 
 type classifier struct {
@@ -302,19 +442,23 @@ func (c *classifier) ontology() {
 		c.add(Change{Gate: HARD, Kind: "ontology-edge-removed", Glyph: "-", Relation: e.P, Subject: c.base.Curie(e.S), Object: c.base.Curie(e.O), Path: provPath(e), Line: provLine(e),
 			Reasons: reasons("edit to ontology", pub), Msg: fmt.Sprintf("%s%s %s %s removed", pubPrefix(pub), c.base.Curie(e.S), e.P, c.base.Curie(e.O))})
 	}
-	// Imports.
+	// Namespaces: an owned one is an edit to glossmark.yaml; an imported one crosses repos.
 	for _, n := range c.head.NodesOf(model.NodeNamespace) {
 		if b := c.base.Node(n.ID); b == nil {
-			kind := "namespace-added"
 			if n.Imported {
-				kind = "import-added"
+				c.add(Change{Gate: HARD, Kind: "import-added", Glyph: "!", Subject: n.CURIE, Path: load.ConfigName, Reasons: []string{"cross-repo import"}, Msg: fmt.Sprintf("import %s added", n.CURIE)})
+			} else {
+				c.add(Change{Gate: HARD, Kind: "namespace-added", Glyph: "!", Subject: n.CURIE, Path: load.ConfigName, Reasons: []string{"namespace added (edit to glossmark.yaml)"}, Msg: fmt.Sprintf("namespace %s added", n.CURIE)})
 			}
-			c.add(Change{Gate: HARD, Kind: kind, Glyph: "!", Subject: n.CURIE, Path: load.ConfigName, Reasons: []string{"cross-repo import"}, Msg: fmt.Sprintf("namespace %s %s", n.CURIE, strings.TrimPrefix(kind, "namespace-"))})
 		}
 	}
 	for _, n := range c.base.NodesOf(model.NodeNamespace) {
 		if h := c.head.Node(n.ID); h == nil {
-			c.add(Change{Gate: HARD, Kind: "namespace-removed", Glyph: "-", Subject: n.CURIE, Path: load.ConfigName, Reasons: []string{"cross-repo import"}, Msg: fmt.Sprintf("namespace %s removed", n.CURIE)})
+			why := "namespace removed (edit to glossmark.yaml)"
+			if n.Imported {
+				why = "cross-repo import removed"
+			}
+			c.add(Change{Gate: HARD, Kind: "namespace-removed", Glyph: "-", Subject: n.CURIE, Path: load.ConfigName, Reasons: []string{why}, Msg: fmt.Sprintf("namespace %s removed", n.CURIE)})
 		}
 	}
 }
@@ -500,10 +644,16 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 	if e.P == "may-modify" || e.P == "instructs" {
 		return HARD, []string{"agent remit or instructions changed"}
 	}
-	// Allowed list of the nearest manifest.
-	if m := ws.ManifestFor(p.Path); m != nil && len(m.Allowed) > 0 && on.NodeType == model.NodeConcept && !model.MatchAnyCurie(m.Allowed, on.CURIE) {
-		gate = HARD
-		reasons = append(reasons, "outside allowed")
+	// Allowed set of the nearest manifest: its list, else the derived default.
+	if m := ws.ManifestFor(p.Path); m != nil && on.NodeType == model.NodeConcept {
+		if a := rollup.AllowedFor(g, ws, m); !a.Matches(on.CURIE) {
+			gate = HARD
+			if a.Derived {
+				reasons = append(reasons, "outside the allowed set derived from the manifest")
+			} else {
+				reasons = append(reasons, "outside allowed")
+			}
+		}
 	}
 	// Agent remit (may-modify) when the actor is a named agent with an agent file.
 	if p.Actor != "" && strings.HasPrefix(p.Actor, "agent:") {
@@ -540,10 +690,14 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 		}
 	}
 	if gate == SOFT {
-		reasons = append(reasons, "existing concept, valid, inside allowed")
+		reasons = append(reasons, softReason)
 	}
 	return gate, reasons
 }
+
+// softReason is the reason a SOFT link carries; it is dropped when a later
+// rule raises the link to HARD.
+const softReason = "existing concept, valid, inside allowed"
 
 func agentName(actor string) string {
 	n := strings.TrimPrefix(actor, "agent:")
@@ -771,7 +925,14 @@ func (c *classifier) viewsImpact() {
 				ch := &c.im.Changes[i]
 				if ch.Gate == SOFT && (ch.Kind == "link-added" || ch.Kind == "link-removed") && c.touchesView(ch, c.im.Views, name) {
 					ch.Gate = HARD
-					ch.Reasons = append(ch.Reasons, "business view affected: "+name)
+					// The SOFT eligibility no longer holds; say only why it is HARD.
+					var why []string
+					for _, r := range ch.Reasons {
+						if r != softReason && r != "link removed; engineering view only" {
+							why = append(why, r)
+						}
+					}
+					ch.Reasons = append(why, "business view affected: "+name)
 				}
 			}
 		}

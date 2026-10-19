@@ -296,9 +296,9 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		e := &graph.Edge{S: aid, P: mk.Relation, O: oiri, Source: graph.SourceInline, Prov: prov}
 		ex.g.AddEdge(e)
 		fm.Edges = append(fm.Edges, e)
-		// Inferrer: a test-path artifact that implements/represents also tests the concept.
+		// Inferrer: a test-path artifact that implements/represents also verifies the concept.
 		if (mk.Relation == "implements" || mk.Relation == "represents") && ex.ws.IsTestPath(rel) {
-			ex.g.AddEdge(&graph.Edge{S: aid, P: "tests", O: oiri, Source: graph.SourceInferred, Prov: &graph.Prov{Path: rel, Line: mk.Line, Rule: "test-path", ID: id, Proposed: mk.Proposed}})
+			ex.g.AddEdge(&graph.Edge{S: aid, P: "verifies", O: oiri, Source: graph.SourceInferred, Prov: &graph.Prov{Path: rel, Line: mk.Line, Rule: "test-path", ID: id, Proposed: mk.Proposed}})
 		}
 	}
 	ex.res.Markers = append(ex.res.Markers, fm)

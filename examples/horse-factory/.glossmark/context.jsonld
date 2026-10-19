@@ -45,6 +45,10 @@
       "@id": "gm:has-part",
       "@type": "@id"
     },
+    "holds": {
+      "@id": "gm:holds",
+      "@type": "@id"
+    },
     "id": "@id",
     "impl": "https://onto.acme.dev/horse-factory/",
     "implements": {

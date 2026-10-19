@@ -43,7 +43,7 @@ func cmdPropose(args []string) int {
 	kind := fs.String("kind", "", "concept kind: "+strings.Join(model.ConceptKinds, ", "))
 	realizes := fs.String("realizes", "", "core concept(s) an implementation concept realizes (comma-separated)")
 	isA := fs.String("is-a", "", "parent concept(s) (comma-separated)")
-	doc := fs.String("doc", "", "one sentence: what the concept is and why it is needed")
+	doc := fs.String("doc", "", "one sentence: what the concept is (with --from-new: applies when exactly one concept is lifted)")
 	internal := fs.Bool("internal", false, "engineering-internal mechanism (realizes nothing)")
 	aliases := fs.String("aliases", "", "other names people use (comma-separated)")
 	fromNew := fs.Bool("from-new", false, "create a proposed concept for every ns:NEW:Name marker target and rewrite the markers")
@@ -60,7 +60,7 @@ func cmdPropose(args []string) int {
 		actor = reviewer(p.WS.Root)
 	}
 	if *fromNew {
-		return proposeFromNew(p, actor)
+		return proposeFromNew(p, actor, *doc)
 	}
 	rest := fs.Args()
 	if len(rest) == 2 && rest[0] == "concept" {
@@ -172,10 +172,23 @@ func splitList(s string) []string {
 }
 
 // proposeFromNew lifts every ns:NEW:Name marker into a proposed concept, using
-// the marker's relation to guess the kind and the note as the doc.
-func proposeFromNew(p *pipeline, actor string) int {
+// the marker's relation to guess the kind. The marker's note= is why the link
+// was written, not what the concept is, so it goes to the ledger as the
+// rationale; the doc comes from --doc (one concept) or a later edit.
+func proposeFromNew(p *pipeline, actor, doc string) int {
 	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
 	done := map[string]bool{}
+	notes := map[string]string{}
+	for _, d := range rep.Decisions {
+		if d.Kind == "new-concept" && !done[d.Concept] {
+			done[d.Concept] = true
+			notes[d.Concept] = d.Note
+		}
+	}
+	if doc != "" && len(done) > 1 {
+		return fail(fmt.Errorf("--doc applies to one concept but %d ns:NEW:Name targets were found; propose them one at a time with gloss propose concept <ns:Name> --doc '...'", len(done)))
+	}
+	done = map[string]bool{}
 	n := 0
 	for _, d := range rep.Decisions {
 		if d.Kind != "new-concept" || done[d.Concept] {
@@ -192,13 +205,16 @@ func proposeFromNew(p *pipeline, actor string) int {
 			continue
 		}
 		kind := kindForRelation(d.Relation)
-		spec := ontoedit.ConceptSpec{Kind: kind, Doc: d.Note, Proposed: true, ProposedBy: firstNonEmpty(d.Actor, actor)}
+		spec := ontoedit.ConceptSpec{Kind: kind, Doc: doc, Proposed: true, ProposedBy: firstNonEmpty(d.Actor, actor)}
 		if err := ontoedit.AddConcept(path, name, spec); err != nil {
 			fmt.Fprintf(os.Stderr, "gloss propose: %v\n", err)
 			continue
 		}
 		rw, _ := ontoedit.RewriteNewMarkers(absFiles(p), d.Concept)
 		fmt.Printf("gloss propose: %s (%s) proposed in %s; %d marker(s) rewritten\n", d.Concept, kind, relOrAbs(p.WS.Root, path), rw)
+		if doc == "" {
+			fmt.Printf("  no doc yet: add doc: \"...\" to the entry (one sentence: what it is, not why the link was written)\n")
+		}
 		n++
 	}
 	if n == 0 {
@@ -206,7 +222,18 @@ func proposeFromNew(p *pipeline, actor string) int {
 		return 0
 	}
 	fmt.Printf("gloss propose: %s; implementation concepts still need realizes: or internal: true before acceptance\n", plural(n, "concept"))
-	if _, err := buildGraph(p.WS.Root, true); err != nil {
+	p2, err := buildGraph(p.WS.Root, true)
+	if err != nil {
+		return fail(err)
+	}
+	// The marker's note is the rationale of the proposal.
+	for curie, note := range notes {
+		if e := p2.Ledger.Entry("concept:" + curie); e != nil && note != "" && e.Rationale == "" {
+			e.Rationale = note
+			p2.Ledger.Touch()
+		}
+	}
+	if err := p2.Ledger.Save(); err != nil {
 		return fail(err)
 	}
 	return 0

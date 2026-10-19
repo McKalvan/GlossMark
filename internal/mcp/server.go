@@ -144,7 +144,7 @@ func str(desc string) map[string]any { return map[string]any{"type": "string", "
 var tools = []tool{
 	{"lookup_concept", "Return a concept (by CURIE such as zoo:Mare) with its kind, tier, doc, relations, realizations and the artifacts linking to it.",
 		obj(map[string]any{"curie": str("Concept CURIE, e.g. pay:Refunding")}, "curie")},
-	{"search_concepts", "Search concepts by meaning: CamelCase names split into words, aliases, docs, stems and small typos all match; one hop through realizes/is-a is followed. Returns why each hit matched. Optionally restrict to a namespace, kind or tier.",
+	{"search_concepts", "Search concepts by meaning: CamelCase names split into words, aliases, docs, stems, synonyms and small typos all match; a kind word in the query (event, constraint) boosts that kind; one hop through realizes/is-a is followed. Hits carry the doc, the artifact count and which field and terms matched. Optionally restrict to a namespace, kind or tier.",
 		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
 	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
 		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
@@ -382,7 +382,8 @@ func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string
 	}
 	out["links"] = links
 	if m := ws.ManifestFor(path); m != nil {
-		b := map[string]any{"boundary": m.Boundary, "level": m.Level, "manifest": m.Path, "default_namespace": m.DefaultNamespace, "allowed": m.Allowed, "realizes": m.Realizes, "produces": m.Produces, "consumes": m.Consumes}
+		allowed := rollup.AllowedFor(g, ws, m)
+		b := map[string]any{"boundary": m.Boundary, "level": m.Level, "manifest": m.Path, "default_namespace": m.DefaultNamespace, "allowed": allowed.Patterns, "allowed_derived": allowed.Derived, "realizes": m.Realizes, "produces": m.Produces, "consumes": m.Consumes}
 		if bn := g.NodeByCurie(m.Boundary); bn != nil {
 			var derived []string
 			for _, e := range g.Out(bn.ID, "") {
@@ -400,7 +401,7 @@ func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string
 			if n.Deprecated || (n.Imported && n.Tier == model.TierImpl && n.Published == "") {
 				continue
 			}
-			if len(m.Allowed) == 0 || model.MatchAnyCurie(m.Allowed, n.CURIE) {
+			if allowed.Matches(n.CURIE) {
 				vocab = append(vocab, n.CURIE+" ("+n.Kind+")")
 			}
 		}

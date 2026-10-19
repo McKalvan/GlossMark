@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -122,11 +123,12 @@ func cmdHook(args []string) int {
 	fs, root := newFlags("hook")
 	noMCP := fs.Bool("no-mcp", false, "do not register the MCP server in .mcp.json")
 	noHook := fs.Bool("no-hook", false, "do not register the SessionStart hook")
-	if err := fs.Parse(args); err != nil {
+	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it")
+	if err := fs.Parse(flagsLast(args)); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "install" {
-		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook]")
+		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--actor agent:name]")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -143,11 +145,13 @@ func cmdHook(args []string) int {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "gloss context --dir \"$PWD\" 2>/dev/null || true"}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" 2>/dev/null || true", *actor)}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
-		for _, it := range list {
+		for i, it := range list {
 			if b, _ := json.Marshal(it); strings.Contains(string(b), "gloss context") {
+				// An earlier install: replace it so the actor line is current.
+				list[i] = entry
 				present = true
 			}
 		}
@@ -171,16 +175,25 @@ func cmdHook(args []string) int {
 		if servers == nil {
 			servers = map[string]any{}
 		}
-		if _, ok := servers["glossmark"]; !ok {
-			servers["glossmark"] = map[string]any{"command": "gloss", "args": []string{"mcp"}}
+		srv, _ := servers["glossmark"].(map[string]any)
+		if srv == nil {
+			srv = map[string]any{"command": "gloss", "args": []string{"mcp"}}
 		}
+		env, _ := srv["env"].(map[string]any)
+		if env == nil {
+			env = map[string]any{}
+		}
+		env["GLOSS_ACTOR"] = *actor
+		srv["env"] = env
+		servers["glossmark"] = srv
 		cfg["mcpServers"] = servers
 		if err := writeJSON(path, cfg); err != nil {
 			return fail(err)
 		}
 		fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(p.WS.Root, path))
 	}
-	fmt.Println("gloss hook: new sessions will receive 'gloss context' for their directory; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of")
+	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of\n", *actor)
+	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
 	return 0
 }
 
@@ -188,9 +201,12 @@ func writeJSON(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false) // keep ">" readable in hook commands
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	return os.WriteFile(path, buf.Bytes(), 0o644)
 }

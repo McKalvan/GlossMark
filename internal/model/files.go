@@ -94,7 +94,8 @@ type Policy struct {
 	AutoAcceptSoft bool `yaml:"auto-accept-soft,omitempty" json:"auto-accept-soft,omitempty"`
 	// Waivers are time-boxed exceptions for known gaps.
 	Waivers []Waiver `yaml:"waivers,omitempty" json:"waivers,omitempty"`
-	// CoverageFailUnder is the default for gloss coverage --fail-under (percent).
+	// CoverageFailUnder is the default for gloss coverage --fail-under
+	// (percent of implementation concepts with an artifact and a verifier).
 	CoverageFailUnder float64 `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
 	// CriticalityGates raises the gate of any change that touches a concept or
 	// boundary at or above a criticality level: level → AUTO | SOFT | HARD.
@@ -302,6 +303,12 @@ type Concept struct {
 	Relations map[string]StringList `yaml:",inline" json:"relations,omitempty"`
 
 	Line int `yaml:"-" json:"-"`
+	// NullKeys lists the entry's keys whose value is null in the file, in file
+	// order; Flow reports that the entry is written as a { } flow mapping. An
+	// unquoted doc with a comma inside { } ends at the comma and the rest
+	// becomes null keys, so both feed the GM304/GM305 lint. Not serialized.
+	NullKeys []string `yaml:"-" json:"-"`
+	Flow     bool     `yaml:"-" json:"-"`
 }
 
 // RelationNames returns the concept's generic relation keys, sorted.
@@ -338,7 +345,21 @@ func LoadOntology(path string) (*Ontology, error) {
 			if m.Content[i].Value == "concepts" && m.Content[i+1].Kind == yaml.MappingNode {
 				cm := m.Content[i+1]
 				for j := 0; j+1 < len(cm.Content); j += 2 {
-					o.Lines[cm.Content[j].Value] = cm.Content[j].Line
+					name := cm.Content[j].Value
+					o.Lines[name] = cm.Content[j].Line
+					c := o.Concepts[name]
+					if c == nil {
+						c = &Concept{}
+						o.Concepts[name] = c
+					}
+					if entry := cm.Content[j+1]; entry.Kind == yaml.MappingNode {
+						c.Flow = entry.Style&yaml.FlowStyle != 0
+						for k := 0; k+1 < len(entry.Content); k += 2 {
+							if v := entry.Content[k+1]; v.Kind == yaml.ScalarNode && v.Tag == "!!null" {
+								c.NullKeys = append(c.NullKeys, entry.Content[k].Value)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -358,16 +379,19 @@ func LoadOntology(path string) (*Ontology, error) {
 
 // Manifest is a per-directory boundary declaration.
 type Manifest struct {
-	Boundary         string     `yaml:"boundary" json:"boundary"`
-	Level            string     `yaml:"level,omitempty" json:"level,omitempty"`
-	Label            string     `yaml:"label,omitempty" json:"label,omitempty"`
-	Doc              string     `yaml:"doc,omitempty" json:"doc,omitempty"`
-	PartOf           StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`
-	Realizes         StringList `yaml:"realizes,omitempty" json:"realizes,omitempty"`
-	Produces         StringList `yaml:"produces,omitempty" json:"produces,omitempty"`
-	Consumes         StringList `yaml:"consumes,omitempty" json:"consumes,omitempty"`
-	Publishes        StringList `yaml:"publishes,omitempty" json:"publishes,omitempty"`
-	Subscribes       StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
+	Boundary   string     `yaml:"boundary" json:"boundary"`
+	Level      string     `yaml:"level,omitempty" json:"level,omitempty"`
+	Label      string     `yaml:"label,omitempty" json:"label,omitempty"`
+	Doc        string     `yaml:"doc,omitempty" json:"doc,omitempty"`
+	PartOf     StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`
+	Realizes   StringList `yaml:"realizes,omitempty" json:"realizes,omitempty"`
+	Produces   StringList `yaml:"produces,omitempty" json:"produces,omitempty"`
+	Consumes   StringList `yaml:"consumes,omitempty" json:"consumes,omitempty"`
+	Publishes  StringList `yaml:"publishes,omitempty" json:"publishes,omitempty"`
+	Subscribes StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
+	// Holds names the entities whose data lives in this boundary (tables,
+	// files, packages); the code's represents links on entities derive it.
+	Holds            StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`
@@ -382,14 +406,36 @@ type Manifest struct {
 	Dir  string `yaml:"-" json:"-"`
 }
 
-// DeclaredSets returns the manifest's declared intent relations.
+// InheritMarker in a manifest's realizes: list means "what my nested
+// boundaries declare"; the manifest may list additions beside it.
+const InheritMarker = "inherit"
+
+// InheritsRealizes reports whether the manifest wrote realizes: inherit.
+func (m *Manifest) InheritsRealizes() bool {
+	for _, r := range m.Realizes {
+		if r == InheritMarker {
+			return true
+		}
+	}
+	return false
+}
+
+// DeclaredSets returns the manifest's declared intent relations (without
+// the inherit marker).
 func (m *Manifest) DeclaredSets() map[string]StringList {
+	var realizes StringList
+	for _, r := range m.Realizes {
+		if r != InheritMarker {
+			realizes = append(realizes, r)
+		}
+	}
 	return map[string]StringList{
-		"realizes":   m.Realizes,
+		"realizes":   realizes,
 		"produces":   m.Produces,
 		"consumes":   m.Consumes,
 		"publishes":  m.Publishes,
 		"subscribes": m.Subscribes,
+		"holds":      m.Holds,
 	}
 }
 

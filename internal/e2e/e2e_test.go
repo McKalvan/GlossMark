@@ -5,6 +5,7 @@ package e2e
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -684,9 +685,23 @@ func TestSearchByMeaning(t *testing.T) {
 			t.Errorf("search %q = %q, want %q (hits %+v)", q, got, want, mcp.Search(g, q, "", "", "", 3))
 		}
 	}
+	// Ranking v2 on horse-factory: every query word matched beats one word,
+	// "birth" reaches FoalBorn through the synonym table, a kind word boosts
+	// that kind, and the hit carries the doc and what matched.
+	_, hf, _, _ := build(t, example(t, "horse-factory"))
+	hits2 := mcp.Search(hf, "foal birth", "", "", "", 5)
+	if len(hits2) == 0 || hits2[0].Curie != "zoo:FoalBorn" || hits2[0].Doc == "" || !strings.HasPrefix(hits2[0].Matched, "name:") {
+		t.Errorf("foal birth = %+v", hits2)
+	}
+	if len(hits2) > 1 && hits2[1].Score == hits2[0].Score {
+		t.Errorf("foal birth: FoalBorn should rank strictly first, got %+v", hits2[:2])
+	}
+	if ev := mcp.Search(hf, "foal event", "", "", "", 3); len(ev) == 0 || ev[0].Curie != "zoo:FoalBorn" || !strings.HasSuffix(ev[0].Matched, "+kind") {
+		t.Errorf("foal event = %+v", ev)
+	}
 	// One hop: the impl handler is found through the core concept it realizes.
 	hits := mcp.Search(g, "authorization", "pa", "", "", 5)
-	if len(hits) == 0 || hits[0].Curie != "pa:AuthorizeHandler" || !strings.HasPrefix(hits[0].Matched, "via") && hits[0].Matched != "name" {
+	if len(hits) == 0 || hits[0].Curie != "pa:AuthorizeHandler" || !strings.HasPrefix(hits[0].Matched, "via") && !strings.HasPrefix(hits[0].Matched, "name") {
 		t.Errorf("one-hop search = %+v", hits)
 	}
 }
@@ -799,5 +814,468 @@ func TestGraphFormatGuard(t *testing.T) {
 	graph.New(nil).WriteJSONL(&sb)
 	if !strings.Contains(sb.String(), `"format":`+fmt.Sprint(version.GraphFormat)) {
 		t.Fatalf("header lacks format: %s", sb.String())
+	}
+}
+
+// TestOntologyFileLint: an unquoted doc with a comma inside { } is cut at the
+// comma and the rest becomes null keys; check must say so (GM305), and report
+// any other null key (GM304). Quoting the doc clears both.
+func TestOntologyFileLint(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n"+
+		"  Account: { kind: entity, doc: One account at an institution (checking, savings, loan) }\n"+
+		"  Institution: { kind: entity, doc: \"A bank, broker or lender.\" }\n"+
+		"  Category:\n    kind: entity\n    doc: A label on a transaction.\n    constrains:\n")
+	codes := func() map[string][]string {
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		rollup.Derive(res.Graph, ws.Vocab)
+		out := map[string][]string{}
+		for _, d := range check.Run(ws, res.Graph) {
+			out[d.Code] = append(out[d.Code], d.Msg)
+		}
+		return out
+	}
+	got := codes()
+	if len(got["GM305"]) != 1 || !strings.Contains(got["GM305"][0], "pf:Account") || !strings.Contains(got["GM305"][0], "savings") {
+		t.Errorf("GM305 = %v", got["GM305"])
+	}
+	if len(got["GM304"]) != 1 || !strings.Contains(got["GM304"][0], "pf:Category") || !strings.Contains(got["GM304"][0], `"constrains"`) {
+		t.Errorf("GM304 = %v", got["GM304"])
+	}
+	// Quoting the doc and dropping the empty key clears both.
+	write("ontology/pf.gloss.yaml", "concepts:\n"+
+		"  Account: { kind: entity, doc: \"One account at an institution (checking, savings, loan)\" }\n"+
+		"  Institution: { kind: entity, doc: \"A bank, broker or lender.\" }\n"+
+		"  Category:\n    kind: entity\n    doc: A label on a transaction.\n")
+	got = codes()
+	if len(got["GM304"])+len(got["GM305"]) != 0 {
+		t.Errorf("after quoting: GM304=%v GM305=%v", got["GM304"], got["GM305"])
+	}
+	// gloss propose writes a quoted doc so the entry survives a later reflow into flow style.
+	path := filepath.Join(root, "ontology", "pf.gloss.yaml")
+	if err := ontoedit.AddConcept(path, "Holding", ontoedit.ConceptSpec{Kind: "entity", Doc: "A position: shares, bonds, cash.", Proposed: true, ProposedBy: "agent:x"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if !strings.Contains(string(b), `doc: "A position: shares, bonds, cash."`) {
+		t.Errorf("propose did not quote the doc:\n%s", b)
+	}
+	if got = codes(); len(got["GM304"])+len(got["GM305"]) != 0 {
+		t.Errorf("after propose: GM304=%v GM305=%v", got["GM304"], got["GM305"])
+	}
+}
+
+// TestActorDurability: the actor belongs to a marker's first appearance. A
+// marker the ledger does not know takes the last built graph's actor, then
+// GLOSS_ACTOR, then the git blame author, then the fallback; an existing
+// entry keeps its actor whatever the session says.
+func TestActorDurability(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Alice Example", "GIT_AUTHOR_EMAIL=a@x", "GIT_COMMITTER_NAME=Alice Example", "GIT_COMMITTER_EMAIL=a@x")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Other: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("a.py", "# @gloss implements .Doer\ndef go(x): pass\n")
+	git("init", "-q")
+	git("add", ".")
+	git("commit", "-q", "-m", "committed marker")
+	// b.py is not committed.
+	write("b.py", "# @gloss? implements .Other conf=0.8\ndef other(): pass\n")
+
+	build := func(actors *ledger.Actors, session string) (*ledger.Ledger, map[string]string) {
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		rollup.Derive(res.Graph, ws.Vocab)
+		lg, _ := ledger.Open(filepath.Join(t.TempDir(), "ledger.jsonl"))
+		lg.Actors = actors
+		lg.Sync(res.Graph, res.Markers, session, time.Now())
+		by := map[string]string{}
+		for _, fm := range res.Markers {
+			by[fm.Path] = lg.Entry(fm.ID).Actor
+		}
+		return lg, by
+	}
+	// No previous graph, no GLOSS_ACTOR: blame for the committed line, the fallback for the rest.
+	_, by := build(&ledger.Actors{Root: root, Fallback: "human:runner"}, "human:runner")
+	if by["a.py"] != "human:alice-example" || by["b.py"] != "human:runner" {
+		t.Errorf("blame/fallback: %v", by)
+	}
+	// GLOSS_ACTOR set: it names the session's new markers, blame is not consulted.
+	lg, by := build(&ledger.Actors{Root: root, Session: "agent:bot@m", Fallback: "human:runner"}, "agent:bot@m")
+	if by["a.py"] != "agent:bot@m" || by["b.py"] != "agent:bot@m" {
+		t.Errorf("session: %v", by)
+	}
+	// The built graph records those actors; a later build by someone else, with
+	// no ledger, keeps them.
+	ws, _ := load.Load(root)
+	res, _ := extract.Build(ws)
+	rollup.Derive(res.Graph, ws.Vocab)
+	lg.Sync(res.Graph, res.Markers, "agent:bot@m", time.Now())
+	previous := ledger.PreviousActors(res.Graph)
+	if len(previous) != 2 {
+		t.Fatalf("previous actors = %v", previous)
+	}
+	lg2, by := build(&ledger.Actors{Previous: previous, Root: root, Fallback: "human:bob"}, "human:bob")
+	if by["a.py"] != "agent:bot@m" || by["b.py"] != "agent:bot@m" {
+		t.Errorf("previous graph: %v", by)
+	}
+	if ch := lg2.ActorChanges(previous); len(ch) != 0 {
+		t.Errorf("no actor should change: %+v", ch)
+	}
+	// An existing entry keeps its actor; a disagreement with the last graph is reported.
+	for _, e := range lg2.Entries {
+		if e.Path == "a.py" {
+			e.Actor = "human:carol"
+		}
+	}
+	ch := lg2.ActorChanges(previous)
+	if len(ch) != 1 || ch[0].Path != "a.py" || ch[0].From != "agent:bot@m" || ch[0].To != "human:carol" {
+		t.Errorf("actor changes = %+v", ch)
+	}
+}
+
+// TestRedundantMarkersAndConceptCoverage: a symbol marker shadowed by a file
+// marker (GM130) and the same marker on consecutive declarations (GM131) are
+// reported; the coverage headline counts concepts with an artifact and a
+// verifier, and the counters are per marker, not per target.
+func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n  Thing: { kind: entity }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Helper: { kind: process, realizes: z:Doing }\n  Store: { kind: resource, realizes: z:Thing }\n  Q: { kind: resource, internal: true }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("app.py", "# @gloss implements .Doer scope=file\n\n# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Helper, .Store\ndef a(): pass\n\n# @gloss implements .Store, .Helper\ndef b(): pass\n\n# @gloss represents .Store\nclass S: pass\n")
+	write("tests/test_app.py", "# @gloss verifies .Doer\ndef test_go(): pass\n")
+	ws, g, _, lg := build(t, root)
+	codes := map[string][]int{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Line)
+	}
+	if len(codes["GM130"]) != 1 || codes["GM130"][0] != 3 {
+		t.Errorf("GM130 lines = %v, want [3]", codes["GM130"])
+	}
+	if len(codes["GM131"]) != 1 || codes["GM131"][0] != 9 {
+		t.Errorf("GM131 lines = %v, want [9] (same targets in another order)", codes["GM131"])
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	m := rep.Metrics
+	// Doer has an artifact and a verifier; Helper and Store have artifacts only; Q is internal and out of scope.
+	if m.ConceptsInScope != 3 || m.ConceptsCovered != 1 || m.ConceptCoveragePct < 33 || m.ConceptCoveragePct > 34 {
+		t.Errorf("concept coverage = %d/%d (%.1f%%)", m.ConceptsCovered, m.ConceptsInScope, m.ConceptCoveragePct)
+	}
+	// Six marker lines state eight targets; every one is accepted.
+	if m.Markers != 6 || m.Targets != 8 || m.Accepted != 6 || m.Proposed != 0 {
+		t.Errorf("markers=%d targets=%d accepted=%d proposed=%d", m.Markers, m.Targets, m.Accepted, m.Proposed)
+	}
+}
+
+// TestVerifiesCanonical: the test-path inferrer emits verifies, and an inline
+// tests marker is accepted with a prefer-verifies warning (GM240).
+func TestVerifiesCanonical(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Other: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("app.py", "# @gloss implements .Doer\ndef go(): pass\n\n# @gloss implements .Other\ndef other(): pass\n")
+	write("tests/test_app.py", "# @gloss implements .Doer\ndef test_go(): pass\n\n# @gloss tests .Other\ndef test_other(): pass\n")
+	ws, g, _, _ := build(t, root)
+	doer := g.NodeByCurie("i:Doer")
+	if len(g.In(doer.ID, "verifies")) == 0 || len(g.In(doer.ID, "tests")) != 0 {
+		t.Errorf("inferrer should emit verifies, not tests: verifies=%d tests=%d", len(g.In(doer.ID, "verifies")), len(g.In(doer.ID, "tests")))
+	}
+	var gm240 []int
+	for _, d := range check.Run(ws, g) {
+		if d.Severity == "error" {
+			t.Errorf("unexpected error: %s", d)
+		}
+		if d.Code == "GM240" {
+			gm240 = append(gm240, d.Line)
+		}
+	}
+	if len(gm240) != 1 || gm240[0] != 4 {
+		t.Errorf("GM240 lines = %v, want [4]", gm240)
+	}
+	// tests still counts: Other is not untested.
+	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+	for _, f := range findings(rep, rollup.KindUntested) {
+		if f.Concept == "i:Other" || f.Concept == "i:Doer" {
+			t.Errorf("%s should count as tested: %s", f.Concept, f.Msg)
+		}
+	}
+}
+
+// TestDerivedAllowed: a manifest without allowed: gets a derived set (default
+// namespace, declared concepts, descendants, realized cores, nested
+// boundaries); a link outside it is GM503 in check and HARD in the gate. A
+// written list is a deliberate narrowing (GM502).
+func TestDerivedAllowed(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n  Thing: { kind: entity }\n  Part: { kind: entity, part-of: Thing }\n  Sub: { kind: entity, is-a: Thing }\n  Elsewhere: { kind: entity }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:Doer]\nproduces: [z:Thing]\n")
+	write("svc/a.py", "# @gloss implements .Doer\ndef go(): pass\n\n# @gloss represents z:Part\nclass P: pass\n\n# @gloss represents z:Sub\nclass S: pass\n\n# @gloss produces z:Doing\ndef d(): pass\n\n# @gloss represents z:Elsewhere\nclass E: pass\n")
+	write("top.sql", "-- @gloss represents z:Sub\nCREATE TABLE sub (id int);\n")
+	ws, g, _, _ := build(t, root)
+	svc := ws.ManifestFor("svc/a.py")
+	a := rollup.AllowedFor(g, ws, svc)
+	if !a.Derived || !has(a.Patterns, "i:*") || !has(a.Patterns, "z:Thing") || !has(a.Patterns, "z:Part") || !has(a.Patterns, "z:Sub") || !has(a.Patterns, "z:Doing") || has(a.Patterns, "z:Elsewhere") {
+		t.Errorf("derived allowed = %+v", a)
+	}
+	// The root inherits what its nested boundary allows.
+	if ra := rollup.AllowedFor(g, ws, ws.ManifestFor("top.sql")); !ra.Derived || !has(ra.Patterns, "z:Sub") || !has(ra.Patterns, "i:*") {
+		t.Errorf("root allowed = %+v", ra)
+	}
+	codes := map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Msg)
+	}
+	if len(codes["GM503"]) != 1 || !strings.Contains(codes["GM503"][0], "z:Elsewhere") || len(codes["GM502"]) != 0 {
+		t.Errorf("GM503=%v GM502=%v", codes["GM503"], codes["GM502"])
+	}
+	if ex := check.ExplainAllowed(ws, g); !strings.Contains(ex, "o:svc (svc/.gloss.yaml): allowed = i:*, i:Doer, z:Doing, z:Part, z:Sub, z:Thing") || !strings.Contains(ex, "[derived") {
+		t.Errorf("explain:\n%s", ex)
+	}
+	// Gate: the Elsewhere link is HARD with the derived-set reason; Part is SOFT.
+	for _, e := range g.Edges() {
+		if e.Source != graph.SourceInline || e.P != "represents" {
+			continue
+		}
+		cls, why := gate.ClassifyLink(g, ws, e, ws.Config.EffectivePolicy())
+		switch g.Curie(e.O) {
+		case "z:Elsewhere":
+			if cls != gate.HARD || !strings.Contains(strings.Join(why, ";"), "derived") {
+				t.Errorf("Elsewhere: %s %v", cls, why)
+			}
+		case "z:Part":
+			if cls != gate.SOFT {
+				t.Errorf("Part: %s %v", cls, why)
+			}
+		}
+	}
+	// A written list narrows: only i:* now, so z:Part becomes GM502.
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:Doer]\nproduces: [z:Thing]\nallowed: [i:*]\n")
+	ws, g, _, _ = build(t, root)
+	codes = map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Msg)
+	}
+	if len(codes["GM502"]) != 4 || len(codes["GM503"]) != 0 {
+		t.Errorf("after narrowing: GM502=%v GM503=%v", codes["GM502"], codes["GM503"])
+	}
+}
+
+// TestAdoptionDiff: a diff whose base has no graph is reported as counts per
+// boundary and per view with only the decision requests listed; the Markdown
+// comment groups changes by boundary; a HARD link never carries the SOFT
+// eligibility text; an owned namespace is "added", not a cross-repo import.
+func TestAdoptionDiff(t *testing.T) {
+	ws, head, _, lg := build(t, example(t, "horse-factory"))
+	pol := ws.Config.EffectivePolicy()
+	after := rollup.Compare(head, ws, rollup.Options{Ledger: lg.Entries, Policy: pol})
+	empty := graph.New(ws.Prefixes)
+	im := gate.Classify(empty, head, ws, gate.Options{Base: "main (no graph)", Policy: pol, HeadLedger: lg.Entries, AfterReport: after, Adoption: true})
+	a := im.Adoption
+	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 3 || len(a.PerBoundary) < 2 || len(a.PerView) != 2 || a.Hidden == 0 {
+		t.Fatalf("adoption summary = %+v", a)
+	}
+	for _, ch := range im.Changes {
+		if ch.Kind != "new-concept" && ch.Kind != "concept-proposed" {
+			t.Errorf("adoption keeps only decision requests, got %s %s", ch.Kind, ch.Msg)
+		}
+	}
+	md := gate.RenderMarkdown(im)
+	if n := strings.Count(md, "\n"); n > 60 {
+		t.Errorf("adoption comment is %d lines; want under 60", n)
+	}
+	if !strings.Contains(md, "Decisions requested") || !strings.Contains(md, "acme:horse-factory-svc") || strings.Contains(md, "cross-repo") {
+		t.Errorf("markdown:\n%s", md)
+	}
+	// Without adoption mode the same diff lists every link, grouped by boundary, and names the owned namespaces as added.
+	full := gate.Classify(empty, head, ws, gate.Options{Base: "main", Policy: pol, HeadLedger: lg.Entries, AfterReport: after})
+	if full.Adoption != nil || len(full.Changes) <= len(im.Changes) {
+		t.Fatalf("full diff: adoption=%v changes=%d", full.Adoption != nil, len(full.Changes))
+	}
+	var nsAdded bool
+	for _, ch := range full.Changes {
+		if ch.Gate == gate.HARD && strings.Contains(strings.Join(ch.Reasons, ";"), "inside allowed") {
+			t.Errorf("HARD change carries the SOFT reason: %+v", ch)
+		}
+		if ch.Kind == "namespace-added" {
+			nsAdded = true
+			if strings.Contains(strings.Join(ch.Reasons, ";"), "cross-repo") {
+				t.Errorf("owned namespace reported as cross-repo import: %+v", ch)
+			}
+		}
+	}
+	if !nsAdded {
+		t.Error("expected namespace-added changes")
+	}
+	md = gate.RenderMarkdown(full)
+	if !strings.Contains(md, "<details open><summary><b>acme:horse-factory-svc</b>") || !strings.Contains(md, "<b>Ontology, manifests and glossmark.yaml</b>") {
+		t.Errorf("grouped markdown:\n%s", md)
+	}
+}
+
+// TestInfraAndDataSatisfyDeclarations: provisions, configures and deploys on
+// a resource or system-type lift to realizes; represents on an entity lifts
+// to holds; a manifest can declare both and gloss drift compares them.
+func TestInfraAndDataSatisfyDeclarations(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Host: { kind: resource }\n  Shop: { kind: system-type }\n  Order: { kind: entity }\n  Other: { kind: entity }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  AwsHost: { kind: resource, realizes: z:Host }\n  OrdersTable: { kind: entity, realizes: z:Order }\n")
+	write("deploy/.gloss.yaml", "boundary: o:deploy\nlevel: container\nrealizes: [z:Host, z:Shop]\n")
+	write("deploy/main.tf", "# @gloss provisions i:AwsHost\nresource \"aws_instance\" \"host\" {}\n")
+	write("deploy/ci.yml", "# @gloss deploys z:Shop scope=file\nname: deploy\n")
+	write("db/.gloss.yaml", "boundary: o:db\nlevel: container\nholds: [z:Order]\n")
+	write("db/0001.sql", "-- @gloss represents i:OrdersTable\nCREATE TABLE orders (id int);\n-- @gloss represents z:Other\nCREATE TABLE other (id int);\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if gaps := findings(rep, rollup.KindGap); len(gaps) != 0 {
+		t.Errorf("infra and data links should satisfy the declarations; gaps: %+v", gaps)
+	}
+	viol := findings(rep, rollup.KindViolation)
+	if len(viol) != 1 || viol[0].Boundary != "o:db" || viol[0].Relation != "holds" || viol[0].Concept != "z:Other" {
+		t.Errorf("want one holds violation for z:Other, got %+v", viol)
+	}
+	deploy := g.NodeByCurie("o:deploy")
+	if r := g.Objects(deploy.ID, "realizes"); !has(curies(g, r), "i:AwsHost") || !has(curies(g, r), "z:Host") || !has(curies(g, r), "z:Shop") {
+		t.Errorf("deploy realizes = %v", curies(g, r))
+	}
+	for _, d := range check.Run(ws, g) {
+		if d.Severity == "error" {
+			t.Errorf("check error: %s", d)
+		}
+	}
+}
+
+func curies(g *graph.Graph, ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		out = append(out, g.Curie(id))
+	}
+	return out
+}
+
+// TestRealizesInheritance: a concept inherits realizes through is-a, a part
+// realizes its whole, a container can write realizes: inherit, and the
+// criticality understatement check (GM600) sees the closure.
+func TestRealizesInheritance(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  pf: { iri: https://x/pf/, tier: core }\n  pfi: { iri: https://x/pfi/, tier: implementation }\n")
+	write("ontology/pf.gloss.yaml", "concepts:\n  Importing: { kind: process, criticality: high }\n  Analysis: { kind: process }\n")
+	write("ontology/pfi.gloss.yaml", "concepts:\n"+
+		"  Importer: { kind: process, realizes: pf:Importing }\n"+
+		"  CsvImporter: { kind: process, is-a: Importer }\n"+
+		"  Pipeline: { kind: process, realizes: pf:Analysis }\n"+
+		"  Step: { kind: process, part-of: Pipeline }\n")
+	write(".gloss.yaml", "boundary: o:lib\nlevel: system\nrealizes: inherit\ncriticality: low\n")
+	write("importers/.gloss.yaml", "boundary: o:importers\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Importer]\n")
+	write("importers/csv.py", "# @gloss implements .CsvImporter\ndef run(): pass\n")
+	write("analytics/.gloss.yaml", "boundary: o:analytics\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Pipeline]\n")
+	write("analytics/step.py", "# @gloss implements .Step\ndef step(): pass\n")
+	ws, g, _, lg := build(t, root)
+	// GM320 does not fire for CsvImporter (is-a carries realizes); GM600 sees o:lib understating pf:Importing through the closure.
+	codes := map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Msg)
+	}
+	if len(codes["GM320"]) != 0 {
+		t.Errorf("GM320 = %v", codes["GM320"])
+	}
+	if len(codes["GM600"]) == 0 || !strings.Contains(strings.Join(codes["GM600"], ";"), "pf:Importing") {
+		t.Errorf("GM600 should report o:lib (low) housing pf:Importing (high) through CsvImporter is-a Importer: %v", codes["GM600"])
+	}
+	// The closure: CsvImporter stands for Importer's core; Step for Pipeline and its core.
+	if r := rollup.RealizesStar(g, g.NodeByCurie("pfi:CsvImporter").ID); !has(curies(g, r), "pf:Importing") {
+		t.Errorf("CsvImporter realizes* = %v", curies(g, r))
+	}
+	if r := rollup.RealizesStar(g, g.NodeByCurie("pfi:Step").ID); !has(curies(g, r), "pfi:Pipeline") || !has(curies(g, r), "pf:Analysis") {
+		t.Errorf("Step realizes* = %v", curies(g, r))
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
+		t.Errorf("no violation expected (CsvImporter covers Importer, Step covers Pipeline, lib inherits): %+v", v)
+	}
+	if gp := findings(rep, rollup.KindGap); len(gp) != 0 {
+		t.Errorf("no gap expected: %+v", gp)
+	}
+	// The inherited parent is compared: a child declaring something nothing implements is the child's gap, not the parent's.
+	write("analytics/.gloss.yaml", "boundary: o:analytics\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Pipeline, pf:Importing]\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	gaps := findings(rep, rollup.KindGap)
+	if len(gaps) != 1 || gaps[0].Boundary != "o:analytics" {
+		t.Errorf("gaps = %+v, want one on o:analytics only", gaps)
+	}
+	// And an unlisted realization in the parent is still a violation there.
+	write("extra.py", "# @gloss implements pfi:Pipeline\ndef x(): pass\n")
+	write(".gloss.yaml", "boundary: o:lib\nlevel: system\nrealizes: [inherit]\ncriticality: low\n")
+	write("importers/.gloss.yaml", "boundary: o:importers\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Importer]\n")
+	write("analytics/.gloss.yaml", "boundary: o:analytics\nlevel: container\npart-of: o:lib\ndefault-namespace: pfi\nrealizes: [pfi:Importer]\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	var libViol []string
+	for _, v := range findings(rep, rollup.KindViolation) {
+		if v.Boundary == "o:lib" {
+			libViol = append(libViol, v.Concept)
+		}
+	}
+	if !has(libViol, "pfi:Pipeline") {
+		t.Errorf("o:lib should report pfi:Pipeline as a violation (nobody declares it): %v", libViol)
 	}
 }

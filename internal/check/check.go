@@ -19,8 +19,10 @@ import (
 //	GM2xx references   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
 func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c := &checker{ws: ws, g: g}
+	c.ontologyFiles()
 	c.concepts()
 	c.edges()
+	c.markers()
 	c.manifests()
 	c.governance()
 	sort.SliceStable(c.out, func(i, j int) bool {
@@ -51,6 +53,57 @@ func (c *checker) prefixOf(curie string) string {
 		return curie[:i]
 	}
 	return ""
+}
+
+// ontologyFiles lints the YAML shape of owned ontology files. Inside a { }
+// flow mapping an unquoted doc ends at the first comma and the rest of the
+// sentence becomes null-valued keys; a null relation produces no edge, so
+// nothing else would notice. GM305 names the truncated doc, GM304 any other
+// null key.
+func (c *checker) ontologyFiles() {
+	for _, p := range sortedKeys(c.ws.Ontologies) {
+		if !c.ws.Owned[p] {
+			continue
+		}
+		o := c.ws.Ontologies[p]
+		file := relFile(c.ws, o.Path)
+		for _, name := range sortedKeys(o.Concepts) {
+			con := o.Concepts[name]
+			if con == nil || len(con.NullKeys) == 0 {
+				continue
+			}
+			curie := p + ":" + name
+			if con.Flow && con.Doc != "" && looksTruncated(con.Doc) {
+				c.add(file, con.Line, "error", "GM305", fmt.Sprintf("%s: doc is cut at a comma inside { }: %q; the rest became null keys (%s). Quote the doc or write the entry in block style", curie, con.Doc, strings.Join(con.NullKeys, ", ")))
+				continue
+			}
+			for _, k := range con.NullKeys {
+				c.add(file, con.Line, "warning", "GM304", fmt.Sprintf("%s: key %q has no value, so it adds no edge; give it targets or remove it", curie, k))
+			}
+		}
+	}
+}
+
+// looksTruncated reports whether a doc stops mid-sentence: no terminal
+// punctuation, or a parenthesis or bracket left open.
+func looksTruncated(doc string) bool {
+	d := strings.TrimSpace(doc)
+	if d == "" {
+		return false
+	}
+	depth := 0
+	for _, ch := range d {
+		switch ch {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		}
+	}
+	if depth > 0 {
+		return true
+	}
+	return !strings.ContainsAny(d[len(d)-1:], ".!?")
 }
 
 func (c *checker) concepts() {
@@ -89,12 +142,14 @@ func (c *checker) concepts() {
 			}
 		case model.TierImpl:
 			realizes := c.g.Objects(n.ID, "realizes")
-			if len(realizes) == 0 && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 {
+			// realizes is inherited through is-a and part-of (RealizesStar), so
+			// only a concept that stands for nothing at all is incomplete.
+			if len(realizes) == 0 && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 && len(rollup.RealizesStar(c.g, n.ID)) == 0 {
 				sev := "error"
 				if n.Proposed {
 					sev = "warning" // a proposal may be incomplete; acceptance requires the full entry
 				}
-				c.add(n.File, n.Line, sev, "GM320", fmt.Sprintf("%s: implementation concept must carry realizes: <core concept> or internal: true", n.CURIE))
+				c.add(n.File, n.Line, sev, "GM320", fmt.Sprintf("%s: implementation concept must carry realizes: <core concept>, is-a or part-of a concept that does, or internal: true", n.CURIE))
 			}
 			for _, r := range realizes {
 				rn := c.g.Node(r)
@@ -130,6 +185,73 @@ func (c *checker) concepts() {
 	}
 }
 
+// markers lints redundancy between inline markers. A symbol-level marker
+// that repeats a file-level marker's relation and target states the same
+// fact twice and makes two edges (GM130); the same marker on consecutive
+// declarations usually wants one scope=block marker above the run (GM131).
+// Both passed silently and inflated file coverage in the first adoptions.
+func (c *checker) markers() {
+	type fact struct{ path, rel, obj string }
+	type mk struct {
+		id, scope, rel string
+		line           int
+		objs           []string
+	}
+	fileLevel := map[fact]int{}
+	byPath := map[string][]*graph.Edge{}
+	for _, e := range c.g.Edges() {
+		if e.Source != graph.SourceInline || e.Prov == nil || e.P == "may-modify" {
+			continue
+		}
+		if e.Prov.Scope == "file" {
+			fileLevel[fact{e.Prov.Path, e.P, e.O}] = e.Prov.Line
+		}
+		byPath[e.Prov.Path] = append(byPath[e.Prov.Path], e)
+	}
+	for _, path := range sortedKeys(byPath) {
+		edges := byPath[path]
+		sort.SliceStable(edges, func(i, j int) bool { return edges[i].Prov.Line < edges[j].Prov.Line })
+		var ms []*mk
+		index := map[string]*mk{}
+		for _, e := range edges {
+			if e.Prov.Scope != "file" {
+				if fl, ok := fileLevel[fact{path, e.P, e.O}]; ok && fl != e.Prov.Line {
+					c.add(path, e.Prov.Line, "warning", "GM130", fmt.Sprintf("%s %s repeats the file-level marker at line %d; keep the file marker or the symbol markers, not both", e.P, c.g.Curie(e.O), fl))
+				}
+			}
+			m, ok := index[e.Prov.ID]
+			if !ok {
+				m = &mk{id: e.Prov.ID, scope: e.Prov.Scope, rel: e.P, line: e.Prov.Line}
+				index[e.Prov.ID] = m
+				ms = append(ms, m)
+			}
+			m.objs = append(m.objs, e.O)
+		}
+		for i := 1; i < len(ms); i++ {
+			a, b := ms[i-1], ms[i]
+			if a.scope != "symbol" || b.scope != "symbol" || a.rel != b.rel || !sameSet(a.objs, b.objs) {
+				continue
+			}
+			c.add(path, b.line, "warning", "GM131", fmt.Sprintf("%s %s repeats the marker at line %d on the previous declaration; one marker with scope=block above the run says the same with one edge", b.rel, c.g.Curie(b.objs[0]), a.line))
+		}
+	}
+}
+
+func sameSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	x, y := append([]string{}, a...), append([]string{}, b...)
+	sort.Strings(x)
+	sort.Strings(y)
+	for i := range x {
+		if x[i] != y[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *checker) edges() {
 	for _, e := range c.g.Edges() {
 		if e.Source == graph.SourceDerived {
@@ -150,6 +272,9 @@ func (c *checker) edges() {
 		case graph.SourceInline:
 			if !rel.Inline {
 				c.add(path, line, "error", "GM201", fmt.Sprintf("relation %q cannot be used in an inline marker (ontology or manifest only)", e.P))
+			}
+			if e.P == "tests" {
+				c.add(path, line, "warning", "GM240", "prefer verifies: it is the one test relation; tests is an accepted alias that means the same")
 			}
 		case graph.SourceDeclared:
 			if sn != nil && sn.NodeType == model.NodeConcept && !rel.Ontology {
@@ -277,8 +402,10 @@ func (c *checker) manifests() {
 				c.add(m.Path, 1, "warning", "GM501", fmt.Sprintf("allowed lists %s, which does not exist", pat))
 			}
 		}
-		// Inline links in this boundary must target allowed concepts (when the list exists).
-		if len(m.Allowed) == 0 {
+		// Inline links in this boundary must target the allowed set: the
+		// manifest's own list, else the set derived from what it declares.
+		allowed := rollup.AllowedFor(c.g, c.ws, m)
+		if len(allowed.Patterns) == 0 {
 			continue
 		}
 		for _, a := range c.g.NodesOf(model.NodeArtifact) {
@@ -296,16 +423,39 @@ func (c *checker) manifests() {
 				if on == nil || on.NodeType != model.NodeConcept {
 					continue
 				}
-				if !model.MatchAnyCurie(m.Allowed, on.CURIE) {
-					sev := "warning"
-					if e.Prov == nil || !e.Prov.Proposed {
-						sev = "error"
-					}
-					c.add(e.Prov.Path, e.Prov.Line, sev, "GM502", fmt.Sprintf("%s %s is outside this boundary's allowed list in %s (HARD gate)", e.P, on.CURIE, m.Path))
+				if allowed.Matches(on.CURIE) {
+					continue
 				}
+				if allowed.Derived {
+					c.add(e.Prov.Path, e.Prov.Line, "warning", "GM503", fmt.Sprintf("%s %s is outside the allowed set derived from %s (HARD gate); declare the concept there, or write allowed: to widen it (gloss check --explain shows the set)", e.P, on.CURIE, m.Path))
+					continue
+				}
+				sev := "warning"
+				if e.Prov == nil || !e.Prov.Proposed {
+					sev = "error"
+				}
+				c.add(e.Prov.Path, e.Prov.Line, sev, "GM502", fmt.Sprintf("%s %s is outside this boundary's allowed list in %s (HARD gate)", e.P, on.CURIE, m.Path))
 			}
 		}
 	}
+}
+
+// ExplainAllowed renders the effective allowed set of every manifest, one
+// line each, for gloss check --explain.
+func ExplainAllowed(ws *load.Workspace, g *graph.Graph) string {
+	var sb strings.Builder
+	for _, m := range ws.Manifests {
+		a := rollup.AllowedFor(g, ws, m)
+		switch {
+		case len(a.Patterns) == 0:
+			fmt.Fprintf(&sb, "%s (%s): allowed = everything; the manifest declares nothing and has no default-namespace\n", m.Boundary, m.Path)
+		case a.Derived:
+			fmt.Fprintf(&sb, "%s (%s): allowed = %s  [derived: default-namespace, declared concepts, their descendants, realized cores, nested boundaries]\n", m.Boundary, m.Path, strings.Join(a.Patterns, ", "))
+		default:
+			fmt.Fprintf(&sb, "%s (%s): allowed = %s  [declared]\n", m.Boundary, m.Path, strings.Join(a.Patterns, ", "))
+		}
+	}
+	return sb.String()
 }
 
 func relFile(ws *load.Workspace, path string) string {

@@ -28,6 +28,8 @@ type pipeline struct {
 	Ledger *ledger.Ledger
 	Diags  []marker.Diagnostic
 	Took   time.Duration
+	// ActorChanges lists markers whose actor differs from the last built graph.
+	ActorChanges []ledger.ActorChange
 }
 
 // buildGraph runs the pipeline. When writeLedger is true the ledger is synced
@@ -56,17 +58,36 @@ func buildGraph(root string, writeLedger bool) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
-	actor := os.Getenv("GLOSS_ACTOR")
+	session := os.Getenv("GLOSS_ACTOR")
+	actor := session
 	if actor == "" {
 		actor = ledger.DefaultActor(root)
 	}
+	// A marker's actor belongs to its first appearance: the last built graph,
+	// then this session, then git blame, then the git user (docs/QUICKSTART.md).
+	previous := ledger.PreviousActors(readGraph(ws.StatePath("graph.jsonl")))
+	lg.Actors = &ledger.Actors{Previous: previous, Session: session, Root: ws.Root, Fallback: actor}
 	lg.Sync(g, res.Markers, actor, time.Now().UTC())
 	if writeLedger {
 		if err := lg.Save(); err != nil {
 			return nil, err
 		}
 	}
-	return &pipeline{WS: ws, Res: res, Graph: g, Ledger: lg, Diags: res.Diags, Took: time.Since(start)}, nil
+	return &pipeline{WS: ws, Res: res, Graph: g, Ledger: lg, Diags: res.Diags, Took: time.Since(start), ActorChanges: lg.ActorChanges(previous)}, nil
+}
+
+// readGraph loads a built graph, or returns nil when there is none to read.
+func readGraph(path string) *graph.Graph {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	g, err := graph.ReadJSONL(f)
+	if err != nil {
+		return nil
+	}
+	return g
 }
 
 func cmdBuild(args []string) int {
@@ -89,6 +110,10 @@ func cmdBuild(args []string) int {
 		return fail(err)
 	}
 	printDiags(p.Diags)
+	if n := len(p.ActorChanges); n > 0 {
+		c := p.ActorChanges[0]
+		fmt.Fprintf(os.Stderr, "gloss build: warning: actor rewritten on %s (e.g. %s %s: %s → %s); the ledger is the review record and belongs in git, see docs/QUICKSTART.md\n", plural(n, "existing marker"), c.MarkerID, c.Path, c.From, c.To)
+	}
 	if !*quiet {
 		s := p.Graph.Stats()
 		fmt.Printf("gloss build: %d files scanned, %s, %d nodes (%d concepts, %d boundaries, %d artifacts), %d edges (%d declared, %d inline, %d derived) in %s → %s\n",

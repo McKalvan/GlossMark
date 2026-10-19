@@ -21,6 +21,9 @@ const (
 // LiftedRelations are the artifact relations that lift to boundaries.
 var LiftedRelations = []string{"produces", "consumes", "publishes", "subscribes"}
 
+// InfraRelations lift to realizes when their target is a resource or a system-type.
+var InfraRelations = []string{"provisions", "configures", "deploys"}
+
 // IsConcrete reports whether an object IRI names a real node (not NEW/glob/unresolved).
 func IsConcrete(iri string) bool {
 	return !strings.HasPrefix(iri, "urn:gloss:new:") && !strings.HasPrefix(iri, "urn:gloss:glob:") && !strings.HasPrefix(iri, "urn:gloss:unresolved:")
@@ -86,8 +89,32 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 				}
 			}
 			for _, e := range g.Out(a.ID, "represents") {
-				if IsConcrete(e.O) {
-					add("represents", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+				if !IsConcrete(e.O) {
+					continue
+				}
+				add("represents", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+				// A table, file or package that represents an entity means the
+				// boundary holds that entity's data; a manifest declares holds:.
+				if on := g.Node(e.O); on != nil && on.Kind == "entity" {
+					add("holds", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+					for _, core := range RealizesStar(g, e.O) {
+						add("holds", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+					}
+				}
+			}
+			// Infrastructure, configuration and deployment of a resource or a
+			// system-type realize it: a Terraform file that provisions the
+			// registry satisfies a manifest that declares realizes: [impl:FoalRegistry].
+			for _, rel := range InfraRelations {
+				for _, e := range g.Out(a.ID, rel) {
+					on := g.Node(e.O)
+					if !IsConcrete(e.O) || on == nil || on.NodeType != model.NodeConcept || (on.Kind != "resource" && on.Kind != "system-type") {
+						continue
+					}
+					add("realizes", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+					for _, core := range RealizesStar(g, e.O) {
+						add("realizes", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+					}
 				}
 			}
 			for _, rel := range LiftedRelations {
@@ -186,10 +213,14 @@ func isAncestorBoundary(g *graph.Graph, anc, b string) bool {
 	return false
 }
 
-// RealizesStar returns every concept reachable from c through realizes,
-// published-as and part-of→realizes chains: the core concepts c stands for.
+// RealizesStar returns every concept c stands for: what it realizes or is
+// published as (transitively), the wholes it is part of and what they
+// realize (implementing a part implements the whole), and what its is-a
+// ancestors realize (a CsvImporter is-a Importer realizes pf:Importing
+// without repeating the line). Neither is-a ancestors nor c itself are
+// included.
 func RealizesStar(g *graph.Graph, c string) []string {
-	seen := map[string]bool{}
+	seen := map[string]bool{c: true}
 	var out []string
 	var walk func(x string, depth int)
 	walk = func(x string, depth int) {
@@ -208,8 +239,16 @@ func RealizesStar(g *graph.Graph, c string) []string {
 				}
 			}
 		}
-		// A part of a mechanism realizes what the mechanism realizes.
+		// A part of a mechanism realizes the mechanism and what it realizes.
 		for _, e := range g.Out(x, "part-of") {
+			if n := g.Node(e.O); n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived && !seen[e.O] {
+				seen[e.O] = true
+				out = append(out, e.O)
+				walk(e.O, depth+1)
+			}
+		}
+		// A kind of a mechanism realizes what the mechanism realizes.
+		for _, e := range g.Out(x, "is-a") {
 			if n := g.Node(e.O); n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived {
 				walk(e.O, depth+1)
 			}

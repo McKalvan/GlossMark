@@ -36,10 +36,15 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 			fmt.Fprintf(&sb, "; criticality %s (%s)", b.Criticality, from)
 		}
 		sb.WriteString("\n")
-		if len(m.Allowed) > 0 {
-			fmt.Fprintf(&sb, "Allowed targets: %s (others are HARD-gated)\n", strings.Join(m.Allowed, ", "))
+		if a := rollup.AllowedFor(g, ws, m); len(a.Patterns) > 0 {
+			how := ""
+			if a.Derived {
+				how = ", derived from what the manifest declares"
+			}
+			fmt.Fprintf(&sb, "Allowed targets: %s (others are HARD-gated%s)\n", strings.Join(a.Patterns, ", "), how)
 		}
 	}
+	allowed := rollup.AllowedFor(g, ws, m)
 	// Agent remits present in the repo.
 	var remits []string
 	for _, a := range g.NodesOf(model.NodeArtifact) {
@@ -61,7 +66,7 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 		if n.Deprecated || (n.Imported && n.Tier == model.TierImpl && n.Published == "") {
 			continue
 		}
-		if m != nil && len(m.Allowed) > 0 && !model.MatchAnyCurie(m.Allowed, n.CURIE) {
+		if m != nil && !allowed.Matches(n.CURIE) {
 			continue
 		}
 		var tags []string
@@ -117,11 +122,11 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 	}
 	if rep != nil {
 		mm := rep.Metrics
-		fmt.Fprintf(&sb, "\nState: coverage %.0f%%, %d proposed links, %d proposed concepts, %d stale, %d violations, %d gaps, %d untested.\n",
-			mm.CoveragePct, mm.Proposed, mm.ProposedConcepts, mm.Stale, mm.Violations, mm.Gaps, mm.Untested)
+		fmt.Fprintf(&sb, "\nState: %d/%d concepts covered (artifact and verifier), files %.0f%%, %d proposed links, %d proposed concepts, %d stale, %d violations, %d gaps, %d untested.\n",
+			mm.ConceptsCovered, mm.ConceptsInScope, mm.CoveragePct, mm.Proposed, mm.ProposedConcepts, mm.Stale, mm.Violations, mm.Gaps, mm.Untested)
 		var untested []string
 		for _, f := range rep.Findings {
-			if f.Kind == rollup.KindUntested && (m == nil || len(m.Allowed) == 0 || model.MatchAnyCurie(m.Allowed, f.Concept)) {
+			if f.Kind == rollup.KindUntested && (m == nil || allowed.Matches(f.Concept)) {
 				untested = append(untested, f.Concept)
 			}
 		}
