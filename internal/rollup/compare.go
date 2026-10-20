@@ -283,8 +283,16 @@ func (c *comparer) boundaries() {
 					continue
 				}
 				consistent = false
-				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line,
-					Msg: fmt.Sprintf("%s declares %s %s but nothing under it %s it: intended capability not implemented, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), verb(rel))})
+				msg := fmt.Sprintf("%s declares %s %s but nothing under it %s it: intended capability not implemented, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), verb(rel))
+				if links := c.unlifted(b.ID, s); len(links) > 0 {
+					// The code links to it, but the links do not lift to rel:
+					// usually the concept's kind (a retype upstream).
+					msg = fmt.Sprintf("%s declares %s %s, but the links to it under it do not lift to %s: %s", b.CURIE, rel, c.g.Curie(s), rel, strings.Join(links, "; "))
+					if why := KindMismatch(c.g, rel, s); why != "" {
+						msg += " (" + why + ")"
+					}
+				}
+				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line, Msg: msg})
 			}
 			if consistent {
 				lifted := c.lifted(rel, derived)
@@ -293,6 +301,56 @@ func (c *comparer) boundaries() {
 			}
 		}
 	}
+}
+
+// unlifted lists the inline links from artifacts under boundary b to concept
+// s, as "path:line relation", for a gap the code links to but does not reach.
+func (c *comparer) unlifted(b, s string) []string {
+	var out []string
+	for _, e := range c.g.Edges() {
+		if e.O != s || e.Source != graph.SourceInline || e.Prov == nil {
+			continue
+		}
+		a := c.g.Node(e.S)
+		if a == nil || a.NodeType != model.NodeArtifact || a.Boundary == "" {
+			continue
+		}
+		under := a.Boundary == b
+		for _, anc := range c.g.PartOfChain(a.Boundary) {
+			under = under || anc == b
+		}
+		if under {
+			out = append(out, fmt.Sprintf("%s:%d %s", e.Prov.Path, e.Prov.Line, e.P))
+		}
+	}
+	sort.Strings(out)
+	return uniqStrings(out)
+}
+
+// KindMismatch explains why a manifest relation cannot be satisfied for a
+// concept of the wrong kind: holds takes entities, publishes and subscribes
+// take events. Empty when the kind fits or is unknown.
+func KindMismatch(g *graph.Graph, rel, iri string) string {
+	n := g.Node(iri)
+	if n == nil || n.NodeType != model.NodeConcept || n.Kind == "" {
+		return ""
+	}
+	want := map[string]string{"holds": "entity", "publishes": "event", "subscribes": "event"}[rel]
+	if want == "" || n.Kind == want {
+		return ""
+	}
+	plural := map[string]string{"entity": "entities", "event": "events"}[want]
+	return fmt.Sprintf("%s is a %s; %s takes %s", n.CURIE, n.Kind, rel, plural)
+}
+
+func uniqStrings(xs []string) []string {
+	var out []string
+	for i, x := range xs {
+		if i == 0 || x != xs[i-1] {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // wholeOfCovered reports whether derived concept d is only there because a

@@ -507,6 +507,13 @@ func (c *checker) edges() {
 		if e.Source == graph.SourceInline && len(rel.RangeKinds) > 0 && on.NodeType == model.NodeConcept && on.Kind != "" && !contains(rel.RangeKinds, on.Kind) {
 			c.add(path, line, "warning", "GM221", fmt.Sprintf("%s usually targets a %s; %s is a %s", e.P, strings.Join(rel.RangeKinds, "/"), on.CURIE, on.Kind))
 		}
+		// A manifest relation that cannot lift for the concept's kind is
+		// a gap waiting to happen; say why (often an upstream retype).
+		if e.Source == graph.SourceDeclared && sn.NodeType == model.NodeBoundary {
+			if why := rollup.KindMismatch(c.g, e.P, e.O); why != "" {
+				c.add(path, line, "warning", "GM223", fmt.Sprintf("%s %s %s: %s", sn.CURIE, e.P, on.CURIE, why))
+			}
+		}
 		// Deprecated targets.
 		if on.Deprecated {
 			msg := fmt.Sprintf("%s is deprecated", on.CURIE)
