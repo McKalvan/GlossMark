@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/ledger"
@@ -92,6 +93,50 @@ func TestOneGateClassifier(t *testing.T) {
 	}
 	if ts[2].Gate != gate.SOFT || !strings.Contains(strings.Join(ts[2].Hints, ";"), "it is not rated by it") {
 		t.Errorf("LimitPage.tsx: %+v", ts[2])
+	}
+}
+
+// TestWaiverValidation: a waiver without an ISO expires: date is a check
+// error and waives nothing; one that names no finding is a warning (#126).
+func TestWaiverValidation(t *testing.T) {
+	root, write := tempRepo(t)
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n  Lonely: { kind: process }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\n")
+	write("a.py", "# @gloss implements z:Doing\ndef a(): pass\n")
+	for _, c := range []struct {
+		waiver, code string
+		waived       bool
+	}{
+		{"{ finding: z:Lonely, owner: alice, expires: 2999-12-31 }", "", true},
+		{`{ finding: z:Lonely, owner: alice, expires: "2999-12-31" }`, "", true},
+		{"{ finding: z:Lonely, owner: alice, expires: 30 June 2020 }", "GM610", false},
+		{"{ finding: z:Lonely, owner: alice }", "GM610", false},
+		{"{ finding: orphan:z:Lonley, owner: alice, expires: 2999-12-31 }", "GM611", false},
+	} {
+		write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\npolicy:\n  waivers:\n    - "+c.waiver+"\n")
+		ws, g, _, _ := build(t, root)
+		var codes []string
+		for _, d := range check.Run(ws, g) {
+			if strings.HasPrefix(d.Code, "GM61") {
+				codes = append(codes, d.Code+" "+d.Severity)
+			}
+		}
+		want := ""
+		switch c.code {
+		case "GM610":
+			want = "GM610 error"
+		case "GM611":
+			want = "GM611 warning"
+		}
+		if strings.Join(codes, ";") != want {
+			t.Errorf("%s: check %v, want %q", c.waiver, codes, want)
+		}
+		rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+		for _, f := range findings(rep, rollup.KindOrphan) {
+			if f.Concept == "z:Lonely" && f.Waived != c.waived {
+				t.Errorf("%s: orphan waived = %v, want %v (%s)", c.waiver, f.Waived, c.waived, f.Msg)
+			}
+		}
 	}
 }
 

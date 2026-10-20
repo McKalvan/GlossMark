@@ -61,7 +61,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
 
-`--fail-on` chooses which kinds fail the command (`none` for none; an unknown kind exits 2 with the list of valid ones); `policy.waivers` in `glossmark.yaml` silences one finding until a date.
+`--fail-on` chooses which kinds fail the command (`none` for none; an unknown kind exits 2 with the list of valid ones); `policy.waivers` in `glossmark.yaml` silences one finding until a date. `gloss check` fails a waiver whose `expires:` is missing or not a `YYYY-MM-DD` date (GM610; such a waiver waives nothing) and warns about one whose `finding:` matches no finding id or concept (GM611).
 
 ## Gates (`gloss diff`)
 

@@ -824,6 +824,32 @@ func (c *comparer) metrics() {
 	}
 }
 
+// WaiverDate is the layout of a waiver's expires: date.
+const WaiverDate = "2006-01-02"
+
+// UnmatchedWaivers returns the policy's waivers that name no finding of the
+// report, by finding id or concept: a mistyped id waives nothing. Waivers of
+// stale findings are left out, since those need the ledger to be found.
+func UnmatchedWaivers(r *Report, pol *model.Policy) []model.Waiver {
+	if pol == nil {
+		return nil
+	}
+	var out []model.Waiver
+	for _, w := range pol.Waivers {
+		if strings.HasPrefix(w.Finding, KindStale+":") {
+			continue
+		}
+		found := false
+		for _, f := range r.Findings {
+			found = found || w.Finding == f.ID || w.Finding == f.Concept
+		}
+		if !found {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 func (c *comparer) waive() {
 	if c.opt.Policy == nil {
 		return
@@ -834,7 +860,13 @@ func (c *comparer) waive() {
 			if w.Finding != f.ID && w.Finding != f.Concept {
 				continue
 			}
-			if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && c.opt.Now.After(exp.Add(24*time.Hour)) {
+			// A waiver without a valid date waives nothing (gloss check GM610).
+			exp, err := time.Parse(WaiverDate, w.Expires)
+			if err != nil {
+				f.Msg += fmt.Sprintf(" [waiver by %s ignored: expires %q is not a YYYY-MM-DD date]", w.Owner, w.Expires)
+				continue
+			}
+			if c.opt.Now.After(exp.Add(24 * time.Hour)) {
 				f.Msg += fmt.Sprintf(" [waiver by %s expired %s]", w.Owner, w.Expires)
 				continue
 			}

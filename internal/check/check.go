@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -27,6 +28,7 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c.markers()
 	c.manifests()
 	c.governance()
+	c.waivers()
 	sort.SliceStable(c.out, func(i, j int) bool {
 		a, b := c.out[i], c.out[j]
 		if a.Path != b.Path {
@@ -389,6 +391,24 @@ func (c *checker) edges() {
 				c.add(relFile(c.ws, o.Path), con.Line, "error", "GM401", fmt.Sprintf("%s: concept defined in namespace %s: belongs to %s:, which this repo does not own (own-subject rule)", name, p, c.prefixOf(name)))
 			}
 		}
+	}
+}
+
+// waivers: a waiver needs an ISO expires: date, or it would waive forever
+// (GM610); one that names no finding waives nothing, usually a typo (GM611).
+func (c *checker) waivers() {
+	pol := c.ws.Config.EffectivePolicy()
+	if len(pol.Waivers) == 0 {
+		return
+	}
+	for _, w := range pol.Waivers {
+		if _, err := time.Parse(rollup.WaiverDate, w.Expires); err != nil {
+			c.add(load.ConfigName, 1, "error", "GM610", fmt.Sprintf("waiver for %s by %s: expires %q is not a YYYY-MM-DD date; a waiver must expire", w.Finding, w.Owner, w.Expires))
+		}
+	}
+	rep := rollup.Compare(c.g, c.ws, rollup.Options{Policy: pol})
+	for _, w := range rollup.UnmatchedWaivers(rep, pol) {
+		c.add(load.ConfigName, 1, "warning", "GM611", fmt.Sprintf("waiver for %s by %s matches no finding (by id or concept); gloss drift --format json lists the ids", w.Finding, w.Owner))
 	}
 }
 
