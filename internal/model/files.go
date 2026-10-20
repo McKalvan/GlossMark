@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -105,12 +108,35 @@ type Policy struct {
 	// Waivers are time-boxed exceptions for known gaps.
 	Waivers []Waiver `yaml:"waivers,omitempty" json:"waivers,omitempty"`
 	// CoverageFailUnder is the default for gloss coverage --fail-under
-	// (percent of implementation concepts with an artifact and a verifier).
-	CoverageFailUnder float64 `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
+	// (percent of implementation concepts with an artifact and a verifier),
+	// or "current" for the base's coverage (a ratchet).
+	CoverageFailUnder FailUnder `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
 	// CriticalityGates raises the gate of any change that touches a concept or
 	// boundary at or above a criticality level: level → AUTO | SOFT | HARD.
 	// Default: critical → HARD. See docs/GOVERNANCE.md.
 	CriticalityGates map[string]string `yaml:"criticality-gates,omitempty" json:"criticality-gates,omitempty"`
+}
+
+// FailUnder is a coverage threshold as written: a percentage, or "current".
+// It is validated when glossmark.yaml is read.
+type FailUnder string
+
+// UnmarshalYAML accepts a number or the word current.
+func (f *FailUnder) UnmarshalYAML(n *yaml.Node) error {
+	v := strings.TrimSpace(n.Value)
+	if n.Kind != yaml.ScalarNode {
+		return fmt.Errorf("line %d: coverage-fail-under: want a percentage or current", n.Line)
+	}
+	if strings.EqualFold(v, "current") {
+		*f = "current"
+		return nil
+	}
+	p, err := strconv.ParseFloat(v, 64)
+	if err != nil || p < 0 || p > 100 {
+		return fmt.Errorf("line %d: coverage-fail-under: %q is neither a percentage (0 to 100) nor current", n.Line, v)
+	}
+	*f = FailUnder(v)
+	return nil
 }
 
 // Waiver suppresses one finding until it expires.
@@ -128,7 +154,6 @@ func DefaultPolicy() *Policy {
 		// @gloss publishes-value gmi:DefaultSoftThreshold scope=line
 		SoftConfThreshold: 0.7,
 		HardPaths:         []string{"ontology/**", "**/.gloss.yaml", "glossmark.yaml"},
-		CoverageFailUnder: 0,
 		CriticalityGates:  map[string]string{"critical": "HARD"},
 	}
 }
@@ -431,6 +456,12 @@ type Manifest struct {
 	// beneath it, including nested boundaries. Without it an artifact takes
 	// only the level of the concepts it links to. See docs/GOVERNANCE.md.
 	CriticalityFloor bool `yaml:"criticality-floor,omitempty" json:"criticality-floor,omitempty"`
+	// Deprecated marks a boundary that is being retired; ReplacedBy names
+	// the boundary that takes over (a CURIE, possibly in another repository)
+	// and RetireBy the date it is due to go (YYYY-MM-DD). See ADR 0007.
+	Deprecated bool   `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
+	ReplacedBy string `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
+	RetireBy   string `yaml:"retire-by,omitempty" json:"retire-by,omitempty"`
 
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
@@ -486,21 +517,48 @@ func (m *Manifest) DeclaredSets() map[string]StringList {
 	}
 }
 
-// LoadManifest reads a .gloss.yaml manifest.
-func LoadManifest(path string) (*Manifest, error) {
+// UnknownKey is a top-level manifest key the format does not define.
+type UnknownKey struct {
+	Key  string
+	Line int
+}
+
+// LoadManifest reads a .gloss.yaml manifest. Unknown top-level keys do not
+// fail the load: they are returned, with their lines, for the caller to
+// report, and the known keys still make the boundary, so one misspelt key
+// does not hand the directory's markers to the parent boundary.
+func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
+	}
+	var unknown []UnknownKey
+	if len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
+		known := yamlKeys(Manifest{})
+		mn := doc.Content[0]
+		var kept []*yaml.Node
+		for i := 0; i+1 < len(mn.Content); i += 2 {
+			if k := mn.Content[i]; !known[k.Value] {
+				unknown = append(unknown, UnknownKey{Key: k.Value, Line: k.Line})
+				continue
+			}
+			kept = append(kept, mn.Content[i], mn.Content[i+1])
+		}
+		mn.Content = kept
 	}
 	var m Manifest
-	dec := yaml.NewDecoder(strings.NewReader(string(b)))
-	dec.KnownFields(true)
-	if err := dec.Decode(&m); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+	if len(doc.Content) > 0 {
+		if err := doc.Decode(&m); err != nil {
+			return nil, unknown, fmt.Errorf("%s: %w", path, err)
+		}
 	}
 	m.Path = path
 	if m.Boundary == "" {
-		return nil, fmt.Errorf("%s: boundary is required", path)
+		return nil, unknown, fmt.Errorf("%s: boundary is required", path)
 	}
 	if m.Level == "" {
 		m.Level = "component"
@@ -512,12 +570,30 @@ func LoadManifest(path string) (*Manifest, error) {
 		}
 	}
 	if !ok {
-		return nil, fmt.Errorf("%s: level must be one of %s, got %q", path, strings.Join(BoundaryLevels, ", "), m.Level)
+		return nil, unknown, fmt.Errorf("%s: level must be one of %s, got %q", path, strings.Join(BoundaryLevels, ", "), m.Level)
 	}
 	if !ValidCriticality(m.Criticality) {
-		return nil, fmt.Errorf("%s: criticality must be one of %s, got %q", path, strings.Join(CriticalityLevels, ", "), m.Criticality)
+		return nil, unknown, fmt.Errorf("%s: criticality must be one of %s, got %q", path, strings.Join(CriticalityLevels, ", "), m.Criticality)
 	}
-	return &m, nil
+	if m.RetireBy != "" {
+		if _, err := time.Parse("2006-01-02", m.RetireBy); err != nil {
+			return nil, unknown, fmt.Errorf("%s: retire-by must be a date (YYYY-MM-DD), got %q", path, m.RetireBy)
+		}
+	}
+	return &m, unknown, nil
+}
+
+// yamlKeys lists the YAML keys a struct decodes.
+func yamlKeys(v any) map[string]bool {
+	out := map[string]bool{}
+	t := reflect.TypeOf(v)
+	for i := 0; i < t.NumField(); i++ {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("yaml"), ",")
+		if name != "" && name != "-" {
+			out[name] = true
+		}
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------

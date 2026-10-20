@@ -29,6 +29,11 @@ type Entry struct {
 	Proposed   bool     `json:"proposed,omitempty"`
 	Deprecated bool     `json:"deprecated,omitempty"`
 	Line       int      `json:"line"`
+	// Enum is set on an enum value named by its bare value: when the
+	// ontology already holds a concept of that name that is not is-a the
+	// enum (a glossary term, say), the value is written as <Enum><Value>
+	// instead of overwriting it.
+	Enum string `json:"enum,omitempty"`
 }
 
 var (
@@ -128,7 +133,8 @@ func ParseGlossary(text string) []Entry {
 // enum name to either a list of values, a mapping value → description, or
 // { description|doc, values }. Each enum becomes an entity; with values, each
 // value becomes a concept that is-a the enum, named <Value> (or
-// <Enum><Value> when the bare name would collide).
+// <Enum><Value> when the bare name would collide, here or with an unrelated
+// concept already in the ontology; see Entry.Enum).
 func ParseEnums(b []byte, withValues bool) ([]Entry, error) {
 	var root yaml.Node
 	if err := yaml.Unmarshal(b, &root); err != nil {
@@ -223,11 +229,12 @@ func ParseEnums(b []byte, withValues bool) ([]Entry, error) {
 				if name == "" {
 					continue
 				}
+				e := Entry{Name: name, IsA: []string{en}, Doc: strings.TrimSpace(v.doc), Line: v.line, Enum: en}
 				if names[name] {
-					name = en + name
+					e.Name, e.Enum = en+name, ""
 				}
-				names[name] = true
-				out = append(out, Entry{Name: name, IsA: []string{en}, Doc: strings.TrimSpace(v.doc), Line: v.line})
+				names[e.Name] = true
+				out = append(out, e)
 			}
 		}
 	}
@@ -272,11 +279,23 @@ func Apply(path string, entries []Entry, by string, dry bool) (*Result, error) {
 			r.Skipped = append(r.Skipped, fmt.Sprintf("%s (line %d): not a usable concept name", e.Name, e.Line))
 			continue
 		}
-		cur, ok, err := ontoedit.Get(path, e.Name, "kind")
+		_, ok, err := ontoedit.Get(path, e.Name, "kind")
 		if err != nil {
 			return r, err
 		}
-		_ = cur
+		if ok && e.Enum != "" {
+			// The bare value name is taken. Unless the existing concept is
+			// this enum's value from an earlier run, it belongs to someone
+			// else: use <Enum><Value>, as ParseEnums does for collisions
+			// inside one file.
+			isa, _, _ := ontoedit.Get(path, e.Name, "is-a")
+			if !hasParent(isa, e.Enum) {
+				e.Name = e.Enum + e.Name
+				if _, ok, err = ontoedit.Get(path, e.Name, "kind"); err != nil {
+					return r, err
+				}
+			}
+		}
 		if !ok {
 			r.Added = append(r.Added, e.Name)
 			if dry {
@@ -329,6 +348,21 @@ func Apply(path string, entries []Entry, by string, dry bool) (*Result, error) {
 		}
 	}
 	return r, nil
+}
+
+// hasParent reports whether a rendered is-a value ("A, ns:B") names parent,
+// with or without a namespace prefix.
+func hasParent(isa, parent string) bool {
+	for _, p := range strings.Split(isa, ",") {
+		p = strings.TrimSpace(p)
+		if i := strings.LastIndex(p, ":"); i >= 0 {
+			p = p[i+1:]
+		}
+		if p == parent {
+			return true
+		}
+	}
+	return false
 }
 
 // Pascal turns "foal birth", "foal_birth", "FOAL-BIRTH" or "foalBirth" into FoalBirth.

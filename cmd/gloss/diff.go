@@ -17,6 +17,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
@@ -45,7 +46,7 @@ func cmdDiff(args []string) int {
 	changed, _ := changedFiles(head.WS.Root, *base)
 	pol := head.WS.Config.EffectivePolicy()
 	after := rollup.Compare(head.Graph, head.WS, rollup.Options{Ledger: head.Ledger.Entries, Policy: pol, Now: time.Now()})
-	before := rollup.Compare(baseGraph, head.WS, rollup.Options{Policy: pol, Now: time.Now()})
+	before := baseReport(head.WS, *base, baseGraph, pol)
 	label := *base
 	adoption := *baseline
 	if baseGraph.Stats()["nodes"] == 0 {
@@ -151,6 +152,37 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 		}
 	}
 	return res.Graph, nil
+}
+
+// baseReport compares the base graph over the base tree's own file set, as
+// gloss drift on a checkout of the base would; the head's files would count
+// files added since the base against the base's coverage.
+func baseReport(ws *load.Workspace, ref string, bg *graph.Graph, pol *model.Policy) *rollup.Report {
+	return rollup.Compare(bg, ws, rollup.Options{Policy: pol, Now: time.Now(), Files: baseFiles(ws, ref, bg)})
+}
+
+// baseFiles lists the in-scope files of the tree at ref (none when the base
+// has no graph); nil, meaning the workspace's files, when git cannot say.
+func baseFiles(ws *load.Workspace, ref string, bg *graph.Graph) []string {
+	if ref == "" || bg.Stats()["nodes"] == 0 {
+		return []string{}
+	}
+	prefix, err := gitOut(ws.Root, "rev-parse", "--show-prefix")
+	if err != nil {
+		return nil
+	}
+	out, err := gitOut(ws.Root, "ls-tree", "-r", "--name-only", "--full-tree", ref)
+	if err != nil {
+		return nil
+	}
+	files := []string{}
+	for _, l := range strings.Split(out, "\n") {
+		rel, ok := strings.CutPrefix(strings.TrimSpace(l), strings.TrimSpace(prefix))
+		if ok && rel != "" && ws.InScope(rel) {
+			files = append(files, rel)
+		}
+	}
+	return files
 }
 
 func changedFiles(root, ref string) ([]string, error) {

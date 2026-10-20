@@ -53,7 +53,7 @@ If the repository already keeps its vocabulary, import it instead of retyping it
 ```sh
 gloss import --from markdown-glossary docs/glossary.md --namespace pay   # headings → concepts, Def. → doc, Aliases, Status (not implemented → proposed: true)
 gloss import --from enums enums.yaml --namespace pay [--values]          # each enum an entity; --values adds each value as is-a the enum
-gloss export --status -o status.json                                     # implemented / untested / orphan / proposed per concept
+gloss export --status -o status.json                                     # implemented / untested / unimplemented / orphan / proposed per concept
 ```
 
 Imports are re-runnable: new terms are appended, a changed definition or alias list updates that one line, everything else in the file (kinds you fixed, comments, alignment) is left alone. Kinds are guessed when the source has none; review them.
@@ -127,7 +127,7 @@ gloss agents --dir services/api --write AGENTS.md
 
 ```sh
 gloss check                      # lint: syntax, dangling refs, domain/range, own-subject rule, tiers, import ranges, lockfile
-gloss lock                       # pin resolved import versions in glossmark.lock
+gloss lock                       # pin imports: glossmark.lock + vendored copies in .glossmark/imports/ (--update to move)
 gloss build                      # .glossmark/graph.jsonl + context.jsonld + ledger.jsonl
 gloss drift                      # violations, gaps, orphans, rogues, stale, untested, metrics
 gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
@@ -137,7 +137,7 @@ gloss view                       # .glossmark/viewer.html + views.js, static, no
 gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
-gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)
+gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
 gloss mcp                        # MCP server on stdio for agents
 gloss doctor                     # one line per setup check with its fix: gloss on PATH (and that it is GlossMark), GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
@@ -189,6 +189,8 @@ jobs:
 ```
 
 On the first PR (the base has no graph) the comment reports counts per boundary and per view plus the decision requests instead of one row per link; later PRs list changes grouped by boundary in collapsible sections, each capped. `coverage-fail-under: current` fails only when a PR lowers the base's concept coverage.
+
+A repository with several workspaces runs the Action once per `root:` (a matrix); each root keeps its own comment, keyed by `<!-- glossmark-impact:<root> -->` and named in its heading, and a re-run updates it in place.
 
 The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
 

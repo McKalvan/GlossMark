@@ -59,6 +59,11 @@ var (
 		{regexp.MustCompile(`^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)`), "variable", nil},
 		{regexp.MustCompile(`^\s*(?:public|private|protected|static|async|readonly|\s)*\s*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::\s*[^{]+)?\{`), "method", nil},
 	}
+	// ktRules come before the TS and C rules for Kotlin and Scala, where
+	// "const val NAME" would otherwise read as the TS "const val".
+	ktRules = []declRule{
+		{regexp.MustCompile(`^\s*(?:(?:private|public|internal|protected|override|open|final|abstract|lateinit|const|lazy|implicit|inline)\s+)*(?:val|var)\s+([A-Za-z_]\w*)`), "variable", nil},
+	}
 	goRules = []declRule{
 		{regexp.MustCompile(`^func\s+\(\s*\w+\s+\*?([A-Za-z_]\w*)\s*\)\s*([A-Za-z_]\w*)`), "method", func(m []string) string { return m[1] + "." + m[2] }},
 		{regexp.MustCompile(`^func\s+([A-Za-z_]\w*)`), "function", nil},
@@ -111,7 +116,9 @@ func rulesFor(path string) []declRule {
 	switch strings.ToLower(filepath.Ext(base)) {
 	case ".py":
 		return pyRules
-	case ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".dart", ".swift", ".kt", ".kts", ".scala", ".groovy":
+	case ".kt", ".kts", ".scala":
+		return append(append(append([]declRule{}, ktRules...), tsRules...), cRules...)
+	case ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".dart", ".swift", ".groovy":
 		return append(append([]declRule{}, tsRules...), cRules...)
 	case ".go":
 		return goRules

@@ -80,6 +80,7 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 			}
 		}
 		seen := map[string]bool{}
+		code := false
 		addConcept := func(id string) {
 			n := g.Node(id)
 			if n == nil || n.NodeType != model.NodeConcept || seen[id] {
@@ -114,15 +115,27 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 			ft.Gate = HARD
 			ft.Hints = append(ft.Hints, "namespace changes are HARD")
 		default:
+			code = true
 			for _, a := range g.NodesOf(model.NodeArtifact) {
 				if a.Path != f {
 					continue
+				}
+				// The file is rated at the level the graph stamps on its
+				// artifacts, so impact, diff and the graph agree.
+				if model.CriticalityRank(a.Criticality) > model.CriticalityRank(ft.Criticality) {
+					ft.Criticality, ft.CriticalityFrom = a.Criticality, a.CriticalityFrom
 				}
 				for _, e := range g.Out(a.ID, "") {
 					if e.Source != graph.SourceInline || e.Prov == nil {
 						continue
 					}
 					ft.Links = append(ft.Links, LinkTouch{Line: e.Prov.Line, Symbol: e.Prov.Symbol, Relation: e.P, Target: g.Curie(e.O), Proposed: e.Prov.Proposed, MarkerID: e.Prov.ID})
+					// Each link is gated as gloss diff gates it.
+					cls, _ := ClassifyLink(g, ws, e, pol)
+					ft.Gate = Max(ft.Gate, cls)
+					if on := g.Node(e.O); on != nil && on.Criticality != "" && !rollup.CarriesCriticality(e.P) {
+						ft.Hints = append(ft.Hints, fmt.Sprintf("%s %s (%s): this file shows a %s concept; it is not rated by it", e.P, on.CURIE, on.Criticality, on.Criticality))
+					}
 					addConcept(e.O)
 					for _, core := range realizesChain(g, e.O) {
 						addConcept(core)
@@ -141,7 +154,7 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 			if c.Proposed {
 				ft.Gate = HARD
 			}
-			if model.CriticalityRank(c.Criticality) > model.CriticalityRank(ft.Criticality) {
+			if !code && model.CriticalityRank(c.Criticality) > model.CriticalityRank(ft.Criticality) {
 				ft.Criticality, ft.CriticalityFrom = c.Criticality, c.Curie
 			}
 		}
@@ -156,6 +169,7 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 				ft.Hints = append(ft.Hints, fmt.Sprintf("criticality %s (via %s): a reviewer who owns this area should see the change", ft.Criticality, ft.CriticalityFrom))
 			}
 		}
+		ft.Hints = uniq(ft.Hints)
 		sort.Slice(ft.Links, func(i, j int) bool { return ft.Links[i].Line < ft.Links[j].Line })
 		sort.Slice(ft.Concepts, func(i, j int) bool { return ft.Concepts[i].Curie < ft.Concepts[j].Curie })
 		out = append(out, ft)

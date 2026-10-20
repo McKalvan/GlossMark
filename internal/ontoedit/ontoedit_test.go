@@ -189,3 +189,44 @@ func TestSetField(t *testing.T) {
 		t.Errorf("Get = %q %v", v, ok)
 	}
 }
+
+// TestPublishCopy: the published copy keeps only the selected concepts, in
+// the owner's formatting, and states the tier (issues #129, #96).
+func TestPublishCopy(t *testing.T) {
+	src := tmp(t, flowFile)
+	dst := filepath.Join(t.TempDir(), "out.gloss.yaml")
+	keep := map[string]bool{"HorseBuilder": true, "Throughput": true}
+	if err := PublishCopy(src, dst, func(n string) bool { return keep[n] }, "implementation"); err != nil {
+		t.Fatal(err)
+	}
+	want := `# ontology/impl.gloss.yaml  (implementation tier)
+namespace: impl
+version: 0.3.0
+tier: implementation
+concepts:
+  HorseBuilder:               { kind: process, realizes: zoo:Breeding }
+  Throughput:
+    kind: measure
+    criticality: low                 # telemetry
+    realizes: zoo:ProductionCapacity
+    doc: |
+      Multi-line block scalar.
+      Second line.
+relations:
+  produces: { lift: range-lcs }
+`
+	if got := read(t, dst); got != want {
+		t.Fatalf("published copy:\n%s\nwant:\n%s", got, want)
+	}
+	if read(t, src) != flowFile {
+		t.Fatal("source file changed")
+	}
+	// An existing tier: line is corrected in place; a comment above a dropped entry goes with it.
+	src = tmp(t, "tier: core\nconcepts:\n  A: { kind: entity }\n  # private helper\n  B: { kind: process }\n")
+	if err := PublishCopy(src, dst, func(n string) bool { return n == "A" }, "implementation"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := read(t, dst), "tier: implementation\nconcepts:\n  A: { kind: entity }\n"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

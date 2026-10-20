@@ -26,7 +26,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `realizes` | | ✓ | ✓ | implementation concept → core concept; a boundary → what its code stands for |
 | `holds` | | | ✓ | boundary holds an entity's data; derived from `represents` on entities |
 | `is-a` | | ✓ | | taxonomy; the closure is computed, a concept inherits `realizes` through it |
-| `part-of`, `has-part` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
+| `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
+| `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |
 | `published-as` | | ✓ | | written as `published: { as: core:X }`: the only seam between tiers and across repositories |
 | `constrains`, `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
 | `depends-on`, `calls`, `derived-from`, `same-as` | | | | derived or reserved (imports, SCIP, SSSOM) |
@@ -56,12 +57,12 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | dangling | a marker targets a concept that does not exist (write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |
-| untested | an implemented concept nothing verifies | |
+| untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts) | |
 | presented-only | a page presents the concept but nothing implements it | |
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
 
-`--fail-on` chooses which kinds fail the command; `policy.waivers` in `glossmark.yaml` silences one finding until a date.
+`gloss drift --fail-on` and `gloss landscape --fail-on` take a comma-separated list of these kind names, spelled as in the first column (`value-drift`, `presented-only`), or `none`; any of them fails the command when listed, `stale`, `rogue` and `proposed` included, and an unknown kind exits 2 with the list of valid ones. The defaults are `violation,value-drift,gap,dangling` for `drift` (the ticks above) and `violation,dangling` for `landscape`. `gloss diff --fail-on` takes a gate class instead (`HARD`, `SOFT` or `none`). `policy.waivers` in `glossmark.yaml` silences one finding until a date. `gloss check` fails a waiver whose `expires:` is missing or not a `YYYY-MM-DD` date (GM610; such a waiver waives nothing) and warns about one whose `finding:` matches no finding id or concept (GM611).
 
 ## Gates (`gloss diff`)
 

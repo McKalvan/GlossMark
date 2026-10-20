@@ -36,14 +36,22 @@ type Proposal struct {
 
 // Options tunes the matcher.
 type Options struct {
-	// MinScore is the lowest search score that becomes a proposal (default 60:
-	// at least two words of the name, or the whole of a one-word name).
+	// MinScore is the lowest score that becomes a proposal, after the
+	// docstring penalty (0 means DefaultMinScore).
 	MinScore int
 	// Ledger, when set, holds review decisions: a link it records as
 	// rejected (same marker id, or same anchor fingerprint, relation and
 	// target) is not proposed again.
 	Ledger map[string]*model.LedgerEntry
 }
+
+// DefaultMinScore is at least two words of the name, or the whole of a
+// one-word name.
+const DefaultMinScore = 60
+
+// docPenalty is taken off a match found through the docstring rather than
+// the name: weaker evidence, so it needs a stronger hit to be proposed.
+const docPenalty = 20
 
 // codeExts are the files suggest proposes markers in.
 var codeExts = map[string]bool{".py": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".go": true, ".rs": true,
@@ -55,7 +63,7 @@ var codeExts = map[string]bool{".py": true, ".ts": true, ".tsx": true, ".js": tr
 // them as rejected.
 func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out []Proposal, skipped int, err error) {
 	if opt.MinScore <= 0 {
-		opt.MinScore = 60
+		opt.MinScore = DefaultMinScore
 	}
 	type link struct{ fp, rel, target string }
 	rejected := map[link]bool{}
@@ -102,12 +110,13 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 			if score < opt.MinScore && d.Doc != "" {
 				// The docstring is weaker evidence; it needs to name the concept.
 				if dh := mcp.Search(g, d.Doc, "", "", "", 5); len(dh) > 0 {
-					if b, h := pick(dh, ws, g, m, d.Kind, test, rel); b != nil && strings.HasPrefix(b.Matched, "name") && b.Score >= opt.MinScore {
-						best, how, score = b, "doc "+h, b.Score-20
+					if b, h := pick(dh, ws, g, m, d.Kind, test, rel); b != nil && strings.HasPrefix(b.Matched, "name") && b.Score-docPenalty > score {
+						best, how, score = b, "doc "+h, b.Score-docPenalty
 					}
 				}
 			}
-			if best == nil || score < opt.MinScore-20 || score < 40 {
+			// MinScore is the floor of what is emitted, conf included.
+			if best == nil || score < opt.MinScore {
 				continue
 			}
 			relName := relation(d.Kind, best.Kind, test, rel)

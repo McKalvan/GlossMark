@@ -18,8 +18,12 @@ func cmdSuggest(args []string) int {
 	fs, root := newFlags("suggest")
 	write := fs.Bool("write", false, "insert the proposals into the files instead of printing a patch")
 	format := fs.String("format", "patch", "patch | json | text")
-	minScore := fs.Int("min-score", 60, "lowest search score that becomes a proposal")
+	minScore := fs.Int("min-score", suggest.DefaultMinScore, "lowest score that becomes a proposal (conf is score/110; a docstring match scores 20 below its search score)")
 	if err := parseFlags(fs, args); err != nil {
+		return 2
+	}
+	if *minScore < 1 {
+		fmt.Fprintln(os.Stderr, "gloss suggest: --min-score must be at least 1")
 		return 2
 	}
 	p, err := buildGraph(*root, false)

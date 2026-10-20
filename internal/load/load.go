@@ -45,7 +45,8 @@ type Workspace struct {
 	// Resolved records how each import was resolved (version, source, hash).
 	Resolved map[string]*Resolved
 	// Lock is glossmark.lock when present.
-	Lock *Lock
+	Lock    *Lock
+	lockErr error
 }
 
 // FindRoot walks up from start until it finds glossmark.yaml.
@@ -112,8 +113,15 @@ func Load(root string) (*Workspace, error) {
 		if o.Tier == "" {
 			o.Tier = decl.Tier
 		}
-		if o.Version == "" {
-			o.Version = decl.Version
+		// The ontology file's version: is the namespace version, because it is
+		// what importers resolve; owns.<prefix>.version may only repeat it.
+		switch {
+		case decl.Version != "" && o.Version == "" && !errors.Is(err, fs.ErrNotExist):
+			ws.Diags = append(ws.Diags, marker.Diagnostic{Path: ConfigName, Line: 1, Severity: "warning", Code: "GM114",
+				Msg: fmt.Sprintf("owns.%s.version is %s but %s has no version:, which is what importers and gloss diff read; move it into the ontology file", p, decl.Version, decl.File)})
+		case decl.Version != "" && o.Version != "" && decl.Version != o.Version:
+			ws.Diags = append(ws.Diags, marker.Diagnostic{Path: ConfigName, Line: 1, Severity: "error", Code: "GM115",
+				Msg: fmt.Sprintf("owns.%s.version is %s but %s says version: %s; the ontology file is the version importers resolve, so make them agree (or drop owns.%s.version)", p, decl.Version, decl.File, o.Version, p)})
 		}
 		if decl.Version == "" {
 			decl.Version = o.Version
@@ -126,18 +134,36 @@ func Load(root string) (*Workspace, error) {
 		iprefixes = append(iprefixes, p)
 	}
 	sort.Strings(iprefixes)
+	ws.Lock, ws.lockErr = ReadLock(root)
 	for _, p := range iprefixes {
 		im := cfg.Imports[p]
 		ws.Imported[p] = im
 		ws.Prefixes[p] = im.IRI
 		o, diag := resolveImport(root, p, im)
+		var up *Resolved
+		if o != nil {
+			up = &Resolved{Prefix: p, Version: o.Version, Range: im.Version, Source: im.Source, Hash: hashFile(o.Path), Path: o.Path}
+		}
+		// A locked import resolves from its vendored copy; the upstream is
+		// only compared, so a newer one is reported instead of taken.
+		if po := pinned(root, p, im, ws.Lock); po != nil {
+			r := &Resolved{Prefix: p, Version: po.Version, Range: im.Version, Source: im.Source, Hash: hashFile(po.Path), Path: po.Path, Pinned: true, Upstream: up}
+			if diag != nil {
+				diag.Severity = "warning"
+				diag.Msg += "; resolving the pinned copy " + ws.Rel(po.Path)
+			}
+			if up != nil && up.Hash != r.Hash {
+				ws.Diags = append(ws.Diags, upstreamAvailable(r, up))
+			}
+			o, ws.Resolved[p] = po, r
+		} else if o != nil {
+			ws.Resolved[p] = up
+		}
 		if diag != nil {
 			ws.Diags = append(ws.Diags, *diag)
 		}
 		if o == nil {
 			o = &model.Ontology{Concepts: map[string]*model.Concept{}}
-		} else {
-			ws.Resolved[p] = &Resolved{Prefix: p, Version: o.Version, Range: im.Version, Source: im.Source, Hash: hashFile(o.Path), Path: o.Path}
 		}
 		o.Namespace = p
 		if o.IRI == "" {
@@ -148,6 +174,10 @@ func Load(root string) (*Workspace, error) {
 		}
 		if o.Tier == "" {
 			o.Tier = model.TierCore
+			if looksImplementation(o) {
+				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: ConfigName, Line: 1, Severity: "warning", Code: "GM113",
+					Msg: fmt.Sprintf("imports.%s: neither the import nor the imported ontology states a tier, so %s: is read as core and only-published-concepts (GM230) is not enforced although it has published or realizing concepts; add tier: implementation to imports.%s, or import from gloss publish output", p, p, p)})
+			}
 		}
 		ws.Ontologies[p] = o
 	}
@@ -187,6 +217,31 @@ func Load(root string) (*Workspace, error) {
 		return nil, err
 	}
 	return ws, nil
+}
+
+// upstreamAvailable is the GM116 warning for a pinned import whose source
+// now resolves to something else.
+func upstreamAvailable(pin, up *Resolved) marker.Diagnostic {
+	msg := fmt.Sprintf("imports.%s: upstream content changed under the same version %s (it should bump); still resolving the pinned copy. Review it, then run gloss lock --update", pin.Prefix, orNone(pin.Version))
+	if up.Version != pin.Version {
+		where := "inside"
+		if code, _ := RangeProblem(up); code != "" {
+			where = "outside"
+		}
+		msg = fmt.Sprintf("imports.%s: %s available, %s %s; still resolving the pinned %s. Review it, then run gloss lock --update", pin.Prefix, orNone(up.Version), where, orNone(pin.Range), orNone(pin.Version))
+	}
+	return marker.Diagnostic{Path: LockName, Line: 1, Severity: "warning", Code: "GM116", Msg: msg}
+}
+
+// looksImplementation reports whether an ontology has concepts only an
+// implementation namespace carries: published: or realizes:.
+func looksImplementation(o *model.Ontology) bool {
+	for _, c := range o.Concepts {
+		if c.Published != nil || len(c.Realizes) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveImport loads an imported ontology from a local source.
@@ -254,9 +309,14 @@ func (ws *Workspace) walk() error {
 			return nil
 		}
 		if d.Name() == ManifestName {
-			m, err := model.LoadManifest(path)
+			m, unknown, err := model.LoadManifest(path)
+			for _, k := range unknown {
+				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: k.Line, Severity: "error", Code: "GM110", Msg: fmt.Sprintf("unknown manifest key %q; the other keys still apply", k.Key)})
+			}
 			if err != nil {
-				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: 1, Severity: "error", Code: "GM110", Msg: err.Error()})
+				// The diagnostic carries the workspace-relative path; drop the
+				// absolute one LoadManifest prefixes.
+				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: 1, Severity: "error", Code: "GM110", Msg: strings.TrimPrefix(err.Error(), path+": ")})
 				return nil
 			}
 			m.Path = rel
@@ -299,21 +359,51 @@ func (ws *Workspace) walk() error {
 	// Drop files matched by a manifest's generated globs.
 	var kept []string
 	for _, f := range files {
-		m := ws.ManifestFor(f)
-		if m != nil && len(m.Generated) > 0 {
-			sub := f
-			if m.Dir != "" {
-				sub = strings.TrimPrefix(f, m.Dir+"/")
-			}
-			if model.MatchAnyGlob(m.Generated, sub) {
-				continue
-			}
+		if !ws.generated(f) {
+			kept = append(kept, f)
 		}
-		kept = append(kept, f)
 	}
 	sort.Strings(kept)
 	ws.Files = kept
 	return nil
+}
+
+// generated reports whether a file matches its manifest's generated globs.
+func (ws *Workspace) generated(f string) bool {
+	m := ws.ManifestFor(f)
+	if m == nil || len(m.Generated) == 0 {
+		return false
+	}
+	sub := f
+	if m.Dir != "" {
+		sub = strings.TrimPrefix(f, m.Dir+"/")
+	}
+	return model.MatchAnyGlob(m.Generated, sub)
+}
+
+// InScope reports whether a repo-relative file path is one the walk would
+// keep: outside skipped and excluded directories, not glossmark.yaml, a
+// manifest or an ontology file, in a language with a comment style, and not
+// generated. The size limit is not checked. gloss diff uses it to rebuild a
+// base tree's file set from git when the base graph is read from a commit.
+func (ws *Workspace) InScope(rel string) bool {
+	parts := strings.Split(rel, "/")
+	for i := 0; i < len(parts)-1; i++ {
+		dir := strings.Join(parts[:i+1], "/")
+		if defaultSkipDirs[parts[i]] || model.MatchAnyGlob(ws.Config.Exclude, dir) || model.MatchAnyGlob(ws.Config.Exclude, dir+"/") {
+			return false
+		}
+	}
+	if parts[len(parts)-1] == ManifestName || rel == ConfigName || model.MatchAnyGlob(ws.Config.Exclude, rel) {
+		return false
+	}
+	if strings.HasSuffix(rel, ".gloss.yaml") && strings.HasPrefix(rel, "ontology/") {
+		return false
+	}
+	if _, ok := marker.StyleFor(rel, ws.Config.CommentStyles); !ok {
+		return false
+	}
+	return !ws.generated(rel)
 }
 
 // ManifestFor returns the nearest ancestor manifest for a repo-relative path, or nil.
@@ -340,6 +430,20 @@ func (ws *Workspace) Tier(prefix string) string {
 // StatePath returns the path of a tool-maintained file.
 func (ws *Workspace) StatePath(name string) string {
 	return filepath.Join(ws.Root, StateDir, name)
+}
+
+// Rel returns path relative to the root, slash-separated. A file outside the
+// root, such as an import from a sibling checkout, keeps its ../ form, so
+// nothing written to the graph depends on where the repository is checked out.
+func (ws *Workspace) Rel(path string) string {
+	if !filepath.IsAbs(path) {
+		return filepath.ToSlash(path)
+	}
+	rel, err := filepath.Rel(ws.Root, path)
+	if err != nil {
+		return filepath.ToSlash(path)
+	}
+	return filepath.ToSlash(rel)
 }
 
 // Abs returns the absolute path of a repo-relative file.

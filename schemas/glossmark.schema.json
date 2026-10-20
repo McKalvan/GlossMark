@@ -135,7 +135,7 @@
           "$ref": "#/$defs/tier"
         },
         "version": {
-          "description": "Semantic version of the namespace.",
+          "description": "Optional repeat of the ontology file's version:, which is the namespace version; gloss check fails when they disagree (GM115) and warns when only this one is set (GM114).",
           "type": "string",
           "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
         },
@@ -212,10 +212,11 @@
           }
         },
         "coverage-fail-under": {
-          "description": "Default for gloss coverage --fail-under, in percent.",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100,
+          "description": "Default for gloss coverage --fail-under: a percentage, or current to fail only when coverage falls below the base's (a ratchet).",
+          "oneOf": [
+            { "type": "number", "minimum": 0, "maximum": 100 },
+            { "const": "current" }
+          ],
           "default": 0
         },
         "criticality-gates": {

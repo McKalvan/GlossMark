@@ -88,6 +88,21 @@ func TestCorpus(t *testing.T) {
 			t.Errorf("%s: expected %d markers, found %d: %+v", rel, len(exp), len(found), summarize(found))
 			continue
 		}
+		anchors := make([]Anchor, len(found))
+		for i, fd := range found {
+			anchors[i] = Resolve(rel, fd, lines, style)
+			// A JSON sidecar's scope=range resolves its pointer in the target.
+			if IsSidecar(rel) && anchors[i].Scope == "range" {
+				src, err := os.ReadFile(filepath.Join(root, SidecarTarget(rel)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if a, ok := PointerAnchor(src, fd.Marker.Keys["note"], "range"); ok {
+					anchors[i] = a
+				}
+			}
+		}
+		Disambiguate(rel, lines, anchors)
 		for i, fd := range found {
 			e := exp[i]
 			m := fd.Marker
@@ -104,7 +119,7 @@ func TestCorpus(t *testing.T) {
 			if !reflect.DeepEqual(got, e.Keys) {
 				t.Errorf("%s:%d: keys got %v want %v", rel, m.Line, got, e.Keys)
 			}
-			a := Resolve(rel, fd, lines, style)
+			a := anchors[i]
 			if a.Scope != e.Scope || a.Symbol != e.Symbol {
 				t.Errorf("%s:%d: anchor got scope=%s symbol=%q want scope=%s symbol=%q (kind=%s lines %d-%d)", rel, m.Line, a.Scope, a.Symbol, e.Scope, e.Symbol, a.Kind, a.StartLine, a.EndLine)
 			}
@@ -182,5 +197,19 @@ func TestFileFingerprintIgnoresMetadata(t *testing.T) {
 	}
 	if a := fileAnchor(file("def test(): pass")); a.Legacy == a.Fingerprint || a.Legacy == "" {
 		t.Errorf("legacy fingerprint %q should hash every line", a.Legacy)
+	}
+}
+
+// TestDeclarationsKotlinConst: suggest's detector names a Kotlin constant,
+// not its "val" keyword (issue #131).
+func TestDeclarationsKotlinConst(t *testing.T) {
+	lines := []string{"const val FILING_WINDOW_DAYS = 30", "private const val LIMIT = 9", "var counter = 0"}
+	style, _ := StyleFor("a.kt", nil)
+	var got []string
+	for _, d := range Declarations("a.kt", lines, style) {
+		got = append(got, d.Symbol)
+	}
+	if want := []string{"FILING_WINDOW_DAYS", "LIMIT", "counter"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("symbols = %v, want %v", got, want)
 	}
 }

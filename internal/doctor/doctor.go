@@ -248,6 +248,10 @@ func (d *doctor) lock() {
 			d.add("lockfile", Warn, g.Msg, "gloss lock after reviewing the upstream change")
 			return
 		}
+		if g.Code == "GM116" {
+			d.add("lockfile", Warn, g.Msg, "gloss lock --update after reviewing the upstream change")
+			return
+		}
 	}
 	d.add("lockfile", OK, load.LockName+" pins every import", "")
 }

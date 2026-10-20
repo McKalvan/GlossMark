@@ -4,6 +4,7 @@ package graph
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/mckalvan/glossmark/internal/model"
@@ -90,5 +91,42 @@ func TestGlob(t *testing.T) {
 	}
 	if !model.MatchCurie("impl:Foal*", "impl:FoalRegistry") || model.MatchCurie("impl:Foal*", "zoo:Foal") || !model.MatchCurie("pa:*", "pa:X") {
 		t.Fatal("MatchCurie wrong")
+	}
+}
+
+func TestCycles(t *testing.T) {
+	g := testGraph()
+	id := func(c string) string { s, _ := g.Expand("zoo:" + c); return s }
+	isa := func(a, b string) { g.AddEdge(&Edge{S: id(a), P: "is-a", O: id(b), Source: SourceDeclared}) }
+	isa("Animal", "Mare") // Animal > Horse > Mare > Animal
+	isa("Cow", "Cow")     // self-loop
+	var all []string
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		all = append(all, n.ID)
+	}
+	next := func(x string) []Step {
+		var out []Step
+		for _, e := range g.Out(x, "is-a") {
+			out = append(out, Step{From: x, To: e.O, Edge: e})
+		}
+		return out
+	}
+	cycles := g.Cycles(all, next)
+	if len(cycles) != 2 {
+		t.Fatalf("want 2 cycles, got %d: %+v", len(cycles), cycles)
+	}
+	var path []string
+	for _, s := range cycles[0] {
+		path = append(path, g.Curie(s.From))
+	}
+	if got := strings.Join(path, ">"); got != "zoo:Animal>zoo:Mare>zoo:Horse" {
+		t.Errorf("cycle = %s, want zoo:Animal>zoo:Mare>zoo:Horse", got)
+	}
+	if len(cycles[1]) != 1 || g.Curie(cycles[1][0].From) != "zoo:Cow" {
+		t.Errorf("self-loop = %+v", cycles[1])
+	}
+	// Closures stay finite and exclude the start.
+	if anc := g.Ancestors(id("Mare")); len(anc) != 2 {
+		t.Errorf("Ancestors(Mare) on a cycle = %v", anc)
 	}
 }

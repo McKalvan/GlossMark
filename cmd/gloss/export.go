@@ -14,6 +14,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/ontoedit"
 	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/internal/store"
 )
@@ -28,7 +29,7 @@ func cmdExport(args []string) int {
 	fs, root := newFlags("export")
 	sqlitePath := fs.String("sqlite", "", "write a SQLite database with closure views")
 	provPath := fs.String("prov", "", "write the ledger as PROV-O JSON-LD")
-	status := fs.Bool("status", false, "write implemented / untested / orphan / proposed per owned concept as JSON (for an external checker)")
+	status := fs.Bool("status", false, "write implemented / untested / unimplemented / orphan / proposed per owned concept as JSON (for an external checker)")
 	out := fs.String("o", "", "with --status: write to this file instead of stdout")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
@@ -145,15 +146,21 @@ func cmdPublish(args []string) int {
 				if on != nil && on.NodeType == model.NodeConcept && on.Tier == model.TierImpl && on.Published == "" && on.NS == ns {
 					continue // internal structure stays private
 				}
+				// published: { as: X } is both n.Published and a declared
+				// published-as edge; a target already written is not repeated.
 				key := e.P
 				cur := g.Curie(e.O)
 				switch v := item[key].(type) {
 				case nil:
 					item[key] = cur
 				case string:
-					item[key] = []string{v, cur}
+					if v != cur {
+						item[key] = []string{v, cur}
+					}
 				case []string:
-					item[key] = append(v, cur)
+					if !containsStr(v, cur) {
+						item[key] = append(v, cur)
+					}
 				}
 			}
 			items = append(items, item)
@@ -197,9 +204,17 @@ func cmdPublish(args []string) int {
 			sub.WriteJSONL(f)
 			f.Close()
 		}
-		// The source file itself, so importers can point source: at the directory.
-		if src, err := os.ReadFile(o.Path); err == nil {
-			os.WriteFile(filepath.Join(dir, ns+".gloss.yaml"), src, 0o644)
+		// The source file, so importers can point source: at the directory:
+		// filtered like ontology.jsonld (only published concepts of an
+		// implementation namespace) and stating its tier for the importer.
+		keep := func(name string) bool {
+			c := o.Concepts[name]
+			return o.Tier != model.TierImpl || c != nil && c.Published != nil
+		}
+		if _, err := os.Stat(o.Path); err == nil {
+			if err := ontoedit.PublishCopy(o.Path, filepath.Join(dir, ns+".gloss.yaml"), keep, o.Tier); err != nil {
+				return fail(err)
+			}
 		}
 		fmt.Printf("gloss publish: %s: (%s %s) → %s\n", ns, o.Tier, o.Version, relOrAbs(p.WS.Root, dir))
 	}

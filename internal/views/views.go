@@ -90,6 +90,36 @@ func (e PEdge) key() string { return e.S + "|" + e.P + "|" + e.O }
 var zoomIndex = map[string]int{"landscape": 0, "system": 1, "container": 2, "component": 3, "code": 4}
 var levelIndex = map[string]int{"domain": 0, "system": 1, "container": 2, "component": 3}
 
+// boundaryLevel is a boundary's depth by its level. A boundary with no level
+// (a parent named only by part-of, with no manifest of its own) sits one
+// level above its shallowest child; one with no children either is a component.
+func boundaryLevel(g *graph.Graph, id string, seen map[string]bool) int {
+	if n := g.Node(id); n != nil {
+		if lvl, ok := levelIndex[n.Kind]; ok {
+			return lvl
+		}
+	}
+	if seen[id] {
+		return 3
+	}
+	seen[id] = true
+	lvl := 4
+	for _, c := range g.Subjects(id, "part-of") {
+		if cn := g.Node(c); cn != nil && cn.NodeType == model.NodeBoundary {
+			if l := boundaryLevel(g, c, seen) - 1; l < lvl {
+				lvl = l
+			}
+		}
+	}
+	if lvl == 4 {
+		return 3
+	}
+	if lvl < 0 {
+		return 0
+	}
+	return lvl
+}
+
 // ProjectAll renders every declared view, sorted by name.
 func ProjectAll(g *graph.Graph, vs *model.Views) []*Projection {
 	names := make([]string, 0, len(vs.Views))
@@ -324,14 +354,11 @@ func (p *projector) boundaries() {
 		return
 	}
 	for _, b := range p.g.NodesOf(model.NodeBoundary) {
-		lvl, ok := levelIndex[b.Kind]
-		if !ok {
-			lvl = 3
-		}
+		lvl := boundaryLevel(p.g, b.ID, map[string]bool{})
 		if lvl > p.zoom {
 			// Deeper than the zoom: fold into the nearest shown ancestor.
 			for _, anc := range p.g.PartOfChain(b.ID) {
-				if an := p.g.Node(anc); an != nil && levelIndex[an.Kind] <= p.zoom {
+				if boundaryLevel(p.g, anc, map[string]bool{}) <= p.zoom {
 					p.fold[b.ID] = []string{anc}
 					break
 				}

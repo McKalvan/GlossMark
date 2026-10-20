@@ -10,7 +10,7 @@ A gloss mark is one line, inside whatever comment syntax the file already uses.
 | Part | Meaning |
 | --- | --- |
 | `?` | The link is a proposal nobody has accepted yet. Accepting is the one-character diff `@gloss?` → `@gloss` (`gloss accept`). |
-| `relation` | kebab-case, one of the inline relations: `implements`, `represents`, `presents`, `hosts`, `verifies`, `provisions`, `configures`, `deploys`, `documents`, `instructs`, `may-modify`, `publishes-value`, `produces`, `consumes`, `publishes`, `subscribes`. `tests` is an accepted alias of `verifies` and means the same; `gloss check` asks for `verifies` (GM240). |
+| `relation` | kebab-case, one of the inline relations: `implements`, `represents`, `presents`, `hosts`, `verifies`, `provisions`, `configures`, `deploys`, `documents`, `instructs`, `may-modify`, `publishes-value`, `produces`, `consumes`, `publishes`, `subscribes`. `tests` is an accepted alias of `verifies` and means the same: it is stored in the graph as `verifies`, with `"alias":"tests"` in the edge provenance; `gloss check` asks for `verifies` (GM240). |
 | `target` | A CURIE (`zoo:Mare`, `impl:HoofStep`), or `.Local` resolved against the enclosing manifest's `default-namespace`, or `ns:NEW:Name` to propose a concept that does not exist yet. `may-modify` targets may be globs (`pa:*`). |
 | `key=value` | Only `scope` (`file`, `symbol`, `block`, `line`, `range`), `conf` (0–1), `id`, `note`. Values with spaces are double-quoted. Nothing else goes inline; provenance lives in the ledger. |
 
@@ -38,7 +38,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 - Inside a comment, text between a pair of backticks is quoted prose, so a comment can talk about `` `@gloss` `` or quote a whole marker without being one. In Markdown the body of a fenced code block (```` ``` ```` or `~~~`) is quoted as well. This is a scanner rule; the reference regex is unchanged.
 - Malformed markers are build warnings at `file:line:col` (codes `GM001`–`GM007`), never silent drops. Positions are physical columns.
 - Multi-line YAML-in-comment blocks are not supported; one marker, one line.
-- JSON has no comments: use a sidecar `foo.json.gloss` holding one marker per line, with JSON Pointers in `note=` and `scope=range`.
+- JSON has no comments: use a sidecar `foo.json.gloss` holding one marker per line, with JSON Pointers in `note=` and `scope=range` (`@gloss configures .DvdLoan scope=range note="/formats/DVD"`). A sidecar marker anchors to the file it annotates, never to the sidecar: a range anchors to the lines of the value its pointer names and fingerprints that value, and any other marker fingerprints the whole annotated file. A pointer that names nothing is a warning (GM123).
 - SPDX-style headers are accepted as sugar and parsed into the same form with `scope=file`: `Gloss-Implements: impl:X`, `Gloss-May-Modify: pa:*`.
 - Generated and vendored paths are excluded by the manifest's `generated:` globs or `exclude:` in `glossmark.yaml`; tag the generator input instead.
 
@@ -49,6 +49,8 @@ A marker binds, in order of precedence, to an explicit `scope=`, else to the nex
 1. path plus line range;
 2. a symbol string (`breed_stallion`, `HorseBuilder.AttachHoof`, `resource.aws_sqs_queue.capture`, `Deployment/horse-factory`, `table.foals`, `feature:Stallion production`) — a SCIP symbol once an indexer is joined;
 3. a content fingerprint of the normalized signature line (`sha256:` prefix).
+
+Go methods are always qualified by their receiver. In other languages a method keeps its bare name unless another marked declaration in the same file has the same name; then each is qualified by its enclosing classes (`InboundHandler.process`, `OutboundHandler.process`), and declarations that still share a name, such as overloads, take an ordinal in file order (`StringUtils.check`, `StringUtils.check#2`). A qualified symbol's fingerprint covers the qualified name, so identical signatures in two classes differ ([ADR 0008](adr/0008-same-named-declarations.md)).
 
 A fingerprint change marks the link **stale** in the ledger until it is re-confirmed with `gloss accept <id>`. A `scope=file` fingerprint covers the whole file except lines that carry `@gloss` and the `gloss:begin`…`gloss:end` block, so accepting a proposal or adding a marker does not stale it (ADR 0006). In Phase 1 the declaration detector is regex-based per language; tree-sitter replaces it in Phase 2 without changing the graph.
 
@@ -99,9 +101,9 @@ Feature: Stallion production
 | GM005 | invalid scope |
 | GM006 | conf outside [0,1] |
 | GM007 | glob target on a relation other than may-modify |
-| GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected) |
+| GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
-| GM131 | the same marker on three or more consecutive declarations: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
+| GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
 | GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
 | GM360 | a `value-from` names a file, line or symbol that does not exist |

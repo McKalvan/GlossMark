@@ -168,6 +168,8 @@ type comparer struct {
 	ws  *load.Workspace
 	opt Options
 	r   *Report
+	// realizers maps a core concept to the concepts that realize it (lazy).
+	realizers map[string]map[string]bool
 }
 
 func (c *comparer) add(f Finding) {
@@ -235,7 +237,7 @@ func (c *comparer) boundaries() {
 						break
 					}
 				}
-				if covered {
+				if covered || c.wholeOfCovered(d, derivedEdges, declared) {
 					continue
 				}
 				consistent = false
@@ -291,6 +293,48 @@ func (c *comparer) boundaries() {
 			}
 		}
 	}
+}
+
+// wholeOfCovered reports whether derived concept d is only there because a
+// covered part lifted it: every derived edge to d came through a derived
+// concept o that d is a whole of (or what such a whole realizes), and o is
+// covered. Code implementing a declared part makes the boundary realize the
+// whole too; that lift is the part's, not a claim on the whole. Code that
+// names the whole itself is not excused (ADR 0009).
+func (c *comparer) wholeOfCovered(d string, derived map[string][]*graph.Edge, declared []string) bool {
+	es := derived[d]
+	if len(es) == 0 {
+		return false
+	}
+	for _, e := range es {
+		if e.Prov == nil || len(e.Prov.Via) < 2 {
+			return false
+		}
+		o, _ := c.g.Expand(e.Prov.Via[1])
+		if o == d || derived[o] == nil || !has(RealizesStar(c.g, o), d) || has(realizedBy(c.g, o), d) {
+			return false
+		}
+		ok := false
+		for _, s := range declared {
+			if Covers(c.g, s, o) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func has(xs []string, x string) bool {
+	for _, y := range xs {
+		if y == x {
+			return true
+		}
+	}
+	return false
 }
 
 // lifted summarizes a derived set with the least common subsumer when the relation lifts.
@@ -650,11 +694,15 @@ func (c *comparer) tested(id string, depth int) bool {
 			}
 		}
 	}
-	// An implementation concept is tested when a core concept it realizes is tested directly.
+	// An implementation concept is tested when a core concept it realizes is
+	// tested directly, and it is that core concept's only realizer or the test
+	// sits in a boundary holding one of its artifacts: the engine's test of a
+	// core concept does not cover a renderer that realizes it too.
 	for _, core := range RealizesStar(c.g, id) {
+		sole := len(c.realizersOf(core)) == 1
 		for _, p := range []string{"tests", "verifies"} {
 			for _, e := range c.g.In(core, p) {
-				if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
+				if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && (sole || c.implementedIn(id, a.Boundary)) {
 					return true
 				}
 			}
@@ -670,6 +718,32 @@ func (c *comparer) tested(id string, depth int) bool {
 	}
 	for _, d := range c.g.Descendants(id) {
 		if c.tested(d, depth+1) {
+			return true
+		}
+	}
+	return false
+}
+
+// realizersOf returns the concepts whose RealizesStar reaches core.
+func (c *comparer) realizersOf(core string) map[string]bool {
+	if c.realizers == nil {
+		c.realizers = map[string]map[string]bool{}
+		for _, n := range c.g.NodesOf(model.NodeConcept) {
+			for _, k := range RealizesStar(c.g, n.ID) {
+				if c.realizers[k] == nil {
+					c.realizers[k] = map[string]bool{}
+				}
+				c.realizers[k][n.ID] = true
+			}
+		}
+	}
+	return c.realizers[core]
+}
+
+// implementedIn reports whether an artifact in boundary b implements concept id.
+func (c *comparer) implementedIn(id, b string) bool {
+	for _, e := range c.g.In(id, "implements") {
+		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && a.Boundary == b {
 			return true
 		}
 	}
@@ -800,6 +874,32 @@ func (c *comparer) metrics() {
 	}
 }
 
+// WaiverDate is the layout of a waiver's expires: date.
+const WaiverDate = "2006-01-02"
+
+// UnmatchedWaivers returns the policy's waivers that name no finding of the
+// report, by finding id or concept: a mistyped id waives nothing. Waivers of
+// stale findings are left out, since those need the ledger to be found.
+func UnmatchedWaivers(r *Report, pol *model.Policy) []model.Waiver {
+	if pol == nil {
+		return nil
+	}
+	var out []model.Waiver
+	for _, w := range pol.Waivers {
+		if strings.HasPrefix(w.Finding, KindStale+":") {
+			continue
+		}
+		found := false
+		for _, f := range r.Findings {
+			found = found || w.Finding == f.ID || w.Finding == f.Concept
+		}
+		if !found {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 func (c *comparer) waive() {
 	if c.opt.Policy == nil {
 		return
@@ -810,7 +910,13 @@ func (c *comparer) waive() {
 			if w.Finding != f.ID && w.Finding != f.Concept {
 				continue
 			}
-			if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && c.opt.Now.After(exp.Add(24*time.Hour)) {
+			// A waiver without a valid date waives nothing (gloss check GM610).
+			exp, err := time.Parse(WaiverDate, w.Expires)
+			if err != nil {
+				f.Msg += fmt.Sprintf(" [waiver by %s ignored: expires %q is not a YYYY-MM-DD date]", w.Owner, w.Expires)
+				continue
+			}
+			if c.opt.Now.After(exp.Add(24 * time.Hour)) {
 				f.Msg += fmt.Sprintf(" [waiver by %s expired %s]", w.Owner, w.Expires)
 				continue
 			}
@@ -818,6 +924,30 @@ func (c *comparer) waive() {
 			f.Waiver = fmt.Sprintf("%s until %s", w.Owner, w.Expires)
 		}
 	}
+}
+
+// FindingKinds are the kinds a finding can have, in the order --fail-on lists them.
+var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindStale, KindProposed, KindConsistent}
+
+// ParseFailOn splits a --fail-on list and rejects unknown kinds, so a typo
+// cannot silently disable part of a gate. "none" (or nothing) fails on nothing.
+func ParseFailOn(list string) ([]string, error) {
+	var kinds []string
+	for _, k := range strings.Split(list, ",") {
+		k = strings.TrimSpace(k)
+		if k == "" || k == "none" {
+			continue
+		}
+		known := false
+		for _, fk := range FindingKinds {
+			known = known || k == fk
+		}
+		if !known {
+			return nil, fmt.Errorf("--fail-on: unknown finding kind %q; valid kinds: %s, none", k, strings.Join(FindingKinds, ", "))
+		}
+		kinds = append(kinds, k)
+	}
+	return kinds, nil
 }
 
 // Failing reports the findings that fail the build for the given kinds.
