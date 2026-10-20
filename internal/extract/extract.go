@@ -51,6 +51,7 @@ func Build(ws *load.Workspace) (*Result, error) {
 	ex := &extractor{ws: ws, g: g, res: res}
 	ex.namespaces()
 	ex.ontologies()
+	ex.inheritKinds()
 	ex.manifests()
 	if err := ex.files(); err != nil {
 		return nil, err
@@ -154,6 +155,40 @@ func (ex *extractor) ontologies() {
 			for _, rel := range c.RelationNames() {
 				add(rel, c.Relations[rel])
 			}
+		}
+	}
+}
+
+// inheritKinds gives a concept with no kind of its own the kind of its
+// nearest is-a ancestor that declares one, and records that ancestor in
+// KindFrom, so every kind-dependent rule (the holds and infrastructure lifts,
+// domain and range, impact output) sees a subtype as what it is. Among
+// ancestors at the same distance the first by IRI wins; gloss check reports
+// parents that disagree (GM306). The walk visits each ancestor once, so an
+// is-a cycle ends it.
+func (ex *extractor) inheritKinds() {
+	for _, n := range ex.g.NodesOf(model.NodeConcept) {
+		if n.Kind != "" {
+			continue
+		}
+		seen := map[string]bool{n.ID: true}
+		level := []string{n.ID}
+		for len(level) > 0 && n.Kind == "" {
+			var next []string
+			for _, x := range level {
+				for _, p := range ex.g.Objects(x, "is-a") {
+					pn := ex.g.Node(p)
+					if seen[p] || pn == nil || pn.NodeType != model.NodeConcept {
+						continue
+					}
+					seen[p] = true
+					if n.Kind == "" && pn.Kind != "" && pn.KindFrom == "" {
+						n.Kind, n.KindFrom = pn.Kind, pn.CURIE
+					}
+					next = append(next, p)
+				}
+			}
+			level = next
 		}
 	}
 }

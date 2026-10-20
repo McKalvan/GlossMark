@@ -39,8 +39,11 @@ type Node struct {
 	NS       string         `json:"ns,omitempty"`
 	Tier     string         `json:"tier,omitempty"`
 	Kind     string         `json:"kind,omitempty"`
-	Label    string         `json:"label,omitempty"`
-	Doc      string         `json:"doc,omitempty"`
+	// KindFrom is the CURIE of the is-a ancestor a concept's kind was
+	// inherited from; empty when the kind is declared.
+	KindFrom string `json:"kind-from,omitempty"`
+	Label    string `json:"label,omitempty"`
+	Doc      string `json:"doc,omitempty"`
 	// Concept attributes.
 	Published  string `json:"published-as,omitempty"`
 	Internal   bool   `json:"internal,omitempty"`
@@ -200,7 +203,7 @@ func (g *Graph) AddNode(n *Node) *Node {
 	if ex, ok := g.nodes[n.ID]; ok {
 		// Merge: keep the first declaration's fields, fill blanks.
 		if ex.Kind == "" {
-			ex.Kind = n.Kind
+			ex.Kind, ex.KindFrom = n.Kind, n.KindFrom
 		}
 		if ex.Label == "" {
 			ex.Label = n.Label

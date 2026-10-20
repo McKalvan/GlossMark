@@ -57,7 +57,7 @@ Concept keys:
 
 | Key | Meaning |
 | --- | --- |
-| `kind` | `entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type` (required unless `is-a` is given) |
+| `kind` | `entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type` (required unless `is-a` is given). A concept without one inherits the kind of its nearest `is-a` ancestor that declares one; the graph node records it with `kind-from`, and every kind-dependent rule (`represents` on an entity lifting to `holds`, `provisions`/`configures`/`deploys` on a resource or system-type lifting to `realizes`, domain and range) uses it. Parents that give different kinds are an error (GM306), and so is no kind anywhere up the chain (GM300). |
 | `is-a`, `part-of`, `has-part` | Taxonomy and partonomy. Bare names are in the file's namespace. |
 | `realizes` | Implementation → core. Every impl concept carries this or `internal: true` (GM320). |
 | `published: { as: <core> }` | The single seam into the business view and across repos. `as:` must name an existing core concept (GM330). |

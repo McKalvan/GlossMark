@@ -114,10 +114,24 @@ func (c *checker) concepts() {
 			continue
 		}
 		if n.Kind == "" {
-			if len(c.g.Out(n.ID, "is-a")) > 0 {
-				// kind is inherited from the parent; fine.
-			} else {
-				c.add(n.File, n.Line, "error", "GM300", fmt.Sprintf("%s: kind is required (one of %s) unless the concept has is-a", n.CURIE, strings.Join(model.ConceptKinds, ", ")))
+			// kind is inherited through is-a when an ancestor declares one;
+			// with no such ancestor the concept has none.
+			c.add(n.File, n.Line, "error", "GM300", fmt.Sprintf("%s: kind is required (one of %s) unless an is-a ancestor declares one", n.CURIE, strings.Join(model.ConceptKinds, ", ")))
+		} else if n.KindFrom != "" {
+			// Inherited: the ancestor's own entry is checked. Parents that
+			// disagree leave the kind ambiguous.
+			kinds := map[string][]string{}
+			for _, p := range c.g.Objects(n.ID, "is-a") {
+				if pn := c.g.Node(p); pn != nil && pn.NodeType == model.NodeConcept && pn.Kind != "" {
+					kinds[pn.Kind] = append(kinds[pn.Kind], pn.CURIE)
+				}
+			}
+			if len(kinds) > 1 {
+				var parts []string
+				for _, k := range sortedKeys(kinds) {
+					parts = append(parts, fmt.Sprintf("%s from %s", k, strings.Join(kinds[k], ", ")))
+				}
+				c.add(n.File, n.Line, "error", "GM306", fmt.Sprintf("%s: is-a parents give different kinds (%s); declare kind: on the concept", n.CURIE, strings.Join(parts, "; ")))
 			}
 		} else if !contains(model.ConceptKinds, n.Kind) {
 			c.add(n.File, n.Line, "error", "GM301", fmt.Sprintf("%s: unknown kind %q; allowed: %s", n.CURIE, n.Kind, strings.Join(model.ConceptKinds, ", ")))

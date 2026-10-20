@@ -5,6 +5,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mckalvan/glossmark/internal/check"
@@ -81,6 +82,54 @@ func TestPartOfCoverageDirection(t *testing.T) {
 	rep, _ = run("realizes: [z:ScanConfirm]\n", "# @gloss implements z:ScanConfirm\ndef verify(): pass\n")
 	if v := concepts(findings(rep, rollup.KindViolation)); len(v) != 2 || !has(v, "z:Picking") || !has(v, "z:OrderFulfilment") {
 		t.Errorf("violations = %v, want z:Picking and z:OrderFulfilment", v)
+	}
+}
+
+// TestKindInheritance: a concept with no kind takes its nearest is-a
+// ancestor's, so represents on an entity subtype lifts to holds, provisions
+// on a resource subtype lifts to realizes and domain/range sees the
+// inherited kind. Parents that disagree, or no kind anywhere, are lint errors.
+func TestKindInheritance(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n"+
+		"  Product: { kind: entity }\n"+
+		"  Brake: { is-a: Product }\n"+
+		"  DiscBrake: { is-a: Brake }\n"+
+		"  HydraulicDiscBrake: { is-a: DiscBrake, doc: \"A disc brake actuated by fluid.\" }\n"+
+		"  Host: { kind: resource }\n"+
+		"  GpuHost: { is-a: Host }\n"+
+		"  Pricing: { kind: process }\n"+
+		"  PricedProduct: { is-a: [Product, Pricing] }\n"+
+		"  Loop: { is-a: Knot }\n"+
+		"  Knot: { is-a: Loop }\n")
+	write("db/.gloss.yaml", "boundary: o:db\nlevel: container\nholds: [z:Product, z:HydraulicDiscBrake]\n")
+	write("db/0001.sql", "-- @gloss represents z:Product\nCREATE TABLE products (id int);\n-- @gloss represents z:HydraulicDiscBrake\nCREATE TABLE brakes (id int);\n")
+	write("infra/.gloss.yaml", "boundary: o:infra\nlevel: container\nrealizes: [z:GpuHost]\n")
+	write("infra/main.tf", "# @gloss provisions z:GpuHost\nresource \"x\" \"y\" {}\n")
+	write("app/.gloss.yaml", "boundary: o:app\nlevel: container\n")
+	write("app/emit.py", "# @gloss publishes z:HydraulicDiscBrake\ndef emit(): pass\n")
+	ws, g, _, lg := build(t, root)
+	n := g.NodeByCurie("z:HydraulicDiscBrake")
+	if n.Kind != "entity" || n.KindFrom != "z:Product" {
+		t.Errorf("z:HydraulicDiscBrake kind = %q from %q, want entity from z:Product", n.Kind, n.KindFrom)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if gp := findings(rep, rollup.KindGap); len(gp) != 0 {
+		t.Errorf("an entity subtype should derive holds and a resource subtype realizes; gaps: %+v", gp)
+	}
+	codes := map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Msg)
+	}
+	if len(codes["GM221"]) != 1 {
+		t.Errorf("publishes on an inherited entity should warn GM221: %v", codes["GM221"])
+	}
+	if len(codes["GM306"]) != 1 || !strings.Contains(codes["GM306"][0], "z:PricedProduct") {
+		t.Errorf("GM306 = %v, want z:PricedProduct", codes["GM306"])
+	}
+	if len(codes["GM300"]) != 2 {
+		t.Errorf("an is-a cycle with no kind gives none; GM300 = %v", codes["GM300"])
 	}
 }
 
