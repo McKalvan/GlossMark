@@ -61,6 +61,13 @@
     {"line": 3, "relation": "implements", "targets": ["impl:HoofAssembler"], "scope": "symbol", "symbol": "HoofAssembler"},
     {"line": 5, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "attach"}
   ],
+  "testdata/Example.kt": [
+    {"line": 3, "relation": "represents", "targets": ["impl:FoalingWindow"], "scope": "symbol", "symbol": "FOALING_WINDOW_DAYS"},
+    {"line": 6, "relation": "represents", "targets": ["impl:HoofCount"], "scope": "symbol", "symbol": "HOOVES"},
+    {"line": 10, "relation": "represents", "targets": ["impl:StallCount"], "scope": "symbol", "symbol": "STALLS"},
+    {"line": 14, "relation": "implements", "targets": ["impl:FoalRegistry"], "scope": "symbol", "symbol": "FoalRegistry"},
+    {"line": 16, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "attach"}
+  ],
   "testdata/example.rs": [
     {"line": 2, "relation": "implements", "targets": ["impl:TailQueue"], "scope": "symbol", "symbol": "TailQueue"},
     {"line": 5, "relation": "implements", "targets": ["impl:TailStep"], "scope": "symbol", "symbol": "enqueue"}

@@ -158,3 +158,17 @@ func TestIsNewTarget(t *testing.T) {
 		t.Fatal("StripNew wrong")
 	}
 }
+
+// TestDeclarationsKotlinConst: suggest's detector names a Kotlin constant,
+// not its "val" keyword (issue #131).
+func TestDeclarationsKotlinConst(t *testing.T) {
+	lines := []string{"const val FILING_WINDOW_DAYS = 30", "private const val LIMIT = 9", "var counter = 0"}
+	style, _ := StyleFor("a.kt", nil)
+	var got []string
+	for _, d := range Declarations("a.kt", lines, style) {
+		got = append(got, d.Symbol)
+	}
+	if want := []string{"FILING_WINDOW_DAYS", "LIMIT", "counter"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("symbols = %v, want %v", got, want)
+	}
+}
