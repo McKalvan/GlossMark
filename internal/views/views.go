@@ -75,6 +75,11 @@ type PNode struct {
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticalityFrom,omitempty"`
 	Owner           string `json:"owner,omitempty"`
+	// Deprecated, ReplacedBy and RetireBy (boundaries only) mark what is being
+	// retired and its successor; the viewer draws such nodes dashed.
+	Deprecated bool   `json:"deprecated,omitempty"`
+	ReplacedBy string `json:"replacedBy,omitempty"`
+	RetireBy   string `json:"retireBy,omitempty"`
 }
 
 // PEdge is an edge as the view shows it.
@@ -87,6 +92,10 @@ type PEdge struct {
 	Count    int      `json:"count,omitempty"`
 	Lifted   bool     `json:"lifted,omitempty"`
 	Via      []string `json:"via,omitempty"`
+	// NoUniqueSubsumer names, on an edge the view's lift: range-lcs left in
+	// place, the incomparable minimal common subsumers of the set it belongs
+	// to: the lift was tried and declined.
+	NoUniqueSubsumer []string `json:"noUniqueSubsumer,omitempty"`
 }
 
 func (e PEdge) key() string { return e.S + "|" + e.P + "|" + e.O }
@@ -245,6 +254,16 @@ func (p *projector) target(iri string, depth int) []string {
 				}
 			}
 		}
+		if len(ups) == 0 {
+			// A kind of a mechanism folds where the mechanism folds: it
+			// realizes what its is-a ancestor realizes, so every concept
+			// whose realizes closure reaches a core concept folds into it.
+			for _, e := range p.g.Out(iri, "is-a") {
+				if pn := p.g.Node(e.O); pn != nil && pn.NodeType == model.NodeConcept && e.Source != graph.SourceDerived {
+					ups = append(ups, e.O)
+				}
+			}
+		}
 		for _, u := range ups {
 			out = append(out, p.target(u, depth+1)...)
 		}
@@ -309,7 +328,7 @@ func (p *projector) concepts() {
 		p.included[n.ID] = true
 		p.fold[n.ID] = []string{n.ID}
 		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom,
-			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom}
+			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom, Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy}
 		pn.Branch = p.branch(n.ID)
 		if n.Published != "" {
 			pn.Published = true
@@ -379,7 +398,7 @@ func (p *projector) boundaries() {
 		}
 		p.included[b.ID] = true
 		p.fold[b.ID] = []string{b.ID}
-		pn := PNode{ID: b.CURIE, Label: p.g.Label(b.ID), Type: "boundary", Kind: b.Kind, NS: b.NS, Depth: lvl, Doc: b.Doc, Branch: "boundary", Criticality: b.Criticality, CriticalityFrom: b.CriticalityFrom, Owner: b.Owner}
+		pn := PNode{ID: b.CURIE, Label: p.g.Label(b.ID), Type: "boundary", Kind: b.Kind, NS: b.NS, Depth: lvl, Doc: b.Doc, Branch: "boundary", Criticality: b.Criticality, CriticalityFrom: b.CriticalityFrom, Owner: b.Owner, Deprecated: b.Deprecated, ReplacedBy: b.ReplacedBy, RetireBy: b.RetireBy}
 		if chain := p.g.PartOfChain(b.ID); len(chain) > 0 {
 			pn.Parent = p.g.Curie(chain[0])
 		}
@@ -541,6 +560,7 @@ func (p *projector) house() {
 			}
 		}
 	}
+	p.notBelowParts()
 	p.place(strongest)
 }
 
@@ -562,6 +582,65 @@ func (p *projector) ownCode(e *graph.Edge) bool {
 					return true
 				}
 			}
+		}
+	}
+	return false
+}
+
+// notBelowParts lifts a whole whose box sits inside the box of one of its
+// parts to the nearest boundary enclosing its own and all its parts' boxes:
+// a whole is never drawn deeper than a part of it.
+func (p *projector) notBelowParts() {
+	parts := map[int]map[string]bool{} // whole → boundaries of its parts, at any depth
+	for i := range p.nodes {
+		if p.nodes[i].Type != "concept" || p.nodes[i].Boundary == "" {
+			continue
+		}
+		cur := i
+		for g := 0; g < 32; g++ {
+			j, ok := p.byID[p.nodes[cur].Parent]
+			if p.nodes[cur].Parent == "" || !ok || p.nodes[j].Type != "concept" {
+				break
+			}
+			if parts[j] == nil {
+				parts[j] = map[string]bool{}
+			}
+			parts[j][p.nodes[i].Boundary] = true
+			cur = j
+		}
+	}
+	for w, set := range parts {
+		bw := p.nodes[w].Boundary
+		if bw == "" {
+			continue
+		}
+		deeper := false
+		for b := range set {
+			if b != bw && has(p.boundaryChain(bw), b) {
+				deeper = true
+			}
+		}
+		if !deeper {
+			continue
+		}
+		all := append([]string{bw}, keys(set)...)
+		for _, anc := range p.boundaryChain(bw) {
+			common := true
+			for _, b := range all {
+				common = common && has(p.boundaryChain(b), anc)
+			}
+			if common {
+				p.nodes[w].Boundary = anc
+				break
+			}
+		}
+	}
+}
+
+func has(xs []string, x string) bool {
+	for _, y := range xs {
+		if y == x {
+			return true
 		}
 	}
 	return false
@@ -885,18 +964,44 @@ func (p *projector) edges() {
 			}
 			var ids []string
 			for o := range set {
-				if n := p.g.Node(o); n != nil && n.NodeType == model.NodeConcept {
-					ids = append(ids, o)
+				n := p.g.Node(o)
+				if n == nil || n.NodeType != model.NodeConcept {
+					continue
 				}
+				// A curated view keeps the edges to the concepts it names: they
+				// are what it was written to show (ADR 0011).
+				if p.curated && p.matchesInclude(n.CURIE) {
+					continue
+				}
+				ids = append(ids, o)
 			}
-			lcs := p.g.LCS(ids)
-			if len(lcs) >= len(ids) {
+			if len(ids) < 2 {
 				continue
 			}
+			sort.Strings(ids)
+			lcs, candidates := p.g.Subsumer(ids)
+			if lcs == "" {
+				if len(candidates) > 1 {
+					// Lift tried and declined: say so on the edges it would have replaced.
+					var names []string
+					for _, c := range candidates {
+						names = append(names, p.g.Curie(c))
+					}
+					for _, o := range ids {
+						if a, ok := aggs[key.s+"|"+key.p+"|"+p.g.Curie(o)]; ok {
+							a.e.NoUniqueSubsumer = names
+						}
+					}
+				}
+				continue
+			}
+			if !p.included[lcs] {
+				continue // the summary is not in this view: keep the members
+			}
 			var via []string
-			anyProposed, allProposed := false, true
+			allProposed := true
 			srcs := map[string]bool{}
-			for o := range set {
+			for _, o := range ids {
 				oc := p.g.Curie(o)
 				k := key.s + "|" + key.p + "|" + oc
 				if a, ok := aggs[k]; ok {
@@ -905,21 +1010,13 @@ func (p *projector) edges() {
 					for s := range a.src {
 						srcs[s] = true
 					}
-					if a.all {
-						anyProposed = true
-					} else {
+					if !a.all {
 						allProposed = false
 					}
 				}
 			}
-			_ = anyProposed
-			for _, l := range lcs {
-				lc := p.g.Curie(l)
-				if !p.included[l] {
-					continue
-				}
-				lifted[key.s+"|"+key.p+"|"+lc] = PEdge{S: key.s, P: key.p, O: lc, Source: mixed(srcs), Lifted: true, Via: uniq(via), Count: len(via), Proposed: allProposed}
-			}
+			lc := p.g.Curie(lcs)
+			lifted[key.s+"|"+key.p+"|"+lc] = PEdge{S: key.s, P: key.p, O: lc, Source: mixed(srcs), Lifted: true, Via: uniq(via), Count: len(via), Proposed: allProposed}
 		}
 	}
 	// A purely derived edge on a boundary that a visible descendant boundary
@@ -933,7 +1030,9 @@ func (p *projector) edges() {
 			continue
 		}
 		for k2, b := range aggs {
-			if k2 == k || dropped[k2] || b.e.P != a.e.P || b.e.O != a.e.O || !isBoundary(b.e.S) {
+			// A descendant edge that was lifted or rolled up itself still
+			// carries the fact, so the ancestor's copy goes either way.
+			if k2 == k || b.e.P != a.e.P || b.e.O != a.e.O || !isBoundary(b.e.S) {
 				continue
 			}
 			if p.isDescendant(b.e.S, a.e.S) {
@@ -1004,12 +1103,14 @@ type Delta struct {
 	RemovedNodes []string `json:"removed_nodes,omitempty"`
 	AddedEdges   []PEdge  `json:"added_edges,omitempty"`
 	RemovedEdges []PEdge  `json:"removed_edges,omitempty"`
-	ChangedNodes []string `json:"changed_nodes,omitempty"` // published value / badge / criticality changed
+	ChangedNodes []string `json:"changed_nodes,omitempty"` // published value / badge / definition / criticality changed
+	// Removed is set when the view exists in the base and not in the head.
+	Removed bool `json:"removed,omitempty"`
 }
 
 // Changed reports whether the delta is non-empty.
 func (d *Delta) Changed() bool {
-	return len(d.AddedNodes)+len(d.RemovedNodes)+len(d.AddedEdges)+len(d.RemovedEdges)+len(d.ChangedNodes) > 0
+	return d.Removed || len(d.AddedNodes)+len(d.RemovedNodes)+len(d.AddedEdges)+len(d.RemovedEdges)+len(d.ChangedNodes) > 0
 }
 
 // Diff compares two projections of one view.
@@ -1029,7 +1130,7 @@ func Diff(base, head *Projection) *Delta {
 			d.AddedNodes = append(d.AddedNodes, id)
 			continue
 		}
-		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Kind != n.Kind || b.Criticality != n.Criticality {
+		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Doc != n.Doc || b.Deprecated != n.Deprecated || b.ReplacedBy != n.ReplacedBy || b.Kind != n.Kind || b.Criticality != n.Criticality {
 			d.ChangedNodes = append(d.ChangedNodes, id)
 		}
 	}

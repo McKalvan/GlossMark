@@ -58,7 +58,7 @@ Anchoring without tree-sitter (POC): a per-language declaration detector (regex)
 
 ### Comparison and gating
 
-Rollup derives, per boundary, `realizes`/`produces`/`consumes`/`publishes`/`subscribes` sets from the artifacts under it (rule 1–2), lifts impl → core through `realizes`, and compares against the manifest's declared sets under the subsumption rule (rule 3, `lift: range-lcs`): derived ⊑ declared is consistent; derived not covered is a violation; declared not reached is a gap. Orphans are concepts no artifact reaches; rogues are `NEW:` targets or dangling references.
+Rollup derives, per boundary, `realizes`/`produces`/`consumes`/`publishes`/`subscribes` sets from the artifacts under it (rule 1–2), lifts impl → core through `realizes`, and compares against the manifest's declared sets under the subsumption rule (always on; `lift: range-lcs` only summarizes the derived set, [ADR 0011](adr/0011-range-lcs-summary.md)): derived ⊑ declared is consistent; derived not covered is a violation; declared not reached is a gap. Orphans are concepts no artifact reaches; rogues are `NEW:` targets or dangling references.
 
 Gates are a policy table with spec defaults, overridable in `glossmark.yaml` under `policy:`.
 

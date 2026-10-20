@@ -129,7 +129,12 @@ func (ex *extractor) ontologies() {
 				n.Criticality, n.CriticalityFrom = c.Criticality, "declared"
 			}
 			if c.ReplacedBy != "" {
-				_, cur := ex.resolveRef(c.ReplacedBy, ns)
+				// A CURIE, or a full IRI shown as a CURIE when a prefix
+				// matches; the namespace need not be imported (ADR 0020).
+				riri, cur := ex.resolveRef(c.ReplacedBy, ns)
+				if strings.Contains(cur, "://") {
+					cur = ex.g.Curie(riri)
+				}
 				n.ReplacedBy = cur
 			}
 			if c.Published != nil {
@@ -156,6 +161,9 @@ func (ex *extractor) ontologies() {
 			add("part-of", c.PartOf)
 			add("has-part", c.HasPart)
 			add("realizes", c.Realizes)
+			if c.ReplacedBy != "" {
+				add("replaced-by", []string{c.ReplacedBy})
+			}
 			if c.Published != nil {
 				add("published-as", []string{c.Published.As})
 			}
@@ -256,6 +264,11 @@ func (ex *extractor) manifests() {
 				ex.g.AddNode(pn)
 			}
 			ex.g.AddEdge(&graph.Edge{S: iri, P: "part-of", O: piri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1, Raw: p}})
+		}
+		if m.ReplacedBy != "" {
+			// The successor is often in another repository: no node is made.
+			riri, _ := ex.g.Expand(m.ReplacedBy)
+			ex.g.AddEdge(&graph.Edge{S: iri, P: "replaced-by", O: riri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1, Raw: m.ReplacedBy}})
 		}
 		for rel, targets := range m.DeclaredSets() {
 			for _, t := range targets {

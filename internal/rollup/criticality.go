@@ -37,13 +37,15 @@ var RatingRelations = []string{"realizes", "represents", "configures"}
 //     artifacts beneath it only when its manifest sets criticality-floor: true.
 //
 // CriticalityFrom records the provenance: "declared", or the CURIE of the node
-// the level was inherited from.
+// the level was inherited from; CriticalitySource names the node that
+// declared it, the end of that chain.
 func Criticality(g *graph.Graph) {
 	// Reset inherited values so a rebuild is idempotent.
 	for _, n := range g.Nodes() {
 		if n.CriticalityFrom != "declared" {
 			n.Criticality, n.CriticalityFrom = "", ""
 		}
+		n.CriticalitySource = ""
 	}
 	memo := map[string]bool{}
 	var concept func(n *graph.Node, depth int) string
@@ -145,6 +147,21 @@ func Criticality(g *graph.Graph) {
 		}
 		if best != "" {
 			a.Criticality, a.CriticalityFrom = best, bestNode.CURIE
+		}
+	}
+
+	// Sources: follow each inherited level's criticality-from chain to the
+	// node that declares it, so a deep derivation names its origin.
+	for _, n := range g.Nodes() {
+		if n.Criticality == "" || n.CriticalityFrom == "declared" || n.CriticalityFrom == "" {
+			continue
+		}
+		cur := n
+		for i := 0; i < 64 && cur != nil && cur.CriticalityFrom != "declared"; i++ {
+			cur = g.NodeByCurie(cur.CriticalityFrom)
+		}
+		if cur != nil && cur.CriticalityFrom == "declared" {
+			n.CriticalitySource = cur.CURIE
 		}
 	}
 }

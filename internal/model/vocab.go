@@ -62,8 +62,14 @@ var Scopes = []string{"file", "symbol", "block", "line", "range"}
 // MarkerKeys allowed inline. Everything else lives in the ledger.
 var MarkerKeys = []string{"scope", "conf", "id", "note"}
 
-// Lift strategies.
-const LiftRangeLCS = "range-lcs"
+// Lift strategies: how gloss drift and views summarize a derived set.
+// range-lcs, the default for produces, consumes, publishes and subscribes,
+// shows a set by its least common subsumer; none shows the members. Neither
+// changes coverage, which always subsumes (ADR 0011).
+const (
+	LiftRangeLCS = "range-lcs"
+	LiftNone     = "none"
+)
 
 // Relation declares one relation type: who may be subject and object, and how
 // it behaves. Every edge in the graph is checked against its Relation.
@@ -106,6 +112,7 @@ var BuiltinRelations = []Relation{
 	{Name: "has-part", Domain: cb, Range: cb, Inverse: "part-of", Ontology: true, Doc: "Inverse of part-of."},
 	{Name: "realizes", Domain: cb, Range: c, Ontology: true, Manifest: true, Derived: true, Doc: "impl Concept → core Concept; Boundary → Concept. Also derived by rollup."},
 	{Name: "published-as", Domain: c, Range: c, Ontology: true, Doc: "impl Concept → core Concept under which it surfaces in the business view."},
+	{Name: "replaced-by", Domain: cb, Range: cb, Ontology: true, Manifest: true, Doc: "A deprecated concept or boundary → its successor; written as the replaced-by: key, drawn in views. The successor may live in a namespace or repository this workspace does not import (ADR 0020)."},
 	{Name: "implements", Domain: a, Range: c, Inline: true, RangeKinds: []string{"process", "capability", "system-type", "event", "constraint", "measure"}, Doc: "Artifact implements the behaviour of a concept."},
 	{Name: "presents", Domain: acb, Range: c, Inline: true, Ontology: true, Manifest: true, Derived: true, Doc: "A UI surface for a concept (a page, a screen, a view): lifts to the boundary as presents, never as realizes, and carries no criticality. See docs/adr/0001-presents-and-hosts.md."},
 	{Name: "hosts", Domain: acb, Range: c, Inline: true, Ontology: true, Manifest: true, Derived: true, Doc: "A shell or container for a concept (the app frame, a router, a plugin host): lifts as hosts, never as realizes, and carries no criticality."},

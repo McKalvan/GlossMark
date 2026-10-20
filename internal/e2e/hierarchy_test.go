@@ -77,11 +77,12 @@ func TestPartOfCoverageDirection(t *testing.T) {
 		t.Errorf("whole declared, part implemented: violations %+v, gaps %+v", v, gp)
 	}
 	// Code naming a whole next to code for the part is still a violation,
-	// and so is the whole above it, which that code lifts.
+	// and so is the whole above it, which that code lifts: one finding for
+	// the link, listing the whole it lifts (ADR 0010).
 	write("scan/extra.py", "# @gloss implements z:Picking\ndef pick(): pass\n")
 	rep, _ = run("realizes: [z:ScanConfirm]\n", "# @gloss implements z:ScanConfirm\ndef verify(): pass\n")
-	if v := concepts(findings(rep, rollup.KindViolation)); len(v) != 2 || !has(v, "z:Picking") || !has(v, "z:OrderFulfilment") {
-		t.Errorf("violations = %v, want z:Picking and z:OrderFulfilment", v)
+	if v := findings(rep, rollup.KindViolation); len(v) != 1 || v[0].Concept != "z:Picking" || strings.Join(v[0].Lifted, ",") != "z:OrderFulfilment" {
+		t.Errorf("violations = %+v, want z:Picking lifting z:OrderFulfilment", v)
 	}
 }
 

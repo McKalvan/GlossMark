@@ -1425,8 +1425,21 @@ func TestDerivedAllowed(t *testing.T) {
 	if len(codes["GM503"]) != 1 || !strings.Contains(codes["GM503"][0], "z:Elsewhere") || len(codes["GM502"]) != 0 {
 		t.Errorf("GM503=%v GM502=%v", codes["GM503"], codes["GM502"])
 	}
-	if ex := check.ExplainAllowed(ws, g); !strings.Contains(ex, "o:svc (svc/.gloss.yaml): allowed = i:*, i:Doer, z:Doing, z:Part, z:Sub, z:Thing") || !strings.Contains(ex, "[derived") {
+	// --explain groups the set by source and collapses a declared concept's descendants.
+	if ex := check.ExplainAllowed(ws, g); !strings.Contains(ex, "o:svc (svc/.gloss.yaml): derived, 6 entries\n  namespace  i:*\n  declared   i:Doer, z:Thing (+2 below)\n  realized   z:Doing (by i:Doer)\n") || !strings.Contains(ex, "o:root (.gloss.yaml): derived, 6 entries\n  nested     o:svc (+6)\n") {
 		t.Errorf("explain:\n%s", ex)
+	}
+	for _, r := range check.ExplainAllowedRecords(ws, g) {
+		if r.Boundary != "o:svc" {
+			continue
+		}
+		why := map[string]string{}
+		for _, e := range r.Entries {
+			why[e.Pattern] = e.Reason + " " + e.From
+		}
+		if r.Set != "derived" || why["z:Part"] != "covered z:Thing" || why["z:Doing"] != "realized i:Doer" || why["i:*"] != "default-namespace " {
+			t.Errorf("explain records for o:svc = %+v", r)
+		}
 	}
 	// Gate: the Elsewhere link is HARD with the derived-set reason; Part is SOFT.
 	for _, e := range g.Edges() {

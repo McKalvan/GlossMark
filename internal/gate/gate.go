@@ -72,6 +72,9 @@ type Change struct {
 	// carries it. See docs/GOVERNANCE.md.
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticality_from,omitempty"`
+	// Bump is the namespace semver bump this change requires (MAJOR, MINOR,
+	// PATCH); set on ontology changes only. See docs/VERSIONING.md.
+	Bump string `json:"bump,omitempty"`
 }
 
 // Impact is the result of gloss diff.
@@ -87,7 +90,10 @@ type Impact struct {
 	After        rollup.Metrics  `json:"after"`
 	Orphans      []string        `json:"orphans"`
 	Versions     []VersionChange `json:"versions,omitempty"`
-	Boundaries   []string        `json:"boundaries"`
+	// Realizations lists each concept whose set of realizing or holding
+	// boundaries changed: what moved, in one line per concept.
+	Realizations []RealizationChange `json:"realizations,omitempty"`
+	Boundaries   []string            `json:"boundaries"`
 	// Criticality is the highest level any change touches; Critical lists the
 	// nodes that carry the levels, highest first.
 	Criticality string             `json:"criticality,omitempty"`
@@ -148,6 +154,24 @@ type VersionChange struct {
 	OK        bool   `json:"ok"`
 }
 
+// RealizationChange is a concept whose deepest realizing (relation realizes)
+// or holding (holds) boundaries differ between base and head.
+type RealizationChange struct {
+	Concept  string   `json:"concept"`
+	Relation string   `json:"relation"` // realizes | holds
+	Before   []string `json:"before"`
+	After    []string `json:"after"`
+}
+
+// String renders "hire:Invoicing realized by {a} → {a, b}".
+func (r RealizationChange) String() string {
+	verb := "realized by"
+	if r.Relation == "holds" {
+		verb = "held by"
+	}
+	return fmt.Sprintf("%s %s {%s} → {%s}", r.Concept, verb, strings.Join(r.Before, ", "), strings.Join(r.After, ", "))
+}
+
 // Options for Classify.
 type Options struct {
 	Base       string
@@ -159,6 +183,9 @@ type Options struct {
 	AfterReport  *rollup.Report
 	// Adoption reports counts instead of per-link changes (base without a graph).
 	Adoption bool
+	// BaseViews are the views declared at the base; a view declared there and
+	// not in the head is listed as changed (removed). Nil when unknown.
+	BaseViews *model.Views
 }
 
 // Classify diffs base against head.
@@ -172,6 +199,9 @@ func Classify(base, head *graph.Graph, ws *load.Workspace, opt Options) *Impact 
 	c.manifests()
 	c.links()
 	c.stale()
+	if !opt.Adoption {
+		c.realizations()
+	}
 	c.versions()
 	c.paths()
 	c.viewsImpact()
@@ -367,7 +397,7 @@ func (c *classifier) ontology() {
 					Reasons: []string{"new concept proposed; accept with gloss accept --concept " + h.CURIE}, Msg: fmt.Sprintf("concept %s proposed%s (%s)", h.CURIE, by, h.Kind)})
 				continue
 			}
-			c.add(Change{Gate: HARD, Kind: "concept-added", Glyph: "!", Subject: h.CURIE, Path: h.File, Line: h.Line, Reasons: []string{"edit to ontology"}, Msg: fmt.Sprintf("concept %s added (%s)", h.CURIE, h.Kind)})
+			c.add(Change{Gate: HARD, Kind: "concept-added", Glyph: "!", Subject: h.CURIE, Path: h.File, Line: h.Line, Bump: "MINOR", Reasons: []string{"edit to ontology"}, Msg: fmt.Sprintf("concept %s added (%s)", h.CURIE, h.Kind)})
 			continue
 		}
 		if b.Proposed && !h.Proposed {
@@ -375,8 +405,15 @@ func (c *classifier) ontology() {
 			continue
 		}
 		var diffs []string
+		bump := "PATCH"
+		raise := func(to string) {
+			if rankBump(to) > rankBump(bump) {
+				bump = to
+			}
+		}
 		if b.Kind != h.Kind {
 			diffs = append(diffs, fmt.Sprintf("kind %s → %s", b.Kind, h.Kind))
+			raise("MAJOR")
 		}
 		if fmt.Sprint(b.Value) != fmt.Sprint(h.Value) {
 			diffs = append(diffs, fmt.Sprintf("value %v → %v", orNone(b.Value), orNone(h.Value)))
@@ -391,8 +428,15 @@ func (c *classifier) ontology() {
 		if b.Internal != h.Internal {
 			diffs = append(diffs, fmt.Sprintf("internal %v → %v", b.Internal, h.Internal))
 		}
+		// A deprecation changes what importers see (GM222 starts firing), so it
+		// ships in a MINOR, as semver 2.0.0 item 7 requires (ADR 0018).
 		if b.Deprecated != h.Deprecated {
 			diffs = append(diffs, fmt.Sprintf("deprecated %v → %v", b.Deprecated, h.Deprecated))
+			raise("MINOR")
+		}
+		if b.ReplacedBy != h.ReplacedBy {
+			diffs = append(diffs, fmt.Sprintf("replaced-by %s → %s", orNone(b.ReplacedBy), orNone(h.ReplacedBy)))
+			raise("MINOR")
 		}
 		if declaredCriticality(b) != declaredCriticality(h) {
 			diffs = append(diffs, fmt.Sprintf("criticality %s → %s", orNone(declaredCriticality(b)), orNone(declaredCriticality(h))))
@@ -407,8 +451,14 @@ func (c *classifier) ontology() {
 		gate := HARD
 		reasons := []string{"edit to ontology"}
 		if len(diffs) == 1 && diffs[0] == "label/doc" {
-			gate = SOFT
-			reasons = []string{"labels and docs only (PATCH)"}
+			// A core concept's definition is what the business view shows;
+			// rewriting it is a decision, not a typo fix (ADR 0018).
+			if h.Tier == model.TierImpl {
+				gate = SOFT
+				reasons = []string{"labels and docs only (PATCH)"}
+			} else {
+				reasons = []string{"definition of a core concept changed (PATCH)"}
+			}
 		}
 		if pub {
 			reasons = append(reasons, "business view affected: published concept")
@@ -418,11 +468,20 @@ func (c *classifier) ontology() {
 		if pub {
 			kind = "published-changed"
 		}
-		c.add(Change{Gate: gate, Kind: kind, Glyph: "!", Subject: h.CURIE, Path: h.File, Line: h.Line, Reasons: reasons, Msg: fmt.Sprintf("%s%s %s", pubPrefix(pub), h.CURIE, strings.Join(diffs, ", "))})
+		c.add(Change{Gate: gate, Kind: kind, Glyph: "!", Subject: h.CURIE, Path: h.File, Line: h.Line, Bump: bump, Reasons: reasons, Msg: fmt.Sprintf("%s%s %s", pubPrefix(pub), h.CURIE, strings.Join(diffs, ", "))})
 	}
 	for id, b := range bn {
 		if _, ok := hn[id]; !ok {
-			c.add(Change{Gate: HARD, Kind: "concept-removed", Glyph: "-", Subject: b.CURIE, Path: b.File, Line: b.Line, Reasons: []string{"edit to ontology (MAJOR)"}, Msg: fmt.Sprintf("concept %s removed; IDs are permanent, prefer deprecated: true + replaced-by:", b.CURIE)})
+			msg := fmt.Sprintf("concept %s removed; IDs are permanent, prefer deprecated: true + replaced-by:", b.CURIE)
+			if b.Deprecated {
+				// The recommended path: deprecated in an earlier release, removed now.
+				msg = fmt.Sprintf("concept %s removed (deprecated since base", b.CURIE)
+				if b.ReplacedBy != "" {
+					msg += ", replaced-by " + b.ReplacedBy
+				}
+				msg += ")"
+			}
+			c.add(Change{Gate: HARD, Kind: "concept-removed", Glyph: "-", Subject: b.CURIE, Path: b.File, Line: b.Line, Bump: "MAJOR", Reasons: []string{"edit to ontology (MAJOR)"}, Msg: msg})
 		}
 	}
 	// Declared concept edges.
@@ -435,7 +494,11 @@ func (c *classifier) ontology() {
 			continue // reported with the concept
 		}
 		pub := isPublished(c.head, e.S) || isPublished(c.head, e.O)
-		c.add(Change{Gate: HARD, Kind: "ontology-edge-added", Glyph: "!", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: provPath(e), Line: provLine(e),
+		bump := "MINOR"
+		if e.P == "is-a" || e.P == "part-of" {
+			bump = "MAJOR"
+		}
+		c.add(Change{Gate: HARD, Kind: "ontology-edge-added", Glyph: "!", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: provPath(e), Line: provLine(e), Bump: bump,
 			Reasons: reasons("edit to ontology", pub), Msg: fmt.Sprintf("%s%s %s %s added", pubPrefix(pub), c.head.Curie(e.S), e.P, c.head.Curie(e.O))})
 	}
 	for k, e := range be {
@@ -446,7 +509,7 @@ func (c *classifier) ontology() {
 			continue
 		}
 		pub := isPublished(c.base, e.S) || isPublished(c.base, e.O)
-		c.add(Change{Gate: HARD, Kind: "ontology-edge-removed", Glyph: "-", Relation: e.P, Subject: c.base.Curie(e.S), Object: c.base.Curie(e.O), Path: provPath(e), Line: provLine(e),
+		c.add(Change{Gate: HARD, Kind: "ontology-edge-removed", Glyph: "-", Relation: e.P, Subject: c.base.Curie(e.S), Object: c.base.Curie(e.O), Path: provPath(e), Line: provLine(e), Bump: "MAJOR",
 			Reasons: reasons("edit to ontology", pub), Msg: fmt.Sprintf("%s%s %s %s removed", pubPrefix(pub), c.base.Curie(e.S), e.P, c.base.Curie(e.O))})
 	}
 	// Namespaces: an owned one is an edit to glossmark.yaml; an imported one crosses repos.
@@ -915,6 +978,56 @@ func (c *classifier) stale() {
 	}
 }
 
+// realizations reports, per concept, how the set of boundaries realizing or
+// holding it moved, and adds a change for each boundary that lost its last
+// implementation of a concept; governance gates that change at the
+// concept's criticality, so a cutover off a critical concept is not SOFT.
+func (c *classifier) realizations() {
+	for _, rel := range []string{"realizes", "holds"} {
+		before, after := rollup.Realizers(c.base, rel), rollup.Realizers(c.head, rel)
+		rawAfter := rollup.RealizersRaw(c.head, rel)
+		concepts := map[string]bool{}
+		for k := range before {
+			concepts[k] = true
+		}
+		for k := range after {
+			concepts[k] = true
+		}
+		var names []string
+		for k := range concepts {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		for _, cu := range names {
+			b, a := before[cu], after[cu]
+			if strings.Join(b, ",") == strings.Join(a, ",") {
+				continue
+			}
+			c.im.Realizations = append(c.im.Realizations, RealizationChange{Concept: cu, Relation: rel, Before: b, After: a})
+			for _, bc := range b {
+				bn := c.head.NodeByCurie(bc)
+				if bn != nil && rawAfter[cu][bn.ID] {
+					continue // still realized there, or by a boundary nested in it
+				}
+				verb := "realizes"
+				if rel == "holds" {
+					verb = "holds"
+				}
+				msg := fmt.Sprintf("%s no longer %s %s", bc, verb, cu)
+				gate, why := SOFT, "last implementation in a boundary removed"
+				if len(a) > 0 {
+					msg += "; now " + strings.Join(a, ", ")
+				} else {
+					msg += "; nothing does now"
+					gate, why = HARD, "no boundary "+verb+" it any more"
+				}
+				c.add(Change{Gate: gate, Kind: "realization-removed", Glyph: "-", Relation: rel, Subject: cu, Object: bc, Boundary: bc,
+					Reasons: []string{why}, Msg: msg})
+			}
+		}
+	}
+}
+
 // versions classifies the semver bump each owned namespace needs.
 func (c *classifier) versions() {
 	for _, n := range c.head.NodesOf(model.NodeNamespace) {
@@ -927,28 +1040,11 @@ func (c *classifier) versions() {
 		}
 		required := "none"
 		for _, ch := range c.im.Changes {
-			if !strings.HasPrefix(ch.Subject, n.NS+":") {
+			if ch.Bump == "" || !strings.HasPrefix(ch.Subject, n.NS+":") {
 				continue
 			}
-			switch ch.Kind {
-			case "concept-removed", "ontology-edge-removed":
-				required = "MAJOR"
-			case "concept-changed", "published-changed":
-				if strings.Contains(ch.Msg, "kind ") && required != "MAJOR" {
-					required = "MAJOR"
-				} else if required == "none" {
-					required = "PATCH"
-				}
-			case "ontology-edge-added":
-				if (ch.Relation == "is-a" || ch.Relation == "part-of") && required != "MAJOR" {
-					required = "MAJOR"
-				} else if required == "none" || required == "PATCH" {
-					required = "MINOR"
-				}
-			case "concept-added":
-				if required == "none" || required == "PATCH" {
-					required = "MINOR"
-				}
+			if rankBump(ch.Bump) > rankBump(required) {
+				required = ch.Bump
 			}
 		}
 		actual := bumpOf(b.Version, n.Version)
@@ -958,7 +1054,9 @@ func (c *classifier) versions() {
 		ok := rankBump(actual) >= rankBump(required)
 		c.im.Versions = append(c.im.Versions, VersionChange{Namespace: n.NS, From: b.Version, To: n.Version, Required: required, Actual: actual, OK: ok})
 		if !ok {
-			c.add(Change{Gate: SOFT, Kind: "version-bump", Glyph: "!", Subject: n.NS + ":", Path: n.File, Reasons: []string{"semver: bump the namespace version"},
+			// Importers' ranges rely on the bump: a missing or undersized one
+			// ships changed content inside their range (ADR 0018).
+			c.add(Change{Gate: HARD, Kind: "version-bump", Glyph: "!", Subject: n.NS + ":", Path: n.File, Reasons: []string{"semver: bump the namespace version; importers' ranges rely on it"},
 				Msg: fmt.Sprintf("namespace %s: changes require a %s bump but version went %s → %s (%s)", n.NS, required, orNone(b.Version), orNone(n.Version), actual)})
 		}
 		if required == "MAJOR" {
@@ -1015,11 +1113,19 @@ func semver(s string) []int {
 	return out
 }
 
-// paths applies the HARD path rule for changed files the graph did not already explain.
+// paths applies the HARD path rule: a change in a file under hard-paths is
+// HARD whatever its semantic class (bookkeeping aside), and a changed file
+// the graph did not explain is reported on its own.
 func (c *classifier) paths() {
 	seen := map[string]bool{}
-	for _, ch := range c.im.Changes {
+	bookkeeping := map[string]bool{"link-accepted": true, "concept-accepted": true, "stale": true, "fingerprint-changed": true}
+	for i := range c.im.Changes {
+		ch := &c.im.Changes[i]
 		seen[ch.Path] = true
+		if ch.Gate != HARD && ch.Path != "" && !bookkeeping[ch.Kind] && model.MatchAnyGlob(c.opt.Policy.HardPaths, ch.Path) {
+			ch.Gate = HARD
+			ch.Reasons = append(ch.Reasons, "edit to ontology/ or manifests (hard-paths)")
+		}
 	}
 	for _, f := range c.opt.ChangedFiles {
 		if seen[f] || !model.MatchAnyGlob(c.opt.Policy.HardPaths, f) {
@@ -1045,6 +1151,19 @@ func (c *classifier) viewsImpact() {
 		c.im.Views = append(c.im.Views, d)
 		if d.Changed() {
 			c.im.ViewsChanged = append(c.im.ViewsChanged, h.Name)
+		}
+	}
+	if c.opt.BaseViews != nil {
+		var gone []string
+		for name := range c.opt.BaseViews.Views {
+			if _, ok := c.ws.Views.Views[name]; !ok {
+				gone = append(gone, name)
+			}
+		}
+		sort.Strings(gone)
+		for _, name := range gone {
+			c.im.Views = append(c.im.Views, &views.Delta{View: name, Removed: true})
+			c.im.ViewsChanged = append(c.im.ViewsChanged, name+" (removed)")
 		}
 	}
 	// A change that alters a core-only view is HARD; one that alters only engineering views is SOFT at most.

@@ -55,7 +55,7 @@ func cmdDiff(args []string) int {
 		adoption = true
 		label += " (no graph)"
 	}
-	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption})
+	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption, BaseViews: baseViews(head.WS, *base)})
 	var buf bytes.Buffer
 	switch *format {
 	case "json":
@@ -156,6 +156,27 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 		}
 	}
 	return res.Graph, nil
+}
+
+// baseViews reads the views file committed at ref, so a view the change
+// deletes is reported; nil when the base has none or git cannot say.
+func baseViews(ws *load.Workspace, ref string) *model.Views {
+	if ref == "" {
+		return nil
+	}
+	prefix, err := gitOut(ws.Root, "rev-parse", "--show-prefix")
+	if err != nil {
+		return nil
+	}
+	out, err := gitOut(ws.Root, "show", ref+":"+strings.TrimSpace(prefix)+ws.Config.Views)
+	if err != nil {
+		return nil
+	}
+	v, _, err := model.ParseViews(ws.Config.Views, []byte(out))
+	if err != nil {
+		return nil
+	}
+	return v
 }
 
 // baseReport compares the base graph over the base tree's own file set, as

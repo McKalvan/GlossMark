@@ -87,7 +87,7 @@ boundary: acme:payments-api
 level: container
 realizes: [pay:Authorization, pay:Capture]
 default-namespace: pa
-# allowed: is optional. Without it, links may target pa:*, what the manifest declares, their parts and the cores they realize;
+# allowed: is optional. Without it, links may target pa:*, what the manifest declares, their parts and subtypes, what realizes them and the cores they realize;
 # gloss check --explain prints the set. Write it only to narrow or to add a concept the boundary uses without declaring.
 ```
 
@@ -147,7 +147,7 @@ gloss coverage --fail-under 80   # headline: concepts with an artifact and a ver
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
-gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
+gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift, import versions, deprecated concepts still in use
 gloss mcp                        # MCP server on stdio for agents
 gloss doctor                     # one line per setup check with its fix: gloss on PATH (and that it is GlossMark), GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
 ```
@@ -174,7 +174,7 @@ gloss accept --concept pa:RefundHandler # a human accepts the proposal (drops pr
 gloss reject --concept pa:RefundHandler --reason "duplicate of pa:RefundFlow" --remove
 ```
 
-The briefing ranks concepts by relevance: those linked by code under the directory, then those its manifest declares, then its default namespace, then the rest. When `GLOSS_ACTOR` names an agent with an agent file (`agent:breeding-planner` and `.claude/agents/breeding-planner.md`), it shows only that agent's remit.
+The briefing ranks concepts by relevance: those linked by code under the directory, then those its manifest declares, then its default namespace, then the rest. When `GLOSS_ACTOR` names an agent with an agent file (`agent:breeding-planner` and `.claude/agents/breeding-planner.md`), it shows only that agent's remit. In a retiring module it adds a "Retiring here" line: the deprecated boundary (or one enclosing it) with its `replaced-by` and `retire-by`, and each deprecated concept the code links to with its successor and the boundary that realizes it.
 
 A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [chargeback]` on `pay:Refund`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "settlement cutoff" finds `sw:CutoffClock`.
 

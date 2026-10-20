@@ -47,10 +47,10 @@ Every namespace carries semver in its ontology file (`version:` at the top of `<
 | Bump | Change |
 | --- | --- |
 | MAJOR | a concept removed or retyped, or its is-a / part-of changed |
-| MINOR | a concept or relation added |
+| MINOR | a concept or relation added; a concept deprecated or un-deprecated, or its `replaced-by` changed |
 | PATCH | labels, docs, values |
 
-A missing bump is reported as SOFT; a MAJOR bump is HARD.
+A deprecation is MINOR because it changes what importers see (GM222 starts firing in their `check`), as semver 2.0.0 item 7 requires. A missing or undersized bump is HARD, like the change that needs it: importers' ranges rely on the bump, and a `~1.0.0` importer otherwise receives the change, or a GM107 failure, inside its range. A MAJOR bump is HARD. Removing a concept the base already deprecated is still MAJOR; the diff names its replacement instead of advising a deprecation. See [ADR 0018](adr/0018-gate-classification.md).
 
 Importers state a range and get it enforced:
 

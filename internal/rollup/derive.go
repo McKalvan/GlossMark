@@ -70,8 +70,21 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 	// Rule 2: realization lift.
 	for _, b := range g.NodesOf(model.NodeBoundary) {
 		arts := contained[b.ID]
-		add := func(p, o string, via []string, path string, line int, proposed bool) {
-			g.AddEdge(&graph.Edge{S: b.ID, P: p, O: o, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: via, Path: path, Line: line, Proposed: proposed}})
+		// direct adds b rel o, from artifact a's link e.
+		direct := func(p, o string, a *graph.Node, e *graph.Edge) {
+			g.AddEdge(&graph.Edge{S: b.ID, P: p, O: o, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: []string{g.Curie(a.ID)}, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
+		}
+		// lift adds b rel o, reached from the concept e links along path.
+		lift := func(p, o string, a *graph.Node, e *graph.Edge, path []Hop) {
+			via, steps := liftVia(g, a.ID, e.O, path)
+			g.AddEdge(&graph.Edge{S: b.ID, P: p, O: o, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: via, Steps: steps, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
+		}
+		// liftStar lifts every concept e's object stands for under rel.
+		liftStar := func(rel string, a *graph.Node, e *graph.Edge) {
+			paths := RealizesPaths(g, e.O)
+			for _, core := range sortedKeys(paths) {
+				lift(rel, core, a, e, paths[core])
+			}
 		}
 		for _, a := range arts {
 			// publishes-value lifts as implements: the line holding a
@@ -80,31 +93,20 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 				if !IsConcrete(e.O) {
 					continue
 				}
-				add("realizes", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+				direct("realizes", e.O, a, e)
 				// Impl concepts lift to core through their own realizes (transitively).
-				for _, core := range RealizesStar(g, e.O) {
-					add("realizes", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
-				}
+				liftStar("realizes", a, e)
 				// Intended relations declared on the implemented concept, and on the
 				// core concepts it realizes, lift to the boundary. So do the surface
 				// relations: code implementing pfi:FirePage, which presents
 				// pf:FirePlanning, makes the boundary present it, not realize it.
-				for _, c := range append([]string{e.O}, RealizesStar(g, e.O)...) {
-					for _, rel := range SurfaceRelations {
+				paths := RealizesPaths(g, e.O)
+				paths[e.O] = nil
+				for _, c := range sortedKeys(paths) {
+					for _, rel := range append(append([]string{}, SurfaceRelations...), LiftedRelations...) {
 						for _, x := range g.Objects(c, rel) {
 							if IsConcrete(x) {
-								g.AddEdge(&graph.Edge{S: b.ID, P: rel, O: x, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: []string{g.Curie(a.ID), g.Curie(c)}, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
-							}
-						}
-					}
-					for _, rel := range LiftedRelations {
-						for _, x := range g.Objects(c, rel) {
-							if IsConcrete(x) {
-								via := []string{g.Curie(a.ID), g.Curie(e.O)}
-								if c != e.O {
-									via = append(via, g.Curie(c))
-								}
-								g.AddEdge(&graph.Edge{S: b.ID, P: rel, O: x, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: via, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
+								lift(rel, x, a, e, append(append([]Hop{}, paths[c]...), Hop{rel, x}))
 							}
 						}
 					}
@@ -114,22 +116,20 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 				if !IsConcrete(e.O) {
 					continue
 				}
-				add("represents", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+				direct("represents", e.O, a, e)
 				// A table, file or package that represents a concept means the
 				// boundary holds its data: an entity's records, a measure's
 				// stored values, an event log, a constraint's configured value.
 				// A manifest declares holds: (ADR 0013).
 				if on := g.Node(e.O); on != nil && on.NodeType == model.NodeConcept {
-					add("holds", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
-					for _, core := range RealizesStar(g, e.O) {
-						add("holds", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
-					}
+					direct("holds", e.O, a, e)
+					liftStar("holds", a, e)
 				}
 			}
 			for _, rel := range append(append([]string{}, SurfaceRelations...), ConfigRelations...) {
 				for _, e := range g.Out(a.ID, rel) {
 					if on := g.Node(e.O); IsConcrete(e.O) && on != nil && on.NodeType == model.NodeConcept {
-						add(rel, e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
+						direct(rel, e.O, a, e)
 					}
 				}
 			}
@@ -142,10 +142,8 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 					if !IsConcrete(e.O) || on == nil || on.NodeType != model.NodeConcept || (on.Kind != "resource" && on.Kind != "system-type") {
 						continue
 					}
-					add("realizes", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
-					for _, core := range RealizesStar(g, e.O) {
-						add("realizes", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
-					}
+					direct("realizes", e.O, a, e)
+					liftStar("realizes", a, e)
 				}
 			}
 			for _, rel := range LiftedRelations {
@@ -153,10 +151,8 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 					if !IsConcrete(e.O) {
 						continue
 					}
-					g.AddEdge(&graph.Edge{S: b.ID, P: rel, O: e.O, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: []string{g.Curie(a.ID)}, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
-					for _, core := range RealizesStar(g, e.O) {
-						g.AddEdge(&graph.Edge{S: b.ID, P: rel, O: core, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: []string{g.Curie(a.ID), g.Curie(e.O)}, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
-					}
+					direct(rel, e.O, a, e)
+					liftStar(rel, a, e)
 				}
 			}
 			// Test relations lift too, so "implemented but untested" can be judged per boundary.
@@ -258,47 +254,101 @@ func RealizesStar(g *graph.Graph, c string) []string { return standsFor(g, c, tr
 func realizedBy(g *graph.Graph, c string) []string { return standsFor(g, c, false) }
 
 func standsFor(g *graph.Graph, c string, wholes bool) []string {
-	seen := map[string]bool{c: true}
-	// walked: each concept is expanded once, so an is-a or part-of cycle
-	// ends the walk instead of re-entering it until the depth limit.
-	walked := map[string]bool{}
-	var out []string
-	var walk func(x string, depth int)
-	walk = func(x string, depth int) {
-		if depth > 16 || walked[x] {
-			return
+	paths := standsForPaths(g, c, wholes)
+	out := make([]string, 0, len(paths))
+	for k := range paths {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Hop is one step of a derivation: the relation followed and the concept it
+// leads to.
+type Hop struct{ Rel, To string }
+
+// RealizesPaths is RealizesStar with, for every concept c stands for, the
+// shortest chain of hops from c to it: is-a steps up to the ancestor that
+// realizes, part-of steps up to the whole, and the realizes or published-as
+// step itself. Among chains of one length the first by relation and IRI wins.
+func RealizesPaths(g *graph.Graph, c string) map[string][]Hop { return standsForPaths(g, c, true) }
+
+func standsForPaths(g *graph.Graph, c string, wholes bool) map[string][]Hop {
+	out := map[string][]Hop{}
+	// walked: each concept is expanded once (breadth first, so its path is a
+	// shortest one), and an is-a or part-of cycle ends the walk.
+	walked := map[string][]Hop{c: nil}
+	queue := []string{c}
+	extend := func(path []Hop, rel, to string) []Hop {
+		return append(append([]Hop{}, path...), Hop{rel, to})
+	}
+	for len(queue) > 0 {
+		x := queue[0]
+		queue = queue[1:]
+		path := walked[x]
+		if len(path) > 16 {
+			continue
 		}
-		walked[x] = true
-		for _, p := range []string{"realizes", "published-as"} {
-			for _, e := range g.Out(x, p) {
-				if e.Source == graph.SourceDerived || !IsConcrete(e.O) {
-					continue
+		visit := func(rel, to string, output bool) {
+			p := extend(path, rel, to)
+			if output && to != c {
+				if _, ok := out[to]; !ok {
+					out[to] = p
 				}
-				if !seen[e.O] {
-					seen[e.O] = true
-					out = append(out, e.O)
-					walk(e.O, depth+1)
+			}
+			if _, ok := walked[to]; !ok {
+				walked[to] = p
+				queue = append(queue, to)
+			}
+		}
+		for _, p := range []string{"realizes", "published-as"} {
+			for _, o := range g.Objects(x, p) {
+				if IsConcrete(o) && declaredEdge(g, x, p, o) {
+					visit(p, o, true)
 				}
 			}
 		}
 		// A part of a mechanism realizes the mechanism and what it realizes.
-		for _, e := range g.Out(x, "part-of") {
-			if n := g.Node(e.O); wholes && n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived && !seen[e.O] {
-				seen[e.O] = true
-				out = append(out, e.O)
-				walk(e.O, depth+1)
+		if wholes {
+			for _, o := range g.Objects(x, "part-of") {
+				if n := g.Node(o); n != nil && n.NodeType == model.NodeConcept && declaredEdge(g, x, "part-of", o) {
+					visit("part-of", o, true)
+				}
 			}
 		}
 		// A kind of a mechanism realizes what the mechanism realizes.
-		for _, e := range g.Out(x, "is-a") {
-			if n := g.Node(e.O); n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived {
-				walk(e.O, depth+1)
+		for _, o := range g.Objects(x, "is-a") {
+			if n := g.Node(o); n != nil && n.NodeType == model.NodeConcept && declaredEdge(g, x, "is-a", o) {
+				visit("is-a", o, false)
 			}
 		}
 	}
-	walk(c, 0)
-	sort.Strings(out)
 	return out
+}
+
+// declaredEdge reports whether (s, p, o) has an edge that is not derived.
+func declaredEdge(g *graph.Graph, s, p, o string) bool {
+	for _, e := range g.Out(s, p) {
+		if e.O == o && e.Source != graph.SourceDerived {
+			return true
+		}
+	}
+	return false
+}
+
+// liftVia returns the provenance of a fact derived from artifact a linking
+// to concept linked and reaching its target along path: via lists the
+// artifact, the linked concept and every concept passed through (not the
+// target), steps the hops from linked to the target as "rel CURIE".
+func liftVia(g *graph.Graph, a, linked string, path []Hop) (via, steps []string) {
+	via = []string{g.Curie(a), g.Curie(linked)}
+	for i, h := range path {
+		if i < len(path)-1 {
+			via = append(via, g.Curie(h.To))
+		}
+		steps = append(steps, h.Rel+" "+g.Curie(h.To))
+	}
+	return via, steps
 }
 
 // Covers reports whether declared concept s accounts for derived concept d:

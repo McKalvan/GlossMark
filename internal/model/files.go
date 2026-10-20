@@ -717,24 +717,61 @@ func DefaultViews(coreNS, implNS []string) *Views {
 	}}
 }
 
-// LoadViews reads views.yaml.
-func LoadViews(path string) (*Views, error) {
+// LoadViews reads views.yaml. Unknown keys, at the top or inside a view, are
+// returned with their lines (Key is "views.<name>.<key>" inside a view) for
+// the caller to report; the rest of the file still applies.
+func LoadViews(path string) (*Views, []UnknownKey, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	return ParseViews(path, b)
+}
+
+// ParseViews parses views.yaml content; path is used in messages only.
+func ParseViews(path string, b []byte) (*Views, []UnknownKey, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
+	}
+	var unknown []UnknownKey
+	strip := func(mn *yaml.Node, known map[string]bool, prefix string) {
+		var kept []*yaml.Node
+		for i := 0; i+1 < len(mn.Content); i += 2 {
+			if k := mn.Content[i]; !known[k.Value] {
+				unknown = append(unknown, UnknownKey{Key: prefix + k.Value, Line: k.Line})
+				continue
+			}
+			kept = append(kept, mn.Content[i], mn.Content[i+1])
+		}
+		mn.Content = kept
+	}
+	if len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
+		top := doc.Content[0]
+		strip(top, map[string]bool{"views": true}, "")
+		viewKeys := yamlKeys(View{})
+		for i := 0; i+1 < len(top.Content); i += 2 {
+			if vs := top.Content[i+1]; vs.Kind == yaml.MappingNode {
+				for j := 0; j+1 < len(vs.Content); j += 2 {
+					if vn := vs.Content[j+1]; vn.Kind == yaml.MappingNode {
+						strip(vn, viewKeys, "views."+vs.Content[j].Value+".")
+					}
+				}
+			}
+		}
 	}
 	var v Views
-	dec := yaml.NewDecoder(strings.NewReader(string(b)))
-	dec.KnownFields(true)
-	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+	if len(doc.Content) > 0 {
+		if err := doc.Decode(&v); err != nil {
+			return nil, unknown, fmt.Errorf("%s: %w", path, err)
+		}
 	}
 	for name, view := range v.Views {
 		if view == nil {
-			return nil, fmt.Errorf("%s: view %s is empty", path, name)
+			return nil, unknown, fmt.Errorf("%s: view %s is empty", path, name)
 		}
 		if len(view.Slice) > 0 && len(view.Include) > 0 {
-			return nil, fmt.Errorf("%s: view %s: slice and include are two ways to choose nodes; use one", path, name)
+			return nil, unknown, fmt.Errorf("%s: view %s: slice and include are two ways to choose nodes; use one", path, name)
 		}
 		if view.Zoom != "" {
 			ok := false
@@ -744,11 +781,11 @@ func LoadViews(path string) (*Views, error) {
 				}
 			}
 			if !ok {
-				return nil, fmt.Errorf("%s: view %s: zoom must be one of %s", path, name, strings.Join(ZoomLevels, ", "))
+				return nil, unknown, fmt.Errorf("%s: view %s: zoom must be one of %s", path, name, strings.Join(ZoomLevels, ", "))
 			}
 		}
 	}
-	return &v, nil
+	return &v, unknown, nil
 }
 
 // ---------------------------------------------------------------------------

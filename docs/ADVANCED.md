@@ -29,6 +29,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
 | `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |
 | `published-as` | | ✓ | | written as `published: { as: core:X }`: the only seam between tiers and across repositories |
+| `replaced-by` | | ✓ | ✓ | written as the `replaced-by:` key on a deprecated concept or boundary; stored as an edge so views can select and draw it; the successor may be in a namespace known only under `prefixes:` ([ADR 0020](adr/0020-replacements-across-repos.md)) |
 | `guards` (`applies-to`) | | ✓ | | a cross-cutting mechanism (authentication, a rate limit, a flag) applies to concepts and the code implementing them; `impact` and `context` show it on both ends, `diff` reviews guarded code at the guard's level, no criticality flows ([ADR 0015](adr/0015-guards.md)) |
 | `constrains` | | ✓ | | a rule applies to a concept; `impact` lists the constrained code, `context` names it |
 | `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
@@ -56,21 +57,31 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | violation | a boundary's code realizes, holds, produces, consumes, publishes or subscribes something its manifest does not declare | ✓ |
 | gap | a manifest declares something nothing under it implements | ✓ |
 | value-drift | the code a published value is bound to (`value-from`, `publishes-value`) changed and the ontology `value` did not | ✓ |
-| dangling | a marker targets a concept that does not exist (write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
+| dangling | a marker, a manifest relation key or `allowed:` entry, or a relation in the workspace's own ontology files targets a concept that does not exist (in a marker, write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
+| overdue | a deprecated boundary whose `retire-by` date has passed still has code under it ([ADR 0019](adr/0019-migration-overlap.md)) | ✓ |
+| overlap | two boundaries, neither nested in the other, realize or hold the same concept, and no manifest declares one `deprecated` with `replaced-by` the other (listed with `--all`, like consistent pairs; always in JSON) | |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
-| orphan | a concept no artifact links to | |
+| orphan | a concept nothing is built for: no artifact links to it, to a concept that realizes it or is part of it, or to anything below it in `is-a` by any of those routes (an abstract supertype whose subtype is realized by code is not an orphan) | |
 | untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts). An `internal: true` concept is left out unless its effective criticality is `high` or `critical`; then it is reported, and counted in concept coverage, like any other | |
 | presented-only | a page presents the concept, or a shell hosts a concept that is not a system-type, but nothing implements it | |
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
+| out-of-range | `gloss landscape` only: an importer resolves a namespace version outside its range (GM106 in that repository's `check`) | |
+| deprecated-use | `gloss landscape` only: a marker, manifest or concept references a deprecated concept; the line names the `replaced-by` | |
 
-`gloss drift --fail-on` and `gloss landscape --fail-on` take a comma-separated list of these kind names, spelled as in the first column (`value-drift`, `presented-only`), or `none`; any of them fails the command when listed, `stale`, `rogue` and `proposed` included, and an unknown kind exits 2 with the list of valid ones. The defaults are `violation,value-drift,gap,dangling` for `drift` (the ticks above) and `violation,dangling` for `landscape`. `gloss diff --fail-on` takes a gate class instead (`HARD`, `SOFT` or `none`). `policy.waivers` in `glossmark.yaml` silences one finding until a date. `gloss check` fails a waiver whose `expires:` is missing or not a `YYYY-MM-DD` date (GM610; such a waiver waives nothing) and warns about one whose `finding:` matches no finding id or concept (GM611).
+`gloss landscape` also prints an **Imports** section, one row per importer and namespace: range, locked version, resolved version and a status (`ok`, `not locked`, `lock behind` with the version available and whether it is inside the range, `out of range`, `content changed without bump`). In `--format json`, `repos` holds one object per repository (`path`, `name`, `owns` with each namespace's version, `imports` with those rows), and `imports` lists every row.
+
+`gloss drift --fail-on` and `gloss landscape --fail-on` take a comma-separated list of these kind names, spelled as in the first column (`value-drift`, `presented-only`), or `none`; any of them fails the command when listed, `stale`, `rogue` and `proposed` included, and an unknown kind exits 2 with the list of valid ones. The defaults are `violation,value-drift,gap,dangling,overdue` for `drift` (the ticks above) and `violation,dangling,overdue` for `landscape`. `gloss diff --fail-on` takes a gate class instead (`HARD`, `SOFT` or `none`). `policy.waivers` in `glossmark.yaml` silences one finding until a date. `gloss check` fails a waiver whose `expires:` is missing or not a `YYYY-MM-DD` date (GM610; such a waiver waives nothing) and warns about one whose `finding:` matches no finding id or concept (GM611) and about one that has expired (GM612). `expires` is inclusive: the waiver holds through that day. `gloss doctor` lists waivers that expired or expire within 30 days. A waiver silences a drift finding only; a retirement deadline belongs in the manifest's `retire-by`, which drift turns into `overdue` (ADR 0019).
 
 ## Gates (`gloss diff`)
 
 - **AUTO**: fingerprint-only changes, accepted proposals, derived edges. A changed decorator stack on an unchanged signature (`decorators changed: removed @requires_role("approver")`, [ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)) is AUTO too, but `criticality-gates` raises it.
 - **SOFT**: a link to an existing concept, valid, inside the allowed set, at or above `soft-conf-threshold`, changing only engineering views.
-- **HARD**: a new or proposed concept, a link outside an agent's remit or the allowed set, any ontology or manifest edit, anything touching a published concept, a criticality the policy gates, a MAJOR version bump, a cross-repo import.
+- **HARD**: a new or proposed concept, a link outside an agent's remit or the allowed set, any ontology or manifest edit, anything touching a published concept, a criticality the policy gates, a MAJOR version bump, a missing or undersized version bump, a cross-repo import, removing the last implementation of a concept anywhere.
+
+A label or `doc:` change on a core concept is HARD and changes every view that shows the concept: the definition is what the business view says. On an implementation concept it is SOFT, unless its file is under `policy.hard-paths` (default `ontology/**`, `**/.gloss.yaml`, `glossmark.yaml`): a change in a file under hard-paths is HARD whatever its semantic class, so the path rule is never lowered ([ADR 0018](adr/0018-gate-classification.md)).
+
+`gloss diff` also prints a **Realization changes** block (`realizations` in JSON): one line per concept whose deepest realizing or holding boundaries changed, such as `hire:Invoicing realized by {bw:hirehq-invoicing} → {bw:hirehq-invoicing, bw:invoicing-service}`. A boundary that loses its last implementation of a concept is a `realization-removed` change, gated at the concept's criticality, and HARD when no boundary realizes or holds the concept any more. A view the change deletes is listed under "Views changed" as `name (removed)`.
 
 ## Review states (the ledger)
 

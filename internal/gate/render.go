@@ -23,7 +23,26 @@ func RenderText(im *Impact) string {
 		sb.WriteString("  no ontology-relevant changes\n")
 	}
 	sb.WriteString(renderRows(im.Changes, 0))
+	sb.WriteString(renderRealizations(im.Realizations, 0))
 	sb.WriteString(footer(im))
+	return sb.String()
+}
+
+// renderRealizations renders the "Realization changes" block: one line per
+// concept whose realizing or holding boundaries moved.
+func renderRealizations(rs []RealizationChange, limit int) string {
+	if len(rs) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("Realization changes:\n")
+	for i, r := range rs {
+		if limit > 0 && i >= limit {
+			fmt.Fprintf(&sb, "  … %d more\n", len(rs)-limit)
+			break
+		}
+		sb.WriteString("  " + r.String() + "\n")
+	}
 	return sb.String()
 }
 
@@ -214,6 +233,7 @@ func RenderMarkdown(im *Impact) string {
 	if im.Adoption != nil {
 		sb.WriteString(renderAdoption(im.Adoption))
 	}
+	sb.WriteString(renderRealizations(im.Realizations, maxRows))
 	sb.WriteString(footer(im))
 	sb.WriteString("```\n")
 	if len(im.Critical) > 0 {
@@ -243,6 +263,10 @@ func RenderMarkdown(im *Impact) string {
 	}
 	for _, d := range im.Views {
 		if !d.Changed() {
+			continue
+		}
+		if d.Removed {
+			fmt.Fprintf(&sb, "\n**View %s** is removed by this change.\n", d.View)
 			continue
 		}
 		fmt.Fprintf(&sb, "\n<details><summary>View <b>%s</b>: +%d/−%d nodes, +%d/−%d edges, %d changed</summary>\n\n", d.View, len(d.AddedNodes), len(d.RemovedNodes), len(d.AddedEdges), len(d.RemovedEdges), len(d.ChangedNodes))

@@ -235,10 +235,11 @@
       "additionalProperties": false,
       "properties": {
         "lift": {
-          "description": "Lift strategy when the relation is projected onto boundaries.",
+          "description": "How gloss drift summarizes a boundary's derived set for this relation: range-lcs (the builtin default for produces, consumes, publishes and subscribes) shows it by its least common subsumer, none shows the members. Coverage is not affected: a declared supertype always covers a derived subtype (ADR 0011).",
           "type": "string",
           "enum": [
-            "range-lcs"
+            "range-lcs",
+            "none"
           ]
         },
         "transitive": {

@@ -695,7 +695,7 @@ function draw(){
     }
     ctx.fillStyle=C.bOpen;roundRect(r.x,r.y,r.w,r.h,10);ctx.fill();
     ctx.strokeStyle=b._diff==='added'?C.added:b._diff==='removed'?C.removed:hl?C.select:(cc||C.bStroke);
-    ctx.lineWidth=(hl?2.5:cc?2:1.4)*u;ctx.setLineDash(b.ghost?[4,3]:[]);ctx.stroke();ctx.setLineDash([]);
+    ctx.lineWidth=(hl?2.5:cc?2:1.4)*u;ctx.setLineDash(b.ghost?[4,3]:b.deprecated?[2,4]:[]);ctx.stroke();ctx.setLineDash([]);
     // title strip
     ctx.fillStyle=C.bOpen;roundRect(r.x,r.y,r.w,TITLE,10);ctx.fill();
     ctx.font=(12*u)+'px system-ui,sans-serif';
@@ -749,7 +749,8 @@ function draw(){
     ctx.fillStyle=n.ghost?'transparent':col.fill;
     ctx.strokeStyle=n._diff==='added'?C.added:n._diff==='removed'?C.removed:hl?C.select:(n.type==='boundary'&&cc)?cc:col.stroke;
     ctx.lineWidth=hl?3:n._diff?2.5:n._kids?2.2:1.5;
-    ctx.setLineDash(n.tier==='implementation'||n.ghost?[4,3]:[]);
+    // Deprecated: dotted (being retired); implementation tier and diff ghosts: dashed.
+    ctx.setLineDash(n.deprecated?[2,4]:n.tier==='implementation'||n.ghost?[4,3]:[]);
     ctx.beginPath();
     if(n.type==='boundary')ctx.roundRect(p.x-n._w/2,p.y-n._h/2,n._w,n._h,8);
     else if(n.type==='artifact')ctx.rect(p.x-6,p.y-6,12,12);
@@ -819,6 +820,7 @@ function nodeTip(n){
   if(n.criticality)h+=`<br><span class="k">criticality</span> ${esc(critText(n))}`;
   if(n.owner)h+=`<br><span class="k">owner</span> ${esc(n.owner)}`;
   if(n.published)h+=`<br><span class="k">published as</span> ${esc(n.publishedAs||'')}`;
+  if(n.deprecated)h+=`<br><span class="k">deprecated</span>${n.replacedBy?' → '+esc(n.replacedBy):''}${n.retireBy?' · retire by '+esc(n.retireBy):''}`;
   if(n.value!=null)h+=`<br><span class="k">value</span> ${esc(typeof n.value==='object'?JSON.stringify(n.value):n.value)}`;
   if(n.liveValue)h+=`<br><span class="k">live</span> <span class="mono">${esc(n.liveValue)}</span>`;
   if(n.doc)h+=`<br>${esc(n.doc)}`;
@@ -883,6 +885,7 @@ function renderPanel(){
     const sr=S.slice&&S.slice.roles.get(n.id);
     if(sr)row('slice role','<b title="'+esc(SLICEDEFS[sr.role]||'')+'">'+esc(sr.role)+'</b>'+(sr.member!==n.id?' <span class="via">as '+esc(sr.member)+'</span>':'')+(sr.via.length?'<div class="via">via '+sr.via.map(esc).join('<br>→ ')+'</div>':''));
     row('published as',n.published?esc(n.publishedAs||'yes'):'');
+    row('deprecated',n.deprecated?'<b>yes</b>'+(n.replacedBy?' · replaced by '+(byId.get(n.replacedBy)?nodeLink(byId.get(n.replacedBy)):esc(n.replacedBy)):'')+(n.retireBy?' · retire by '+esc(n.retireBy):''):'');
     row('value',n.value!=null?esc(typeof n.value==='object'?JSON.stringify(n.value):n.value):'');
     if(n.liveValue){const at=n.valueFrom||'',i=at.lastIndexOf(':');row('live value','<span class="mono">'+esc(n.liveValue)+'</span><br>'+srcLink(i>0?at.slice(0,i):at,i>0?+at.slice(i+1):0));}
     row('path',n.path?srcLink(n.path,n.line||0):'');
@@ -891,6 +894,7 @@ function renderPanel(){
     const dt=n.type==='concept'?details[n.id]:null;
     if(dt){
       const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="via">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="via">proposed</span>':''}${l.via?' <span class="via">via '+esc(l.via)+'</span>':''}</li>`;
+      if(dt.replaces&&dt.replaces.length)h+=`<h2>Replaces</h2><div class="mono">${dt.replaces.map(esc).join(', ')}</div>`;
       if(dt.realizes&&dt.realizes.length)h+=`<h2>Realizes</h2><div class="mono">${dt.realizes.map(esc).join(' → ')}</div>`;
       h+=`<h2>Artifacts (${(dt.artifacts||[]).length})</h2><ul>${(dt.artifacts||[]).map(linkLi).join('')||'<li class="via">no code links to it</li>'}</ul>`;
       h+=`<h2>Verified by (${(dt.verifiers||[]).length})</h2><ul>${(dt.verifiers||[]).map(linkLi).join('')||'<li class="via">nothing verifies it</li>'}</ul>`;
@@ -984,6 +988,7 @@ const RELDEFS={
   'realizes':'A stands for B. An implementation concept realizes the core concept it is the mechanism for; a boundary realizes what its code implements. Places B inside A\u2019s box. Often derived by rollup from implements.',
   'implements':'A is the code that does the work of B: the handler, pipeline or module behind a process, capability or event. Lifts to the boundary as realizes.',
   'represents':'A is the data shape of B: a model, table or schema. On an entity it lifts to the boundary as holds.',
+  'replaced-by':'A is deprecated and B takes over: the replaced-by key on a concept or a boundary manifest. A is drawn dotted.',
   'holds':'Boundary A stores B\u2019s data. Derived from represents on an entity or declared in a manifest; gloss drift compares the two.',
   'presents':'A is a UI surface that shows B: a page or screen. Lifts as presents, never as realizes, and carries no criticality.',
   'hosts':'A is a shell or container for B: the app frame or a router. Lifts as hosts, never as realizes.',

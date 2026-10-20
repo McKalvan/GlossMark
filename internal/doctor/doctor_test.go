@@ -135,6 +135,37 @@ func TestDoctor(t *testing.T) {
 	_ = graph.New
 }
 
+// TestDoctorWaivers: doctor lists waivers that expired or expire within 30
+// days; expires is inclusive (#102).
+func TestDoctorWaivers(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "glossmark.yaml"), []byte("owns:\n  z: { iri: https://x/z/, tier: core }\npolicy:\n  waivers:\n    - { finding: z:A, owner: a, expires: 2026-01-31 }\n    - { finding: z:B, owner: a, expires: 2026-11-10 }\n    - { finding: z:C, owner: a, expires: 2027-06-30 }\n"), 0o644)
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, _ := extract.Build(ws)
+	at := func(day string) Check {
+		now, _ := time.Parse("2006-01-02", day)
+		env := Env{Actor: "agent:x", LookPath: func(string) (string, error) { return "", errors.New("none") }, Now: now.Add(12 * time.Hour)}
+		for _, c := range Run(ws, res.Graph, nil, env) {
+			if c.Name == "waivers" {
+				return c
+			}
+		}
+		return Check{}
+	}
+	if c := at("2026-10-20"); c.Status != Warn || c.Msg != "z:A (expired 2026-01-31), z:B (expires 2026-11-10)" {
+		t.Errorf("waivers = %+v", c)
+	}
+	if c := at("2026-01-31"); c.Status != Warn || !strings.HasPrefix(c.Msg, "expiring within 30 days: z:A (expires 2026-01-31)") {
+		t.Errorf("on the expiry day the waiver still holds: %+v", c)
+	}
+	if c := at("2025-01-01"); c.Status != OK {
+		t.Errorf("waivers far from expiry = %+v", c)
+	}
+}
+
 // TestDoctorCIAtGitRoot: a workspace below the git root is covered by a
 // workflow at the git root that runs the Action with its root: (issue #36),
 // and not by one that names another workspace.

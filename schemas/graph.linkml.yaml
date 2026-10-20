@@ -266,6 +266,8 @@ slots:
     range: Criticality
   criticality_from:
     description: Where the level comes from, "declared" or the CURIE it was inherited from.
+  criticality_source:
+    description: For an inherited level, the CURIE of the node that declares it (the end of the criticality_from chain).
   path:
     description: Repo-relative file path.
   anchor:
@@ -362,7 +364,10 @@ slots:
   rule:
     description: Rollup rule or inferrer that produced a derived or inferred edge.
   via:
-    description: CURIEs the derivation passed through.
+    description: CURIEs the derivation passed through; for a lifted boundary edge the artifact, the concept it links and every concept on the way to the object.
+    multivalued: true
+  steps:
+    description: A lifted edge's path from the linked concept to the object, one "relation CURIE" per hop.
     multivalued: true
   raw:
     description: The original target text as written (.Local, impl:NEW:X, pa:*).
@@ -416,6 +421,7 @@ classes:
       - imported
       - criticality
       - criticality_from
+      - criticality_source
     slot_usage:
       node:
         equals_string: concept
@@ -431,6 +437,7 @@ classes:
       - dir
       - criticality
       - criticality_from
+      - criticality_source
       - deprecated
       - replaced_by
       - retire_by
@@ -450,6 +457,7 @@ classes:
       - boundary
       - criticality
       - criticality_from
+      - criticality_source
     slot_usage:
       node:
         equals_string: artifact
@@ -526,5 +534,6 @@ classes:
       - sugar
       - rule
       - via
+      - steps
       - raw
       - alias

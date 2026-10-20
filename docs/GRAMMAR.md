@@ -103,11 +103,13 @@ Feature: Stallion production
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
 | GM117 | a file contains a marker but its type has no comment style, so it is not scanned: add it under `comment-styles:` (JSON takes a sidecar) |
+| GM118 | unknown key in `views.yaml` (at the top or in a view); the rest of the file still applies |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
 | GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them (two in a row is fine). The hint names what spans the run: for methods, one marker on the enclosing class or block; for top-level functions, where `scope=block` covers only the next one, one `scope=file` marker at the top of the file, one on the shared entry point, or, for a cross-cutting mechanism, `guards:` on its concept ([ADR 0015](adr/0015-guards.md)) |
 | GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |
 | GM223 | `hosts` on a concept that is not a system-type (nor a page concept that presents or hosts one): write `implements` if the code does the work, `presents` if it shows it |
 | GM224 | `presents` on a constraint: a page that edits the value `configures` it, code that enforces it `implements` it |
+| GM225 | a manifest `publishes` or `subscribes` a concept that is not an event (often after an upstream retype) |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
 | GM360 | a `value-from` names a file, line or symbol that does not exist, or, in YAML, TOML or JSON, a key that ends several key paths (the message lists them) |
 | GM502 / GM503 | link outside the manifest's written `allowed` list (error) / outside the set derived from what it declares (warning); both are HARD in the gate |
