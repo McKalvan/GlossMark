@@ -156,6 +156,9 @@ func (d *deriver) expandDeclared(m *model.Manifest) []AllowedEntry {
 		rels = append(rels, rel)
 	}
 	sort.Strings(rels)
+	// Every declared concept first, so one declared below another keeps its
+	// own reason.
+	var declared []*graph.Node
 	for _, rel := range rels {
 		for _, t := range sets[rel] {
 			iri, _ := d.g.Expand(t)
@@ -165,15 +168,18 @@ func (d *deriver) expandDeclared(m *model.Manifest) []AllowedEntry {
 				continue
 			}
 			out = append(out, AllowedEntry{Pattern: n.CURIE, Reason: AllowedDeclared})
-			for _, x := range d.coveredBy(n.ID) {
-				out = append(out, AllowedEntry{Pattern: d.g.Curie(x), Reason: AllowedCovered, From: n.CURIE})
-			}
-			// What it realizes, not the wholes it is part of: declaring a
-			// part does not admit links to the whole (ADR 0009).
-			for _, core := range realizedBy(d.g, n.ID) {
-				if cn := d.g.Node(core); cn != nil {
-					out = append(out, AllowedEntry{Pattern: cn.CURIE, Reason: AllowedRealized, From: n.CURIE})
-				}
+			declared = append(declared, n)
+		}
+	}
+	for _, n := range declared {
+		for _, x := range d.coveredBy(n.ID) {
+			out = append(out, AllowedEntry{Pattern: d.g.Curie(x), Reason: AllowedCovered, From: n.CURIE})
+		}
+		// What it realizes, not the wholes it is part of: declaring a part
+		// does not admit links to the whole (ADR 0009).
+		for _, core := range realizedBy(d.g, n.ID) {
+			if cn := d.g.Node(core); cn != nil {
+				out = append(out, AllowedEntry{Pattern: cn.CURIE, Reason: AllowedRealized, From: n.CURIE})
 			}
 		}
 	}

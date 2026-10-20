@@ -135,3 +135,30 @@ func TestAllowedSetFollowsCoverage(t *testing.T) {
 		t.Errorf("declares the part spk:CsvRowParser: GM503 = %v, want spk:CsvFeedImporter and spk:ShimanoXmlImporter", got)
 	}
 }
+
+// TestExplainBySource (#93): check --explain groups a derived set by source
+// and collapses a declared concept with what it covers, so a manifest that
+// declares two concepts reads in two lines however deep the taxonomy.
+func TestExplainBySource(t *testing.T) {
+	root, _ := catalogue(t)
+	ws, g, _, _ := build(t, root)
+	ex := check.ExplainAllowed(ws, g)
+	var block []string
+	for _, l := range strings.Split(ex, "\n") {
+		if strings.HasPrefix(l, "spw:catalogue-db ") || len(block) > 0 && strings.HasPrefix(l, "  ") {
+			block = append(block, l)
+		} else if len(block) > 0 {
+			break
+		}
+	}
+	if len(block) > 3 || len(block) < 2 || !strings.Contains(block[1], "cyc:Product (+") || !strings.Contains(block[1], "cyc:HydraulicDiscBrake") {
+		t.Errorf("spw:catalogue-db explain = %q, want a header and a declared line naming cyc:Product (+N below)", block)
+	}
+	// Core concepts inherit criticality through is-a and part-of (GOVERNANCE.md).
+	if n := g.NodeByCurie("cyc:HydraulicDiscBrake"); n.Criticality != "critical" {
+		t.Errorf("cyc:HydraulicDiscBrake criticality = %q, want critical through is-a", n.Criticality)
+	}
+	if n := g.NodeByCurie("cyc:ScanConfirm"); n.Criticality != "high" {
+		t.Errorf("cyc:ScanConfirm criticality = %q, want high through part-of", n.Criticality)
+	}
+}
