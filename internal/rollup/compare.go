@@ -691,6 +691,11 @@ func (c *comparer) implemented(id string, depth int) bool {
 	return false
 }
 
+// Tested reports whether gloss drift counts the concept as tested: verified
+// directly, through a concept that realizes it, through a core concept it
+// realizes (see tested), or through an is-a descendant.
+func Tested(g *graph.Graph, id string) bool { return (&comparer{g: g}).tested(id, 0) }
+
 func (c *comparer) tested(id string, depth int) bool {
 	if depth > 8 {
 		return false

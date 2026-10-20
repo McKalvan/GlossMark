@@ -71,6 +71,9 @@ func RenderTouched(ts []FileTouch) string {
 			if len(c.Tests) > 0 {
 				fmt.Fprintf(&sb, "      tests: %s\n", strings.Join(c.Tests, ", "))
 			}
+			for _, v := range c.TestsVia {
+				fmt.Fprintf(&sb, "      tests (via %s): %s\n", v.Via, strings.Join(v.Tests, ", "))
+			}
 			if len(c.OtherArtifacts) > 0 {
 				fmt.Fprintf(&sb, "      also linked from: %s\n", strings.Join(c.OtherArtifacts, ", "))
 			}

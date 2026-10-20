@@ -232,6 +232,41 @@ func TestValueFromConfigKey(t *testing.T) {
 	}
 }
 
+// TestImpactTestsVia: gloss impact counts a verifier of a concept that
+// realizes a core concept, as gloss drift does, and names it; it warns
+// exactly where drift reports untested (#79).
+func TestImpactTestsVia(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Approving: { kind: process }\n  History: { kind: capability }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Decider: { kind: process, realizes: z:Approving }\n  Queries: { kind: capability, realizes: z:History }\n")
+	write("claims.py", "# @gloss implements i:Decider\ndef approve(): pass\n\n# @gloss implements i:Queries\ndef history(): pass\n")
+	write("tests/test_claims.py", "# @gloss verifies i:Decider\ndef test_approve(): pass\n")
+	ws, g, _, lg := build(t, root)
+	untested := concepts(findings(rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries}), rollup.KindUntested))
+	if !reflect.DeepEqual(untested, []string{"z:History"}) {
+		t.Fatalf("drift untested = %v", untested)
+	}
+	fts := gate.Touched(g, ws, []string{"claims.py"})
+	var warned []string
+	for _, c := range fts[0].Concepts {
+		for _, w := range c.Warnings {
+			if strings.Contains(w, "no tests") {
+				warned = append(warned, c.Curie)
+			}
+		}
+		if c.Curie == "z:Approving" && !reflect.DeepEqual(c.TestsVia, []gate.ViaTests{{Via: "i:Decider", Tests: []string{"tests/test_claims.py"}}}) {
+			t.Errorf("z:Approving tests via %+v", c.TestsVia)
+		}
+	}
+	if !reflect.DeepEqual(warned, []string{"i:Queries", "z:History"}) {
+		t.Errorf("impact warns on %v, want i:Queries and z:History (what drift calls untested, and its realizer)", warned)
+	}
+	if out := gate.RenderTouched(fts); !strings.Contains(out, "tests (via i:Decider): tests/test_claims.py") {
+		t.Errorf("impact text:\n%s", out)
+	}
+}
+
 // TestInternalCriticalUntested: an internal concept is left out of untested
 // and concept coverage unless its effective criticality is high or critical;
 // then losing its only test shows (#74).
