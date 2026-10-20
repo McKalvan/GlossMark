@@ -1,7 +1,7 @@
 <!-- @gloss documents gmi:Scaffolder scope=file -->
 # ADR 0016: What gloss init scaffolds, where namespace IRIs come from, and what an importer remembers
 
-Status: accepted, 2026-10-20. Closes issues #35 (F-ADOPT-1), #36 (F-ADOPT-2), #44 (F-ADOPT-10), #135 and #136.
+Status: accepted, 2026-10-20. Closes issues #35 (F-ADOPT-1), #36 (F-ADOPT-2), #44 (F-ADOPT-10), #135 and #136; extended for #64 (F-POOR-7).
 
 ## Context
 
@@ -32,6 +32,12 @@ A brownfield adoption imported a fifteen-year-old staff glossary and an enums fi
 11. `gloss export --sqlite` adds a `node='file'` row (id `urn:gloss:file:<path>`, `path`, `boundary`, `criticality`, `criticality_from` = the floor boundary) for every in-scope file with no artifact node beneath a floor. `graph.jsonl` is unchanged: a file without a marker is not a graph node. The governance query in GOVERNANCE.md reads `node IN ('artifact','file')`.
 
 An `import-ignore:` list was not added: with the record, deleting an unwanted concept is remembered, which is the same decision made where the concept is.
+
+### Utility directories are not boundaries (issue #64)
+
+On concept-poor legacy code (`opstool`), `init` planned `core/` (a package of god classes) and `utils/` (a utility folder) as containers; the adopter deleted both manifests. Decision:
+
+12. A directory named `util`, `utils`, `utilities`, `helper`, `helpers`, `common`, `commons`, `core`, `lib`, `libs`, `shared` or `misc`, at the top level or inside a grouping, gets a manifest only when it holds an entry point: a project file (as in 1), a build file (`Makefile`, `CMakeLists.txt`, `BUILD`, `Procfile`), a `Dockerfile`, or a source file named `main`, `__main__`, `server`, `wsgi`, `asgi`, `routes` or `Program`. Otherwise the plan lists it as "not a boundary" and its code stays under the parent's manifest. A `common/` with a `pom.xml` is still a container. The name list, not a content heuristic, decides, so a utility folder named `toolkit/` still gets a manifest that the adopter can delete.
 
 ## Alternatives considered
 

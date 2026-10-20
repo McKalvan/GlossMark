@@ -3,7 +3,8 @@
 // Package scaffold plans and writes the files gloss init creates: the
 // config, two tier files, a root manifest and one per deployable directory
 // (a top-level directory with source, schema, infrastructure or config files,
-// or each project inside a grouping directory such as apps/ or services/),
+// or each project inside a grouping directory such as apps/ or services/;
+// a utility directory such as utils/ or core/ with no entry point gets none),
 // views, .gitignore lines, a task-runner target and a CI job (written only
 // when the workspace is the git root). It never overwrites a file; existing
 // ones are skipped or appended to.
@@ -65,7 +66,10 @@ type Plan struct {
 	Impl     string
 	Boundary string   // boundary prefix
 	Dirs     []string // manifest directories, slash-separated and relative to Root
-	Files    []File
+	// Utility lists directories named like shared code (utils/, core/, ...)
+	// with no entry point: no manifest, they stay under their parent.
+	Utility []string
+	Files   []File
 	// GitRoot is the enclosing git repository's root when it differs from
 	// Root; the CI job is then printed (Workflow), not written.
 	GitRoot  string
@@ -166,9 +170,28 @@ func slug(name string) string {
 // to root and slash-separated: each top-level directory holding source,
 // schema, infrastructure or configuration files, except that a grouping
 // directory (no project file of its own, at least one child with one) is
-// replaced by its children that hold such files.
+// replaced by its children that hold such files, and a utility directory
+// (utils/, helpers/, common/, core/, lib/, ...) with no entry point is left
+// to its parent (issue #64).
 func SourceDirs(root string) []string {
-	var out []string
+	dirs, _ := planDirs(root)
+	return dirs
+}
+
+// planDirs returns the manifest directories and the utility directories
+// that hold content but are not a boundary.
+func planDirs(root string) (dirs, utility []string) {
+	consider := func(rel string) {
+		dir := filepath.Join(root, filepath.FromSlash(rel))
+		if !hasContent(dir) {
+			return
+		}
+		if utilityNames[strings.ToLower(path.Base(rel))] && !hasEntryPoint(dir) {
+			utility = append(utility, rel)
+			return
+		}
+		dirs = append(dirs, rel)
+	}
 	for _, n := range subdirs(root) {
 		dir := filepath.Join(root, n)
 		if !isProject(dir) {
@@ -178,21 +201,67 @@ func SourceDirs(root string) []string {
 				if isProject(filepath.Join(dir, c)) {
 					grouping = true
 				}
-				if hasContent(filepath.Join(dir, c)) {
-					kids = append(kids, n+"/"+c)
-				}
+				kids = append(kids, n+"/"+c)
 			}
 			if grouping {
-				out = append(out, kids...)
+				for _, k := range kids {
+					consider(k)
+				}
 				continue
 			}
 		}
-		if hasContent(dir) {
-			out = append(out, n)
-		}
+		consider(n)
 	}
-	sort.Strings(out)
-	return out
+	sort.Strings(dirs)
+	sort.Strings(utility)
+	return dirs, utility
+}
+
+// utilityNames are directory names that conventionally hold shared code (a
+// utility folder, a package of base classes) rather than a deployable; such a
+// directory is a boundary only when it holds an entry point.
+var utilityNames = map[string]bool{"util": true, "utils": true, "utilities": true, "helper": true, "helpers": true, "common": true,
+	"commons": true, "core": true, "lib": true, "libs": true, "shared": true, "misc": true}
+
+// entryStems are file names (without extension, lower-cased) that start a
+// program or serve requests: main.go, __main__.py, Main.java, server.ts,
+// wsgi.py, routes.rb, Program.cs.
+var entryStems = map[string]bool{"main": true, "__main__": true, "server": true, "wsgi": true, "asgi": true, "routes": true, "program": true}
+
+// buildFiles mark a directory with its own build as a deployable.
+var buildFiles = map[string]bool{"Makefile": true, "CMakeLists.txt": true, "BUILD": true, "BUILD.bazel": true, "Procfile": true}
+
+// hasEntryPoint reports whether dir is a project, or holds (outside hidden
+// and skipped directories) a project or build file, a Dockerfile, or a source
+// file named like an entry point.
+func hasEntryPoint(dir string) bool {
+	if isProject(dir) {
+		return true
+	}
+	found := false
+	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || found {
+			return filepath.SkipDir
+		}
+		if d.IsDir() {
+			if p != dir && (strings.HasPrefix(d.Name(), ".") || skipDirs[strings.ToLower(d.Name())]) {
+				return filepath.SkipDir
+			}
+			if p != dir && isProject(p) {
+				found = true
+				return filepath.SkipAll
+			}
+			return nil
+		}
+		n := d.Name()
+		ext := strings.ToLower(filepath.Ext(n))
+		if buildFiles[n] || (sourceExts[ext] && entryStems[strings.ToLower(strings.TrimSuffix(n, filepath.Ext(n)))]) {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
 }
 
 // subdirs lists the directories directly under dir that are not hidden or
@@ -371,7 +440,8 @@ func Make(root string, opt Options) (*Plan, error) {
 	if bprefix == core || bprefix == impl {
 		return nil, fmt.Errorf("the boundary prefix must differ from the namespace prefixes (%q)", bprefix)
 	}
-	p := &Plan{Root: root, Name: name, Core: core, Impl: impl, Boundary: bprefix, Dirs: SourceDirs(root), Imported: imported}
+	dirs, utility := planDirs(root)
+	p := &Plan{Root: root, Name: name, Core: core, Impl: impl, Boundary: bprefix, Dirs: dirs, Utility: utility, Imported: imported}
 	if g := GitRoot(root); g != "" && g != root {
 		p.GitRoot = g
 	}
@@ -544,6 +614,9 @@ func (p *Plan) String() string {
 			fmt.Fprintf(&sb, "  (%s)", f.Note)
 		}
 		sb.WriteString("\n")
+	}
+	for _, d := range p.Utility {
+		fmt.Fprintf(&sb, "  %-6s %s/  (not a boundary: shared code with no entry point; it stays under its parent's manifest)\n", "-", d)
 	}
 	if p.Workflow != "" {
 		fmt.Fprintf(&sb, "CI job for a workflow at the git root (%s):\n", p.GitRoot)

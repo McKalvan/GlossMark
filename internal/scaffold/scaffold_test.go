@@ -278,3 +278,81 @@ func TestInitThenCheck(t *testing.T) {
 		}
 	}
 }
+
+// TestInitUtilityDirs (issue #64, F-POOR-7): on the stripped opstool layout
+// init plans no manifest for core/ and utils/ (shared code, no entry point)
+// and lists them as not a boundary; common/ (a Maven project), web/ and
+// sql/ keep theirs. A utility-named directory with an entry point, or a
+// project inside a grouping directory, is still a boundary.
+func TestInitUtilityDirs(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "opstool")
+	writeTree(t, root, map[string]string{
+		"app.py":            "from core.Processor import Processor\n",
+		"helpers.py":        "def fmt(x): return x\n",
+		"requirements.txt":  "flask\n",
+		"README.md":         "ops tool\n",
+		"core/__init__.py":  "",
+		"core/Processor.py": "class Processor: pass\n",
+		"core/Manager.py":   "class Manager: pass\n",
+		"utils/__init__.py": "",
+		"utils/common.py":   "def a(): pass\n",
+		"utils/misc.py":     "def b(): pass\n",
+		"utils/db.py":       "def c(): pass\n",
+		"common/pom.xml":    "<project/>\n",
+		"common/src/main/java/com/acme/ops/common/Handler.java":     "class Handler {}\n",
+		"common/src/main/java/com/acme/ops/common/StringUtils.java": "class StringUtils {}\n",
+		"web/page2.php":         "<?php\n",
+		"web/functions.php":     "<?php\n",
+		"web/misc.js":           "x\n",
+		"sql/tables.sql":        "create table tbl_rma();\n",
+		"jobs/nightly.sh":       "#!/bin/sh\n",
+		"tests/test_helpers.py": "x = 1\n",
+	})
+	p, err := Make(root, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(p.Dirs, ","), "common,sql,web"; got != want {
+		t.Errorf("dirs = %s, want %s", got, want)
+	}
+	if got, want := strings.Join(p.Utility, ","), "core,utils"; got != want {
+		t.Errorf("utility = %s, want %s", got, want)
+	}
+	files := planned(p)
+	for _, d := range []string{"core", "utils"} {
+		if _, ok := files[d+"/.gloss.yaml"]; ok {
+			t.Errorf("%s/ got a manifest", d)
+		}
+		if !strings.Contains(p.String(), d+"/  (not a boundary") {
+			t.Errorf("%s/ not listed as not a boundary:\n%s", d, p.String())
+		}
+	}
+
+	// An entry point, a Dockerfile or a project file makes a utility-named
+	// directory a deployable; inside a grouping the same rules apply.
+	root2 := filepath.Join(t.TempDir(), "mono")
+	writeTree(t, root2, map[string]string{
+		"core/main.go":                  "package main\n",
+		"lib/Dockerfile":                "FROM scratch\n",
+		"lib/x.py":                      "x = 1\n",
+		"shared/package.json":           "{}\n",
+		"shared/index.ts":               "export {}\n",
+		"helpers/server/routes.rb":      "x\n",
+		"misc/a.py":                     "x = 1\n",
+		"packages/common/package.json":  "{}\n",
+		"packages/common/index.ts":      "export {}\n",
+		"packages/utils/strings.ts":     "export {}\n",
+		"packages/billing/package.json": "{}\n",
+		"packages/billing/index.ts":     "export {}\n",
+	})
+	p2, err := Make(root2, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(p2.Dirs, ","), "core,helpers,lib,packages/billing,packages/common,shared"; got != want {
+		t.Errorf("dirs = %s, want %s", got, want)
+	}
+	if got, want := strings.Join(p2.Utility, ","), "misc,packages/utils"; got != want {
+		t.Errorf("utility = %s, want %s", got, want)
+	}
+}
