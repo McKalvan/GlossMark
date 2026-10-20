@@ -10,7 +10,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | Relation | Inline | Ontology | Manifest | Meaning |
 | --- | :-: | :-: | :-: | --- |
 | `implements` | ✓ | | | artifact is the mechanism behind a concept; lifts to the boundary as `realizes` |
-| `represents` | ✓ | | | artifact is the data shape of a concept; on an entity it lifts to `holds` |
+| `represents` | ✓ | | | artifact is the data shape of a concept; it lifts to `holds` |
 | `presents` | ✓ | ✓ | ✓ | a UI surface (page, screen) for a concept; lifts as itself, never to `realizes`, carries no criticality ([ADR 0001](adr/0001-presents-and-hosts.md)) |
 | `hosts` | ✓ | ✓ | ✓ | a shell or container for a concept (the app frame, a router); lifts as itself, never to `realizes` |
 | `verifies` (`tests`) | ✓ | | | test artifact checks a concept; `tests` is an accepted alias (GM240 asks for `verifies`) |
@@ -24,7 +24,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `produces`, `consumes` | ✓ | ✓ | ✓ | intended (concept, manifest) or actual (artifact) flow of a concept; lifted to boundaries with `range-lcs` |
 | `publishes`, `subscribes` | ✓ | ✓ | ✓ | same for events |
 | `realizes` | | ✓ | ✓ | implementation concept → core concept; a boundary → what its code stands for |
-| `holds` | | | ✓ | boundary holds an entity's data; derived from `represents` on entities |
+| `holds` | | | ✓ | boundary holds a concept's data (an entity's records, a measure's stored values); derived from `represents` |
 | `is-a` | | ✓ | | taxonomy; the closure is computed, a concept inherits `realizes` through it |
 | `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
 | `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |

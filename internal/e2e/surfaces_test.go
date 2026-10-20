@@ -8,6 +8,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
 // TestGraphQLScannedAndUnscannedMarkers: GraphQL SDL is in the built-in
@@ -52,5 +53,35 @@ func TestGraphQLScannedAndUnscannedMarkers(t *testing.T) {
 		if d.Code == "GM117" && strings.HasPrefix(d.Path, "model.pkl") {
 			t.Errorf("GM117 with a comment style: %s", d)
 		}
+	}
+}
+
+// TestRepresentsAnyKindHolds: a table that stores a measure's values holds
+// the measure, so a manifest declaring it under holds: with no allowed: is
+// consistent: no GM503 and no gap (#63, ADR 0013).
+func TestRepresentsAnyKindHolds(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  wh: { iri: https://x/wh/, tier: core }\n")
+	write("ontology/wh.gloss.yaml", "concepts:\n  Count: { kind: entity }\n  CountVariance: { kind: measure }\n  Recount: { kind: event }\n")
+	write("sql/.gloss.yaml", "boundary: whb:db\nlevel: container\nholds: [wh:Count, wh:CountVariance]\n")
+	write("sql/tables.sql", "-- @gloss represents wh:Count\nCREATE TABLE tbl_count (id int);\n-- @gloss represents wh:CountVariance\nCREATE TABLE tbl_cnt (id int);\n")
+	ws, g, _, lg := build(t, root)
+	for _, d := range check.Run(ws, g) {
+		if d.Severity != "info" {
+			t.Errorf("check: %s", d)
+		}
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	for _, k := range []string{rollup.KindGap, rollup.KindViolation} {
+		if fs := findings(rep, k); len(fs) != 0 {
+			t.Errorf("%s: %+v", k, fs)
+		}
+	}
+	// An undeclared concept the code represents is a holds violation.
+	write("sql/events.sql", "-- @gloss represents wh:Recount\nCREATE TABLE recounts (id int);\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if v := findings(rep, rollup.KindViolation); len(v) != 1 || v[0].Concept != "wh:Recount" || v[0].Relation != "holds" {
+		t.Errorf("violations = %+v, want holds wh:Recount", v)
 	}
 }

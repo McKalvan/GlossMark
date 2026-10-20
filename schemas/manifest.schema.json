@@ -34,7 +34,7 @@
       "$ref": "#/$defs/stringOrList"
     },
     "holds": {
-      "description": "Entities whose data lives in this boundary (tables, files, packages); derived from represents on entity concepts and compared by gloss drift.",
+      "description": "Concepts whose data lives in this boundary (tables, files, packages): entities, stored measures, event logs; derived from represents on a concept of any kind and compared by gloss drift (docs/adr/0013-data-shapes-and-coverage.md).",
       "$ref": "#/$defs/stringOrList"
     },
     "presents": {
