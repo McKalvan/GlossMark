@@ -3,6 +3,7 @@
 package suggest
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,5 +110,30 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 	}
 	if again, _ := Run(ws, g, nil, Options{}); len(again) != 0 {
 		t.Errorf("a second run should propose nothing, got %+v", again)
+	}
+}
+
+// TestMinScoreIsTheFloor: no proposal scores below MinScore, docstring
+// matches included, so --min-score 60 emits nothing under conf 0.55.
+func TestMinScoreIsTheFloor(t *testing.T) {
+	root := t.TempDir()
+	copyStripped(t, filepath.Join("..", "..", "examples", "horse-factory"), root)
+	ws, g := build(t, root)
+	prev := -1
+	for _, min := range []int{20, 40, 60, 80, 100} {
+		ps, err := Run(ws, g, nil, Options{MinScore: min})
+		if err != nil {
+			t.Fatal(err)
+		}
+		floor := math.Round(float64(min)/110*100) / 100
+		for _, p := range ps {
+			if p.Conf < floor {
+				t.Errorf("min-score %d: %s %s conf=%.2f is below %.2f", min, p.Symbol, p.Target, p.Conf, floor)
+			}
+		}
+		if prev >= 0 && len(ps) > prev {
+			t.Errorf("min-score %d proposes more (%d) than a lower floor (%d)", min, len(ps), prev)
+		}
+		prev = len(ps)
 	}
 }

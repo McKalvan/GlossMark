@@ -52,6 +52,7 @@ func Build(ws *load.Workspace) (*Result, error) {
 	ex := &extractor{ws: ws, g: g, res: res}
 	ex.namespaces()
 	ex.ontologies()
+	ex.inheritKinds()
 	ex.manifests()
 	if err := ex.files(); err != nil {
 		return nil, err
@@ -159,6 +160,40 @@ func (ex *extractor) ontologies() {
 	}
 }
 
+// inheritKinds gives a concept with no kind of its own the kind of its
+// nearest is-a ancestor that declares one, and records that ancestor in
+// KindFrom, so every kind-dependent rule (the holds and infrastructure lifts,
+// domain and range, impact output) sees a subtype as what it is. Among
+// ancestors at the same distance the first by IRI wins; gloss check reports
+// parents that disagree (GM306). The walk visits each ancestor once, so an
+// is-a cycle ends it.
+func (ex *extractor) inheritKinds() {
+	for _, n := range ex.g.NodesOf(model.NodeConcept) {
+		if n.Kind != "" {
+			continue
+		}
+		seen := map[string]bool{n.ID: true}
+		level := []string{n.ID}
+		for len(level) > 0 && n.Kind == "" {
+			var next []string
+			for _, x := range level {
+				for _, p := range ex.g.Objects(x, "is-a") {
+					pn := ex.g.Node(p)
+					if seen[p] || pn == nil || pn.NodeType != model.NodeConcept {
+						continue
+					}
+					seen[p] = true
+					if n.Kind == "" && pn.Kind != "" && pn.KindFrom == "" {
+						n.Kind, n.KindFrom = pn.Kind, pn.CURIE
+					}
+					next = append(next, p)
+				}
+			}
+			level = next
+		}
+	}
+}
+
 // boundaryIRI expands a boundary CURIE, registering an urn prefix for unknown prefixes.
 func (ex *extractor) boundaryIRI(curie, path string, line int) string {
 	i := strings.Index(curie, ":")
@@ -183,8 +218,13 @@ func (ex *extractor) boundaryIRI(curie, path string, line int) string {
 }
 
 func (ex *extractor) manifests() {
-	for _, m := range ex.ws.Manifests {
+	// Every manifest's own node first: a part-of reference to a boundary
+	// declared in a sibling directory must never create that node from the
+	// child's manifest, which would give it the child's file and no dir.
+	iris := make([]string, len(ex.ws.Manifests))
+	for i, m := range ex.ws.Manifests {
 		iri := ex.boundaryIRI(m.Boundary, m.Path, 1)
+		iris[i] = iri
 		n := &graph.Node{NodeType: model.NodeBoundary, ID: iri, CURIE: m.Boundary, Kind: m.Level, Label: m.Label, Doc: m.Doc, Dir: m.Dir, File: m.Path, Line: 1, Owner: m.Owner}
 		if m.Criticality != "" {
 			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
@@ -195,11 +235,15 @@ func (ex *extractor) manifests() {
 			n.NS = m.Boundary[:i]
 		}
 		ex.g.AddNode(n)
+	}
+	for i, m := range ex.ws.Manifests {
+		iri := iris[i]
 		for _, p := range m.PartOf {
 			piri := ex.boundaryIRI(p, m.Path, 1)
 			if ex.g.Node(piri) == nil {
-				// Implicit parent boundary: declared only by reference.
-				pn := &graph.Node{NodeType: model.NodeBoundary, ID: piri, CURIE: p, Kind: parentLevel(m.Level), File: m.Path, Line: 1}
+				// Implicit parent boundary: declared only by reference. It has
+				// no level of its own; views place it above its children.
+				pn := &graph.Node{NodeType: model.NodeBoundary, ID: piri, CURIE: p, File: m.Path, Line: 1}
 				if i := strings.Index(p, ":"); i > 0 {
 					pn.NS = p[:i]
 				}
@@ -223,15 +267,6 @@ func (ex *extractor) manifests() {
 			ex.g.AddEdge(&graph.Edge{S: aid, P: "owns", O: iri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1}})
 		}
 	}
-}
-
-func parentLevel(level string) string {
-	for i, l := range model.BoundaryLevels {
-		if l == level && i > 0 {
-			return model.BoundaryLevels[i-1]
-		}
-	}
-	return "domain"
 }
 
 func (ex *extractor) files() error {

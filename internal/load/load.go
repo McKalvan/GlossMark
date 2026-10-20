@@ -259,7 +259,8 @@ func (ws *Workspace) walk() error {
 				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: k.Line, Severity: "error", Code: "GM110", Msg: fmt.Sprintf("unknown manifest key %q; the other keys still apply", k.Key)})
 			}
 			if err != nil {
-				// The diagnostic carries the workspace-relative path already.
+				// The diagnostic carries the workspace-relative path; drop the
+				// absolute one LoadManifest prefixes.
 				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: 1, Severity: "error", Code: "GM110", Msg: strings.TrimPrefix(err.Error(), path+": ")})
 				return nil
 			}

@@ -23,6 +23,7 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c := &checker{ws: ws, g: g}
 	c.ontologyFiles()
 	c.concepts()
+	c.cycles()
 	c.edges()
 	c.markers()
 	c.manifests()
@@ -126,10 +127,24 @@ func (c *checker) concepts() {
 			continue
 		}
 		if n.Kind == "" {
-			if len(c.g.Out(n.ID, "is-a")) > 0 {
-				// kind is inherited from the parent; fine.
-			} else {
-				c.add(n.File, n.Line, "error", "GM300", fmt.Sprintf("%s: kind is required (one of %s) unless the concept has is-a", n.CURIE, strings.Join(model.ConceptKinds, ", ")))
+			// kind is inherited through is-a when an ancestor declares one;
+			// with no such ancestor the concept has none.
+			c.add(n.File, n.Line, "error", "GM300", fmt.Sprintf("%s: kind is required (one of %s) unless an is-a ancestor declares one", n.CURIE, strings.Join(model.ConceptKinds, ", ")))
+		} else if n.KindFrom != "" {
+			// Inherited: the ancestor's own entry is checked. Parents that
+			// disagree leave the kind ambiguous.
+			kinds := map[string][]string{}
+			for _, p := range c.g.Objects(n.ID, "is-a") {
+				if pn := c.g.Node(p); pn != nil && pn.NodeType == model.NodeConcept && pn.Kind != "" {
+					kinds[pn.Kind] = append(kinds[pn.Kind], pn.CURIE)
+				}
+			}
+			if len(kinds) > 1 {
+				var parts []string
+				for _, k := range sortedKeys(kinds) {
+					parts = append(parts, fmt.Sprintf("%s from %s", k, strings.Join(kinds[k], ", ")))
+				}
+				c.add(n.File, n.Line, "error", "GM306", fmt.Sprintf("%s: is-a parents give different kinds (%s); declare kind: on the concept", n.CURIE, strings.Join(parts, "; ")))
 			}
 		} else if !contains(model.ConceptKinds, n.Kind) {
 			c.add(n.File, n.Line, "error", "GM301", fmt.Sprintf("%s: unknown kind %q; allowed: %s", n.CURIE, n.Kind, strings.Join(model.ConceptKinds, ", ")))
@@ -156,10 +171,11 @@ func (c *checker) concepts() {
 			}
 		case model.TierImpl:
 			realizes := c.g.Objects(n.ID, "realizes")
-			// realizes is inherited through is-a and part-of (RealizesStar), so
-			// only a concept that stands for nothing at all is incomplete.
-			surface := len(c.g.Out(n.ID, "presents"))+len(c.g.Out(n.ID, "hosts")) > 0
-			if len(realizes) == 0 && !surface && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 && len(rollup.RealizesStar(c.g, n.ID)) == 0 {
+			// realizes is inherited through is-a and part-of, so only a concept
+			// whose is-a and part-of ancestors stand for nothing either is
+			// incomplete. Two concepts that are part of each other and
+			// realize nothing are not excused by the edge between them.
+			if !n.Internal && !n.Deprecated && !c.standsFor(n.ID) {
 				sev := "error"
 				if n.Proposed {
 					sev = "warning" // a proposal may be incomplete; acceptance requires the full entry
@@ -198,6 +214,116 @@ func (c *checker) concepts() {
 			c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s does not exist", n.CURIE, n.ReplacedBy))
 		}
 	}
+}
+
+// standsFor reports whether an implementation concept, or a concept it is-a
+// or is part of (transitively), realizes, is published as, presents or hosts
+// something, is internal, or is a core concept. That is what GM320 asks of
+// every implementation concept.
+func (c *checker) standsFor(id string) bool {
+	seen := map[string]bool{id: true}
+	queue := []string{id}
+	for len(queue) > 0 {
+		x := queue[0]
+		queue = queue[1:]
+		n := c.g.Node(x)
+		if n == nil || n.NodeType != model.NodeConcept {
+			continue
+		}
+		if x != id && (n.Tier == model.TierCore || n.Internal) {
+			return true
+		}
+		for _, p := range []string{"realizes", "published-as", "presents", "hosts"} {
+			for _, e := range c.g.Out(x, p) {
+				if e.Source != graph.SourceDerived {
+					return true
+				}
+			}
+		}
+		for _, p := range []string{"is-a", "part-of"} {
+			for _, e := range c.g.Out(x, p) {
+				if e.Source != graph.SourceDerived && !seen[e.O] {
+					seen[e.O] = true
+					queue = append(queue, e.O)
+				}
+			}
+		}
+	}
+	return false
+}
+
+// cycles reports the cycles in the hierarchies: an is-a cycle (GM370, a
+// self-loop included) makes every concept on it subsume every other and so
+// widens every declaration that names one; a part-of or has-part cycle among
+// concepts (GM371) makes each a part of itself; a part-of cycle among
+// boundaries (GM510) makes each roll up the other's code. Each error names
+// the members in order with the file and line of every edge.
+func (c *checker) cycles() {
+	var concepts, boundaries []string
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		concepts = append(concepts, n.ID)
+	}
+	for _, n := range c.g.NodesOf(model.NodeBoundary) {
+		boundaries = append(boundaries, n.ID)
+	}
+	forward := func(p string) func(string) []graph.Step {
+		return func(id string) []graph.Step {
+			var out []graph.Step
+			for _, e := range c.g.Out(id, p) {
+				if e.Source == graph.SourceDeclared {
+					out = append(out, graph.Step{From: id, To: e.O, Edge: e})
+				}
+			}
+			return out
+		}
+	}
+	// W has-part P states P part-of W.
+	partOf := func(id string) []graph.Step {
+		out := forward("part-of")(id)
+		for _, e := range c.g.In(id, "has-part") {
+			if e.Source == graph.SourceDeclared {
+				out = append(out, graph.Step{From: id, To: e.S, Edge: e})
+			}
+		}
+		return out
+	}
+	report := func(code, what string, cycle []graph.Step) {
+		var parts []string
+		for _, s := range cycle {
+			parts = append(parts, fmt.Sprintf("%s %s %s (%s:%d)", c.g.Curie(s.Edge.S), s.Edge.P, c.g.Curie(s.Edge.O), provPath(s.Edge), provLine(s.Edge)))
+		}
+		first := cycle[0].Edge
+		c.add(provPath(first), provLine(first), "error", code, fmt.Sprintf("%s cycle: %s; %s", what, strings.Join(parts, " → "), cycleAdvice[code]))
+	}
+	for _, cy := range c.g.Cycles(concepts, forward("is-a")) {
+		report("GM370", "is-a", cy)
+	}
+	for _, cy := range c.g.Cycles(concepts, partOf) {
+		report("GM371", "part-of", cy)
+	}
+	for _, cy := range c.g.Cycles(boundaries, forward("part-of")) {
+		report("GM510", "boundary part-of", cy)
+	}
+}
+
+var cycleAdvice = map[string]string{
+	"GM370": "every concept on it subsumes every other, which widens every declaration that names one; remove one edge",
+	"GM371": "every concept on it is a part of itself; remove one edge",
+	"GM510": "every boundary on it rolls up the others' code; remove one part-of",
+}
+
+func provPath(e *graph.Edge) string {
+	if e.Prov == nil {
+		return ""
+	}
+	return e.Prov.Path
+}
+
+func provLine(e *graph.Edge) int {
+	if e.Prov == nil {
+		return 0
+	}
+	return e.Prov.Line
 }
 
 // markers lints redundancy between inline markers. A symbol-level marker
