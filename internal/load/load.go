@@ -299,21 +299,51 @@ func (ws *Workspace) walk() error {
 	// Drop files matched by a manifest's generated globs.
 	var kept []string
 	for _, f := range files {
-		m := ws.ManifestFor(f)
-		if m != nil && len(m.Generated) > 0 {
-			sub := f
-			if m.Dir != "" {
-				sub = strings.TrimPrefix(f, m.Dir+"/")
-			}
-			if model.MatchAnyGlob(m.Generated, sub) {
-				continue
-			}
+		if !ws.generated(f) {
+			kept = append(kept, f)
 		}
-		kept = append(kept, f)
 	}
 	sort.Strings(kept)
 	ws.Files = kept
 	return nil
+}
+
+// generated reports whether a file matches its manifest's generated globs.
+func (ws *Workspace) generated(f string) bool {
+	m := ws.ManifestFor(f)
+	if m == nil || len(m.Generated) == 0 {
+		return false
+	}
+	sub := f
+	if m.Dir != "" {
+		sub = strings.TrimPrefix(f, m.Dir+"/")
+	}
+	return model.MatchAnyGlob(m.Generated, sub)
+}
+
+// InScope reports whether a repo-relative file path is one the walk would
+// keep: outside skipped and excluded directories, not glossmark.yaml, a
+// manifest or an ontology file, in a language with a comment style, and not
+// generated. The size limit is not checked. gloss diff uses it to rebuild a
+// base tree's file set from git when the base graph is read from a commit.
+func (ws *Workspace) InScope(rel string) bool {
+	parts := strings.Split(rel, "/")
+	for i := 0; i < len(parts)-1; i++ {
+		dir := strings.Join(parts[:i+1], "/")
+		if defaultSkipDirs[parts[i]] || model.MatchAnyGlob(ws.Config.Exclude, dir) || model.MatchAnyGlob(ws.Config.Exclude, dir+"/") {
+			return false
+		}
+	}
+	if parts[len(parts)-1] == ManifestName || rel == ConfigName || model.MatchAnyGlob(ws.Config.Exclude, rel) {
+		return false
+	}
+	if strings.HasSuffix(rel, ".gloss.yaml") && strings.HasPrefix(rel, "ontology/") {
+		return false
+	}
+	if _, ok := marker.StyleFor(rel, ws.Config.CommentStyles); !ok {
+		return false
+	}
+	return !ws.generated(rel)
 }
 
 // ManifestFor returns the nearest ancestor manifest for a repo-relative path, or nil.
