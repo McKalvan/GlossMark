@@ -127,9 +127,7 @@ func Criticality(g *graph.Graph) {
 		}
 		for _, e := range g.Out(a.ID, "") {
 			o := g.Node(e.O)
-			// A page that presents a critical concept, or a shell that hosts
-			// it, is not itself critical: criticality follows the mechanism.
-			if o == nil || o.NodeType != model.NodeConcept || e.P == "part-of" || e.P == "presents" || e.P == "hosts" {
+			if o == nil || o.NodeType != model.NodeConcept || !CarriesCriticality(e.P) {
 				continue
 			}
 			if better(o.Criticality, o, best, bestNode) {
@@ -140,6 +138,14 @@ func Criticality(g *graph.Graph) {
 			a.Criticality, a.CriticalityFrom = best, bestNode.CURIE
 		}
 	}
+}
+
+// CarriesCriticality reports whether an artifact takes the level of a concept
+// it links to with relation p. A page that presents a critical concept, or a
+// shell that hosts it, is not itself critical: criticality follows the
+// mechanism (ADR 0001 rule 3). The gate applies the same rule.
+func CarriesCriticality(p string) bool {
+	return p != "part-of" && p != "presents" && p != "hosts"
 }
 
 // FloorFor returns the nearest boundary at or above b that declares

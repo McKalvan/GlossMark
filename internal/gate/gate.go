@@ -495,7 +495,8 @@ func (c *classifier) governance() {
 			touched[n.CURIE] = CriticalityTouch{Curie: n.CURIE, Level: n.Criticality, From: n.CriticalityFrom}
 		}
 		for _, cu := range []string{ch.Subject, ch.Object} {
-			if cu == "" {
+			// A link through presents or hosts takes no level from its target.
+			if cu == "" || (cu == ch.Object && linkKinds[ch.Kind] && !rollup.CarriesCriticality(ch.Relation)) {
 				continue
 			}
 			if n := c.head.NodeByCurie(cu); n != nil {
@@ -518,7 +519,8 @@ func (c *classifier) governance() {
 			continue
 		}
 		ch.Criticality, ch.CriticalityFrom = lvl, from
-		if bookkeeping[ch.Kind] {
+		// ClassifyLink has already applied the policy to an added link.
+		if bookkeeping[ch.Kind] || ch.Kind == "link-added" || ch.Kind == "new-concept" {
 			continue
 		}
 		if want := Class(c.opt.Policy.GateForCriticality(lvl)); want != "" {
@@ -696,10 +698,36 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 			reasons = append(reasons, "agent proposal without conf")
 		}
 	}
+	if lvl, from := LinkCriticality(g, ws, e); lvl != "" {
+		if want := Class(pol.GateForCriticality(lvl)); want != "" {
+			gate = Max(gate, want)
+			reasons = append(reasons, fmt.Sprintf("criticality %s: %s", lvl, from))
+		}
+	}
 	if gate == SOFT {
 		reasons = append(reasons, softReason)
 	}
 	return gate, reasons
+}
+
+// LinkCriticality is the governance level an inline link carries: the level
+// of the concept it links to, unless criticality does not flow through the
+// relation (rollup.CarriesCriticality), raised to the level of a floor
+// boundary above the link's file. from names the node that carries it.
+func LinkCriticality(g *graph.Graph, ws *load.Workspace, e *graph.Edge) (lvl, from string) {
+	if on := g.Node(e.O); on != nil && on.NodeType == model.NodeConcept && rollup.CarriesCriticality(e.P) {
+		lvl, from = on.Criticality, on.CURIE
+	}
+	if e.Prov != nil {
+		if m := ws.ManifestFor(e.Prov.Path); m != nil {
+			if b := g.NodeByCurie(m.Boundary); b != nil {
+				if f := rollup.FloorFor(g, b.ID); f != nil && model.CriticalityRank(f.Criticality) > model.CriticalityRank(lvl) {
+					lvl, from = f.Criticality, f.CURIE
+				}
+			}
+		}
+	}
+	return lvl, from
 }
 
 // softReason is the reason a SOFT link carries; it is dropped when a later
