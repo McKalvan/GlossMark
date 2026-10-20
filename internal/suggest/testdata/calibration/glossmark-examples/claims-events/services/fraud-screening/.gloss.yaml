@@ -1,0 +1,10 @@
+# services/fraud-screening/.gloss.yaml
+boundary: claimb:fraud-screening
+level: container
+label: Fraud screening
+part-of: claimb:claims-events
+realizes: [claim:FraudScreening, claim:FraudReferralThreshold, tide:FraudScreeningService]
+subscribes: [claim:ClaimFiled]
+publishes: [claim:FraudSuspected]
+default-namespace: tide
+owner: claims-siu-engineering

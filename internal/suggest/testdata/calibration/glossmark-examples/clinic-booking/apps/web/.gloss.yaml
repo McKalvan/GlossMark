@@ -1,0 +1,11 @@
+# apps/web/.gloss.yaml: the patient site. It shows concepts; it does not realize them.
+boundary: clinicb:web
+level: container
+label: Patient site
+part-of: clinicb:clinic-booking
+# The pages and the shell are implementation concepts of their own; what they show is presents.
+realizes: [lark:PatientSite, lark:BookingPage, lark:AppointmentPage, lark:PractitionerDirectory, lark:NoShowDashboard, lark:WaitlistPage]
+presents: [clinic:Booking, clinic:Availability, clinic:Appointment, clinic:Cancellation, clinic:Practitioner, clinic:NoShowRate, clinic:Waitlist]
+hosts: [lark:BookingPage, lark:AppointmentPage, lark:PractitionerDirectory, lark:NoShowDashboard, lark:WaitlistPage]
+default-namespace: lark
+owner: web-team

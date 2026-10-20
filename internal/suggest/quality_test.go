@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mckalvan/glossmark/internal/calib"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
@@ -56,11 +57,13 @@ func want(t *testing.T, got map[string]Proposal, key, rel, target string) {
 
 // TestConceptPoorEvidence (#58): in code whose names carry no domain
 // words, docstrings, comments, the tables a class touches and the calls a
-// test makes find the concept.
+// test makes find the concept. This tests the evidence, not the floor: on
+// the pooled calibration set, doc and data evidence measured below the
+// default --min-conf (ADR 0024), so the floor here is lowered.
 func TestConceptPoorEvidence(t *testing.T) {
 	_, _, got := stripped(t, warehouse, map[string]string{
 		"zz.py": "# Top up the pick faces (replenishment).\ndef zz1():\n    pass\n\n\ndef zz2():\n    \"\"\"Replenishment: top up the pick faces.\"\"\"\n    pass\n",
-	}, DefaultMinConf)
+	}, 0.05)
 	want(t, got, "zz.py#zz1", "implements", "wh:Replenishment")
 	want(t, got, "zz.py#zz2", "implements", "wh:Replenishment")
 	want(t, got, "helpers.py#process_data", "implements", "wh:CycleCount")
@@ -69,7 +72,9 @@ func TestConceptPoorEvidence(t *testing.T) {
 	want(t, got, "core/Manager.py#doIt", "implements", ".ReplenishmentRun")
 	want(t, got, "core/Manager.py#run_batch", "implements", ".WaveBatch")
 	want(t, got, "tests/test_manager.py#test_doIt", "verifies", ".ReplenishmentRun")
-	want(t, got, "tests/test_manager.py#test_process_data", "verifies", "wh:CycleCount")
+	// test_process_data verified wh:CycleCount through process_data, whose
+	// doc/func evidence now measures under callableConf: a test is only
+	// proposed for a callee suggest would itself propose at the default floor.
 	p := got["core/Processor.py#Processor"]
 	if p.Target != "wh:ReturnsProcessing" || !strings.Contains(p.Context, "wh:ReturnAuthorization (tbl_rma)") {
 		t.Errorf("Processor touches tbl_rma, which represents wh:ReturnAuthorization, which ReturnsProcessing consumes: %+v", p)
@@ -135,7 +140,7 @@ func TestPrecisionRisesWithTheFloor(t *testing.T) {
 		if len(ps) == 0 {
 			break
 		}
-		rep := Evaluate("", Score(ws, ps, labels), labels, 0.7)
+		rep := Evaluate("", Score(ws, ps, labels), labels, calib.AutoAccept{Threshold: 0.7, MinConf: DefaultMinConf})
 		if p := rep.All.Precision(); p < last {
 			t.Errorf("min-conf %.1f: precision %.2f fell from %.2f", min, p, last)
 		} else {

@@ -1,0 +1,42 @@
+# @gloss deploys .ReminderService conf=0.9
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reminders-worker
+  namespace: clinic-booking
+  labels: { app: reminders-worker }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: reminders-worker }
+  template:
+    metadata:
+      labels: { app: reminders-worker }
+    spec:
+      serviceAccountName: reminders
+      containers:
+        - name: worker
+          image: ghcr.io/larkspur-clinics/reminders:1.8.0
+          envFrom: [{ configMapRef: { name: reminders } }]
+          env:
+            - name: REMINDERS_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: reminders-db, key: url } }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: noshow-report
+  namespace: clinic-booking
+spec:
+  schedule: "0 6 * * 1"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: reminders
+          containers:
+            - name: report
+              image: ghcr.io/larkspur-clinics/reminders:1.8.0
+              command: ["noshow-report", "4b1d0b8e-2f43-4f6c-9a63-5c9d7f6a1e01", "9e7c3a55-0d12-4b8e-b0a4-3f0f4c2d6b77"]
+              envFrom: [{ configMapRef: { name: reminders } }]

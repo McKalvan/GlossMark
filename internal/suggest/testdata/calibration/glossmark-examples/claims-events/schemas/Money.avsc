@@ -1,0 +1,10 @@
+{
+  "type": "record",
+  "name": "Money",
+  "namespace": "com.tidewater.claims.common",
+  "doc": "An amount in minor units with its ISO 4217 currency.",
+  "fields": [
+    {"name": "amountMinor", "type": "long", "doc": "Amount in minor units (cents)."},
+    {"name": "currency", "type": {"type": "string", "avro.java.string": "String"}, "doc": "ISO 4217 code, e.g. EUR."}
+  ]
+}

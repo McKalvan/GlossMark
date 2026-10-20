@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "ClaimApproved",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "Assessment approved the claim for the settled amount.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "assessmentId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "settledAmount", "type": "com.tidewater.claims.common.Money"},
+    {"name": "autoApproved", "type": "boolean"},
+    {"name": "decidedBy", "type": "string", "doc": "rules-engine or an adjuster id."}
+  ]
+}

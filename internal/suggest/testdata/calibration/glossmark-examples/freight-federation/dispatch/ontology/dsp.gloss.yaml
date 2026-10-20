@@ -1,0 +1,25 @@
+# ontology/dsp.gloss.yaml: the dispatch planner's implementation tier.
+# Every subject is a dsp: concept (own-subject rule); frt: and shc: are imported.
+namespace: dsp
+version: 0.3.0
+concepts:
+  BookedIntake:
+    kind: process
+    realizes: frt:Dispatching
+    consumes: [frt:Shipment]
+    doc: "Turns each ShipmentBooked message into a queued pickup request for the right day."
+  PickupPlanner:
+    kind: process
+    realizes: frt:Dispatching
+    produces: [frt:Route]
+    doc: "Builds a day's plan: matches queued pickups to drivers, orders each driver's stops, persists and announces the routes."
+  DriverMatcher: { kind: process, part-of: PickupPlanner, doc: "Assigns pickups to drivers by zone, vehicle capacity and shift." }
+  RouteOptimizer: { kind: process, part-of: PickupPlanner, doc: "Orders a driver's stops: nearest neighbour, then 2-opt, inside each stop's window." }
+  PickupConfirmation:
+    kind: process
+    realizes: frt:Pickup
+    doc: "The driver app confirms a collection; the request is marked picked up and ShipmentPickedUp is published."
+  ExpressPickup:
+    is-a: frt:Pickup
+    doc: "A same-day pickup booked before the 11:00 local cut-off, inserted at the cheapest position of a live route."
+  PickupQueue: { kind: resource, internal: true, doc: "The pickup_requests table: pickups waiting for a plan." }

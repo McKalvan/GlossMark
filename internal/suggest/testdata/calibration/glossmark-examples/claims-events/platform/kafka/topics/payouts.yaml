@@ -1,0 +1,19 @@
+# Authorized and failed payouts. One year, for reconciliation.
+# @gloss provisions .PayoutsTopic conf=0.9
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: payouts.v1
+  namespace: claims
+  labels:
+    strimzi.io/cluster: claims-kafka
+spec:
+  topicName: payouts.v1
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: "31536000000"
+    min.insync.replicas: "2"
+    cleanup.policy: delete
+    message.timestamp.type: CreateTime
+    confluent.value.schema.validation: "true"

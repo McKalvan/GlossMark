@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "ClaimReferred",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "Assessment referred the claim to a human adjuster because the rules could not decide it.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "assessmentId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "referralReason", "type": {"type": "enum", "name": "ReferralReason", "symbols": ["ABOVE_AUTO_APPROVE_LIMIT", "FRAUD_HOLD", "MISSING_EVIDENCE", "THIRD_PARTY"]}},
+    {"name": "queue", "type": "string"},
+    {"name": "decidedBy", "type": "string", "doc": "rules-engine or an adjuster id."}
+  ]
+}

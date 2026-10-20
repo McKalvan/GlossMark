@@ -1,0 +1,8 @@
+# platform/.gloss.yaml: the Kafka cluster, its topics and the service identities (Strimzi CRDs).
+boundary: claimb:kafka-platform
+level: container
+label: Kafka platform
+part-of: claimb:claims-events
+realizes: [tide:ClaimsKafkaCluster, tide:ServiceIdentities, tide:FiledTopic, tide:LifecycleTopic, tide:DecisionsTopic, tide:ReferralsTopic, tide:PayoutsTopic, tide:FraudAlertsTopic]
+default-namespace: tide
+owner: platform

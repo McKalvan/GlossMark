@@ -1,0 +1,25 @@
+# @gloss represents lib:LoanStatus, lib:ItemFormat, lib:PatronType, lib:FineType scope=file conf=0.85
+# Shared code tables (since 2011). The web app checks its Java enums against
+# this file at startup, the Perl batch jobs read it with YAML::Tiny, and the
+# loans.status / fines.fine_type CHECK constraints are generated from it.
+# Keep values UPPER_SNAKE and never reuse a retired value.
+enums:
+  LoanStatus:
+    description: "Where a loan is in its life."
+    values:
+      - { name: ACTIVE, description: "Checked out and not yet due." }
+      - { name: OVERDUE, description: "Past its due date and not returned." }
+      - { name: RETURNED, description: "Checked in." }
+      - { name: LOST, description: "Declared lost by the patron, or 60 days overdue." }
+  ItemFormat:
+    description: "The physical form of an item. Drives the loan period and the daily fine."
+    values: [BOOK, LARGE_PRINT, DVD, AUDIOBOOK, MAGAZINE]
+  PatronType:
+    ADULT: "Resident aged 18 or over."
+    JUVENILE: "Resident under 18. No overdue fines."
+    SENIOR: "Resident aged 65 or over. Overdue fines are halved."
+    NONRESIDENT: "Lives outside the city and pays an annual fee."
+  FineType:
+    OVERDUE: "Daily charge for an item kept past its due date and grace period."
+    LOST_ITEM: "Replacement cost charged when an item is declared lost."
+    DAMAGE: "Assessed by staff at check-in."

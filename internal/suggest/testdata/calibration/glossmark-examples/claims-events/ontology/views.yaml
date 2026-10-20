@@ -1,0 +1,28 @@
+# ontology/views.yaml: declared projections over tier × zoom (docs/FILE-FORMATS.md).
+views:
+  business:
+    doc: The core tier only; implementation folds into what it realizes.
+    include: [claim:*]
+    collapse: { "tide:*": via realizes }
+    show-published: true
+    relations: [produces, consumes, constrains, publishes, subscribes, reverses, is-a, realizes]
+    lift: range-lcs
+    zoom: system
+  engineering:
+    doc: Both tiers, two levels of parts, container zoom.
+    include: [claim:*, tide:*]
+    expand: { part-of: 2 }
+    zoom: container
+  event-flow:
+    doc: "Who publishes and who subscribes, per container, with each container's events summarized by their least common subsumer."
+    include: [claim:*]
+    collapse: { "tide:*": via realizes }
+    relations: [publishes, subscribes, is-a]
+    lift: range-lcs
+    zoom: container
+  event-flow-flat:
+    doc: "The same edges without the taxonomic lift: every concrete event a container publishes or subscribes to."
+    include: [claim:*]
+    collapse: { "tide:*": via realizes }
+    relations: [publishes, subscribes]
+    zoom: container

@@ -1,0 +1,33 @@
+# @gloss deploys .FraudScreeningService conf=0.9
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-screening
+  namespace: claims
+  labels: { app.kubernetes.io/name: fraud-screening, app.kubernetes.io/part-of: claims-platform }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app.kubernetes.io/name: fraud-screening }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: fraud-screening, app.kubernetes.io/part-of: claims-platform }
+    spec:
+      serviceAccountName: fraud-screening
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: fraud-screening
+          image: registry.tidewater.example/claims/fraud-screening:2.1.0
+          ports: [{ name: http, containerPort: 8081 }]
+          envFrom: [{ configMapRef: { name: claims-common } }]
+          env:
+            - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=75" }
+          volumeMounts:
+            - { name: kafka-tls, mountPath: /etc/kafka/tls, readOnly: true }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+      volumes:
+        - name: kafka-tls
+          secret: { secretName: fraud-screening }   # written by the Strimzi user operator for KafkaUser fraud-screening

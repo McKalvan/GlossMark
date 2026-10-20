@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "MotorClaimFiled",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "A policyholder filed a motor claim: collision, theft or glass.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "lossDate", "type": {"type": "int", "logicalType": "date"}},
+    {"name": "estimatedLoss", "type": "com.tidewater.claims.common.Money"},
+    {"name": "vehicleVin", "type": "string"},
+    {"name": "incidentKind", "type": {"type": "enum", "name": "MotorIncidentKind", "symbols": ["COLLISION", "THEFT", "GLASS", "VANDALISM"]}},
+    {"name": "policeReportNumber", "type": ["null", "string"], "default": null},
+    {"name": "thirdPartyInvolved", "type": "boolean"},
+    {"name": "evidenceIds", "type": {"type": "array", "items": "string"}, "default": []}
+  ]
+}

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claims-common
+  namespace: claims
+data:
+  KAFKA_BOOTSTRAP: claims-kafka-kafka-bootstrap.claims.svc:9093
+  SCHEMA_REGISTRY_URL: https://schema-registry.claims.svc

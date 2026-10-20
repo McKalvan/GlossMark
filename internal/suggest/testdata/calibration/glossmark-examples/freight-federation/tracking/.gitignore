@@ -1,0 +1,9 @@
+/target
+.env
+*.log
+.idea/
+.vscode/
+# GlossMark: the viewer is generated; graph.jsonl and ledger.jsonl are committed
+.glossmark/viewer.html
+.glossmark/views.js
+.glossmark/views.json

@@ -1,0 +1,13 @@
+# glossmark.yaml: the namespaces this repository owns (docs/FILE-FORMATS.md).
+grammar: 1
+repo-iri: https://onto.riverbend.example/library/                 # boundary prefixes such as libb: expand under it; no prefixes: needed
+owns:
+  lib: { iri: https://onto.riverbend.example/library/core/, tier: core,           version: 0.1.0 }   # what the business recognises
+  circ: { iri: https://onto.riverbend.example/library/impl/, tier: implementation, version: 0.1.0 }   # the mechanisms that realize it
+policy:
+  soft-conf-threshold: 0.7
+  waivers:
+    # Interlibrary loan intake moved to the Prairie Libraries Consortium in 2025 and its code
+    # was removed (CIRC-2210); the city's service catalogue lists ILL under CIRC until the
+    # contract hand-over on 30 June 2027. Find the id with: gloss drift --format json
+    - { finding: "gap:libb:ill:realizes:lib:InterlibraryLoan", owner: circulation-dept, expires: 2027-06-30, reason: "ILL retiring; consortium takes over 2027-06-30 (CIRC-2210)" }

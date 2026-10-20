@@ -1,0 +1,11 @@
+# db/.gloss.yaml: the schema. Every migration touches patient data, so the
+# boundary's level is a floor for every file beneath it.
+boundary: clinicb:db
+level: container
+label: Booking database schema
+part-of: clinicb:clinic-booking
+holds: [clinic:Clinic, clinic:Practitioner, clinic:Patient, clinic:Slot, clinic:Appointment]
+default-namespace: lark
+owner: booking-platform
+criticality: high
+criticality-floor: true

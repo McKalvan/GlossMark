@@ -1,0 +1,21 @@
+[project]
+name = "assessment"
+version = "2.4.1"
+description = "Assesses filed claims: auto-approves small ones, denies what is not covered, refers the rest."
+requires-python = ">=3.12"
+dependencies = [
+    "confluent-kafka[avro,schemaregistry]>=2.5",
+    "pydantic>=2.8",
+    "pyyaml>=6.0",
+    "structlog>=24.4",
+    "prometheus-client>=0.21",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.3", "freezegun>=1.5"]
+
+[project.scripts]
+assessment = "assessment.main:run"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

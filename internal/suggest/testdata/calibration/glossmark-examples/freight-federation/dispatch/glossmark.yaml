@@ -1,0 +1,15 @@
+# glossmark.yaml: dispatch owns its implementation tier (dsp:) and imports the freight
+# core (frt:) and shipment-core's published concepts (shc:) from the sibling checkout.
+# Sources are local paths in GlossMark v0.1.0; they become git refs once the fetcher ships.
+grammar: 1
+repo-iri: https://arch.kestrel-freight.example/dispatch/      # dispatch: expands under it
+owns:
+  dsp: { iri: https://onto.kestrel-freight.example/dsp/, tier: implementation, version: 0.3.0, owner: dispatch-eng }
+imports:
+  frt: { iri: https://onto.kestrel-freight.example/frt/, version: "^1.4",   source: ../shipment-core/ontology/frt.gloss.yaml }
+  shc: { iri: https://onto.kestrel-freight.example/shc/, version: "~1.1.0", source: ../shipment-core/ontology/shc.gloss.yaml }
+prefixes:
+  fleet: https://arch.kestrel-freight.example/boundaries/      # boundaries shared by all three repositories
+comment-styles: { ".prisma": ["//"] }                          # Prisma schema comments are //
+policy:
+  soft-conf-threshold: 0.7

@@ -1,0 +1,19 @@
+# Claims referred to a human adjuster. Added for the adjuster queue in 2026-09.
+# @gloss provisions .ReferralsTopic conf=0.9
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: claims.referrals.v1
+  namespace: claims
+  labels:
+    strimzi.io/cluster: claims-kafka
+spec:
+  topicName: claims.referrals.v1
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: "7776000000"
+    min.insync.replicas: "2"
+    cleanup.policy: delete
+    message.timestamp.type: CreateTime
+    confluent.value.schema.validation: "true"

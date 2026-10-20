@@ -81,13 +81,6 @@ type Config struct {
 	Dir string `yaml:"-" json:"-"`
 }
 
-// SuggestConfig tunes gloss suggest.
-type SuggestConfig struct {
-	// Stopwords extend the built-in list of programming words (handler,
-	// manager, process, ...) that never match a concept on their own.
-	Stopwords []string `yaml:"stopwords,omitempty" json:"stopwords,omitempty"`
-}
-
 // NamespaceDecl describes an owned namespace.
 type NamespaceDecl struct {
 	IRI     string `yaml:"iri" json:"iri"`
@@ -109,6 +102,9 @@ type ImportDecl struct {
 // Policy is the configurable gate policy. Defaults follow the design.
 type Policy struct {
 	// SoftConfThreshold: proposed links at or above this confidence are SOFT.
+	// suggest.auto-accept-precision, when set, derives the threshold
+	// instead; when neither is set the default precision derives it
+	// (Config.AutoAccept, ADR 0024).
 	SoftConfThreshold float64 `yaml:"soft-conf-threshold,omitempty" json:"soft-conf-threshold,omitempty"`
 	// HardPaths are globs whose changes are always HARD (default: ontology dir, manifests).
 	HardPaths []string `yaml:"hard-paths,omitempty" json:"hard-paths,omitempty"`
@@ -200,16 +196,16 @@ func gateRank(g string) int {
 	return -1
 }
 
-// EffectivePolicy merges the configured policy over the defaults.
+// EffectivePolicy merges the configured policy over the defaults. Its
+// SoftConfThreshold is the auto-accept rule's threshold (Config.AutoAccept).
 func (c *Config) EffectivePolicy() *Policy {
 	d := DefaultPolicy()
 	if c == nil || c.Policy == nil {
+		d.SoftConfThreshold = c.AutoAccept().Threshold
 		return d
 	}
 	p := *c.Policy
-	if p.SoftConfThreshold == 0 {
-		p.SoftConfThreshold = d.SoftConfThreshold
-	}
+	p.SoftConfThreshold = c.AutoAccept().Threshold
 	if len(p.HardPaths) == 0 {
 		p.HardPaths = d.HardPaths
 	}
@@ -285,6 +281,9 @@ func LoadConfig(path string) (*Config, error) {
 				return nil, fmt.Errorf("%s: policy.criticality-gates.%s: gate must be AUTO, SOFT or HARD, got %q", path, lvl, gate)
 			}
 		}
+	}
+	if err := c.loadSuggest(path); err != nil {
+		return nil, err
 	}
 	if c.Views == "" {
 		c.Views = "ontology/views.yaml"

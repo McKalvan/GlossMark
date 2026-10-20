@@ -1,0 +1,11 @@
+# @gloss configures lib:InterlibraryLoan scope=file conf=0.8
+# Prairie Libraries Consortium hand-off (CIRC-2210). Desk staff open requests
+# in the consortium portal; CIRC only prints the branch delivery code.
+consortium:
+  portal: https://portal.prairielibraries.example/requests
+  member_code: RIVB
+delivery_codes:
+  MAIN: RIVB-01
+  EAST: RIVB-02
+  NORTH: RIVB-03
+handover_date: 2027-06-30

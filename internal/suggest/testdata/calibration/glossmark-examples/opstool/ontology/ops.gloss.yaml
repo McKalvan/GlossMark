@@ -1,0 +1,34 @@
+# ontology/ops.gloss.yaml: the implementation tier.
+# The code has no names for its mechanisms (Manager.doIt, Processor.process, Handler.handle),
+# so these concepts are the names it should have had. Each realizes the core concept it serves.
+namespace: ops
+version: 0.1.0
+concepts:
+  CountReconciler:
+    kind: process
+    realizes: wh:CycleCount
+    doc: "Takes an uploaded count sheet, records each bin's variance and returns the bins to recount."
+  ReplenishmentRun:
+    kind: process
+    realizes: wh:Replenishment
+    doc: "Finds pick faces below minimum and queues a move from the fullest reserve bin."
+  CartBuilder:
+    kind: process
+    realizes: wh:WavePlanning
+    doc: "Packs one cutoff's order lines into carts of at most cart_lines lines, splitting on incompatible hazmat classes."
+  ReturnGrader:
+    kind: process
+    realizes: wh:ReturnsProcessing
+    doc: "Grades each returned line A (restock), B (seconds), V (vendor return) or X (scrap) and closes the RMA."
+  ScanConfirm:
+    kind: process
+    realizes: wh:Picking
+    doc: "The handheld loop: scan the bin, scan the item, confirm the line, go to the next bin."
+  LabelRenderer:
+    kind: process
+    realizes: wh:CartonLabel
+    doc: "Renders a carton label as ZPL with an SSCC barcode."
+  PickListPage:
+    kind: process
+    presents: wh:PickList
+    doc: "The handheld page that prints a cart's lines and hosts the scan loop."

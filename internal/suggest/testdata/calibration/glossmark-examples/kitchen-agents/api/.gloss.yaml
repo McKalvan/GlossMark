@@ -1,0 +1,9 @@
+# api/.gloss.yaml: the FastAPI ordering service.
+boundary: dineb:api
+level: container
+label: Ordering API
+part-of: dineb:kitchen-agents
+realizes: [pepper:OrderingApi, pepper:MenuCatalog, pepper:OrderFlow, pepper:AllergenGuard, pepper:TicketRouter, pepper:PaymentHandoff]
+holds: [dine:MenuItem, dine:Allergen, dine:Order, dine:KitchenTicket, dine:Station, dine:Payment]
+default-namespace: pepper
+owner: pepper-row-engineering

@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "PayoutAuthorized",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "Money for an approved claim is cleared for payment to the policyholder.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "payoutId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "amount", "type": "com.tidewater.claims.common.Money"},
+    {"name": "payeeIbanLast4", "type": "string"},
+    {"name": "expectedValueDate", "type": {"type": "int", "logicalType": "date"}}
+  ]
+}

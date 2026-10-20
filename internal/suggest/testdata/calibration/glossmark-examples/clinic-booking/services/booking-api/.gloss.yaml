@@ -1,0 +1,10 @@
+# services/booking-api/.gloss.yaml
+boundary: clinicb:booking-api
+level: container
+label: Booking API
+part-of: clinicb:clinic-booking
+realizes: [clinic:Booking, clinic:Cancellation, clinic:Availability, lark:CancellationPolicy]
+holds: [clinic:Appointment, clinic:Patient, clinic:Practitioner, clinic:Slot]
+default-namespace: lark
+owner: booking-platform
+criticality: high

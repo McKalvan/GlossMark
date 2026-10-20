@@ -1,0 +1,8 @@
+# deploy/.gloss.yaml: what the Kubernetes manifests run.
+boundary: clinicb:deploy
+level: container
+label: Kubernetes deployment
+part-of: clinicb:clinic-booking
+realizes: [lark:BookingApiService, lark:ReminderService, lark:PatientSite]
+default-namespace: lark
+owner: platform

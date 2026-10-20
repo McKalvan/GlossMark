@@ -1,0 +1,34 @@
+# @gloss deploys .AssessmentService conf=0.9
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assessment
+  namespace: claims
+  labels: { app.kubernetes.io/name: assessment, app.kubernetes.io/part-of: claims-platform }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app.kubernetes.io/name: assessment }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: assessment, app.kubernetes.io/part-of: claims-platform }
+    spec:
+      serviceAccountName: assessment
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: assessment
+          image: registry.tidewater.example/claims/assessment:2.4.1
+          ports: [{ name: http, containerPort: 9102 }]
+          envFrom: [{ configMapRef: { name: claims-common } }]
+          env:
+            - { name: SCHEMA_DIR, value: /schemas }
+            - { name: CONSUMER_CONFIG, value: /app/config/consumer-group.yaml }
+          volumeMounts:
+            - { name: kafka-tls, mountPath: /etc/kafka/tls, readOnly: true }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+      volumes:
+        - name: kafka-tls
+          secret: { secretName: assessment }   # written by the Strimzi user operator for KafkaUser assessment

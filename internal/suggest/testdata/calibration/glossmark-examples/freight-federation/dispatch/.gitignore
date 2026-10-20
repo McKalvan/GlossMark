@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.log
+.DS_Store
+# GlossMark: the viewer is generated; graph.jsonl and ledger.jsonl are committed
+.glossmark/viewer.html
+.glossmark/views.js
+.glossmark/views.json

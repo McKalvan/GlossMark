@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ordering
+      POSTGRES_PASSWORD: ordering
+      POSTGRES_DB: ordering
+    ports: ["5432:5432"]
+  api:
+    build: ./api
+    environment:
+      ORDERING_DATABASE_URL: postgresql://ordering:ordering@db:5432/ordering
+      ORDERING_KDS_PUSH_URL: http://kds-gateway:8090/tickets
+    depends_on: [db]
+    ports: ["8080:8080"]
+  kds:
+    build: ./kds
+    ports: ["5174:80"]

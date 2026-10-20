@@ -1,0 +1,9 @@
+# .gloss.yaml: the freight platform, the system all three repositories belong to.
+# dispatch and tracking declare part-of: fleet:freight-platform in their own root
+# manifests. Its event catalogue is declared here, next to the core tier; this
+# repository alone publishes only one of the three (see README, cross-repo drift).
+boundary: fleet:freight-platform
+level: system
+label: Kestrel Freight platform
+owner: freight-architecture
+publishes: [frt:ShipmentBooked, frt:ShipmentPickedUp, frt:ShipmentDelivered]

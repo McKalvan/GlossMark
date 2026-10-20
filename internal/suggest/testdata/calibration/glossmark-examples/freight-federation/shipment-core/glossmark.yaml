@@ -1,0 +1,11 @@
+# glossmark.yaml: shipment-core owns the freight core tier (frt:) that dispatch and
+# tracking import, and its own implementation tier (shc:). docs/FILE-FORMATS.md.
+grammar: 1
+repo-iri: https://arch.kestrel-freight.example/shipment-core/   # shipcore: expands under it
+owns:
+  frt: { iri: https://onto.kestrel-freight.example/frt/, tier: core,           version: 1.4.0, owner: freight-product }   # what a freight planner recognises
+  shc: { iri: https://onto.kestrel-freight.example/shc/, tier: implementation, version: 1.1.0, owner: shipment-eng }     # the mechanisms of this service
+prefixes:
+  fleet: https://arch.kestrel-freight.example/boundaries/      # boundaries shared by all three repositories
+policy:
+  soft-conf-threshold: 0.7

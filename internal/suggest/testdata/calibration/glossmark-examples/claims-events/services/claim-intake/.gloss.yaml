@@ -1,0 +1,12 @@
+# services/claim-intake/.gloss.yaml
+boundary: claimb:claim-intake
+level: container
+label: Claim intake API
+part-of: claimb:claims-events
+realizes: [claim:ClaimFiling, claim:ClaimWithdrawal, claim:FilingWindow, tide:IntakeService]
+publishes: [claim:ClaimFiled, claim:ClaimWithdrawn]
+produces: [claim:Claim]
+consumes: [claim:Policy, claim:Claim]
+holds: [claim:Claim]
+default-namespace: tide
+owner: claims-intake

@@ -1,0 +1,23 @@
+# ontology/views.yaml: declared projections over tier × zoom (docs/FILE-FORMATS.md).
+views:
+  business:
+    doc: The core tier only; implementation folds into what it realizes.
+    include: [clinic:*]
+    collapse: { "lark:*": via realizes }
+    show-published: true
+    relations: [produces, consumes, constrains, publishes, subscribes, reverses, is-a, realizes]
+    lift: range-lcs
+    zoom: system
+  engineering:
+    doc: Both tiers, two levels of parts, container zoom.
+    include: [clinic:*, lark:*]
+    expand: { part-of: 2 }
+    zoom: container
+  patient-data:
+    doc: "Curated: where patient PII lives, which code shapes it and what provisions its storage. Opens with every box open."
+    include: [clinic:Patient, clinic:Appointment, lark:BookingDatabase, lark:BookingHandler]
+    zoom: code
+  published-values:
+    doc: "Curated: the two values engineering publishes to the business, and the code each is bound to."
+    include: [clinic:CancellationWindow, clinic:ReminderLeadTime, lark:CancellationPolicy, lark:LeadTimeSetting]
+    zoom: code

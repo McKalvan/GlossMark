@@ -1,0 +1,12 @@
+# services/assessment/.gloss.yaml
+boundary: claimb:assessment
+level: container
+label: Claim assessment
+part-of: claimb:claims-events
+realizes: [claim:ClaimAssessment, claim:AutoApprovalLimit, tide:AssessmentService]
+subscribes: [claim:ClaimFiled, claim:ClaimWithdrawn, claim:FraudSuspected]
+publishes: [claim:ClaimDecided, claim:PayoutAuthorized]
+consumes: [claim:Claim]
+produces: [claim:Assessment, claim:Payout]
+default-namespace: tide
+owner: claims-decisioning

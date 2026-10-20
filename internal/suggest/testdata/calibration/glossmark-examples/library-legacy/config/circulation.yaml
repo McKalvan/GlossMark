@@ -1,0 +1,25 @@
+# Circulation rules read by the web app (CircConfig) and the nightly batch.
+# Changes need sign-off from the Head of Circulation (policy 4.2, 2018).
+# @gloss configures .RenewalHandler scope=block conf=0.8
+loans:
+  max_renewals: 2
+# @gloss configures .DeskFineCalculator, .GracePeriodRule, .FineCapRule scope=block conf=0.8
+fines:
+  grace_days: 3
+  cap_flat: 20.00
+  daily_rate:
+    DEFAULT: 0.25
+    DVD: 1.00
+    MAGAZINE: 0.10
+# @gloss configures .PatronBlockCheck scope=block conf=0.8
+patrons:
+  block_threshold: 10.00
+# @gloss configures .HoldQueue scope=block conf=0.8
+holds:
+  pickup_days: 7
+# @gloss configures .LoanPeriodRule scope=block conf=0.8
+calendar:
+  closed:
+    - 2026-11-26
+    - 2026-12-25
+    - 2027-01-01

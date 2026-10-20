@@ -1,0 +1,13 @@
+# kds/.gloss.yaml: the kitchen display.
+boundary: dineb:kds
+level: container
+label: Kitchen display
+part-of: dineb:kitchen-agents
+realizes: [pepper:KitchenDisplay, pepper:TicketStore, pepper:TicketBoard, pepper:AllergenBanner]
+hosts: [pepper:TicketBoard, pepper:AllergenBanner]
+presents: [dine:KitchenTicket, dine:AllergenRule]
+default-namespace: pepper
+# A written list, narrower than the derived set: the display may link to its own
+# mechanisms, the ticket it shows and the allergen data it flags, and nothing in the API.
+allowed: [pepper:KitchenDisplay, pepper:Ticket*, pepper:AllergenBanner, dine:KitchenTicket, dine:Station, dine:Allergen, dine:AllergenRule, dine:KitchenFulfilment]
+owner: pepper-row-engineering

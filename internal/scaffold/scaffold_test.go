@@ -261,6 +261,30 @@ func TestInitThenCheck(t *testing.T) {
 				t.Errorf("%s: boundary %s fell back to a urn", tc.name, n.CURIE)
 			}
 		}
+		// glossmark.yaml carries the commented suggest: block at its
+		// defaults, no fixed soft-conf-threshold, and uncommented it loads
+		// to the same rule (ADR 0024).
+		cb, _ := os.ReadFile(filepath.Join(root, "glossmark.yaml"))
+		if !strings.Contains(string(cb), "# suggest:") || !strings.Contains(string(cb), "#   auto-accept-precision: 0.9") || strings.Contains(string(cb), "soft-conf-threshold") {
+			t.Errorf("%s: glossmark.yaml lacks the suggest: block:\n%s", tc.name, cb)
+		}
+		var un []string
+		for _, l := range strings.Split(string(cb), "\n") {
+			switch {
+			case strings.HasPrefix(l, "# suggest:"):
+				l = l[2:]
+			case strings.HasPrefix(l, "#   ") && !strings.HasPrefix(strings.TrimSpace(l[1:]), "#"):
+				l = " " + l[1:]
+			}
+			un = append(un, l)
+		}
+		os.WriteFile(filepath.Join(root, "glossmark.yaml"), []byte(strings.Join(un, "\n")), 0o644)
+		if ws2, err := load.Load(root); err != nil {
+			t.Errorf("%s: uncommented suggest: block: %v", tc.name, err)
+		} else if a, d := ws2.Config.AutoAccept(), ws.Config.AutoAccept(); a.Target != d.Target || a.Threshold != d.Threshold || ws2.Config.SuggestMinConf() != 0.3 {
+			t.Errorf("%s: uncommented block %+v, default %+v", tc.name, a, d)
+		}
+		os.WriteFile(filepath.Join(root, "glossmark.yaml"), cb, 0o644)
 		rb, _ := os.ReadFile(filepath.Join(root, tc.runner))
 		if !strings.Contains(string(rb), "gloss check") {
 			t.Errorf("%s: %s lacks the gloss target:\n%s", tc.name, tc.runner, rb)

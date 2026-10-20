@@ -1,0 +1,22 @@
+# @gloss deploys .PatientSite conf=0.9
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: clinic-booking
+  labels: { app: web }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/larkspur-clinics/web:2.4.0
+          ports: [{ containerPort: 3000 }]
+          env:
+            - { name: BOOKING_API_URL, value: "http://booking-api:8080" }
+            - { name: PUBLIC_URL, value: "https://book.larkspur.example" }

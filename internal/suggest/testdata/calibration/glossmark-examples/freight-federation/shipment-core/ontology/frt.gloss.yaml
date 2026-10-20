@@ -1,0 +1,74 @@
+# ontology/frt.gloss.yaml: the freight core tier, imported by dispatch and tracking.
+# Litmus test: a freight planner or a customer-service agent would nod at every term.
+# Core concepts never mention an implementation namespace.
+namespace: frt
+version: 1.4.0
+concepts:
+  # Things
+  Shipment:
+    kind: entity
+    has-part: [Parcel]
+    criticality: high          # what the customer paid for; a lost or misrouted shipment costs money and trust
+    doc: "One booking to move goods from a shipper's pickup address to a delivery address, with a tracking number."
+  Parcel: { kind: entity, doc: "One physical package of a shipment, with its weight and dimensions." }
+  Consignment:
+    kind: entity
+    has-part: [Shipment]
+    doc: "The shipments handed to one carrier on one manifest date."
+  Carrier: { kind: entity, doc: "A road carrier that moves shipments: its coverage, weight limits and service levels." }
+  ShippingLabel: { kind: entity, doc: "The printed label on each parcel, carrying the tracking number as a barcode." }
+  Route: { kind: entity, doc: "One driver's ordered stops for one day." }
+  Driver: { kind: entity, doc: "A driver with a vehicle, a zone and a shift." }
+
+  # What the business does
+  Booking:
+    kind: process
+    produces: [Shipment]
+    publishes: [ShipmentBooked]
+    criticality: high
+    doc: "Accepting a shipment from a shipper: parcels, addresses, service level, the delivery window promise."
+  Labelling: { kind: process, produces: [ShippingLabel], doc: "Printing a shipping label for every parcel of a booked shipment." }
+  CarrierAssignment: { kind: process, consumes: [Shipment], doc: "Choosing the carrier that moves a shipment." }
+  Dispatching:
+    kind: process
+    consumes: [Shipment]
+    produces: [Route]
+    doc: "Planning which driver collects which shipment, in which order, on which day."
+  Pickup:
+    kind: process
+    publishes: [ShipmentPickedUp]
+    doc: "A driver collecting a shipment from the shipper."
+  Tracking:
+    kind: process
+    consumes: [Route]
+    doc: "Following a shipment from pickup to delivery: positions, scans, arrival."
+  Delivery:
+    kind: process
+    publishes: [ShipmentDelivered]
+    criticality: high
+    doc: "Handing a shipment over at the delivery address, with proof of delivery."
+  ShipmentVisibility: { kind: capability, doc: "Shippers and customer service can see where a shipment is and what state it is in." }
+
+  # What happens
+  ShipmentBooked: { kind: event, doc: "A shipment was booked; dispatch plans its pickup." }
+  ShipmentPickedUp: { kind: event, doc: "A driver collected the shipment; tracking starts following it." }
+  ShipmentDelivered: { kind: event, doc: "The shipment was handed over; the outcome counts toward the on-time rate." }
+
+  # Rules and measures
+  DeliveryWindow:
+    kind: constraint
+    constrains: [Delivery]
+    criticality: high          # the promise made to the customer at booking
+    aliases: [time slot, delivery slot]
+    doc: "The window promised at booking inside which the shipment must be delivered."
+  LabelFormat:
+    kind: constraint
+    constrains: [Labelling]
+    doc: "The label format every depot printer and handheld scanner understands."
+  OnTimeDeliveryRate:
+    kind: measure
+    aliases: [OTD, on-time rate]
+    doc: "Share of deliveries made inside their delivery window, over a rolling seven days."
+relations:
+  produces: { lift: range-lcs }
+  consumes: { lift: range-lcs }

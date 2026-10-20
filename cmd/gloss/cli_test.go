@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"io"
 	"os"
@@ -317,7 +318,7 @@ func TestSuggestEvalLabelsAndHints(t *testing.T) {
 	os.WriteFile(filepath.Join(root, "labels.tsv"), []byte(labels), 0o644)
 	os.WriteFile(filepath.Join(root, "doer.py"), []byte("def doer(): pass\n"), 0o644)
 	_, out := gloss(t, "suggest", "--eval", filepath.Join(root, "labels.tsv"), "--root", root)
-	for _, s := range []string{"1 proposals, 1 labels", "recall: 1 of 1 labels", "Phase 2 gate (>= 80% auto-accept at >= 90% precision):"} {
+	for _, s := range []string{"1 proposals, 1 labels", "recall: 1 of 1 labels", "in force: auto-accept: conf >= ", "this eval alone: auto-accept: ", "Phase 2 gate (auto-accepted proposals at least 90% correct on this eval):"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("eval report lacks %q:\n%s", s, out)
 		}
@@ -334,8 +335,15 @@ func TestSuggestEvalLabelsAndHints(t *testing.T) {
 	w.Close()
 	os.Stderr = old
 	stderr, _ := io.ReadAll(r)
-	if strings.TrimSpace(js) != "[]" {
-		t.Errorf("json: %q, want []", js)
+	var rep struct {
+		AutoAccept struct {
+			Threshold float64 `json:"threshold"`
+			Target    float64 `json:"target"`
+		} `json:"auto_accept"`
+		Proposals []any `json:"proposals"`
+	}
+	if err := json.Unmarshal([]byte(js), &rep); err != nil || rep.Proposals == nil || len(rep.Proposals) != 0 || rep.AutoAccept.Target != 0.9 {
+		t.Errorf("json: %q, want the auto-accept rule and an empty proposals list", js)
 	}
 	if !strings.Contains(string(stderr), "z: has 0 concepts; write the core tier first") {
 		t.Errorf("no hint: %q", stderr)

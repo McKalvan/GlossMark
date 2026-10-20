@@ -1,0 +1,9 @@
+# kiosk/.gloss.yaml: the self-checkout API and its gateway (2022).
+boundary: libb:kiosk
+level: container
+label: Self-checkout kiosks
+part-of: libb:circ
+realizes: [circ:SelfCheckApi]
+holds: [lib:Loan]
+default-namespace: circ
+owner: library-it

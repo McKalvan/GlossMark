@@ -1,0 +1,12 @@
+{
+  "gateway": {
+    "listen": "0.0.0.0:9443",
+    "tlsCert": "/etc/circ/tls/kiosk.pem",
+    "sessionIdleSeconds": 90
+  },
+  "kiosks": [
+    { "id": "SC400-MAIN-1", "branchId": 1, "receiptPrinter": true },
+    { "id": "SC400-MAIN-2", "branchId": 1, "receiptPrinter": true },
+    { "id": "SC400-EAST-1", "branchId": 2, "receiptPrinter": false }
+  ]
+}

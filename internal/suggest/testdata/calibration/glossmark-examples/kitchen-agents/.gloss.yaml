@@ -1,0 +1,10 @@
+# .gloss.yaml: the repository's root boundary (docs/FILE-FORMATS.md).
+# The system realizes what its containers declare. The agent layer (AGENTS.md,
+# CLAUDE.md, .claude/) and docs/ sit here: instructs, may-modify and documents
+# do not lift, so they add nothing to compare.
+boundary: dineb:kitchen-agents
+level: system
+label: Pepper Row ordering and kitchen display
+realizes: inherit
+default-namespace: pepper
+owner: pepper-row-engineering

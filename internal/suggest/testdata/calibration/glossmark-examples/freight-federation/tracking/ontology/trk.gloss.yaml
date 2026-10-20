@@ -1,0 +1,30 @@
+# ontology/trk.gloss.yaml: the tracking service's implementation tier.
+# Every subject is a trk: concept (own-subject rule); frt: and shc: are imported.
+namespace: trk
+version: 0.2.0
+concepts:
+  PickedUpIntake: { kind: process, realizes: frt:Tracking, doc: "Starts following a shipment when dispatch announces its pickup." }
+  PlannedStopSync:
+    kind: process
+    realizes: frt:Tracking
+    consumes: [frt:Route]
+    doc: "Stores each planned route's stops and ETA windows as dispatch publishes them."
+  PingIngestor: { kind: process, realizes: frt:Tracking, doc: "Validates and stores batches of GPS pings from driver devices." }
+  ScanIngestor: { kind: process, realizes: frt:Tracking, doc: "Reads the Code 128 tracking number from depot and handheld scans." }
+  GeofenceArrival:
+    kind: process
+    part-of: frt:Delivery
+    doc: "Detects that the driver is within the arrival radius of the delivery address."
+  ArrivalRadius:
+    kind: constraint
+    part-of: GeofenceArrival
+    value: "75 m"
+    value-from: { path: src/delivery/geofence.rs, symbol: ARRIVAL_RADIUS_M }
+    doc: "How close to the delivery address a ping must be to count as arrival."
+  DeliveryConfirmation:
+    kind: process
+    realizes: frt:Delivery
+    doc: "Records proof of delivery, decides whether it was inside the window, announces ShipmentDelivered."
+  ProofOfDelivery: { kind: entity, internal: true, doc: "A signature, photo or geofence record behind a delivery." }
+  TrackingQuery: { kind: process, realizes: frt:ShipmentVisibility, doc: "GET /tracking/{number}: status, last position, ETA window and events." }
+  TrackingStore: { kind: resource, internal: true, doc: "The tracking_events table of pings and scans." }

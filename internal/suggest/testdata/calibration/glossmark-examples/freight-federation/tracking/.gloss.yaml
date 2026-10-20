@@ -1,0 +1,14 @@
+# .gloss.yaml: the tracking service, one deployable, part of the freight platform
+# declared in shipment-core.
+boundary: tracking:tracker
+level: container
+label: Tracking service
+part-of: fleet:freight-platform
+default-namespace: trk
+owner: tracking-eng
+realizes: [trk:PickedUpIntake, trk:PlannedStopSync, trk:PingIngestor, trk:ScanIngestor, trk:GeofenceArrival, trk:DeliveryConfirmation, trk:TrackingQuery]
+holds: [frt:Shipment, frt:Route]
+consumes: [frt:Route]
+subscribes: [frt:ShipmentPickedUp]
+publishes: [frt:ShipmentDelivered]
+allowed: [derived, shc:DeliveryWindowPolicy]   # tests/window.rs verifies the window shipment-core publishes

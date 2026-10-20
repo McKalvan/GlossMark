@@ -1,0 +1,8 @@
+{
+  "branches": [
+    { "id": 1, "code": "MAIN", "name": "Main Library", "address": "200 Court St", "mailRun": true },
+    { "id": 2, "code": "EAST", "name": "Eastside Branch", "address": "1415 Mill Rd", "mailRun": false },
+    { "id": 3, "code": "NORTH", "name": "Northgate Branch", "address": "88 Prairie Ave", "mailRun": false },
+    { "id": 4, "code": "BKM", "name": "Bookmobile", "address": null, "mailRun": false }
+  ]
+}

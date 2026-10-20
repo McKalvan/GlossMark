@@ -1,0 +1,8 @@
+# db/.gloss.yaml: the Postgres schema. Append-only migrations.
+boundary: dineb:db
+level: container
+label: Ordering database
+part-of: dineb:kitchen-agents
+holds: [dine:Location, dine:MenuItem, dine:Allergen, dine:Order, dine:KitchenTicket, dine:Station, dine:Payment]
+default-namespace: pepper
+owner: pepper-row-engineering

@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "patronTypes": {
+    "ADULT": { "maxItems": 50, "cardYears": 3, "fineMultiplier": 1.0 },
+    "JUVENILE": { "maxItems": 15, "cardYears": 3, "fineMultiplier": 0.0 },
+    "SENIOR": { "maxItems": 50, "cardYears": 5, "fineMultiplier": 0.5 },
+    "NONRESIDENT": { "maxItems": 20, "cardYears": 1, "fineMultiplier": 1.0, "annualFee": 45.00 }
+  }
+}

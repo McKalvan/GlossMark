@@ -1,0 +1,17 @@
+# Schema Registry subjects. Topics carrying more than one event type use
+# TopicRecordNameStrategy, so the subject is <topic>-<record full name>.
+compatibility: BACKWARD_TRANSITIVE
+references:
+  - { name: com.tidewater.claims.common.Money, file: Money.avsc }
+  - { name: com.tidewater.claims.common.ClaimRef, file: ClaimRef.avsc }
+subjects:
+  claims.filed.v1-com.tidewater.claims.events.MotorClaimFiled: { file: MotorClaimFiled.avsc, refs: [Money, ClaimRef] }
+  claims.filed.v1-com.tidewater.claims.events.FloodClaimFiled: { file: FloodClaimFiled.avsc, refs: [Money, ClaimRef] }
+  claims.filed.v1-com.tidewater.claims.events.FireClaimFiled: { file: FireClaimFiled.avsc, refs: [Money, ClaimRef] }
+  claims.lifecycle.v1-com.tidewater.claims.events.ClaimWithdrawn: { file: ClaimWithdrawn.avsc, refs: [ClaimRef] }
+  claims.decisions.v1-com.tidewater.claims.events.ClaimApproved: { file: ClaimApproved.avsc, refs: [Money, ClaimRef] }
+  claims.decisions.v1-com.tidewater.claims.events.ClaimDenied: { file: ClaimDenied.avsc, refs: [ClaimRef] }
+  claims.referrals.v1-com.tidewater.claims.events.ClaimReferred: { file: ClaimReferred.avsc, refs: [ClaimRef] }
+  payouts.v1-com.tidewater.claims.events.PayoutAuthorized: { file: PayoutAuthorized.avsc, refs: [Money, ClaimRef] }
+  payouts.v1-com.tidewater.claims.events.PayoutFailed: { file: PayoutFailed.avsc, refs: [ClaimRef] }
+  fraud.alerts.v1-com.tidewater.claims.events.FraudSuspected: { file: FraudSuspected.avsc, refs: [ClaimRef] }

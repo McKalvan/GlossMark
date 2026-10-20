@@ -1,0 +1,6 @@
+# Sidecar for patron-types.json. scope=range names a JSON Pointer in note=.
+@gloss configures circ:BorrowingLimitCheck scope=range note="/patronTypes" conf=0.9
+@gloss configures lib:Adult scope=range note="/patronTypes/ADULT" conf=0.8
+@gloss configures lib:Juvenile scope=range note="/patronTypes/JUVENILE" conf=0.8
+@gloss configures lib:Senior scope=range note="/patronTypes/SENIOR" conf=0.8
+@gloss configures lib:Nonresident scope=range note="/patronTypes/NONRESIDENT" conf=0.8

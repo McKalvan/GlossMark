@@ -1,0 +1,15 @@
+# glossmark.yaml: tracking owns its implementation tier (trk:) and imports the freight
+# core (frt:) and shipment-core's published concepts (shc:) from the sibling checkout.
+# Sources are local paths in GlossMark v0.1.0; they become git refs once the fetcher ships.
+grammar: 1
+repo-iri: https://arch.kestrel-freight.example/tracking/      # tracking: expands under it
+owns:
+  trk: { iri: https://onto.kestrel-freight.example/trk/, tier: implementation, version: 0.2.0, owner: tracking-eng }
+imports:
+  frt: { iri: https://onto.kestrel-freight.example/frt/, version: "^1.3", source: ../shipment-core/ontology/frt.gloss.yaml }
+  shc: { iri: https://onto.kestrel-freight.example/shc/, version: "^1.1", source: ../shipment-core/ontology/shc.gloss.yaml }
+prefixes:
+  fleet: https://arch.kestrel-freight.example/boundaries/      # boundaries shared by all three repositories
+test-paths: ["tests/**"]
+policy:
+  soft-conf-threshold: 0.7

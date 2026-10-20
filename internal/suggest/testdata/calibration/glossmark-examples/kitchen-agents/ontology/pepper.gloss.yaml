@@ -1,0 +1,58 @@
+# ontology/pepper.gloss.yaml: the implementation tier.
+# Every concept here carries realizes: <a dine: concept>, presents:/hosts: for a
+# page or a shell, or internal: true for an engineering-private mechanism.
+namespace: pepper
+version: 0.1.0
+concepts:
+  # Deployables
+  OrderingApi:
+    kind: system-type
+    realizes: [dine:Ordering, dine:MenuPublishing, dine:Checkout]
+    doc: "The FastAPI ordering service: menu, orders, the allergen check, ticket routing and the payment handoff."
+  KitchenDisplay:
+    kind: system-type
+    realizes: dine:KitchenFulfilment
+    hosts: [TicketBoard, AllergenBanner]
+    doc: "The TypeScript kitchen display: one screen per station."
+
+  # Ordering API mechanisms
+  MenuCatalog:
+    kind: process
+    realizes: dine:MenuPublishing
+    doc: "Groups a location's available items into sections in service order; 86's and restores items."
+  OrderFlow:
+    kind: process
+    realizes: dine:Ordering
+    doc: "The order state machine: open, fire, serve, void."
+  AllergenGuard:
+    kind: process
+    realizes: dine:AllergenRule
+    doc: "find_conflicts and enforce_allergen_rule: refuses to fire an unacknowledged conflict and returns what tickets must flag."
+  TicketRouter:
+    kind: process
+    realizes: dine:KitchenFulfilment
+    doc: "Splits a fired order into one ticket per station, with the allergen alert on the stations that cook a flagged dish."
+  PaymentHandoff:
+    kind: process
+    realizes: dine:Checkout
+    doc: "Creates a Tillpoint payment intent and settles the order from the signed webhook; never sees card data."
+
+  # Kitchen display
+  TicketStore:
+    kind: process
+    part-of: KitchenDisplay
+    doc: "Client-side state: the open tickets of one station, oldest first."
+  TicketBoard:
+    kind: process
+    presents: dine:KitchenTicket
+    doc: "The station screen: one card per open ticket, late tickets highlighted, a bump button."
+  AllergenBanner:
+    kind: process
+    presents: dine:AllergenRule
+    doc: "Pins every open ticket with an allergen alert to the top of the station screen."
+  MenuAvailability:
+    kind: process
+    part-of: MenuCatalog       # added by hand: propose --from-new ignores --realizes and asks for this before acceptance
+    doc: "Taking a dish off a location's menu for the rest of service when the kitchen runs out, and restoring it."
+    proposed: true
+    proposed-by: agent:menu-curator

@@ -1,0 +1,8 @@
+# deploy/.gloss.yaml: what the Kubernetes manifests run.
+boundary: claimb:deploy
+level: container
+label: Kubernetes deployment
+part-of: claimb:claims-events
+realizes: [tide:IntakeService, tide:AssessmentService, tide:FraudScreeningService, tide:PayoutNotifierService]
+default-namespace: tide
+owner: platform

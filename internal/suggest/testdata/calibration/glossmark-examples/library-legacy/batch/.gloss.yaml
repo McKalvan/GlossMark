@@ -1,0 +1,8 @@
+# batch/.gloss.yaml: the nightly batch (Perl, Ruby, shell).
+boundary: libb:batch
+level: container
+label: Nightly batch
+part-of: libb:circ
+realizes: [circ:NightlyBatch, circ:OverdueNoticeJob, circ:NightlyFineJob, circ:HoldExpiryJob]
+default-namespace: circ
+owner: library-it

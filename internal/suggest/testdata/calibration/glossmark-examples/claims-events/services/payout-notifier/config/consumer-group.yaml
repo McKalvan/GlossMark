@@ -1,0 +1,11 @@
+# payout-notifier consumer group. Payout events for one claim share a partition
+# (keyed by claimId), so a failure notice never overtakes its authorization.
+topic: payouts.v1
+# @gloss configures tide:PayoutNotifierService scope=block conf=0.8
+consumer:
+  group.id: payout-notifier.v1
+  client.id: payout-notifier
+  auto.offset.reset: earliest
+  enable.auto.commit: "false"
+  isolation.level: read_committed
+  session.timeout.ms: "45000"

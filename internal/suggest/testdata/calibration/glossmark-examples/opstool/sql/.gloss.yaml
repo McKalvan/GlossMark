@@ -1,0 +1,10 @@
+# sql/.gloss.yaml: the MySQL schema on db01.
+boundary: whb:db
+level: container
+label: Ops database schema
+part-of: whb:opstool
+default-namespace: ops
+holds: [wh:Item, wh:Bin, wh:StockOnHand, wh:CustomerOrder, wh:ReturnAuthorization]
+# tbl_cnt stores count results: it represents the measure wh:CountVariance. represents on a
+# measure does not lift to holds (declaring it there is a gap), so it is allowed instead (F-POOR-6).
+allowed: [derived, wh:CountVariance]

@@ -84,10 +84,34 @@
       }
     },
     "suggest": {
-      "description": "Tunes gloss suggest.",
+      "description": "The repository's defaults for gloss suggest, and the precision auto-accept must meet (ADR 0024). Command-line flags override them.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "auto-accept-precision": {
+          "description": "The precision auto-accepted (SOFT) proposals must reach. The conf threshold is derived from it: the lowest conf whose proposals at or above it were at least this precise on the calibration data (suggest.calibration, else the shipped calibration). When no conf reaches it, nothing is auto-accepted. Takes precedence over policy.soft-conf-threshold; when neither is set, 0.9.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.9
+        },
+        "min-conf": {
+          "description": "Default of gloss suggest --min-conf: the lowest conf that becomes a proposal.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.3
+        },
+        "labels": {
+          "description": "A labels file (tab-separated path, symbol or *, relation, target) that gloss suggest --calibrate scores against instead of the repository's own links. Relative to the repository root.",
+          "type": "string",
+          "minLength": 1
+        },
+        "calibration": {
+          "description": "The repository's own measurement: per-basis counts written by gloss suggest --calibrate --write. When the file exists the auto-accept threshold is derived from it instead of the shipped calibration. Relative to the repository root.",
+          "type": "string",
+          "minLength": 1
+        },
         "stopwords": {
           "description": "Words that never match a concept on their own, added to the built-in list of programming words (handler, manager, process, ...). An alias is never filtered.",
           "type": "array",
@@ -191,16 +215,15 @@
       }
     },
     "policy": {
-      "description": "The configurable gate policy (model.Policy). Omitted fields take the defaults from the design: soft-conf-threshold 0.7, hard-paths [ontology/**, **/.gloss.yaml, glossmark.yaml].",
+      "description": "The configurable gate policy (model.Policy). Omitted fields take the defaults from the design: hard-paths [ontology/**, **/.gloss.yaml, glossmark.yaml]; the SOFT conf threshold is derived from suggest.auto-accept-precision (ADR 0024).",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "soft-conf-threshold": {
-          "description": "Proposed links at or above this confidence are SOFT; below it they are HARD.",
+          "description": "A fixed conf threshold: proposed links at or above it are SOFT, below it HARD. Used only when suggest.auto-accept-precision is not set (it then takes precedence); with neither set, the threshold is derived from the default precision 0.9 (ADR 0024).",
           "type": "number",
           "minimum": 0,
-          "maximum": 1,
-          "default": 0.7
+          "maximum": 1
         },
         "hard-paths": {
           "description": "Globs whose changes are always HARD.",

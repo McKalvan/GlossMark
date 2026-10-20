@@ -1,0 +1,13 @@
+# Consumer group for the assessment service. One group reads all three input
+# topics so that a fraud hold or a withdrawal is seen before the claim is decided
+# whenever it was published first.
+# @gloss configures tide:AssessmentService scope=block conf=0.8
+consumer:
+  group.id: assessment.v1
+  client.id: assessment
+  auto.offset.reset: earliest
+  enable.auto.commit: false
+  isolation.level: read_committed
+  max.poll.interval.ms: 300000
+  session.timeout.ms: 45000
+  partition.assignment.strategy: cooperative-sticky

@@ -1,0 +1,7 @@
+# .gloss.yaml: the opstool system. The Python app (app.py, helpers.py, core/, utils/) sits at the
+# root and has no directory of its own; core/ and utils/ are not boundaries.
+boundary: whb:opstool
+level: system
+label: Warehouse ops tool
+default-namespace: ops
+realizes: [inherit, ops:CountReconciler, ops:ReplenishmentRun, ops:CartBuilder, ops:ReturnGrader, wh:StockAdjustment, wh:HazmatHandling, wh:CountTolerance, wh:CountVariance]

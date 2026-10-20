@@ -1,0 +1,19 @@
+# Approve and deny decisions from assessment. 90 days.
+# @gloss provisions .DecisionsTopic conf=0.9
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: claims.decisions.v1
+  namespace: claims
+  labels:
+    strimzi.io/cluster: claims-kafka
+spec:
+  topicName: claims.decisions.v1
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: "7776000000"
+    min.insync.replicas: "2"
+    cleanup.policy: delete
+    message.timestamp.type: CreateTime
+    confluent.value.schema.validation: "true"

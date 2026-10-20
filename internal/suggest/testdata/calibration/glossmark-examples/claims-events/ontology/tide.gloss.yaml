@@ -1,0 +1,113 @@
+# ontology/tide.gloss.yaml: the implementation tier.
+# Every concept here carries realizes: <a claim: concept>, presents:/hosts: for a
+# page or a shell, or internal: true for an engineering-private mechanism.
+namespace: tide
+version: 0.1.0
+concepts:
+  # Deployable services
+  IntakeService:
+    kind: system-type
+    realizes: [claim:ClaimFiling, claim:ClaimWithdrawal]
+    doc: "claim-intake, the Kotlin/Ktor API that files and withdraws claims and publishes their events."
+  AssessmentService:
+    kind: system-type
+    realizes: claim:ClaimAssessment
+    doc: "assessment, the Python consumer that decides filed claims."
+  FraudScreeningService:
+    kind: system-type
+    realizes: claim:FraudScreening
+    doc: "fraud-screening, the Kotlin Kafka Streams application that scores filed claims."
+  PayoutNotifierService:
+    kind: system-type
+    realizes: claim:PayoutNotification
+    doc: "payout-notifier, the Go consumer that emails policyholders about their payouts."
+
+  # claim-intake
+  FilingHandler:
+    kind: process
+    realizes: claim:ClaimFiling
+    doc: "fileClaim: checks the policy and the filing window, builds the claim for its line of business."
+  WithdrawalHandler:
+    kind: process
+    realizes: claim:ClaimWithdrawal
+    doc: "WithdrawalService.withdraw: closes an undecided claim and publishes ClaimWithdrawn."
+  FilingWindowRule:
+    kind: constraint
+    realizes: claim:FilingWindow
+    published: { as: claim:FilingWindow }
+    value: "60 days"
+    doc: "FILING_WINDOW_DAYS in claim-intake, enforced by requireWithinFilingWindow."
+
+  # assessment
+  AssessmentPipeline:
+    kind: process
+    realizes: claim:ClaimAssessment
+    doc: "AssessmentConsumer: reads filed claims, withdrawals and fraud alerts on one consumer group and routes each outcome."
+  AssessmentRules:
+    kind: process
+    part-of: AssessmentPipeline
+    doc: "assess(): the pure decision function, denials first, then holds, then the auto-approval limit."
+  AutoApprovalRule:
+    kind: constraint
+    realizes: claim:AutoApprovalLimit
+    published: { as: claim:AutoApprovalLimit }
+    value: "5000 EUR"
+    value-from: { path: services/assessment/assessment/settings.py, symbol: AUTO_APPROVE_LIMIT_EUR }
+    doc: "AUTO_APPROVE_LIMIT_EUR in the assessment settings."
+
+  # fraud-screening
+  ScreeningTopology:
+    kind: process
+    realizes: claim:FraudScreening
+    doc: "The Kafka Streams topology: counts claims per policyholder, scores each filed claim, emits alerts."
+  FraudScorer:
+    kind: process
+    part-of: ScreeningTopology
+    doc: "Rule-based scoring: each signal adds weight, capped at 1.0."
+  FraudReferralPolicy:
+    kind: constraint
+    realizes: claim:FraudReferralThreshold
+    published: { as: claim:FraudReferralThreshold }
+    value: "0.80"
+    value-from: { path: services/fraud-screening/src/main/kotlin/com/tidewater/claims/fraud/Thresholds.kt, symbol: REFERRAL_SCORE_THRESHOLD }
+    doc: "REFERRAL_SCORE_THRESHOLD in fraud-screening."
+
+  # payout-notifier
+  PayoutEmail:
+    kind: process
+    realizes: claim:PayoutNotification
+    doc: "Notifier.PayoutAuthorized: renders and sends the payout email through SES."
+
+  # Kafka platform (Strimzi)
+  ClaimsKafkaCluster:
+    kind: resource
+    internal: true
+    doc: "The Strimzi Kafka cluster claims-kafka: three KRaft brokers, mTLS clients."
+  ServiceIdentities:
+    kind: resource
+    internal: true
+    doc: "One KafkaUser per service with the topic and group ACLs it needs."
+  FiledTopic:
+    kind: resource
+    internal: true
+    doc: "claims.filed.v1"
+  LifecycleTopic:
+    kind: resource
+    internal: true
+    doc: "claims.lifecycle.v1"
+  DecisionsTopic:
+    kind: resource
+    internal: true
+    doc: "claims.decisions.v1"
+  ReferralsTopic:
+    kind: resource
+    internal: true
+    doc: "claims.referrals.v1"
+  PayoutsTopic:
+    kind: resource
+    internal: true
+    doc: "payouts.v1"
+  FraudAlertsTopic:
+    kind: resource
+    internal: true
+    doc: "fraud.alerts.v1"

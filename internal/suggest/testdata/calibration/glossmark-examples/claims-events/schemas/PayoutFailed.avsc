@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "PayoutFailed",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "Treasury could not pay an authorized payout (bank rejected it, account closed).",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "payoutId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "failureCode", "type": "string", "doc": "SEPA reason code, e.g. AC04."}
+  ]
+}

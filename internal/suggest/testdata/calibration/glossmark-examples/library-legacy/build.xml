@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ant build for CIRC (2010). Jenkins runs "ant clean test war". -->
+<project name="circ" default="war" basedir=".">
+  <property name="src" value="src/main/java"/>
+  <property name="test.src" value="src/test/java"/>
+  <property name="web" value="src/main/webapp"/>
+  <property name="build" value="build"/>
+  <property name="lib" value="lib"/>
+
+  <path id="classpath">
+    <fileset dir="${lib}" includes="*.jar"/>
+  </path>
+
+  <target name="clean">
+    <delete dir="${build}"/>
+  </target>
+
+  <target name="compile">
+    <mkdir dir="${build}/classes"/>
+    <javac srcdir="${src}" destdir="${build}/classes" classpathref="classpath" source="11" target="11" includeantruntime="false"/>
+    <copy file="config/log4j.properties" todir="${build}/classes"/>
+  </target>
+
+  <target name="test" depends="compile">
+    <mkdir dir="${build}/test-classes"/>
+    <javac srcdir="${test.src}" destdir="${build}/test-classes" includeantruntime="false">
+      <classpath><path refid="classpath"/><pathelement location="${build}/classes"/></classpath>
+    </javac>
+    <junit haltonfailure="true" printsummary="true">
+      <classpath><path refid="classpath"/><pathelement location="${build}/classes"/><pathelement location="${build}/test-classes"/></classpath>
+      <batchtest><fileset dir="${build}/test-classes" includes="**/*Test.class"/></batchtest>
+    </junit>
+  </target>
+
+  <target name="war" depends="compile">
+    <war destfile="${build}/circ.war" webxml="${web}/WEB-INF/web.xml">
+      <fileset dir="${web}" excludes="WEB-INF/web.xml"/>
+      <lib dir="${lib}" excludes="junit-*.jar,hamcrest-*.jar"/>
+      <classes dir="${build}/classes"/>
+    </war>
+  </target>
+</project>

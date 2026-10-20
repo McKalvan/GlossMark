@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "ClaimWithdrawn",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "The policyholder withdrew a claim before a decision. Downstream consumers stop work on it.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "reason", "type": {"type": "enum", "name": "WithdrawalReason", "symbols": ["RESOLVED_PRIVATELY", "BELOW_EXCESS", "FILED_IN_ERROR", "OTHER"]}}
+  ]
+}
