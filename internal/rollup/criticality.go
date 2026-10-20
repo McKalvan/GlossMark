@@ -17,6 +17,11 @@ import (
 // them to place concepts inside boundary boxes; criticality rolls up along them.
 var HousingRelations = []string{"realizes", "represents"}
 
+// RatingRelations are the boundary → concept relations a boundary without a
+// level of its own is rated by: what it houses, and what it configures (a
+// value editor carries the level of the rule it edits; ADR 0012).
+var RatingRelations = []string{"realizes", "represents", "configures"}
+
 // Criticality stamps every concept, boundary and artifact with its effective
 // governance level (see docs/GOVERNANCE.md). A declared level always wins.
 //
@@ -24,7 +29,9 @@ var HousingRelations = []string{"realizes", "represents"}
 //     is published as, else of the concept it is part of, else of its is-a
 //     ancestors.
 //   - A boundary without one takes the highest level of the concepts its code
-//     realizes or represents (declared or derived), else its parent's.
+//     realizes, represents or configures (declared or derived), else its
+//     parent's, unless it is a surface: a boundary that presents or hosts and
+//     is rated by nothing else stays unclassified (ADR 0012).
 //   - An artifact takes the highest level of the concepts it links to (not
 //     those it presents or hosts). A boundary's level is a floor for the
 //     artifacts beneath it only when its manifest sets criticality-floor: true.
@@ -81,7 +88,7 @@ func Criticality(g *graph.Graph) {
 	housed := func(b *graph.Node) (string, string) {
 		best := ""
 		var bestNode *graph.Node
-		for _, p := range HousingRelations {
+		for _, p := range RatingRelations {
 			for _, e := range g.Out(b.ID, p) {
 				o := g.Node(e.O)
 				if o == nil || o.NodeType != model.NodeConcept {
@@ -105,9 +112,11 @@ func Criticality(g *graph.Graph) {
 			b.Criticality, b.CriticalityFrom = lvl, from
 		}
 	}
-	// Parent fallback, walking up the part-of chain to the nearest classified ancestor.
+	// Parent fallback, walking up the part-of chain to the nearest classified
+	// ancestor. A surface takes no level from its neighbours: a BFF that only
+	// presents order placement is not as critical as the system around it.
 	for _, b := range bounds {
-		if b.Criticality != "" {
+		if b.Criticality != "" || surfaceOnly(g, b.ID) {
 			continue
 		}
 		for _, anc := range g.PartOfChain(b.ID) {
@@ -138,6 +147,22 @@ func Criticality(g *graph.Graph) {
 			a.Criticality, a.CriticalityFrom = best, bestNode.CURIE
 		}
 	}
+}
+
+// surfaceOnly reports whether boundary b presents or hosts something and
+// realizes, represents or configures nothing.
+func surfaceOnly(g *graph.Graph, b string) bool {
+	for _, p := range RatingRelations {
+		if len(g.Out(b, p)) > 0 {
+			return false
+		}
+	}
+	for _, p := range SurfaceRelations {
+		if len(g.Out(b, p)) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // CarriesCriticality reports whether an artifact takes the level of a concept
@@ -190,7 +215,8 @@ func better(lvl string, n *graph.Node, best string, bestNode *graph.Node) bool {
 }
 
 // Understated lists boundaries whose declared criticality is below that of a
-// concept their code realizes or represents: the governance drift signal.
+// concept their code realizes, represents or configures: the governance
+// drift signal.
 func Understated(g *graph.Graph) []Understatement {
 	var out []Understatement
 	seen := map[string]bool{}
@@ -198,7 +224,7 @@ func Understated(g *graph.Graph) []Understatement {
 		if b.CriticalityFrom != "declared" {
 			continue
 		}
-		for _, p := range HousingRelations {
+		for _, p := range RatingRelations {
 			for _, e := range g.Out(b.ID, p) {
 				o := g.Node(e.O)
 				if o == nil || o.NodeType != model.NodeConcept || seen[b.ID+"|"+o.ID] {

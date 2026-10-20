@@ -1,0 +1,38 @@
+<!-- @gloss documents gm:DeclaredCapability scope=file -->
+# ADR 0012: Surfaces say what they do: configures, placement, empty declarations and levels
+
+Status: accepted, 2026-10-20. Builds on [ADR 0001](0001-presents-and-hosts.md). Closes issues #48 (F-SURF-2), #49 (F-SURF-3), #50 (F-SURF-4), #51 (F-SURF-5), #55 (F-SURF-9) and #56 (F-SURF-10).
+
+## Context
+
+ADR 0001 took pages and shells out of `realizes` with `presents` and `hosts`. The ambiguous-surfaces experiment (glossmark-examples, `lab/ambiguous-surfaces`) marked the same code five ways in six kinds of surface (a server-rendered page, a CLI, a BFF, an admin console, a GraphQL gateway, a PDF renderer) and found the places where the outcome depended on how a marker was spelled rather than on what the code does.
+
+An admin page that edits a constraint's value is neither the mechanism nor only a view of it. `configures` says exactly that, and of the relations tried it is the only one that keeps the constraint in its engine's box while giving the page the constraint's level. But a manifest could not declare it (GM110), so the page's link and its test were outside the derived allowed set (GM503, HARD in the gate), and on a constraint it lifted nothing to the boundary, so `drift` never compared it.
+
+The manifest is where an architect states what a boundary is for, and `drift` catches code that exceeds it. For surfaces that worked one way only: a boundary declaring `realizes: [hp:X]` whose code only presents X got a gap, but a boundary declared as a surface (`presents: [hp:X]`) whose code `implements` X got nothing, because an undeclared relation is not compared and `realizes: []` was read as no key. No manifest could forbid a relation.
+
+ADR 0001 rule 4 exempts `hosts` from `presented-only` because a shell hosting a whole system-type is expected to have no single implementation, but nothing checked that the hosted concept was a system-type. Marking a critical process `hosts` (a plausible reading for a CLI command, a router or a GraphQL server) gave a concept with no mechanism and no finding anywhere.
+
+A concept is placed in the boundary whose own code links to it directly, ahead of one that reaches it by lifting through another concept. Engines are normally marked through an implementation concept (`implements .CreditCheck`, which realizes `hp:CreditLimit`), so a BFF or an admin console that wrote `implements hp:CreditLimit` outranked the engine and took the concept into its box, while the same surface marked through an implementation concept sent it to the root. Placement depended on the CURIE style, not on the code.
+
+A boundary with no level of its own took the highest level of what its code realizes, else its parent's. A surface that only presents realizes nothing, so it took the whole system's level: the BFF that presents order placement was `critical`, the same BFF that implements it `high`.
+
+## Decision
+
+1. **`configures` is a manifest relation.** A manifest may declare `configures: [hp:CreditLimit]`. It is in the derived allowed set like every declared relation, and `gloss drift` compares it like `presents`.
+2. **`configures` lifts as itself on any concept kind.** Code that `configures` a concept makes its boundary `configure` it. On a resource or system-type it still also lifts to `realizes`, as before.
+3. **`configures` carries criticality and never places.** The artifact takes the level of the concept it configures (a mistake on the page changes the rule); the concept is still drawn in the box of the boundary that realizes or represents it. A concept only configured, presented or hosted is placed `surface`.
+4. **An explicit empty list declares none.** `realizes: []` (or `holds: []`, `presents: []` and so on) means "this boundary does none of it": the relation is compared, and every derived edge is a violation, `hpb:storefront realizes hp:Pricing, declared realizes []`. A relation that is not written is still not compared, so existing manifests are unaffected. `realizes: [inherit]` is not empty.
+5. **A gap names the relation the code used instead.** When a declared `presents hp:Pricing` is not reached as `presents` but the boundary's code reaches it through another compared relation, the gap says so: "nothing under it presents it; its code implements it instead".
+6. **`hosts` is for system-types.** An inline `hosts` on a concept that is not a system-type, nor a page concept that itself presents or hosts something, is a `gloss check` warning (GM223). Such a hosted concept with nothing implementing it is `presented-only` in `gloss drift`, like a presented one. An inline `presents` on a constraint warns too (GM224): a page that edits the limit configures it.
+7. **One realizes hop is the boundary's own code.** For placement, code that implements an implementation concept which realizes (or is published as) X links to X as directly as a marker naming X. Two mechanisms in unrelated boundaries therefore go to their nearest common box whichever CURIE style each used. Among boundaries whose code links to the concept, one whose manifest also declares it (in `realizes` or `holds`, or through an implementation concept that realizes it) wins.
+8. **A surface's level comes from what it does.** A boundary without its own `criticality:` is rated by what it realizes, represents or configures. One that presents or hosts and does none of these stays unclassified rather than taking its parent's level; set `criticality:` on it, or `criticality-floor: true` on the parent, to rate it.
+9. **A page with tests is a page concept.** The inline `presents` form is for components with no tests or logic of their own; a page that has them is modelled as an implementation concept that presents the core concept, so it can be untested and counts in coverage. MARKING.md "Pages and shells" gives the rule. No tool change: reporting inline surfaces as untested would key a finding by artifact, which no other finding does.
+
+## Consequences
+
+- New warnings on adoption branches: GM223 on `hosts` of a process, capability or other non-system-type (a CLI command, a router, a GraphQL server that does the work), and GM224 on `presents` of a constraint. Each says which relation to write instead.
+- `presented-only` can now name hosted concepts.
+- Concepts may move box in the viewer: a surface that named a core concept directly no longer outranks the engine, so the concept goes to their nearest common box, and a boundary that declares the concept beats one that does not.
+- A boundary that only presents or hosts, with no `criticality:` of its own, becomes unclassified where it used to take its parent's level.
+- `realizes: []` and the other empty lists, which used to be ignored, are now compared.

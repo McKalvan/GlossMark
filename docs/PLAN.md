@@ -35,7 +35,8 @@ glossmark.yaml, ontology/*.gloss.yaml, **/.gloss.yaml, inline @gloss markers
         ├─ internal/gate      gloss diff      (AUTO/SOFT/HARD, per-view impact, PR comment)
         ├─ internal/views     gloss view      (projections → static HTML viewer)
         ├─ internal/store     gloss export    (SQLite with recursive CTE closures, JSON-LD context)
-        ├─ internal/mcp       gloss mcp       (stdio MCP server: 5 tools)
+        ├─ internal/slice     gloss slice     (feature slices: typed traversal from a seed, ADR 0023)
+        ├─ internal/mcp       gloss mcp       (stdio MCP server: 9 tools)
         └─ internal/agents    gloss agents    (AGENTS.md vocabulary snippet)
 ```
 
@@ -72,7 +73,7 @@ Gates are a policy table with spec defaults, overridable in `glossmark.yaml` und
 ## 4. Repository layout of this project
 
 ```
-cmd/gloss/                CLI entry point (subcommands: build, check, drift, diff, impact, coverage, accept, reject, status, propose, context, hook, view, export, publish, landscape, mcp, agents, version)
+cmd/gloss/                CLI entry point (subcommands: build, check, drift, diff, impact, coverage, accept, reject, status, propose, context, hook, view, slice, export, publish, landscape, mcp, agents, version)
 internal/ontoedit/        Formatting-preserving edits to *.gloss.yaml (propose, accept, remove)
 internal/model/           File formats as Go types + validation; relation vocabulary
 internal/marker/          Grammar, comment table, declaration detector
@@ -84,6 +85,7 @@ internal/rollup/          Rollup rules, drift classification, metrics
 internal/ledger/          Ledger I/O, review states
 internal/gate/            Gate policy, diff, PR comment rendering
 internal/views/           Projection engine
+internal/slice/           Feature slices (ADR 0023)
 internal/viewer/          Embedded static HTML viewer
 internal/store/           SQLite export
 internal/mcp/             MCP stdio server

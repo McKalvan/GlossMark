@@ -38,6 +38,8 @@ type Data struct {
 	SourceURL string `json:"sourceUrl,omitempty"`
 	// Classified counts concepts with a criticality, for the empty state.
 	Classified int `json:"classified"`
+	// Slices is every concept's and boundary's feature slice, for "Slice on this".
+	Slices *SliceIndex `json:"slices,omitempty"`
 }
 
 // ConceptDetail is the concept pane: what the concept stands for, the code
