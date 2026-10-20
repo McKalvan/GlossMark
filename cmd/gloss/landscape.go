@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -47,16 +48,20 @@ func cmdLandscape(args []string) int {
 		if err != nil {
 			return fail(fmt.Errorf("%s: %w", r, err))
 		}
-		// Prefix artifact paths with the repo name so they stay unique in the union.
+		// Prefix every path with the repo name so it stays unique in the
+		// union and every finding says which repository it is in. An
+		// imported ontology's ../sibling/ path cleans to sibling/.
 		name := filepath.Base(p.WS.Root)
-		for _, n := range p.Graph.NodesOf(model.NodeArtifact) {
-			n.Path = name + "/" + n.Path
-			n.Label = name + "/" + n.Label
-			n.File = name + "/" + n.File
+		for _, n := range p.Graph.Nodes() {
+			if n.NodeType == model.NodeArtifact {
+				n.Path = name + "/" + n.Path
+				n.Label = name + "/" + n.Label
+			}
+			n.File = inRepo(name, n.File)
 		}
 		for _, e := range p.Graph.Edges() {
-			if e.Prov != nil && e.Prov.Path != "" && e.Source != graph.SourceDeclared {
-				e.Prov.Path = name + "/" + e.Prov.Path
+			if e.Prov != nil {
+				e.Prov.Path = inRepo(name, e.Prov.Path)
 			}
 		}
 		wss = append(wss, p.WS)
@@ -216,6 +221,14 @@ func boundaryAncestors(g *graph.Graph, ws *load.Workspace) map[string]map[string
 		out[id] = seen
 	}
 	return out
+}
+
+// inRepo prefixes a workspace-relative path with the repository name.
+func inRepo(name, p string) string {
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	return path.Clean(name + "/" + filepath.ToSlash(p))
 }
 
 func baseNames(paths []string) []string {

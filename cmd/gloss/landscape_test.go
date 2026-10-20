@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+// TestLandscapePathsCarryRepo: boundary and ontology findings name their
+// repository as marker findings do (#115).
+func TestLandscapePathsCarryRepo(t *testing.T) {
+	tmp := t.TempDir()
+	writeTree(t, tmp, map[string]string{
+		"core/glossmark.yaml":           "owns:\n  grid: { iri: https://x.test/grid/, tier: core }\n",
+		"core/ontology/grid.gloss.yaml": "version: 1.0.0\nconcepts:\n  Meter: { kind: entity }\n  Tariff: { kind: entity }\n",
+		"core/.gloss.yaml":              "boundary: grid:core\nlevel: system\n",
+		"ana/glossmark.yaml":            "imports:\n  grid: { iri: https://x.test/grid/, version: \"^1.0\", source: ../core/ontology/grid.gloss.yaml }\n",
+		"ana/.gloss.yaml":               "boundary: grid:analytics\nlevel: system\nholds: [grid:Tariff]\n",
+	})
+	out, _ := capture(t, "landscape", "--fail-on", "none", filepath.Join(tmp, "core"), filepath.Join(tmp, "ana"))
+	for _, want := range []string{"[ana/.gloss.yaml:", "[core/ontology/grid.gloss.yaml:3]"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("landscape output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "[.gloss.yaml") || strings.Contains(out, "[ontology/") {
+		t.Errorf("a location without its repository:\n%s", out)
+	}
+}
+
 // TestLandscapeContextMap: the context map reads consumer → producer, as its
 // header says, and draws no edge between a boundary and one that contains it,
 // by directory nesting or part-of (issue #103).
