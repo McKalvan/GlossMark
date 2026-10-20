@@ -56,7 +56,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | dangling | a marker targets a concept that does not exist (write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |
-| untested | an implemented concept nothing verifies | |
+| untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts) | |
 | presented-only | a page presents the concept but nothing implements it | |
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |

@@ -13,6 +13,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
 // tempRepo returns a fresh workspace root and a helper that writes files into it.
@@ -91,5 +92,39 @@ func TestOneGateClassifier(t *testing.T) {
 	}
 	if ts[2].Gate != gate.SOFT || !strings.Contains(strings.Join(ts[2].Hints, ";"), "it is not rated by it") {
 		t.Errorf("LimitPage.tsx: %+v", ts[2])
+	}
+}
+
+// TestCoreTestCredit: a test of a core concept covers an implementation
+// concept realizing it only when that concept is the sole realizer or the
+// test sits in a boundary holding one of its artifacts (#52).
+func TestCoreTestCredit(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Invoicing: { kind: process }\n  Paying: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  BillingEngine: { kind: process, realizes: z:Invoicing }\n  InvoiceDocument: { kind: process, realizes: z:Invoicing }\n  Payer: { kind: process, realizes: z:Paying }\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
+	write("billing/.gloss.yaml", "boundary: o:billing\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:BillingEngine, i:Payer]\n")
+	write("documents/.gloss.yaml", "boundary: o:documents\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:InvoiceDocument]\n")
+	write("billing/engine.py", "# @gloss implements .BillingEngine\ndef bill(): pass\n\n# @gloss implements .Payer\ndef pay(): pass\n")
+	write("billing/test_engine.py", "# @gloss verifies z:Invoicing\ndef test_bill(): pass\n")
+	// The sole realizer of z:Paying is covered by a test anywhere.
+	write("tests/test_pay.py", "# @gloss verifies z:Paying\ndef test_pay(): pass\n")
+	write("documents/pdf.py", "# @gloss implements .InvoiceDocument\ndef render(): pass\n")
+	report := func() *rollup.Report {
+		ws, g, _, lg := build(t, root)
+		return rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	}
+	rep := report()
+	if u := concepts(findings(rep, rollup.KindUntested)); !has(u, "i:InvoiceDocument") || has(u, "i:BillingEngine") || has(u, "i:Payer") {
+		t.Errorf("untested = %v, want i:InvoiceDocument only", u)
+	}
+	if m := rep.Metrics; m.ConceptsCovered != 2 || m.ConceptsInScope != 3 {
+		t.Errorf("coverage %d of %d, want 2 of 3", m.ConceptsCovered, m.ConceptsInScope)
+	}
+	// A test of the core concept beside the renderer covers it.
+	write("documents/test_pdf.py", "# @gloss verifies z:Invoicing\ndef test_render(): pass\n")
+	if m := report().Metrics; m.ConceptsCovered != 3 {
+		t.Errorf("with a test in o:documents: coverage %d of %d, want 3", m.ConceptsCovered, m.ConceptsInScope)
 	}
 }

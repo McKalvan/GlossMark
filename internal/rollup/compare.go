@@ -168,6 +168,8 @@ type comparer struct {
 	ws  *load.Workspace
 	opt Options
 	r   *Report
+	// realizers maps a core concept to the concepts that realize it (lazy).
+	realizers map[string]map[string]bool
 }
 
 func (c *comparer) add(f Finding) {
@@ -650,11 +652,15 @@ func (c *comparer) tested(id string, depth int) bool {
 			}
 		}
 	}
-	// An implementation concept is tested when a core concept it realizes is tested directly.
+	// An implementation concept is tested when a core concept it realizes is
+	// tested directly, and it is that core concept's only realizer or the test
+	// sits in a boundary holding one of its artifacts: the engine's test of a
+	// core concept does not cover a renderer that realizes it too.
 	for _, core := range RealizesStar(c.g, id) {
+		sole := len(c.realizersOf(core)) == 1
 		for _, p := range []string{"tests", "verifies"} {
 			for _, e := range c.g.In(core, p) {
-				if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
+				if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && (sole || c.implementedIn(id, a.Boundary)) {
 					return true
 				}
 			}
@@ -670,6 +676,32 @@ func (c *comparer) tested(id string, depth int) bool {
 	}
 	for _, d := range c.g.Descendants(id) {
 		if c.tested(d, depth+1) {
+			return true
+		}
+	}
+	return false
+}
+
+// realizersOf returns the concepts whose RealizesStar reaches core.
+func (c *comparer) realizersOf(core string) map[string]bool {
+	if c.realizers == nil {
+		c.realizers = map[string]map[string]bool{}
+		for _, n := range c.g.NodesOf(model.NodeConcept) {
+			for _, k := range RealizesStar(c.g, n.ID) {
+				if c.realizers[k] == nil {
+					c.realizers[k] = map[string]bool{}
+				}
+				c.realizers[k][n.ID] = true
+			}
+		}
+	}
+	return c.realizers[core]
+}
+
+// implementedIn reports whether an artifact in boundary b implements concept id.
+func (c *comparer) implementedIn(id, b string) bool {
+	for _, e := range c.g.In(id, "implements") {
+		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && a.Boundary == b {
 			return true
 		}
 	}
