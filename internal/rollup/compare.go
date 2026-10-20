@@ -738,7 +738,7 @@ func (c *comparer) implemented(id string, depth int) bool {
 	if depth > 8 {
 		return false
 	}
-	for _, e := range c.g.In(id, "implements") {
+	for _, e := range append(c.g.In(id, "implements"), c.g.In(id, "publishes-value")...) {
 		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
 			return true
 		}
@@ -812,7 +812,7 @@ func (c *comparer) realizersOf(core string) map[string]bool {
 
 // implementedIn reports whether an artifact in boundary b implements concept id.
 func (c *comparer) implementedIn(id, b string) bool {
-	for _, e := range c.g.In(id, "implements") {
+	for _, e := range append(c.g.In(id, "implements"), c.g.In(id, "publishes-value")...) {
 		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && a.Boundary == b {
 			return true
 		}
@@ -828,12 +828,15 @@ func (c *comparer) stale() {
 				continue
 			}
 			cur := strings.TrimPrefix(id, "value:")
-			live := ""
+			live, bound := "", e.Path
 			if n := c.g.NodeByCurie(cur); n != nil {
 				live = n.LiveValue
+				if n.ValueFrom != "" {
+					bound = n.ValueFrom
+				}
 			}
 			c.add(Finding{ID: KindValueDrift + ":" + cur, Kind: KindValueDrift, Severity: "error", Path: e.Path, Concept: cur,
-				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, e.Path, e.Live, live, cur)})
+				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, bound, e.Live, live, cur)})
 			continue
 		}
 		if e.Status != model.StatusStale {

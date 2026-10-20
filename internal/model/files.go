@@ -322,9 +322,11 @@ type Concept struct {
 	Deprecated bool       `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	ReplacedBy string     `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	Value      any        `yaml:"value,omitempty" json:"value,omitempty"`
-	// ValueFrom binds value to the line of code it comes from, so a change to
-	// that line without a change to value is "published value drifted".
-	ValueFrom *ValueFrom `yaml:"value-from,omitempty" json:"value-from,omitempty"`
+	// ValueFrom binds value to the lines of code it comes from (one
+	// location, or a list when the value is duplicated, say in the API and
+	// in a page), so a change to any of them without a change to value is
+	// "published value drifted".
+	ValueFrom ValueFromList `yaml:"value-from,omitempty" json:"value-from,omitempty"`
 	// Proposed marks an entry an agent (or anyone) added with the same semantics
 	// as `@gloss?`: it exists so links resolve, but a human accepts it
 	// (gloss accept --concept) before it counts as part of the ontology.
@@ -357,6 +359,28 @@ type ValueFrom struct {
 	Path   string `yaml:"path" json:"path"`
 	Symbol string `yaml:"symbol,omitempty" json:"symbol,omitempty"`
 	Line   int    `yaml:"line,omitempty" json:"line,omitempty"`
+}
+
+// ValueFromList is value-from: one location (a mapping) or several (a
+// sequence of mappings).
+type ValueFromList []ValueFrom
+
+// UnmarshalYAML accepts a mapping or a sequence of mappings.
+func (l *ValueFromList) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.SequenceNode {
+		var vs []ValueFrom
+		if err := n.Decode(&vs); err != nil {
+			return err
+		}
+		*l = vs
+		return nil
+	}
+	var v ValueFrom
+	if err := n.Decode(&v); err != nil {
+		return err
+	}
+	*l = ValueFromList{v}
+	return nil
 }
 
 // RelationNames returns the concept's generic relation keys, sorted.
