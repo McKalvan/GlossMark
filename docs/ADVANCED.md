@@ -62,7 +62,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
 
-`--fail-on` chooses which kinds fail the command; `policy.waivers` in `glossmark.yaml` silences one finding until a date.
+`gloss drift --fail-on` and `gloss landscape --fail-on` take a comma-separated list of these kind names, spelled as in the first column (`value-drift`, `presented-only`); any of them fails the command when listed, `stale`, `rogue` and `proposed` included. The defaults are `violation,value-drift,gap,dangling` for `drift` (the ticks above) and `violation,dangling` for `landscape`. `gloss diff --fail-on` takes a gate class instead (`HARD`, `SOFT` or `none`). `policy.waivers` in `glossmark.yaml` silences one finding until a date.
 
 ## Gates (`gloss diff`)
 
