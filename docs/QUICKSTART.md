@@ -15,12 +15,19 @@ Pin a release everywhere the tool runs (`@v0.1.0`, never `@latest` or `@main`): 
 ## 0. Scaffold
 
 ```sh
-gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per top-level source directory
-gloss init               # write it, install the agent hook, build the first graph
+gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per deployable directory, then hook and build
+gloss init               # write it, install the agent hook, build the first graph (.glossmark/graph.jsonl)
 gloss check              # passes on the empty scaffold
 ```
 
-`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. The sections below explain what it wrote.
+`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one container manifest per deployable directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server, then builds the first graph. It never overwrites a file; run it again and it skips what exists. The sections below explain what it wrote.
+
+- **Deployable directories.** Each top-level directory holding source, schema (`.avsc`, `.proto`, `.graphql`), infrastructure (Terraform, Kubernetes or Helm YAML) or configuration files gets a manifest. A top-level directory with no project file of its own (`package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`, `Dockerfile`, ...) whose children have one is a grouping (`apps/`, `services/`): each child gets the manifest instead (`apps/web`, `services/booking-api`).
+- **Prefixes.** `--core`, `--impl` and `--boundary-prefix` override the guesses from the directory name (initials, which rarely read as a domain: pick a word).
+- **IRIs.** `--iri` is a base shared by sibling repositories: each namespace gets `<iri><prefix>/` and the repository `<iri><name>/`, so two siblings initialised with the company base never share a namespace IRI. `gloss landscape` refuses two prefixes bound to one IRI.
+- **Importers.** `--import ../shipment-core` (repeatable) imports the sibling's core namespace instead of owning one: `imports:` gets its IRI, `^<current version>` and a `source:` path, no core tier file is written, and `init` runs `gloss lock`.
+- **A workspace below the git root.** GitHub runs workflows only at the git root, so `init` writes no `.github/` there and prints the job with `root:` set to the workspace instead; `gloss doctor` looks for it in the git root's workflows.
+- **An existing vocabulary.** A `glossary.md` or an `enums.yaml` in the tree is listed with the `gloss import` command that reads it (section 2).
 
 ## 1. Declare the namespaces
 

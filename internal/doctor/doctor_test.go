@@ -134,3 +134,58 @@ func TestDoctor(t *testing.T) {
 	}
 	_ = graph.New
 }
+
+// TestDoctorCIAtGitRoot: a workspace below the git root is covered by a
+// workflow at the git root that runs the Action with its root: (issue #36),
+// and not by one that names another workspace.
+func TestDoctorCIAtGitRoot(t *testing.T) {
+	top := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(top, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	for _, ws := range []string{"showcase/clinic-booking", "showcase/clinic-booking-v2"} {
+		write(ws+"/glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+		write(ws+"/ontology/z.gloss.yaml", "concepts: {}\n")
+	}
+	write(".github/workflows/showcase.yml", "jobs:\n  g:\n    strategy: { matrix: { root: [showcase/clinic-booking] } }\n    steps:\n      - uses: mckalvan/glossmark@v0.1.0\n        with: { root: \"${{ matrix.root }}\" }\n")
+	if out, err := exec.Command("git", "-C", top, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	pins := func(rel string) Check {
+		ws, err := load.Load(filepath.Join(top, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		for _, c := range Run(ws, res.Graph, nil, Env{LookPath: func(string) (string, error) { return "", errors.New("no") }}) {
+			if c.Name == "CI pins" {
+				return c
+			}
+		}
+		t.Fatal("no CI pins check")
+		return Check{}
+	}
+	if c := pins("showcase/clinic-booking"); c.Status != OK || !strings.Contains(c.Msg, "showcase.yml") {
+		t.Errorf("covered workspace: %+v", c)
+	}
+	if c := pins("showcase/clinic-booking-v2"); c.Status != Warn || !strings.Contains(c.Msg, "git root") {
+		t.Errorf("uncovered workspace: %+v", c)
+	}
+}
+
+func TestMentionsRoot(t *testing.T) {
+	for text, want := range map[string]bool{
+		"root: showcase/clinic-booking\n":        true,
+		"root: ./showcase/clinic-booking/\n":     true,
+		"root: [a, \"showcase/clinic-booking\"]": true,
+		"root: showcase/clinic-booking-v2\n":     false,
+		"root: x/showcase/clinic-booking\n":      false,
+		"root: showcase/clinic-booking/web\n":    false,
+	} {
+		if got := mentionsRoot(text, "showcase/clinic-booking"); got != want {
+			t.Errorf("%q: %v, want %v", text, got, want)
+		}
+	}
+}
