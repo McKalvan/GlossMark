@@ -1,12 +1,12 @@
-// Package horsefactory assembles horses.
+// Package circulation lends library items.
 //
-// @gloss implements impl:HorseFactoryService scope=file
-package horsefactory
+// @gloss implements circ:CirculationService scope=file
+package circulation
 
-// @gloss implements impl:HoofStep
-func (b *HorseBuilder) AttachHoof(h Hoof) error { return nil }
+// @gloss implements circ:MarcFieldMapper
+func (b *CatalogIntake) MapField(f MarcField) error { return nil }
 
-// @gloss represents zoo:Horse
-type Horse struct {
+// @gloss represents lib:Media
+type Media struct {
 	ID string
 }

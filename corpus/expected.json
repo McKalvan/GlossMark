@@ -1,112 +1,112 @@
 {
   "testdata/example.py": [
-    {"line": 7, "relation": "implements", "targets": ["impl:StallionProduction"], "scope": "symbol", "symbol": "breed_stallion"},
-    {"line": 12, "proposed": true, "relation": "represents", "targets": ["zoo:Mare"], "keys": {"conf": "0.72", "note": "agent guess from field names"}, "scope": "symbol", "symbol": "MareRecord"},
-    {"line": 17, "relation": "produces", "targets": ["zoo:Foal", "zoo:FoalBorn"], "scope": "symbol", "symbol": "foal"},
-    {"line": 24, "proposed": true, "relation": "implements", "targets": ["impl:NEW:Gelding"], "keys": {"note": "no concept exists yet"}, "scope": "symbol", "symbol": "geld"}
+    {"line": 7, "relation": "implements", "targets": ["circ:BookIntake"], "scope": "symbol", "symbol": "catalog_book"},
+    {"line": 12, "proposed": true, "relation": "represents", "targets": ["lib:DVD"], "keys": {"conf": "0.72", "note": "agent guess from field names"}, "scope": "symbol", "symbol": "DVDRecord"},
+    {"line": 17, "relation": "produces", "targets": ["lib:Book", "lib:ItemReturned"], "scope": "symbol", "symbol": "return_item"},
+    {"line": 24, "proposed": true, "relation": "implements", "targets": ["circ:NEW:DamageCheck"], "keys": {"note": "no concept exists yet"}, "scope": "symbol", "symbol": "check_damage"}
   ],
   "testdata/decorated.py": [
-    {"line": 4, "relation": "implements", "targets": ["impl:FoalingPipeline"], "scope": "symbol", "symbol": "foal_endpoint"},
-    {"line": 14, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "Shoe"},
-    {"line": 20, "relation": "implements", "targets": ["impl:TailQueue"], "scope": "symbol", "symbol": "shoe"}
+    {"line": 4, "relation": "implements", "targets": ["circ:ReturnPipeline"], "scope": "symbol", "symbol": "return_endpoint"},
+    {"line": 14, "relation": "implements", "targets": ["circ:MarcFieldMapper"], "scope": "symbol", "symbol": "Shelf"},
+    {"line": 20, "relation": "implements", "targets": ["circ:CoverImageCache"], "scope": "symbol", "symbol": "shelve"}
   ],
   "testdata/example.ts": [
-    {"line": 1, "proposed": true, "relation": "represents", "targets": ["zoo:Mare"], "keys": {"conf": "0.72"}, "scope": "symbol", "symbol": "Mare"},
-    {"line": 4, "relation": "implements", "targets": ["impl:FoalRegistry"], "scope": "symbol", "symbol": "FoalRegistry"},
-    {"line": 13, "relation": "documents", "targets": ["zoo:Foal"], "scope": "symbol", "symbol": "Foal"}
+    {"line": 1, "proposed": true, "relation": "represents", "targets": ["lib:Book"], "keys": {"conf": "0.72"}, "scope": "symbol", "symbol": "Book"},
+    {"line": 4, "relation": "implements", "targets": ["circ:LoanStore"], "scope": "symbol", "symbol": "LoanStore"},
+    {"line": 13, "relation": "documents", "targets": ["lib:Loan"], "scope": "symbol", "symbol": "Loan"}
   ],
   "testdata/example.go": [
-    {"line": 3, "relation": "implements", "targets": ["impl:HorseFactoryService"], "keys": {"scope": "file"}, "scope": "file"},
-    {"line": 6, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "HorseBuilder.AttachHoof"},
-    {"line": 9, "relation": "represents", "targets": ["zoo:Horse"], "scope": "symbol", "symbol": "Horse"}
+    {"line": 3, "relation": "implements", "targets": ["circ:CirculationService"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 6, "relation": "implements", "targets": ["circ:MarcFieldMapper"], "scope": "symbol", "symbol": "CatalogIntake.MapField"},
+    {"line": 9, "relation": "represents", "targets": ["lib:Media"], "scope": "symbol", "symbol": "Media"}
   ],
   "testdata/example.tf": [
-    {"line": 1, "relation": "provisions", "targets": ["impl:FoalRegistry"], "scope": "symbol", "symbol": "resource.aws_dynamodb_table.foals"},
-    {"line": 7, "relation": "provisions", "targets": [".CaptureQueue"], "scope": "symbol", "symbol": "resource.aws_sqs_queue.capture"}
+    {"line": 1, "relation": "provisions", "targets": ["circ:LoanStore"], "scope": "symbol", "symbol": "resource.aws_dynamodb_table.loans"},
+    {"line": 7, "relation": "provisions", "targets": [".ReturnQueue"], "scope": "symbol", "symbol": "resource.aws_sqs_queue.returns"}
   ],
   "testdata/example.yaml": [
-    {"line": 1, "relation": "deploys", "targets": ["impl:HorseFactoryService"], "scope": "symbol", "symbol": "Deployment/horse-factory"},
-    {"line": 9, "relation": "configures", "targets": ["impl:FoalEventBus"], "scope": "symbol", "symbol": "ConfigMap/foal-bus"}
+    {"line": 1, "relation": "deploys", "targets": ["circ:CirculationService"], "scope": "symbol", "symbol": "Deployment/circulation"},
+    {"line": 9, "relation": "configures", "targets": ["circ:ReturnEventBus"], "scope": "symbol", "symbol": "ConfigMap/return-bus"}
   ],
   "testdata/deploy.yml": [
-    {"line": 2, "relation": "deploys", "targets": ["acme:payments-api"], "keys": {"scope": "file"}, "scope": "file"}
+    {"line": 2, "relation": "deploys", "targets": ["acme:circulation-svc"], "keys": {"scope": "file"}, "scope": "file"}
   ],
   "testdata/quoted.md": [
-    {"line": 1, "relation": "documents", "targets": ["zoo:Breeding"], "keys": {"scope": "file"}, "scope": "file"},
-    {"line": 19, "relation": "documents", "targets": ["zoo:Foaling"], "scope": "symbol", "symbol": "Foaling"}
+    {"line": 1, "relation": "documents", "targets": ["lib:Cataloging"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 19, "relation": "documents", "targets": ["lib:Return"], "scope": "symbol", "symbol": "Return"}
   ],
   "testdata/quoted.go": [
-    {"line": 5, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "Parse"}
+    {"line": 5, "relation": "implements", "targets": ["circ:MarcFieldMapper"], "scope": "symbol", "symbol": "Parse"}
   ],
   "testdata/agent.md": [
-    {"line": 1, "relation": "instructs", "targets": ["impl:BreedingPlanner"], "keys": {"scope": "file"}, "scope": "file"},
-    {"line": 2, "relation": "may-modify", "targets": ["zoo:Foal", "zoo:Foaling", "impl:*"], "keys": {"scope": "file"}, "scope": "file"},
-    {"line": 7, "relation": "documents", "targets": ["zoo:Foaling"], "scope": "symbol", "symbol": "Foaling"}
+    {"line": 1, "relation": "instructs", "targets": ["circ:SubjectSuggester"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 2, "relation": "may-modify", "targets": ["lib:Book", "lib:Return", "circ:*"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 7, "relation": "documents", "targets": ["lib:Return"], "scope": "symbol", "symbol": "Return"}
   ],
   "testdata/example.sql": [
-    {"line": 1, "relation": "represents", "targets": ["zoo:Foal"], "scope": "symbol", "symbol": "table.foals"},
-    {"line": 4, "relation": "represents", "targets": ["zoo:Mare"], "scope": "symbol", "symbol": "table.mares"}
+    {"line": 1, "relation": "represents", "targets": ["lib:Loan"], "scope": "symbol", "symbol": "table.loans"},
+    {"line": 4, "relation": "represents", "targets": ["lib:Book"], "scope": "symbol", "symbol": "table.books"}
   ],
   "testdata/example.feature": [
-    {"line": 1, "relation": "verifies", "targets": ["impl:StallionProduction"], "scope": "symbol", "symbol": "feature:Stallion production"}
+    {"line": 1, "relation": "verifies", "targets": ["circ:BookIntake"], "scope": "symbol", "symbol": "feature:Book intake"}
   ],
   "testdata/example.sh": [
-    {"line": 2, "relation": "deploys", "targets": ["impl:HorseFactoryService"], "keys": {"scope": "file"}, "scope": "file"},
-    {"line": 5, "relation": "configures", "targets": ["impl:FoalEventBus"], "scope": "symbol", "symbol": "configure_bus"}
+    {"line": 2, "relation": "deploys", "targets": ["circ:CirculationService"], "keys": {"scope": "file"}, "scope": "file"},
+    {"line": 5, "relation": "configures", "targets": ["circ:ReturnEventBus"], "scope": "symbol", "symbol": "configure_bus"}
   ],
   "testdata/Dockerfile": [
-    {"line": 1, "relation": "deploys", "targets": ["impl:HorseFactoryService"], "scope": "symbol", "symbol": "FROM"}
+    {"line": 1, "relation": "deploys", "targets": ["circ:CirculationService"], "scope": "symbol", "symbol": "FROM"}
   ],
   "testdata/Example.java": [
-    {"line": 3, "relation": "implements", "targets": ["impl:HoofAssembler"], "scope": "symbol", "symbol": "HoofAssembler"},
-    {"line": 5, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "attach"}
+    {"line": 3, "relation": "implements", "targets": ["circ:MarcParser"], "scope": "symbol", "symbol": "MarcParser"},
+    {"line": 5, "relation": "implements", "targets": ["circ:MarcFieldMapper"], "scope": "symbol", "symbol": "map"}
   ],
   "testdata/Example.kt": [
-    {"line": 3, "relation": "represents", "targets": ["impl:FoalingWindow"], "scope": "symbol", "symbol": "FOALING_WINDOW_DAYS"},
-    {"line": 6, "relation": "represents", "targets": ["impl:HoofCount"], "scope": "symbol", "symbol": "HOOVES"},
-    {"line": 10, "relation": "represents", "targets": ["impl:StallCount"], "scope": "symbol", "symbol": "STALLS"},
-    {"line": 14, "relation": "implements", "targets": ["impl:FoalRegistry"], "scope": "symbol", "symbol": "FoalRegistry"},
-    {"line": 16, "relation": "implements", "targets": ["impl:HoofStep"], "scope": "symbol", "symbol": "attach"}
+    {"line": 3, "relation": "represents", "targets": ["circ:LoanWindow"], "scope": "symbol", "symbol": "LOAN_WINDOW_DAYS"},
+    {"line": 6, "relation": "represents", "targets": ["circ:RenewalLimit"], "scope": "symbol", "symbol": "RENEWALS"},
+    {"line": 10, "relation": "represents", "targets": ["circ:ShelfCount"], "scope": "symbol", "symbol": "SHELVES"},
+    {"line": 14, "relation": "implements", "targets": ["circ:LoanStore"], "scope": "symbol", "symbol": "LoanStore"},
+    {"line": 16, "relation": "implements", "targets": ["circ:MarcFieldMapper"], "scope": "symbol", "symbol": "map"}
   ],
   "testdata/handlers.py": [
-    {"line": 2, "relation": "implements", "targets": ["impl:Replenishment"], "scope": "symbol", "symbol": "InboundHandler.process"},
-    {"line": 6, "relation": "implements", "targets": ["impl:Receiving"], "scope": "symbol", "symbol": "receive"},
-    {"line": 12, "relation": "implements", "targets": ["impl:WavePlanning"], "scope": "symbol", "symbol": "OutboundHandler.process"},
-    {"line": 13, "relation": "verifies", "targets": ["impl:WavePlanning"], "scope": "symbol", "symbol": "OutboundHandler.process"}
+    {"line": 2, "relation": "implements", "targets": ["circ:Replenishment"], "scope": "symbol", "symbol": "InboundHandler.process"},
+    {"line": 6, "relation": "implements", "targets": ["circ:Receiving"], "scope": "symbol", "symbol": "receive"},
+    {"line": 12, "relation": "implements", "targets": ["circ:WavePlanning"], "scope": "symbol", "symbol": "OutboundHandler.process"},
+    {"line": 13, "relation": "verifies", "targets": ["circ:WavePlanning"], "scope": "symbol", "symbol": "OutboundHandler.process"}
   ],
   "testdata/handlers.ts": [
-    {"line": 2, "relation": "implements", "targets": ["impl:Replenishment"], "scope": "symbol", "symbol": "Inbound.process"},
-    {"line": 9, "relation": "implements", "targets": ["impl:WavePlanning"], "scope": "symbol", "symbol": "Outbound.process"}
+    {"line": 2, "relation": "implements", "targets": ["circ:Replenishment"], "scope": "symbol", "symbol": "Inbound.process"},
+    {"line": 9, "relation": "implements", "targets": ["circ:WavePlanning"], "scope": "symbol", "symbol": "Outbound.process"}
   ],
   "testdata/Overloads.java": [
-    {"line": 4, "relation": "implements", "targets": ["impl:NameCheck"], "scope": "symbol", "symbol": "StringUtils.check"},
-    {"line": 9, "relation": "implements", "targets": ["impl:CountCheck"], "scope": "symbol", "symbol": "StringUtils.check#2"}
+    {"line": 4, "relation": "implements", "targets": ["circ:NameCheck"], "scope": "symbol", "symbol": "StringUtils.check"},
+    {"line": 9, "relation": "implements", "targets": ["circ:CountCheck"], "scope": "symbol", "symbol": "StringUtils.check#2"}
   ],
   "testdata/example.rs": [
-    {"line": 2, "relation": "implements", "targets": ["impl:TailQueue"], "scope": "symbol", "symbol": "TailQueue"},
-    {"line": 5, "relation": "implements", "targets": ["impl:TailStep"], "scope": "symbol", "symbol": "enqueue"}
+    {"line": 2, "relation": "implements", "targets": ["circ:CoverImageCache"], "scope": "symbol", "symbol": "CoverImageCache"},
+    {"line": 5, "relation": "implements", "targets": ["circ:CoverFetch"], "scope": "symbol", "symbol": "fetch"}
   ],
   "testdata/example.rb": [
-    {"line": 1, "relation": "represents", "targets": ["zoo:Mare"], "scope": "symbol", "symbol": "Mare"},
-    {"line": 3, "relation": "implements", "targets": ["impl:Foaling"], "scope": "symbol", "symbol": "foal"}
+    {"line": 1, "relation": "represents", "targets": ["lib:Book"], "scope": "symbol", "symbol": "Book"},
+    {"line": 3, "relation": "implements", "targets": ["circ:Return"], "scope": "symbol", "symbol": "return_item"}
   ],
   "testdata/config.json.gloss": [
-    {"line": 2, "relation": "configures", "targets": ["impl:FoalEventBus"], "keys": {"scope": "range", "note": "/bus"}, "scope": "range", "symbol": "/bus"},
-    {"line": 3, "relation": "configures", "targets": ["impl:FoalRegistry"], "scope": "file"}
+    {"line": 2, "relation": "configures", "targets": ["circ:ReturnEventBus"], "keys": {"scope": "range", "note": "/bus"}, "scope": "range", "symbol": "/bus"},
+    {"line": 3, "relation": "configures", "targets": ["circ:LoanStore"], "scope": "file"}
   ],
   "testdata/example.proto": [
-    {"line": 3, "relation": "represents", "targets": ["zoo:FoalBorn"], "scope": "symbol", "symbol": "FoalBorn"}
+    {"line": 3, "relation": "represents", "targets": ["lib:ItemReturned"], "scope": "symbol", "symbol": "ItemReturned"}
   ],
   "testdata/header.py": [
-    {"line": 2, "relation": "implements", "targets": ["impl:HorseFactoryService"], "keys": {"scope": "file"}, "scope": "file", "sugar": true},
-    {"line": 3, "relation": "may-modify", "targets": ["impl:Horse*", "zoo:Foal"], "keys": {"scope": "file"}, "scope": "file", "sugar": true}
+    {"line": 2, "relation": "implements", "targets": ["circ:CirculationService"], "keys": {"scope": "file"}, "scope": "file", "sugar": true},
+    {"line": 3, "relation": "may-modify", "targets": ["circ:Circulation*", "lib:Book"], "keys": {"scope": "file"}, "scope": "file", "sugar": true}
   ],
   "testdata/malformed.py": [
-    {"line": 2, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM002"]},
-    {"line": 3, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM005"]},
-    {"line": 4, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM006"]},
-    {"line": 5, "relation": "implements", "targets": ["impl:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM004"]},
-    {"line": 6, "relation": "implements", "targets": ["impl:X"], "keys": {"scope": "symbol"}, "scope": "symbol", "symbol": "ok"}
+    {"line": 2, "relation": "implements", "targets": ["circ:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM002"]},
+    {"line": 3, "relation": "implements", "targets": ["circ:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM005"]},
+    {"line": 4, "relation": "implements", "targets": ["circ:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM006"]},
+    {"line": 5, "relation": "implements", "targets": ["circ:X"], "scope": "symbol", "symbol": "ok", "diagnostics": ["GM004"]},
+    {"line": 6, "relation": "implements", "targets": ["circ:X"], "keys": {"scope": "symbol"}, "scope": "symbol", "symbol": "ok"}
   ],
   "_diagnostics": {
     "testdata/malformed.py": [{"line": 1, "code": "GM001"}, {"line": 2, "code": "GM002"}, {"line": 3, "code": "GM005"}, {"line": 4, "code": "GM006"}, {"line": 5, "code": "GM004"}]

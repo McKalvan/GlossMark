@@ -160,7 +160,7 @@ func footer(im *Impact) string {
 	return sb.String()
 }
 
-// criticalList renders "pay:Payment critical (declared), acme:payments-api critical (via pay:Payment), …".
+// criticalList renders "lib:Patron critical (declared), circ:CheckoutHandler high (via lib:Checkout), …".
 func criticalList(ts []CriticalityTouch, max int) string {
 	var parts []string
 	for i, t := range ts {

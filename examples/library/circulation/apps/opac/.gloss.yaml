@@ -1,0 +1,7 @@
+# apps/opac/.gloss.yaml: the online catalog patrons search. It shows concepts; it computes none.
+boundary: acme:opac
+level: container
+label: Online catalog (OPAC)
+part-of: acme:library-platform
+presents: [lib:Book, lib:Hold]
+owner: web-team

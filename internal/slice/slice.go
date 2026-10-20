@@ -92,7 +92,7 @@ type Node struct {
 	Label string `json:"label,omitempty"`
 	Role  string `json:"role"`
 	// Via is the path of edges from a seed to this node, each written as the
-	// edge reads ("pa:CaptureHandler realizes pay:Capture"); empty for a seed.
+	// edge reads ("circ:ReturnPipeline realizes lib:Return"); empty for a seed.
 	Via         []string `json:"via,omitempty"`
 	Path        string   `json:"path,omitempty"`
 	Line        int      `json:"line,omitempty"`

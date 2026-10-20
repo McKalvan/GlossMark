@@ -1,6 +1,6 @@
-# @gloss verifies impl:StallionProduction
-Feature: Stallion production
-  Scenario: breed a stallion
-    Given a sire and a dam
-    When they breed
-    Then a stallion is born
+# @gloss verifies circ:BookIntake
+Feature: Book intake
+  Scenario: catalog a book
+    Given an ISBN and a copy count
+    When they are cataloged
+    Then a book is on the shelf

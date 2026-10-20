@@ -1,7 +1,0 @@
-# settlement-worker/glossmark.yaml
-owns:
-  sw: { iri: https://onto.acme.dev/settlement/, file: ontology/sw.gloss.yaml, tier: implementation, owner: settlement-eng }
-imports:
-  pay: { iri: https://onto.acme.dev/pay/, version: "^1.2", source: ../payments-api/ontology/pay.gloss.yaml }
-prefixes:
-  acme: https://arch.acme.dev/boundaries/

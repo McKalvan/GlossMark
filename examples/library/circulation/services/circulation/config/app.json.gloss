@@ -1,0 +1,3 @@
+# Sidecar for app.json (JSON has no comments); scopes are JSON Pointers.
+@gloss configures .ReturnEventBus scope=range note="/bus"
+@gloss configures .LoanStore scope=range note="/loans"

@@ -478,7 +478,7 @@ func hasParent(isa, parent string) bool {
 	return false
 }
 
-// Pascal turns "foal birth", "foal_birth", "FOAL-BIRTH" or "foalBirth" into FoalBirth.
+// Pascal turns "item returned", "item_returned", "ITEM-RETURNED" or "itemReturned" into ItemReturned.
 func Pascal(s string) string {
 	var words []string
 	var cur []rune

@@ -1,0 +1,38 @@
+Slice of lib:Return (context on)
+  5 members: 3 concepts, 2 artifacts, 0 tests · 2 boundaries · 4 context · highest criticality critical
+
+seed (1)
+  lib:Return  process · core
+      untested: lib:Return is implemented but nothing tests or verifies it
+
+part (1)
+  circ:ReturnNotifier  process · implementation
+      via circ:ReturnPipeline realizes lib:Return · circ:ReturnNotifier part-of circ:ReturnPipeline
+
+realization (1)
+  circ:ReturnPipeline  process · implementation
+      via circ:ReturnPipeline realizes lib:Return
+
+artifact (2)
+  services/circulation/loans/returns.py#announce_return  function  circulation/services/circulation/loans/returns.py:16
+      via circ:ReturnPipeline realizes lib:Return · circ:ReturnNotifier part-of circ:ReturnPipeline · services/circulation/loans/returns.py#announce_return implements circ:ReturnNotifier
+  services/circulation/loans/returns.py#check_in  function  circulation/services/circulation/loans/returns.py:5
+      via circ:ReturnPipeline realizes lib:Return · services/circulation/loans/returns.py#check_in implements circ:ReturnPipeline
+
+boundary (2)
+  acme:circulation-svc  container · high
+      via acme:circulation-svc realizes lib:Return
+  acme:library-platform  system · critical
+      via acme:library-platform realizes lib:Return
+
+context (4)
+  acme:holds-worker  container · high
+      via lib:Return publishes lib:ItemReturned · acme:holds-worker subscribes lib:ItemReturned
+  hw:HoldQueue  process · implementation · high
+      via lib:Return publishes lib:ItemReturned · hw:HoldQueue subscribes lib:ItemReturned
+  lib:Item  entity · core
+      via lib:Return consumes lib:Item
+  lib:ItemReturned  event · core
+      via lib:Return publishes lib:ItemReturned
+
+Untested in this slice: lib:Return

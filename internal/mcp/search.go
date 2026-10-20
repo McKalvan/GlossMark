@@ -25,18 +25,18 @@ type Hit struct {
 	// better-connected concept first.
 	Artifacts int    `json:"artifacts"`
 	Score     int    `json:"score"`
-	Matched   string `json:"matched"` // field and terms the query hit: "name:foal,birth", "alias:chargeback", "doc:cutoff", "fuzzy"
+	Matched   string `json:"matched"` // field and terms the query hit: "name:loan,period", "alias:borrower", "doc:shelf", "fuzzy"
 
 	dist int // edit distance between the query and the name, for ties
 }
 
 // Search ranks concepts by meaning rather than substring: it splits CamelCase
 // names into words, matches aliases and docs, strips common suffixes, maps
-// synonyms (born/birth), and tolerates small typos with edit distance. A
-// query that names a kind ("event", "constraint") boosts concepts of that
-// kind; every query word matched beats one word matched; a whole-word match
-// beats a substring. It also follows is-a and realizes one hop so "settlement
-// cutoff" finds sw:CutoffClock through its core concept. Ties go to core
+// synonyms (born/birth, lend/loan), and tolerates small typos with edit
+// distance. A query that names a kind ("event", "constraint") boosts concepts
+// of that kind; every query word matched beats one word matched; a whole-word
+// match beats a substring. It also follows is-a and realizes one hop so "pickup
+// window" finds hw:PickupClock through its core concept. Ties go to core
 // concepts, then to the one with more artifacts, then to the shorter name.
 func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
 	words := tokens(q)
@@ -142,7 +142,7 @@ func scoreConcept(g *graph.Graph, n *graph.Node, words []string, raw string) (in
 		add(60, "name:"+name)
 	}
 	// Words of the query found in the name: every word beats some words, and a
-	// whole word beats a substring (Foal in FoalBorn, not Foa).
+	// whole word beats a substring (Loan in LoanPeriod, not Loa).
 	if hit := matchedTerms(words, nameToks); len(hit) > 0 {
 		switch {
 		case len(hit) == len(words) && len(words) > 1:
@@ -269,9 +269,10 @@ func kindFor(w string) string {
 	return ""
 }
 
-// synonyms maps stems that name the same thing, so "birth" finds FoalBorn.
+// synonyms maps stems that name the same thing, so "lending" finds LoanPeriod.
 var synonyms = map[string]string{
 	"born": "birth", "birth": "birth", "birthed": "birth",
+	"lend": "loan", "lent": "loan",
 	"creat": "creat", "made": "creat", "build": "creat", "built": "creat",
 	"remov": "delet", "delet": "delet",
 	"updat": "updat", "modifi": "updat", "chang": "updat",
@@ -325,9 +326,9 @@ func rawJoin(s string) string {
 	return sb.String()
 }
 
-// stem strips common English suffixes and a trailing e, so "settlements"
-// matches "Settlement", "refunding" matches "Refund" and "captured" matches
-// "Capture".
+// stem strips common English suffixes and a trailing e, so "renewals"
+// matches "Renewal", "cataloging" matches "Catalog" and "returned" matches
+// "Return".
 func stem(w string) string {
 	for _, suf := range []string{"ations", "ation", "ing", "ers", "ies", "ed", "es", "s", "er"} {
 		if strings.HasSuffix(w, suf) && len(w)-len(suf) >= 3 {

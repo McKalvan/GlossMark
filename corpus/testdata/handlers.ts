@@ -1,11 +1,11 @@
 export class Inbound {
-  // @gloss implements impl:Replenishment
+  // @gloss implements circ:Replenishment
   process(): void {
     const s = "{ not a brace }";
   }
 }
 
 export class Outbound {
-  // @gloss implements impl:WavePlanning
+  // @gloss implements circ:WavePlanning
   process(): void {}
 }

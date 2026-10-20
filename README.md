@@ -4,23 +4,27 @@
 GlossMark is a comment-native code ontology. One grammar, `@gloss`, links any artifact (code, tests, Terraform, configs, CI, Markdown, agent files) to concepts in two ontology tiers: a platonic **core** the business owns and a concrete **implementation** engineering owns. Agents write the links while they write the code; humans own the core and review only novelty. Everything compiles into one graph that tools diff, gate, project into views and serve to agents.
 
 ```python
-# @gloss implements impl:StallionProduction
-def breed_stallion(sire: Horse, dam: Horse) -> Stallion: ...
+# @gloss implements circ:BookIntake
+# @gloss produces lib:Book
+def catalog_book(isbn: str, copies: int) -> Book: ...
 ```
 ```ts
-// @gloss? represents zoo:Mare conf=0.72        <- proposed by an agent; a human accepts it
-export interface Mare { id: string; foalingDate?: Date }
+// @gloss? represents lib:Book conf=0.72        <- proposed by an agent; a human accepts it
+export interface Book { isbn: string; dueOn?: Date }
 ```
 
 ```
 $ gloss drift
 ✗ Violations (boundary exceeds its declared capability)
-  acme:horse-factory-svc produces zoo:Donkey but declares produces {zoo:Horse}; rollup: produces {zoo:Animal} (from zoo:Donkey, zoo:Foal, zoo:Horse, zoo:Stallion) ⊄ declared [proposed link]
+  acme:circulation-svc produces lib:Laptop but declares produces {lib:Media}; rollup: produces {lib:Item} (from lib:Book, lib:DVD, lib:Laptop, lib:Media) ⊄ declared [proposed link]
+  acme:circulation-svc realizes lib:Renewal but declares realizes {circ:CirculationService, lib:Cataloging, lib:Checkout, lib:LoanPeriod, lib:Return} [proposed link]
+○ Gaps (declared, not implemented)
+  acme:library-platform declares publishes lib:HoldReady but nothing under it publishes it: intended capability not implemented, or the declaration is wrong
 ? Rogue concepts (decision requests)
-  services/horse-factory/breeding/engine.py:22 implements impl:NEW:Gelding: rogue concept; becomes a decision request
-· Orphan concepts (no artifacts)
-  impl:TailQueue: orphan concept, implementation concept has no artifacts
-Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)   Orphans: 3   Rogue: 1   Violations: 1   Gaps: 0   Stale: 0   Untested: 3   Proposed links: 3   Proposed concepts: 0
+  services/circulation/loans/returns.py:10 implements circ:NEW:DamageCheck: rogue concept; becomes a decision request
+◇ Presented but not implemented (a surface with no mechanism)
+  lib:Hold is presented (apps/opac/src/PlaceHold.tsx#PlaceHold) but nothing implements it: a surface with no mechanism behind it
+Concepts covered 22% (2/9 with an artifact and a verifier)   Files 83% (15/18)   Orphans: 6   Rogue: 1   Violations: 2   Gaps: 1   Stale: 0   Untested: 4   Proposed links: 4   Proposed concepts: 0
 ```
 
 ## What is in this repository
@@ -38,8 +42,7 @@ Concepts covered 17% (1/6 with an artifact and a verifier)   Files 85% (11/13)  
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
-| `examples/horse-factory` | The zoo example from the design: one repo, both tiers |
-| `examples/payments` | The worked example: two repos sharing one core, with the published seam, extension, remits and a landscape |
+| `examples/library` | The worked example: a public library in two repos sharing one core (`circulation` owns both tiers, `holds-worker` imports and extends the core), covering taxonomic lift, the published seam, `value-from`, surfaces, criticality, extension, remits and a landscape; see its [README](examples/library/README.md) |
 | `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
@@ -56,12 +59,12 @@ Binaries for Linux, macOS and Windows are attached to each [release](https://git
 
 ```sh
 go build -o gloss ./cmd/gloss
-cd examples/horse-factory
-../../gloss check          # 0 errors, 1 warning: the Donkey link is outside the boundary's allowed list
-../../gloss drift          # the drift report above
-../../gloss view           # .glossmark/viewer.html + views.js — open it in a browser: boundaries are boxes, click to drill in, click a concept for its code, tests and findings
-cd ../payments
-../../gloss landscape payments-api settlement-worker   # cross-repo context map and drift
+cd examples/library/circulation
+../../../gloss check       # 0 errors, 1 warning: the Laptop link is outside the boundary's allowed list
+../../../gloss drift       # the drift report above
+../../../gloss view        # .glossmark/viewer.html + views.js — open it in a browser: boundaries are boxes, click to drill in, click a concept for its code, tests and findings
+cd ..
+../../gloss landscape circulation holds-worker   # cross-repo context map; the HoldReady gap closes
 ```
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.

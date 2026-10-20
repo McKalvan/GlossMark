@@ -30,12 +30,12 @@ func build(t *testing.T, rel string) (*load.Workspace, *graph.Graph) {
 	return ws, res.Graph
 }
 
-// payments returns the landscape of the two payments repositories, unioned
+// library returns the landscape of the two library repositories, unioned
 // by IRI as gloss landscape does.
-func payments(t *testing.T) *graph.Graph {
+func library(t *testing.T) *graph.Graph {
 	t.Helper()
-	ws1, g1 := build(t, "payments/payments-api")
-	ws2, g2 := build(t, "payments/settlement-worker")
+	ws1, g1 := build(t, "library/circulation")
+	ws2, g2 := build(t, "library/holds-worker")
 	ws, err := load.Merge([]*load.Workspace{ws1, ws2})
 	if err != nil {
 		t.Fatal(err)
@@ -95,27 +95,27 @@ func expect(t *testing.T, s *slice.Slice, want map[string]string) {
 
 var ctxOn = slice.Options{Context: true}
 
-func TestPaymentsSlices(t *testing.T) {
-	g := payments(t)
-	const cap1, cap2 = "services/api/handlers/capture.py#capture", "services/api/handlers/capture.py#emit_capture_confirmed"
-	const refund = "services/api/handlers/refund.py#refund"
+func TestLibrarySlices(t *testing.T) {
+	g := library(t)
+	const checkIn, announce = "services/circulation/loans/returns.py#check_in", "services/circulation/loans/returns.py#announce_return"
+	const renew = "services/circulation/loans/renew.py#renew"
 	t.Run("core seed", func(t *testing.T) {
-		s := of(t, g, ctxOn, "pay:Capture")
+		s := of(t, g, ctxOn, "lib:Return")
 		expect(t, s, map[string]string{
-			"pay:Capture": slice.RoleSeed, "pa:CaptureHandler": slice.RoleRealization, "pa:CaptureEmitter": slice.RolePart,
-			cap1: slice.RoleArtifact, cap2: slice.RoleArtifact,
-			"acme:payments-api": slice.RoleBoundary, "acme:payments-platform": slice.RoleBoundary,
-			"pay:CaptureConfirmed": slice.RoleContext, "pay:Payment": slice.RoleContext,
+			"lib:Return": slice.RoleSeed, "circ:ReturnPipeline": slice.RoleRealization, "circ:ReturnNotifier": slice.RolePart,
+			checkIn: slice.RoleArtifact, announce: slice.RoleArtifact,
+			"acme:circulation-svc": slice.RoleBoundary, "acme:library-platform": slice.RoleBoundary,
+			"lib:ItemReturned": slice.RoleContext, "lib:Item": slice.RoleContext,
 			// The subscriber on the other side of the published seam.
-			"sw:BatchSettler": slice.RoleContext, "acme:settlement-worker": slice.RoleContext,
-			// Unrelated: refunding and its implementation, the settlement mechanism.
-			"pay:Refunding": "", refund: "", "pay:Refund": "", "pa:AuthorizeHandler": "", "pay:Merchant": "", "pay:Settlement": "",
+			"hw:HoldQueue": slice.RoleContext, "acme:holds-worker": slice.RoleContext,
+			// Unrelated: renewal and its implementation, checkout, the hold-fulfillment mechanism.
+			"lib:Renewal": "", renew: "", "lib:Loan": "", "circ:CheckoutHandler": "", "lib:InterlibraryLoan": "", "lib:HoldFulfillment": "",
 		})
-		if v := s.Node(cap1).Via; strings.Join(v, " · ") != "pa:CaptureHandler realizes pay:Capture · "+cap1+" implements pa:CaptureHandler" {
-			t.Errorf("via of %s = %v", cap1, v)
+		if v := s.Node(checkIn).Via; strings.Join(v, " · ") != "circ:ReturnPipeline realizes lib:Return · "+checkIn+" implements circ:ReturnPipeline" {
+			t.Errorf("via of %s = %v", checkIn, v)
 		}
-		if v := s.Node("sw:BatchSettler").Via; len(v) == 0 || v[len(v)-1] != "sw:BatchSettler subscribes pay:CaptureConfirmed" {
-			t.Errorf("via of sw:BatchSettler = %v", v)
+		if v := s.Node("hw:HoldQueue").Via; len(v) == 0 || v[len(v)-1] != "hw:HoldQueue subscribes lib:ItemReturned" {
+			t.Errorf("via of hw:HoldQueue = %v", v)
 		}
 		// Every edge has both ends in the slice.
 		for _, e := range s.Edges {
@@ -128,84 +128,87 @@ func TestPaymentsSlices(t *testing.T) {
 		}
 	})
 	t.Run("context off", func(t *testing.T) {
-		s := of(t, g, slice.Options{}, "pay:Capture")
-		expect(t, s, map[string]string{"pa:CaptureHandler": slice.RoleRealization, "acme:payments-api": slice.RoleBoundary, "pay:CaptureConfirmed": "", "pay:Payment": ""})
+		s := of(t, g, slice.Options{}, "lib:Return")
+		expect(t, s, map[string]string{"circ:ReturnPipeline": slice.RoleRealization, "acme:circulation-svc": slice.RoleBoundary, "lib:ItemReturned": "", "lib:Item": ""})
 	})
 	t.Run("implementation seed", func(t *testing.T) {
-		s := of(t, g, ctxOn, "pa:CaptureHandler")
+		s := of(t, g, ctxOn, "circ:ReturnPipeline")
 		expect(t, s, map[string]string{
-			"pa:CaptureHandler": slice.RoleSeed, "pa:CaptureEmitter": slice.RolePart, cap1: slice.RoleArtifact, cap2: slice.RoleArtifact,
-			"acme:payments-api": slice.RoleBoundary,
+			"circ:ReturnPipeline": slice.RoleSeed, "circ:ReturnNotifier": slice.RolePart, checkIn: slice.RoleArtifact, announce: slice.RoleArtifact,
+			"acme:circulation-svc": slice.RoleBoundary,
 			// What it stands for is context: realizes is never followed upward into the members.
-			"pay:Capture": slice.RoleContext, "pay:CaptureConfirmed": slice.RoleContext,
-			"pay:Refunding": "", refund: "",
+			"lib:Return": slice.RoleContext, "lib:ItemReturned": slice.RoleContext,
+			"lib:Renewal": "", renew: "",
 		})
 	})
 	t.Run("boundary seed", func(t *testing.T) {
-		s := of(t, g, ctxOn, "acme:settlement-worker")
+		s := of(t, g, ctxOn, "acme:holds-worker")
 		expect(t, s, map[string]string{
-			"acme:settlement-worker": slice.RoleSeed, "pay:Settlement": slice.RoleHoused, "sw:BatchSettler": slice.RoleHoused,
-			"sw:PartialSettlement": slice.RoleKind, "acme:payments-platform": slice.RoleBoundary,
-			"pay:CaptureConfirmed": slice.RoleContext, "pa:CaptureEmitter": slice.RoleContext,
-			"pa:CaptureHandler": "", "pay:Capture": "", cap1: "",
+			"acme:holds-worker": slice.RoleSeed, "lib:HoldFulfillment": slice.RoleHoused, "hw:HoldQueue": slice.RoleHoused,
+			"hw:CurbsidePickup": slice.RoleKind, "acme:library-platform": slice.RoleBoundary,
+			"lib:ItemReturned": slice.RoleContext, "circ:ReturnNotifier": slice.RoleContext,
+			// lib:Return publishes lib:ItemReturned itself, so it is context too;
+			// its implementation is not.
+			"lib:Return": slice.RoleContext, "circ:ReturnPipeline": "", checkIn: "",
 		})
 	})
 	t.Run("event seed", func(t *testing.T) {
-		s := of(t, g, ctxOn, "pay:CaptureConfirmed")
+		s := of(t, g, ctxOn, "lib:ItemReturned")
 		expect(t, s, map[string]string{
-			"pay:CaptureConfirmed": slice.RoleSeed, "pa:CaptureEmitter": slice.RoleRealization, cap2: slice.RoleArtifact,
-			"acme:payments-api": slice.RoleBoundary, "acme:settlement-worker": slice.RoleBoundary,
-			"sw:BatchSettler": slice.RoleContext, "pa:CaptureHandler": slice.RoleContext,
-			cap1: "", "pay:Capture": "",
+			"lib:ItemReturned": slice.RoleSeed, "circ:ReturnNotifier": slice.RoleRealization, announce: slice.RoleArtifact,
+			"acme:circulation-svc": slice.RoleBoundary, "acme:holds-worker": slice.RoleBoundary,
+			"hw:HoldQueue": slice.RoleContext, "circ:ReturnPipeline": slice.RoleContext, "lib:Return": slice.RoleContext,
+			checkIn: "",
 		})
 	})
 	t.Run("published concept", func(t *testing.T) {
-		s := of(t, g, ctxOn, "pay:SettlementCutoff")
+		s := of(t, g, ctxOn, "lib:PickupWindow")
 		expect(t, s, map[string]string{
-			"pay:SettlementCutoff": slice.RoleSeed, "sw:CutoffClock": slice.RolePublished,
-			"acme:settlement-worker": slice.RoleBoundary, "pay:Settlement": slice.RoleContext,
-			"sw:BatchSettler": "", "pay:Capture": "",
+			"lib:PickupWindow": slice.RoleSeed, "hw:PickupClock": slice.RolePublished,
+			"acme:holds-worker": slice.RoleBoundary, "lib:HoldFulfillment": slice.RoleContext,
+			"hw:HoldQueue": "", "lib:Return": "",
 		})
-		s = of(t, g, ctxOn, "sw:CutoffClock")
-		expect(t, s, map[string]string{"sw:CutoffClock": slice.RoleSeed, "pay:SettlementCutoff": slice.RolePublished, "pay:Settlement": slice.RoleContext})
+		s = of(t, g, ctxOn, "hw:PickupClock")
+		expect(t, s, map[string]string{"hw:PickupClock": slice.RoleSeed, "lib:PickupWindow": slice.RolePublished, "lib:HoldFulfillment": slice.RoleContext})
 	})
 	t.Run("path seed", func(t *testing.T) {
-		s := of(t, g, ctxOn, "services/api/handlers/capture.py")
-		if strings.Join(s.Seeds, ",") != "pa:CaptureEmitter,pa:CaptureHandler" {
+		s := of(t, g, ctxOn, "services/circulation/loans/returns.py")
+		if strings.Join(s.Seeds, ",") != "circ:ReturnNotifier,circ:ReturnPipeline" {
 			t.Errorf("path seeds = %v", s.Seeds)
 		}
 	})
 }
 
-func TestHorseFactorySlices(t *testing.T) {
-	_, g := build(t, "horse-factory")
+func TestCirculationSlices(t *testing.T) {
+	_, g := build(t, "library/circulation")
 	t.Run("parts, realizations and tests", func(t *testing.T) {
-		s := of(t, g, ctxOn, "zoo:Breeding")
+		s := of(t, g, ctxOn, "lib:Cataloging")
 		expect(t, s, map[string]string{
-			"impl:HorseBuilder": slice.RoleRealization, "impl:HoofAssembler": slice.RolePart, "impl:HoofStep": slice.RolePart,
-			"services/horse-factory/tests/test_engine.py#test_foal_male": slice.RoleTest,
-			"services/horse-factory/breeding/engine.py#foal_male":        slice.RoleArtifact,
-			"acme:horse-factory-svc":                                     slice.RoleBoundary, "zoo:Foal": slice.RoleContext, "zoo:Mare": slice.RoleContext,
-			// Foaling is another feature: it produces Foal too, but is on the same side.
-			"impl:FoalingPipeline": "", "zoo:Foaling": "",
+			"circ:CatalogIntake": slice.RoleRealization, "circ:MarcParser": slice.RolePart, "circ:MarcFieldMapper": slice.RolePart,
+			"services/circulation/tests/test_intake.py#test_catalog_book": slice.RoleTest,
+			"services/circulation/cataloging/intake.py#catalog_book":      slice.RoleArtifact,
+			"acme:circulation-svc": slice.RoleBoundary, "lib:Book": slice.RoleContext, "lib:Media": slice.RoleContext,
+			// Returning is another feature: it is realized in the same
+			// container, but nothing ties it to cataloging.
+			"circ:ReturnPipeline": "", "lib:Return": "",
 		})
-		if s.Summary.Tests != 2 {
-			t.Errorf("tests = %d, want 2", s.Summary.Tests)
+		if s.Summary.Tests != 1 {
+			t.Errorf("tests = %d, want 1", s.Summary.Tests)
 		}
 	})
 	t.Run("kinds without context", func(t *testing.T) {
-		s := of(t, g, slice.Options{}, "zoo:Horse")
-		expect(t, s, map[string]string{"zoo:Mare": slice.RoleKind, "zoo:Foal": slice.RoleKind, "zoo:Animal": "", "zoo:Breeding": ""})
-		s = of(t, g, ctxOn, "zoo:Horse")
-		expect(t, s, map[string]string{"zoo:Animal": slice.RoleContext, "zoo:Donkey": ""})
+		s := of(t, g, slice.Options{}, "lib:Media")
+		expect(t, s, map[string]string{"lib:Book": slice.RoleKind, "lib:DVD": slice.RoleKind, "lib:Item": "", "lib:Cataloging": ""})
+		s = of(t, g, ctxOn, "lib:Media")
+		expect(t, s, map[string]string{"lib:Item": slice.RoleContext, "lib:Laptop": ""})
 	})
 	t.Run("follow", func(t *testing.T) {
-		s := of(t, g, slice.Options{Follow: []string{"produces"}}, "zoo:Breeding")
-		expect(t, s, map[string]string{"zoo:Foal": slice.RoleFlow, "zoo:Stallion": slice.RoleFlow, "db/migrations/0001_foals.sql#table.foals": slice.RoleArtifact, "zoo:Mare": ""})
+		s := of(t, g, slice.Options{Follow: []string{"produces"}}, "lib:Cataloging")
+		expect(t, s, map[string]string{"lib:Media": slice.RoleFlow, "lib:Book": slice.RoleFlow, "services/circulation/models/book.ts#Book": slice.RoleArtifact, "lib:Item": ""})
 	})
 	t.Run("constraint", func(t *testing.T) {
-		s := of(t, g, ctxOn, "zoo:ProductionCapacity")
-		expect(t, s, map[string]string{"impl:FoalingPipelineThroughput": slice.RolePublished, "zoo:HorseOrder": slice.RoleContext})
+		s := of(t, g, ctxOn, "lib:LoanPeriod")
+		expect(t, s, map[string]string{"circ:DefaultLoanPeriod": slice.RolePublished, "lib:Loan": slice.RoleContext})
 	})
 }
 
@@ -216,8 +219,8 @@ func TestParseFollowAndResolve(t *testing.T) {
 	if f, err := slice.ParseFollow(" produces, consumes "); err != nil || strings.Join(f, ",") != "produces,consumes" {
 		t.Errorf("ParseFollow = %v, %v", f, err)
 	}
-	_, g := build(t, "horse-factory")
-	if _, err := slice.Resolve(g, "", "zoo:Nope"); err == nil {
+	_, g := build(t, "library/circulation")
+	if _, err := slice.Resolve(g, "", "lib:Nope"); err == nil {
 		t.Error("an unknown CURIE should not resolve")
 	}
 }

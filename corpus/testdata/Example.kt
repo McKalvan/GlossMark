@@ -1,19 +1,19 @@
-package zoo
+package lib
 
-// @gloss represents impl:FoalingWindow
-const val FOALING_WINDOW_DAYS = 340
+// @gloss represents circ:LoanWindow
+const val LOAN_WINDOW_DAYS = 21
 
-// @gloss represents impl:HoofCount
-private const val HOOVES = 4
+// @gloss represents circ:RenewalLimit
+private const val RENEWALS = 3
 
-object Stable {
-    // @gloss represents impl:StallCount
-    val STALLS: Int = 12
+object Branch {
+    // @gloss represents circ:ShelfCount
+    val SHELVES: Int = 12
 }
 
-// @gloss implements impl:FoalRegistry
-class FoalRegistry {
-    // @gloss implements impl:HoofStep
-    fun attach(hoof: Hoof) {
+// @gloss implements circ:LoanStore
+class LoanStore {
+    // @gloss implements circ:MarcFieldMapper
+    fun map(field: MarcField) {
     }
 }

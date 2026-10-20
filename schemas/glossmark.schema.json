@@ -182,7 +182,7 @@
           "examples": [
             "../platform-ontology",
             "git+https://github.com/acme/ontology.git",
-            "https://onto.acme.dev/zoo/zoo.gloss.yaml"
+            "https://onto.acme.dev/library/lib.gloss.yaml"
           ]
         },
         "tier": {

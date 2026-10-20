@@ -90,7 +90,7 @@
       "pattern": "^[a-z][a-z0-9-]*$"
     },
     "target": {
-      "description": "A relation target: a bare concept name in this namespace (Animal), a CURIE (zoo:Horse), or for some relations a CURIE glob (impl:Foal*).",
+      "description": "A relation target: a bare concept name in this namespace (Item), a CURIE (lib:Media), or for some relations a CURIE glob (circ:Catalog*).",
       "type": "string",
       "minLength": 1
     },

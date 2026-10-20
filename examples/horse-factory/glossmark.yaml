@@ -1,9 +1,0 @@
-# glossmark.yaml  (repo root): the namespaces this repo owns and imports.
-owns:
-  zoo:  { iri: https://onto.acme.dev/zoo/,           file: ontology/zoo.gloss.yaml,  tier: core,           version: 1.0.0, owner: zoo-product }
-  impl: { iri: https://onto.acme.dev/horse-factory/, file: ontology/impl.gloss.yaml, tier: implementation, version: 0.3.0, owner: horse-platform }
-prefixes:
-  acme: https://arch.acme.dev/boundaries/
-source-url: https://github.com/mckalvan/glossmark/blob/main/examples/horse-factory/{path}#L{line}
-policy:
-  soft-conf-threshold: 0.7

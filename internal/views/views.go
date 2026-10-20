@@ -66,7 +66,7 @@ type PNode struct {
 	// Placement says why a concept sits where it does: housed (inside
 	// Boundary), or why it is unplaced (shared, flow, bound, surface,
 	// unlinked); PlacementReason names what produces it, such as "produced by
-	// acme:payments-api". Concepts only.
+	// acme:circulation-svc". Concepts only.
 	Placement       string `json:"placement,omitempty"`
 	PlacementReason string `json:"placementReason,omitempty"`
 	// Criticality is the effective governance level of the node (the highest

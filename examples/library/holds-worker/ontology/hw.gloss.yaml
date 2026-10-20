@@ -1,0 +1,8 @@
+# holds-worker/ontology/hw.gloss.yaml
+namespace: hw
+version: 0.4.0
+concepts:
+  HoldQueue:      { kind: process, realizes: lib:HoldFulfillment, subscribes: [lib:ItemReturned], publishes: [lib:HoldReady] }
+  CurbsidePickup: { is-a: lib:HoldFulfillment }            # extension in hw:, allowed (subject is ours)
+  PickupClock:    { kind: measure, realizes: lib:PickupWindow,
+                    published: { as: lib:PickupWindow }, value: "7 days" }

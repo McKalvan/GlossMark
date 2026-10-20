@@ -8,7 +8,7 @@
   "required": ["boundary"],
   "properties": {
     "boundary": {
-      "description": "The boundary's CURIE (prefix:local-name), for example acme:horse-factory-svc.",
+      "description": "The boundary's CURIE (prefix:local-name), for example acme:circulation-svc.",
       "type": "string",
       "pattern": "^[A-Za-z][\\w-]*:[\\w.-]+$"
     },
@@ -71,7 +71,7 @@
       "pattern": "^[A-Za-z][\\w-]*$"
     },
     "allowed": {
-      "description": "Concepts that markers under this directory may reference: CURIEs or CURIE globs (impl:Foal*). Optional: when absent the set is derived from what the manifest declares (gloss check --explain). The entry derived keeps the derived set and adds the other entries to it.",
+      "description": "Concepts that markers under this directory may reference: CURIEs or CURIE globs (circ:Catalog*). Optional: when absent the set is derived from what the manifest declares (gloss check --explain). The entry derived keeps the derived set and adds the other entries to it.",
       "anyOf": [
         { "$ref": "#/$defs/curieGlob" },
         {
@@ -125,7 +125,7 @@
       ]
     },
     "curieGlob": {
-      "description": "A CURIE (zoo:Horse), a CURIE glob where * matches any run of characters (impl:Foal*, impl:*), or derived (the derived set).",
+      "description": "A CURIE (lib:Media), a CURIE glob where * matches any run of characters (circ:Catalog*, circ:*), or derived (the derived set).",
       "type": "string",
       "pattern": "^([A-Za-z][\\w-]*:[\\w.*-]+|derived)$"
     }

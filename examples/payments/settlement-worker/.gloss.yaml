@@ -1,7 +1,0 @@
-boundary: acme:settlement-worker
-level: container
-part-of: acme:payments-platform
-realizes: [pay:Settlement, pay:SettlementCutoff]
-default-namespace: sw
-allowed: [pay:Payment, pay:Payout, pay:Settlement, pay:CaptureConfirmed, pay:SettlementCutoff, sw:*]
-owner: settlement-eng

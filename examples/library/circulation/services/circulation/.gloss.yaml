@@ -1,0 +1,11 @@
+# services/circulation/.gloss.yaml: boundary manifest for the circulation container.
+boundary: acme:circulation-svc
+level: container
+label: Circulation service
+part-of: acme:library-platform
+realizes: [circ:CirculationService, lib:Cataloging, lib:Checkout, lib:Return, lib:LoanPeriod]
+produces: [lib:Media]
+default-namespace: circ
+allowed: [lib:Media, lib:Book, lib:DVD, lib:Item, lib:Patron, lib:Loan, lib:Renewal, lib:ItemReturned, circ:*]
+generated: ["gen/**"]
+owner: circulation-eng

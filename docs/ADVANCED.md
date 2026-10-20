@@ -17,7 +17,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `documents` | ✓ | | | Markdown explains a concept or boundary |
 | `instructs` | ✓ | | | an agent file's instructions concern a concept or boundary |
 | `publishes-value` | ✓ | | | the line below holds a measure's or constraint's published value (`scope=line`); same as `value-from:` in the ontology, and lifts as `implements` (the line is the code that holds the setting) |
-| `may-modify` | ✓ | | | an agent's change remit; targets may be globs (`pa:*`); links outside it by that agent are HARD |
+| `may-modify` | ✓ | | | an agent's change remit; targets may be globs (`circ:*`); links outside it by that agent are HARD |
 | `provisions` | ✓ | | | IaC artifact provisions a resource or boundary; on a resource or system-type it lifts to `realizes` |
 | `configures` | ✓ | | ✓ | a config file, or a page that edits a concept's value at runtime; lifts to the boundary as itself on any kind (and to `realizes` on a resource or system-type), carries the concept's criticality, never places it ([ADR 0012](adr/0012-surfaces.md)) |
 | `deploys` | ✓ | | | CI artifact deploys a system-type or boundary; same lift |
@@ -93,7 +93,7 @@ A label or `doc:` change on a core concept is HARD and changes every view that s
 
 ## Feature slices (`gloss slice`)
 
-`gloss slice pay:Withdrawal` prints everything relevant to one feature: the seed, its kinds (`is-a`) and parts (`part-of`), the implementation concepts that realize it or are published as it, the code, tests, docs, pages and infrastructure linked to any of those, the boundaries around them, and a faded ring of context (what they produce, consume, publish or subscribe to with the party on the other side, the constraints on them, what they stand for and their `is-a` ancestors). Each node carries its role and the path of edges that brought it in, its criticality and its drift findings; the summary lists what in the slice is untested, so "what is untested in withdrawals" is one command.
+`gloss slice lib:Cataloging` prints everything relevant to one feature: the seed, its kinds (`is-a`) and parts (`part-of`), the implementation concepts that realize it or are published as it, the code, tests, docs, pages and infrastructure linked to any of those, the boundaries around them, and a faded ring of context (what they produce, consume, publish or subscribe to with the party on the other side, the constraints on them, what they stand for and their `is-a` ancestors). Each node carries its role and the path of edges that brought it in, its criticality and its drift findings; the summary lists what in the slice is untested, so "what is untested in cataloging" is one command.
 
 | Flag | Effect |
 | --- | --- |
@@ -103,7 +103,7 @@ A label or `doc:` change on a core concept is HARD and changes every view that s
 | `--format text\|json\|md` | output; `json` is what MCP `slice_of` returns |
 | `--repo <root>` (repeatable) | slice the landscape of several repositories, so a subscriber in another repo appears |
 
-Every relation is followed in one direction for one reason, never as a blind N-hop neighbourhood, so a hub concept does not pull in the graph; [ADR 0023](adr/0023-feature-slices.md) has the rules. The same slice is MCP `slice_of`, `gloss context --concept <curie>` (a briefing on a feature rather than a directory), a saved slice in `views.yaml` (`slice: [pay:Withdrawal]`, see [FILE-FORMATS.md](FILE-FORMATS.md#viewsyaml)) and the viewer's "Slice on this" (or Alt+click a node; `#slice=pay:Withdrawal` in the URL shares it; Esc or the chip's × clears it).
+Every relation is followed in one direction for one reason, never as a blind N-hop neighbourhood, so a hub concept does not pull in the graph; [ADR 0023](adr/0023-feature-slices.md) has the rules. The same slice is MCP `slice_of`, `gloss context --concept <curie>` (a briefing on a feature rather than a directory), a saved slice in `views.yaml` (`slice: [lib:Cataloging]`, see [FILE-FORMATS.md](FILE-FORMATS.md#viewsyaml)) and the viewer's "Slice on this" (or Alt+click a node; `#slice=lib:Cataloging` in the URL shares it; Esc or the chip's × clears it).
 
 ## Files and version numbers
 

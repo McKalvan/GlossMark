@@ -14,7 +14,7 @@ The lift itself had two rough edges in deep taxonomies (deep-hierarchies lab):
 
 ## Decision
 
-1. **Coverage always subsumes.** Every relation drift compares (`realizes`, `holds`, `presents`, `hosts`, `produces`, `consumes`, `publishes`, `subscribes`) states what a boundary may do, an existential claim: declaring `produces: [zoo:Horse]` permits producing some horse, so a derived `Mare` is covered. No compared relation is an exclusivity claim, so there is nothing to opt out of. The "opt-in" wording is removed.
+1. **Coverage always subsumes.** Every relation drift compares (`realizes`, `holds`, `presents`, `hosts`, `produces`, `consumes`, `publishes`, `subscribes`) states what a boundary may do, an existential claim: declaring `produces: [lib:Media]` permits producing some media, so a derived `Book` is covered. No compared relation is an exclusivity claim, so there is nothing to opt out of. The "opt-in" wording is removed.
 2. **`lift` is the summary.** A relation's `lift` only sets how drift prints a boundary's derived set: `range-lcs` (the builtin for the four flow relations) as its least common subsumer, `none` (new) as its members. A view's own `lift:` sets the same for that view.
 3. **A unique subsumer or none.** The lift replaces a set only by its unique least common subsumer. When the members share several incomparable minimal subsumers nothing is lifted; drift appends `(no unique subsumer: cyc:Derailleur, cyc:PoweredDevice)` and the projection's edges carry `noUniqueSubsumer`. Before, three members with two such subsumers were printed as the two.
 4. **Curated views keep what they name.** A curated view lifts only edges whose concept it does not name, and a lift whose subsumer is not in the view replaces nothing.

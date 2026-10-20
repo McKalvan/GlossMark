@@ -16,7 +16,7 @@ import (
 // anchored signature.
 type Anchor struct {
 	Scope     string `json:"scope"`               // file | symbol | block | line | range
-	Symbol    string `json:"symbol,omitempty"`    // declaration name, e.g. breed_stallion, resource.aws_sqs_queue.capture
+	Symbol    string `json:"symbol,omitempty"`    // declaration name, e.g. catalog_book, resource.aws_dynamodb_table.loans
 	Kind      string `json:"kind,omitempty"`      // function, class, resource, table, feature, document, heading, ...
 	StartLine int    `json:"start"`               // first line of the anchored region (1-based)
 	EndLine   int    `json:"end"`                 // last line (inclusive)

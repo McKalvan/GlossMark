@@ -88,8 +88,8 @@ func has(xs []string, x string) bool {
 	return false
 }
 
-func TestHorseFactory(t *testing.T) {
-	root := example(t, "horse-factory")
+func TestCirculation(t *testing.T) {
+	root := example(t, "library/circulation")
 	start := time.Now()
 	ws, g, res, lg := build(t, root)
 	if took := time.Since(start); took > 5*time.Second {
@@ -104,7 +104,7 @@ func TestHorseFactory(t *testing.T) {
 			t.Errorf("generated file scanned: %s", m.Path)
 		}
 	}
-	// check: no errors; the Donkey link is outside allowed (warning because proposed).
+	// check: no errors; the Laptop link is outside allowed (warning because proposed).
 	diags := check.Run(ws, g)
 	for _, d := range diags {
 		if d.Severity == "error" {
@@ -113,53 +113,72 @@ func TestHorseFactory(t *testing.T) {
 	}
 	gm502 := false
 	for _, d := range diags {
-		if d.Code == "GM502" {
+		if d.Code == "GM502" && strings.Contains(d.Msg, "lib:Laptop") {
 			gm502 = true
 		}
 	}
 	if !gm502 {
-		t.Errorf("expected GM502 outside-allowed warning, got %v", diags)
+		t.Errorf("expected GM502 outside-allowed warning for lib:Laptop, got %v", diags)
 	}
 	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	// Two violations, both proposed: a produces outside the declared Media
+	// (Laptop is an Item, not Media), and Renewal handled but not declared.
 	viol := findings(rep, rollup.KindViolation)
-	if len(viol) != 1 || viol[0].Concept != "zoo:Donkey" || !viol[0].Proposed || viol[0].Relation != "produces" {
-		t.Errorf("violations = %+v, want one proposed produces zoo:Donkey", viol)
+	if len(viol) != 2 ||
+		viol[0].Concept != "lib:Laptop" || viol[0].Relation != "produces" || !viol[0].Proposed ||
+		viol[1].Concept != "lib:Renewal" || viol[1].Relation != "realizes" || !viol[1].Proposed || viol[1].Boundary != "acme:circulation-svc" {
+		t.Errorf("violations = %+v, want proposed produces lib:Laptop and realizes lib:Renewal", viol)
 	}
-	if n := len(findings(rep, rollup.KindGap)); n != 0 {
-		t.Errorf("gaps = %d, want 0", n)
+	// HoldReady is published by holds-worker, another repo: a gap here, closed in the landscape.
+	if gaps := findings(rep, rollup.KindGap); len(gaps) != 1 || gaps[0].Concept != "lib:HoldReady" || gaps[0].Boundary != "acme:library-platform" || gaps[0].Relation != "publishes" {
+		t.Errorf("gaps = %+v, want acme:library-platform publishes lib:HoldReady", gaps)
 	}
 	rogues := findings(rep, rollup.KindRogue)
-	if len(rogues) != 1 || rogues[0].Concept != "impl:NEW:Gelding" {
+	if len(rogues) != 1 || rogues[0].Concept != "circ:NEW:DamageCheck" {
 		t.Errorf("rogues = %+v", rogues)
 	}
-	if len(rep.Decisions) == 0 || rep.Decisions[0].Concept != "impl:Gelding" || rep.Decisions[0].Owners[0] != "horse-platform" {
+	if len(rep.Decisions) == 0 || rep.Decisions[0].Concept != "circ:DamageCheck" || rep.Decisions[0].Owners[0] != "circulation-eng" {
 		t.Errorf("decisions = %+v", rep.Decisions)
 	}
 	orph := concepts(findings(rep, rollup.KindOrphan))
-	for _, want := range []string{"impl:BreedingPlanner", "impl:TailQueue", "zoo:HorseOrder"} {
+	for _, want := range []string{"circ:SubjectSuggester", "circ:CoverImageCache", "lib:InterlibraryLoan"} {
 		if !has(orph, want) {
 			t.Errorf("orphans %v lack %s", orph, want)
 		}
 	}
-	if has(orph, "zoo:FoalBorn") || has(orph, "zoo:ProductionCapacity") {
+	if has(orph, "lib:ItemReturned") || has(orph, "lib:LoanPeriod") {
 		t.Errorf("orphans %v include a reached concept", orph)
 	}
-	// Taxonomic lift: the system boundary's produces {Horse, Stallion, Donkey?} summarizes to Animal and is consistent.
+	// A page presents Hold, but nothing in this repo implements it.
+	if po := concepts(findings(rep, rollup.KindPresentedOnly)); len(po) != 1 || po[0] != "lib:Hold" {
+		t.Errorf("presented-only = %v, want lib:Hold", po)
+	}
+	unt := concepts(findings(rep, rollup.KindUntested))
+	if !has(unt, "lib:Return") {
+		t.Errorf("untested %v lacks lib:Return", unt)
+	}
+	if has(unt, "lib:Checkout") || has(unt, "circ:CheckoutHandler") {
+		t.Errorf("Checkout is verified by a feature file; untested = %v", unt)
+	}
+	if has(unt, "circ:ReturnPipeline") {
+		t.Errorf("impl concept reported alongside its core: %v", unt)
+	}
+	// Taxonomic lift: the system boundary's produces {Book, DVD, Media, Laptop?} summarizes to Item and is consistent.
 	cons := findings(rep, rollup.KindConsistent)
 	ok := false
 	for _, f := range cons {
-		if f.Boundary == "acme:animal-production" && f.Relation == "produces" && strings.Contains(f.Msg, "zoo:Animal") {
+		if f.Boundary == "acme:library-platform" && f.Relation == "produces" && strings.Contains(f.Msg, "lib:Item") {
 			ok = true
 		}
 	}
 	if !ok {
-		t.Errorf("expected animal-production produces consistent via LCS, got %+v", cons)
+		t.Errorf("expected library-platform produces consistent via LCS, got %+v", cons)
 	}
 	m := rep.Metrics
-	if m.InScopeFiles == 0 || m.CoveragePct < 50 || m.Proposed != 3 {
+	if m.InScopeFiles == 0 || m.CoveragePct < 50 || m.Proposed != 4 {
 		t.Errorf("metrics %+v", m)
 	}
-	// Views: business folds impl into core and shows the published measure under its core name.
+	// Views: business folds circ into core and shows the published measure under its core name.
 	ps := views.ProjectAll(g, ws.Views)
 	var biz, eng *views.Projection
 	for _, p := range ps {
@@ -174,56 +193,60 @@ func TestHorseFactory(t *testing.T) {
 		t.Fatal("missing preset views")
 	}
 	for _, n := range biz.Nodes {
-		if strings.HasPrefix(n.ID, "impl:") {
-			t.Errorf("business view shows impl node %s", n.ID)
+		if strings.HasPrefix(n.ID, "circ:") {
+			t.Errorf("business view shows circ node %s", n.ID)
 		}
-		if n.ID == "zoo:ProductionCapacity" && (!n.Published || n.PublishedAs != "impl:FoalingPipelineThroughput") {
+		if n.ID == "lib:LoanPeriod" && (!n.Published || n.PublishedAs != "circ:DefaultLoanPeriod") {
 			t.Errorf("published seam not surfaced: %+v", n)
 		}
-		if n.ID == "zoo:Breeding" && !has(n.Folded, "impl:StallionProduction") {
-			t.Errorf("Breeding should fold StallionProduction: %+v", n)
+		if n.ID == "lib:Cataloging" && !has(n.Folded, "circ:BookIntake") {
+			t.Errorf("Cataloging should fold BookIntake: %+v", n)
 		}
 	}
 	lifted := false
 	for _, e := range biz.Edges {
-		if e.S == "acme:animal-production" && e.P == "produces" && e.O == "zoo:Animal" && e.Lifted {
+		if e.S == "acme:library-platform" && e.P == "produces" && e.O == "lib:Item" && e.Lifted {
 			lifted = true
 		}
 	}
 	if !lifted {
-		t.Error("business view lacks lifted produces → zoo:Animal")
+		t.Error("business view lacks lifted produces → lib:Item")
 	}
 	if len(eng.Nodes) <= len(biz.Nodes) {
 		t.Errorf("engineering view (%d nodes) should be larger than business (%d)", len(eng.Nodes), len(biz.Nodes))
 	}
-	// Boundaries house what their code realizes: at system zoom the container folds
-	// into the system; at container zoom Breeding sits in the service, a part follows
-	// its mechanism, Foal (represented only by the root migration) stays in the system,
-	// and HorseOrder, which nothing implements, is unplaced.
+	// Boundaries house what their code realizes: at system zoom the containers fold
+	// into the system; at container zoom Cataloging sits in the service, a part follows
+	// its mechanism, Loan (represented only by the root migration) stays in the system,
+	// and InterlibraryLoan, which nothing implements, is unplaced.
 	wantIn := map[string]map[string]string{
-		"business":    {"zoo:Breeding": "acme:animal-production", "zoo:HorseOrder": "", "acme:animal-production": ""},
-		"engineering": {"zoo:Breeding": "acme:horse-factory-svc", "impl:HoofStep": "acme:horse-factory-svc", "zoo:Foal": "acme:animal-production", "zoo:HorseOrder": "", "acme:horse-factory-svc": ""},
+		"business":    {"lib:Cataloging": "acme:library-platform", "lib:InterlibraryLoan": "", "acme:library-platform": ""},
+		"engineering": {"lib:Cataloging": "acme:circulation-svc", "circ:MarcFieldMapper": "acme:circulation-svc", "lib:Loan": "acme:library-platform", "lib:InterlibraryLoan": "", "acme:circulation-svc": ""},
 	}
 	for _, p := range []*views.Projection{biz, eng} {
 		for _, n := range p.Nodes {
 			if want, ok := wantIn[p.Name][n.ID]; ok && n.Boundary != want {
 				t.Errorf("%s view: %s in boundary %q, want %q", p.Name, n.ID, n.Boundary, want)
 			}
-			if n.ID == "acme:horse-factory-svc" && n.Parent != "acme:animal-production" {
+			if (n.ID == "acme:circulation-svc" || n.ID == "acme:opac") && p.Name == "engineering" && n.Parent != "acme:library-platform" {
 				t.Errorf("container boundary should nest in the system: %+v", n)
 			}
 		}
 	}
-	// Criticality: declared on zoo:Breeding, inherited by what realizes it and by the boundary.
+	// Criticality: declared on lib:Cataloging, inherited by what realizes it;
+	// the service takes the highest level it realizes (Checkout, high), the
+	// platform declares its own, and a surface-only boundary inherits nothing.
 	wantCrit := map[string][2]string{
-		"zoo:Breeding":                   {"medium", "declared"},
-		"impl:StallionProduction":        {"medium", "zoo:Breeding"},
-		"impl:HoofStep":                  {"medium", "impl:HoofAssembler"},
-		"zoo:HorseOrder":                 {"high", "declared"},
-		"impl:FoalingPipelineThroughput": {"low", "declared"},
-		"acme:horse-factory-svc":         {"medium", "zoo:Breeding"},
-		"acme:animal-production":         {"medium", "zoo:Breeding"},
-		"zoo:Donkey":                     {"", ""},
+		"lib:Cataloging":         {"medium", "declared"},
+		"circ:BookIntake":        {"medium", "lib:Cataloging"},
+		"circ:MarcFieldMapper":   {"medium", "circ:MarcParser"},
+		"lib:Loan":               {"high", "declared"},
+		"circ:CheckoutHandler":   {"high", "lib:Checkout"},
+		"circ:DefaultLoanPeriod": {"low", "declared"},
+		"acme:circulation-svc":   {"high", "lib:Checkout"},
+		"acme:library-platform":  {"critical", "declared"},
+		"acme:opac":              {"", ""},
+		"lib:Laptop":             {"", ""},
 	}
 	for cu, want := range wantCrit {
 		n := g.NodeByCurie(cu)
@@ -236,40 +259,43 @@ func TestHorseFactory(t *testing.T) {
 	}
 	for _, a := range g.NodesOf(model.NodeArtifact) {
 		// An artifact takes the level of what it implements, not its boundary's
-		// (no criticality-floor here): the low-criticality metrics module.
-		if a.Path == "services/horse-factory/breeding/metrics.py" && (a.Criticality != "low" || a.CriticalityFrom != "impl:FoalingPipelineThroughput") {
-			t.Errorf("metrics.py takes its concept's level: %+v", a)
+		// (no criticality-floor here): the low-criticality loan policy module.
+		if a.Path == "services/circulation/loans/policy.py" && (a.Criticality != "low" || a.CriticalityFrom != "circ:DefaultLoanPeriod") {
+			t.Errorf("policy.py takes its concept's level: %+v", a)
 		}
 	}
 	for _, n := range eng.Nodes {
-		if n.ID == "acme:horse-factory-svc" && (n.Criticality != "medium" || n.Owner != "horse-platform") {
+		if n.ID == "acme:circulation-svc" && (n.Criticality != "high" || n.Owner != "circulation-eng") {
 			t.Errorf("projection should carry boundary criticality and owner: %+v", n)
 		}
 	}
 	// A manifest that understates its risk is a governance warning.
-	svc := g.NodeByCurie("acme:horse-factory-svc")
+	svc := g.NodeByCurie("acme:circulation-svc")
 	svc.Criticality, svc.CriticalityFrom = "low", "declared"
 	us := rollup.Understated(g)
 	seenU := map[string]int{}
 	for _, u := range us {
 		seenU[u.Concept]++
-		if u.Boundary != "acme:horse-factory-svc" || u.Declared != "low" || u.Level != "medium" {
+		if u.Boundary != "acme:circulation-svc" || u.Declared != "low" || (u.Level != "medium" && u.Level != "high") {
 			t.Errorf("understated = %+v", u)
 		}
+		if u.Concept == "lib:Checkout" && u.Level != "high" {
+			t.Errorf("Checkout is high: %+v", u)
+		}
 	}
-	if seenU["zoo:Breeding"] != 1 {
-		t.Errorf("understated should list zoo:Breeding once: %+v", us)
+	if seenU["lib:Checkout"] != 1 || seenU["lib:Cataloging"] != 1 {
+		t.Errorf("understated should list lib:Checkout and lib:Cataloging once each: %+v", us)
 	}
 	gm600 := false
 	for _, d := range check.Run(ws, g) {
-		if d.Code == "GM600" && strings.Contains(d.Msg, "zoo:Breeding") {
+		if d.Code == "GM600" && strings.Contains(d.Msg, "lib:Checkout") {
 			gm600 = true
 		}
 	}
 	if !gm600 {
 		t.Error("expected GM600 for an understated boundary")
 	}
-	svc.Criticality, svc.CriticalityFrom = "medium", "zoo:Breeding"
+	svc.Criticality, svc.CriticalityFrom = "high", "lib:Checkout"
 	// Graph round-trips deterministically.
 	var sb1, sb2 strings.Builder
 	g.WriteJSONL(&sb1)
@@ -283,65 +309,58 @@ func TestHorseFactory(t *testing.T) {
 	}
 }
 
-func TestPayments(t *testing.T) {
-	api := example(t, "payments/payments-api")
-	ws, g, _, lg := build(t, api)
+// TestLibraryLandscape: holds-worker imports lib: from circulation and
+// extends it; the landscape unions both repos by IRI.
+func TestLibraryLandscape(t *testing.T) {
+	circ := example(t, "library/circulation")
+	ws, g, _, _ := build(t, circ)
 	if errs := errorsOf(check.Run(ws, g)); len(errs) > 0 {
-		t.Errorf("payments-api check errors: %v", errs)
-	}
-	if b := g.NodeByCurie("acme:payments-api"); b == nil || b.Criticality != "critical" || b.CriticalityFrom != "pay:Authorization" {
-		t.Errorf("payments-api should inherit critical from pay:Authorization: %+v", b)
-	}
-	if b := g.NodeByCurie("acme:payments-platform"); b == nil || b.Criticality != "critical" || b.CriticalityFrom != "declared" {
-		t.Errorf("payments-platform declares critical: %+v", b)
-	}
-	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
-	viol := findings(rep, rollup.KindViolation)
-	if len(viol) != 1 || viol[0].Boundary != "acme:payments-api" || viol[0].Concept != "pay:Refunding" || !viol[0].Proposed {
-		t.Errorf("payments-api violations = %+v, want Refunding handled but not declared", viol)
-	}
-	gaps := concepts(findings(rep, rollup.KindGap))
-	if len(gaps) != 1 || gaps[0] != "pay:Payout" {
-		t.Errorf("gaps = %v, want pay:Payout (produced by the other repo)", gaps)
-	}
-	unt := concepts(findings(rep, rollup.KindUntested))
-	if !has(unt, "pay:Capture") {
-		t.Errorf("untested %v lacks pay:Capture", unt)
-	}
-	if has(unt, "pay:Authorization") || has(unt, "pa:AuthorizeHandler") {
-		t.Errorf("Authorization is verified by a feature file; untested = %v", unt)
-	}
-	if has(unt, "pa:CaptureHandler") {
-		t.Errorf("impl concept reported alongside its core: %v", unt)
-	}
-	if !has(concepts(findings(rep, rollup.KindOrphan)), "pay:Merchant") {
-		t.Error("pay:Merchant should be an orphan")
+		t.Errorf("circulation check errors: %v", errs)
 	}
 
-	// settlement-worker imports pay: and extends it.
-	sw := example(t, "payments/settlement-worker")
-	ws2, g2, _, lg2 := build(t, sw)
+	hw := example(t, "library/holds-worker")
+	ws2, g2, _, lg2 := build(t, hw)
 	if errs := errorsOf(check.Run(ws2, g2)); len(errs) > 0 {
-		t.Errorf("settlement-worker check errors: %v", errs)
+		t.Errorf("holds-worker check errors: %v", errs)
 	}
-	if n := g2.NodeByCurie("pay:Settlement"); n == nil || !n.Imported {
+	if n := g2.NodeByCurie("lib:HoldFulfillment"); n == nil || !n.Imported {
 		t.Fatal("imported core concept missing")
+	}
+	if b := g2.NodeByCurie("acme:holds-worker"); b == nil || b.Criticality != "high" || b.CriticalityFrom != "lib:Hold" {
+		t.Errorf("holds-worker should inherit high from lib:Hold, the data it keeps: %+v", b)
 	}
 	rep2 := rollup.Compare(g2, ws2, rollup.Options{Ledger: lg2.Entries, Policy: ws2.Config.EffectivePolicy()})
 	if n := len(findings(rep2, rollup.KindViolation)); n != 0 {
-		t.Errorf("settlement-worker violations = %d", n)
+		t.Errorf("holds-worker violations = %d", n)
 	}
 	ext := false
 	for _, d := range rep2.Decisions {
-		if d.Kind == "extension-upstream" && d.Concept == "sw:PartialSettlement" {
+		if d.Kind == "extension-upstream" && d.Concept == "hw:CurbsidePickup" {
 			ext = true
 		}
 	}
 	if !ext {
-		t.Errorf("expected extension-upstream decision for sw:PartialSettlement, got %+v", rep2.Decisions)
+		t.Errorf("expected extension-upstream decision for hw:CurbsidePickup, got %+v", rep2.Decisions)
 	}
 
-	// Landscape: union by IRI → context-map edge and the Payout gap closes.
+	// Landscape: union by IRI → context-map edge, and the HoldReady gap and the
+	// presented-only Hold close. Paths take the repo name, as gloss landscape
+	// does, so findings resolve to the manifest that owns the code.
+	for name, gg := range map[string]*graph.Graph{"circulation": g, "holds-worker": g2} {
+		for _, n := range gg.Nodes() {
+			if n.NodeType == model.NodeArtifact {
+				n.Path = name + "/" + n.Path
+			}
+			if n.File != "" {
+				n.File = filepath.ToSlash(filepath.Join(name, n.File))
+			}
+		}
+		for _, e := range gg.Edges() {
+			if e.Prov != nil && e.Prov.Path != "" {
+				e.Prov.Path = filepath.ToSlash(filepath.Join(name, e.Prov.Path))
+			}
+		}
+	}
 	merged, err := load.Merge([]*load.Workspace{ws, ws2})
 	if err != nil {
 		t.Fatal(err)
@@ -368,20 +387,23 @@ func TestPayments(t *testing.T) {
 	}
 	rollup.Derive(u, merged.Vocab)
 	dep := false
-	for _, e := range u.Out(mustIRI(t, u, "acme:settlement-worker"), "depends-on") {
-		if u.Curie(e.O) == "acme:payments-api" && has(e.Prov.Via, "pay:CaptureConfirmed") {
+	for _, e := range u.Out(mustIRI(t, u, "acme:holds-worker"), "depends-on") {
+		if u.Curie(e.O) == "acme:circulation-svc" && has(e.Prov.Via, "lib:ItemReturned") {
 			dep = true
 		}
 	}
 	if !dep {
-		t.Error("landscape lacks settlement-worker depends-on payments-api via pay:CaptureConfirmed")
+		t.Error("landscape lacks holds-worker depends-on circulation-svc via lib:ItemReturned")
 	}
 	rep3 := rollup.Compare(u, merged, rollup.Options{Policy: merged.Config.EffectivePolicy()})
 	if n := len(findings(rep3, rollup.KindGap)); n != 0 {
-		t.Errorf("landscape gaps = %+v, want none (Payout produced by settlement-worker)", findings(rep3, rollup.KindGap))
+		t.Errorf("landscape gaps = %+v, want none (HoldReady published by holds-worker)", findings(rep3, rollup.KindGap))
 	}
-	if v := findings(rep3, rollup.KindViolation); len(v) != 1 || v[0].Concept != "pay:Refunding" {
-		t.Errorf("landscape violations = %+v", v)
+	if n := len(findings(rep3, rollup.KindPresentedOnly)); n != 0 {
+		t.Errorf("landscape presented-only = %+v, want none (holds-worker represents Hold)", findings(rep3, rollup.KindPresentedOnly))
+	}
+	if v := concepts(findings(rep3, rollup.KindViolation)); len(v) != 2 || v[0] != "lib:Laptop" || v[1] != "lib:Renewal" {
+		t.Errorf("landscape violations = %v", v)
 	}
 }
 
@@ -404,24 +426,24 @@ func errorsOf[D interface{ String() string }](ds []D) []string {
 	return out
 }
 
-// TestGateCutoffChange reproduces the design's PR: moving the published
-// cutoff value is HARD because the business view changes; a new in-remit
+// TestGatePickupWindowChange reproduces the design's PR: moving the published
+// pickup window is HARD because the business view changes; a new in-remit
 // proposal is SOFT; a proposal outside the agent's remit is HARD.
-func TestGateCutoffChange(t *testing.T) {
-	src := example(t, "payments/settlement-worker")
-	api := example(t, "payments/payments-api")
+func TestGatePickupWindowChange(t *testing.T) {
+	src := example(t, "library/holds-worker")
+	circ := example(t, "library/circulation")
 	tmp := t.TempDir()
-	// Copy both repos so the relative import (../payments-api) keeps working.
-	copyTree(t, api, filepath.Join(tmp, "payments-api"))
-	copyTree(t, src, filepath.Join(tmp, "settlement-worker"))
-	root := filepath.Join(tmp, "settlement-worker")
+	// Copy both repos so the relative import (../circulation) keeps working.
+	copyTree(t, circ, filepath.Join(tmp, "circulation"))
+	copyTree(t, src, filepath.Join(tmp, "holds-worker"))
+	root := filepath.Join(tmp, "holds-worker")
 	wsBase, base, _, _ := build(t, root)
-	// Head: change the cutoff value and add an agent proposal outside its remit.
-	ont := filepath.Join(root, "ontology", "sw.gloss.yaml")
+	// Head: change the pickup window and add an agent proposal outside its remit.
+	ont := filepath.Join(root, "ontology", "hw.gloss.yaml")
 	b, _ := os.ReadFile(ont)
-	os.WriteFile(ont, []byte(strings.Replace(string(b), `value: "16:00Z"`, `value: "17:00Z"`, 1)), 0o644)
-	os.WriteFile(filepath.Join(root, "internal", "batch", "merchant.go"), []byte("package batch\n\n// @gloss? represents pay:Payment conf=0.9\ntype Row struct{}\n\n// @gloss? implements pay:Settlement conf=0.9\nfunc Settle() {}\n"), 0o644)
-	os.WriteFile(filepath.Join(root, ".claude-agent.md"), []byte("<!-- @gloss may-modify sw:* scope=file -->\n<!-- @gloss instructs sw:BatchSettler scope=file -->\n"), 0o644)
+	os.WriteFile(ont, []byte(strings.Replace(string(b), `value: "7 days"`, `value: "10 days"`, 1)), 0o644)
+	os.WriteFile(filepath.Join(root, "internal", "holds", "notify.go"), []byte("package holds\n\n// @gloss? represents lib:Patron conf=0.9\ntype Contact struct{}\n\n// @gloss? implements lib:HoldFulfillment conf=0.9\nfunc Notify() {}\n"), 0o644)
+	os.WriteFile(filepath.Join(root, ".claude-agent.md"), []byte("<!-- @gloss may-modify hw:* scope=file -->\n<!-- @gloss instructs hw:HoldQueue scope=file -->\n"), 0o644)
 	ws, head, res, _ := build(t, root)
 	lg, _ := ledger.Open(filepath.Join(t.TempDir(), "ledger.jsonl"))
 	lg.Sync(head, res.Markers, "agent:claude-agent@claude-fable-5-1", time.Now())
@@ -433,16 +455,16 @@ func TestGateCutoffChange(t *testing.T) {
 	var pubChanged, softLink, remitHard bool
 	for _, ch := range im.Changes {
 		switch {
-		case ch.Kind == "published-changed" && ch.Subject == "sw:CutoffClock" && ch.Gate == gate.HARD:
+		case ch.Kind == "published-changed" && ch.Subject == "hw:PickupClock" && ch.Gate == gate.HARD:
 			pubChanged = true
-		case ch.Kind == "link-added" && ch.Object == "pay:Settlement" && ch.Gate == gate.HARD && strings.Contains(strings.Join(ch.Reasons, ";"), "remit"):
+		case ch.Kind == "link-added" && ch.Object == "lib:HoldFulfillment" && ch.Gate == gate.HARD && strings.Contains(strings.Join(ch.Reasons, ";"), "remit"):
 			remitHard = true
-		case ch.Kind == "link-added" && ch.Object == "pay:Payment" && ch.Gate == gate.HARD && strings.Contains(strings.Join(ch.Reasons, ";"), "remit"):
-			softLink = true // outside sw:* remit too; both proposals land HARD
+		case ch.Kind == "link-added" && ch.Object == "lib:Patron" && ch.Gate == gate.HARD && strings.Contains(strings.Join(ch.Reasons, ";"), "remit"):
+			softLink = true // outside hw:* remit too; both proposals land HARD
 		}
 	}
 	if !pubChanged {
-		t.Errorf("expected HARD published-changed for sw:CutoffClock; changes: %+v", im.Changes)
+		t.Errorf("expected HARD published-changed for hw:PickupClock; changes: %+v", im.Changes)
 	}
 	if !remitHard || !softLink {
 		t.Errorf("expected remit-based HARD gates; changes: %+v", im.Changes)
@@ -450,23 +472,23 @@ func TestGateCutoffChange(t *testing.T) {
 	if !has(im.ViewsChanged, "business") {
 		t.Errorf("business view should change when a published value moves; got %v", im.ViewsChanged)
 	}
-	// Governance: the Payment proposal touches a critical concept; the cutoff change a medium one.
+	// Governance: the Patron proposal touches a critical concept; the window change a medium one.
 	if im.Criticality != "critical" {
 		t.Errorf("impact criticality = %q, want critical", im.Criticality)
 	}
 	for _, ch := range im.Changes {
-		if ch.Kind == "link-added" && ch.Object == "pay:Payment" && (ch.Criticality != "critical" || ch.CriticalityFrom != "pay:Payment" || !strings.Contains(strings.Join(ch.Reasons, ";"), "criticality critical")) {
-			t.Errorf("Payment link should carry critical and the policy reason: %+v", ch)
+		if ch.Kind == "link-added" && ch.Object == "lib:Patron" && (ch.Criticality != "critical" || ch.CriticalityFrom != "lib:Patron" || !strings.Contains(strings.Join(ch.Reasons, ";"), "criticality critical")) {
+			t.Errorf("Patron link should carry critical and the policy reason: %+v", ch)
 		}
-		if ch.Kind == "published-changed" && ch.Subject == "sw:CutoffClock" && ch.Criticality != "medium" {
-			t.Errorf("CutoffClock change should carry medium (via pay:SettlementCutoff): %+v", ch)
+		if ch.Kind == "published-changed" && ch.Subject == "hw:PickupClock" && ch.Criticality != "medium" {
+			t.Errorf("PickupClock change should carry medium (via lib:PickupWindow): %+v", ch)
 		}
 	}
 	txt := gate.RenderText(im)
-	if !strings.Contains(txt, "published sw:CutoffClock value 16:00Z → 17:00Z") || !strings.Contains(txt, "Views changed:") {
+	if !strings.Contains(txt, "published hw:PickupClock value 7 days → 10 days") || !strings.Contains(txt, "Views changed:") {
 		t.Errorf("render:\n%s", txt)
 	}
-	if !strings.Contains(txt, "criticality critical") || !strings.Contains(txt, "Criticality touched: ") || !strings.Contains(txt, "pay:Payment critical (declared)") || !strings.Contains(txt, "[CRITICAL, agent") {
+	if !strings.Contains(txt, "criticality critical") || !strings.Contains(txt, "Criticality touched: ") || !strings.Contains(txt, "lib:Patron critical (declared)") || !strings.Contains(txt, "[CRITICAL, agent") {
 		t.Errorf("render lacks criticality:\n%s", txt)
 	}
 	md := gate.RenderMarkdown(im)
@@ -564,9 +586,9 @@ func TestOwnSubjectRule(t *testing.T) {
 		os.MkdirAll(filepath.Dir(p), 0o755)
 		os.WriteFile(p, []byte(content), 0o644)
 	}
-	write("upstream/zoo.gloss.yaml", "concepts:\n  Horse: { kind: entity }\n  Mare: { kind: entity, is-a: Horse }\n")
-	write("glossmark.yaml", "owns:\n  mine: { iri: https://x/mine/, tier: core }\nimports:\n  zoo: { iri: https://x/zoo/, source: upstream/zoo.gloss.yaml }\n")
-	write("ontology/mine.gloss.yaml", "concepts:\n  Pony: { kind: entity, is-a: zoo:Horse }\n  Saddle: { kind: entity, attaches-to: zoo:Horse }\n  Breeder: { kind: entity, has-part: zoo:Mare }\n")
+	write("upstream/lib.gloss.yaml", "concepts:\n  Media: { kind: entity }\n  Book: { kind: entity, is-a: Media }\n")
+	write("glossmark.yaml", "owns:\n  mine: { iri: https://x/mine/, tier: core }\nimports:\n  lib: { iri: https://x/lib/, source: upstream/lib.gloss.yaml }\n")
+	write("ontology/mine.gloss.yaml", "concepts:\n  Zine: { kind: entity, is-a: lib:Media }\n  DustJacket: { kind: entity, attaches-to: lib:Media }\n  BoxSet: { kind: entity, has-part: lib:Book }\n")
 	ws, err := load.Load(root)
 	if err != nil {
 		t.Fatal(err)
@@ -582,28 +604,28 @@ func TestOwnSubjectRule(t *testing.T) {
 	}
 	for _, c := range codes {
 		if c != "GM400" && c != "GM302" {
-			t.Errorf("unexpected diagnostic %s (Pony is-a zoo:Horse and Saddle attaches-to zoo:Horse are allowed)", c)
+			t.Errorf("unexpected diagnostic %s (Zine is-a lib:Media and DustJacket attaches-to lib:Media are allowed)", c)
 		}
 	}
 }
 
 // TestProposedConcepts covers the ontology-side ?: propose, link, gate, accept.
 func TestProposedConcepts(t *testing.T) {
-	src := example(t, "horse-factory")
-	root := filepath.Join(t.TempDir(), "hf")
+	src := example(t, "library/circulation")
+	root := filepath.Join(t.TempDir(), "circulation")
 	copyTree(t, src, root)
 	_, base, _, _ := build(t, root)
-	// An agent proposes impl:Gelding and links to it.
-	implPath := filepath.Join(root, "ontology", "impl.gloss.yaml")
-	if err := ontoedit.AddConcept(implPath, "Gelding", ontoedit.ConceptSpec{Kind: "process", Realizes: []string{"zoo:Breeding"}, Doc: "Castration step.", Proposed: true, ProposedBy: "agent:bot@m"}); err != nil {
+	// An agent proposes circ:DamageCheck and links to it.
+	circPath := filepath.Join(root, "ontology", "circ.gloss.yaml")
+	if err := ontoedit.AddConcept(circPath, "DamageCheck", ontoedit.ConceptSpec{Kind: "process", Realizes: []string{"lib:Return"}, Doc: "Inspecting a returned item for repair.", Proposed: true, ProposedBy: "agent:bot@m"}); err != nil {
 		t.Fatal(err)
 	}
-	files := []string{filepath.Join(root, "services", "horse-factory", "breeding", "engine.py")}
-	if n, err := ontoedit.RewriteNewMarkers(files, "impl:Gelding"); err != nil || n != 1 {
+	files := []string{filepath.Join(root, "services", "circulation", "loans", "returns.py")}
+	if n, err := ontoedit.RewriteNewMarkers(files, "circ:DamageCheck"); err != nil || n != 1 {
 		t.Fatalf("rewrite: n=%d err=%v", n, err)
 	}
 	ws, head, _, lg := build(t, root)
-	n := head.NodeByCurie("impl:Gelding")
+	n := head.NodeByCurie("circ:DamageCheck")
 	if n == nil || !n.Proposed || n.ProposedBy != "agent:bot@m" {
 		t.Fatalf("proposed concept missing or unflagged: %+v", n)
 	}
@@ -612,7 +634,7 @@ func TestProposedConcepts(t *testing.T) {
 	if len(findings(rep, rollup.KindRogue)) != 0 {
 		t.Errorf("rogue should be gone after proposal: %+v", findings(rep, rollup.KindRogue))
 	}
-	if p := findings(rep, rollup.KindProposed); len(p) != 1 || p[0].Concept != "impl:Gelding" {
+	if p := findings(rep, rollup.KindProposed); len(p) != 1 || p[0].Concept != "circ:DamageCheck" {
 		t.Errorf("proposed findings = %+v", p)
 	}
 	// Lint: proposed impl concept without realizes would be a warning, with realizes nothing.
@@ -622,17 +644,17 @@ func TestProposedConcepts(t *testing.T) {
 		}
 	}
 	// Ledger tracks the concept proposal.
-	if e := lg.Entry("concept:impl:Gelding"); e == nil || e.Status != model.StatusProposed || e.Actor != "agent:bot@m" {
-		t.Errorf("ledger concept entry = %+v", lg.Entry("concept:impl:Gelding"))
+	if e := lg.Entry("concept:circ:DamageCheck"); e == nil || e.Status != model.StatusProposed || e.Actor != "agent:bot@m" {
+		t.Errorf("ledger concept entry = %+v", lg.Entry("concept:circ:DamageCheck"))
 	}
 	// Gate: the proposal is HARD but in one PR; the link to it is HARD because the target is proposed.
 	im := gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: ws.Config.EffectivePolicy(), HeadLedger: lg.Entries})
 	var proposed, linkHard bool
 	for _, ch := range im.Changes {
-		if ch.Kind == "concept-proposed" && ch.Subject == "impl:Gelding" && ch.Gate == gate.HARD {
+		if ch.Kind == "concept-proposed" && ch.Subject == "circ:DamageCheck" && ch.Gate == gate.HARD {
 			proposed = true
 		}
-		if ch.Kind == "link-added" && ch.Object == "impl:Gelding" && ch.Gate == gate.HARD {
+		if ch.Kind == "link-added" && ch.Object == "circ:DamageCheck" && ch.Gate == gate.HARD {
 			linkHard = true
 		}
 	}
@@ -640,15 +662,15 @@ func TestProposedConcepts(t *testing.T) {
 		t.Errorf("gate changes: %+v", im.Changes)
 	}
 	// Accept: drop proposed:, the graph node is plain, the ledger entry accepted, the diff shows concept-accepted.
-	if err := ontoedit.SetProposed(implPath, "Gelding", false, ""); err != nil {
+	if err := ontoedit.SetProposed(circPath, "DamageCheck", false, ""); err != nil {
 		t.Fatal(err)
 	}
 	ws2, head2, res2, _ := build(t, root)
 	lg.Sync(head2, res2.Markers, "human:alice", time.Now())
-	if n := head2.NodeByCurie("impl:Gelding"); n == nil || n.Proposed {
+	if n := head2.NodeByCurie("circ:DamageCheck"); n == nil || n.Proposed {
 		t.Fatalf("after accept: %+v", n)
 	}
-	if e := lg.Entry("concept:impl:Gelding"); e.Status != model.StatusAccepted || e.ReviewedBy != "human:alice" {
+	if e := lg.Entry("concept:circ:DamageCheck"); e.Status != model.StatusAccepted || e.ReviewedBy != "human:alice" {
 		t.Errorf("ledger after accept = %+v", e)
 	}
 	im2 := gate.Classify(head, head2, ws2, gate.Options{Base: "proposal", Policy: ws2.Config.EffectivePolicy()})
@@ -662,15 +684,15 @@ func TestProposedConcepts(t *testing.T) {
 		t.Errorf("expected AUTO concept-accepted, got %+v", im2.Changes)
 	}
 	// The YAML edit preserved the other entries and comments.
-	b, _ := os.ReadFile(implPath)
-	if !strings.Contains(string(b), "HoofAssembler") || !strings.Contains(string(b), "# unpublished") {
+	b, _ := os.ReadFile(circPath)
+	if !strings.Contains(string(b), "MarcParser") || !strings.Contains(string(b), "# unpublished") {
 		t.Errorf("ontology file lost content:\n%s", b)
 	}
 }
 
 // TestSearchByMeaning: aliases, CamelCase splitting, stems, typos, one hop.
 func TestSearchByMeaning(t *testing.T) {
-	_, g, _, _ := build(t, example(t, "payments/payments-api"))
+	_, g, _, _ := build(t, example(t, "library/circulation"))
 	first := func(q string) string {
 		hits := mcp.Search(g, q, "", "", "", 5)
 		if len(hits) == 0 {
@@ -679,71 +701,77 @@ func TestSearchByMeaning(t *testing.T) {
 		return hits[0].Curie
 	}
 	cases := map[string]string{
-		"chargeback":        "pay:Refund",           // alias
-		"settlement cutoff": "pay:SettlementCutoff", // CamelCase split
-		"refunding":         "pay:Refunding",
-		"refunds":           "pay:Refund",     // stem
-		"settlment":         "pay:Settlement", // typo
-		"captured":          "pay:Capture",    // stem
-		"capture confirmed": "pay:CaptureConfirmed",
+		"cardholder":    "lib:Patron",     // alias
+		"reservation":   "lib:Hold",       // alias
+		"loan period":   "lib:LoanPeriod", // CamelCase split
+		"renewal":       "lib:Renewal",
+		"loans":         "lib:Loan",       // stem
+		"catalogng":     "lib:Cataloging", // typo
+		"returned":      "lib:Return",     // stem
+		"item returned": "lib:ItemReturned",
 	}
 	for q, want := range cases {
 		if got := first(q); got != want {
 			t.Errorf("search %q = %q, want %q (hits %+v)", q, got, want, mcp.Search(g, q, "", "", "", 3))
 		}
 	}
-	// Ranking v2 on horse-factory: every query word matched beats one word,
-	// "birth" reaches FoalBorn through the synonym table, a kind word boosts
-	// that kind, and the hit carries the doc and what matched.
-	_, hf, _, _ := build(t, example(t, "horse-factory"))
-	hits2 := mcp.Search(hf, "foal birth", "", "", "", 5)
-	if len(hits2) == 0 || hits2[0].Curie != "zoo:FoalBorn" || hits2[0].Doc == "" || !strings.HasPrefix(hits2[0].Matched, "name:") {
-		t.Errorf("foal birth = %+v", hits2)
+	// Ranking v2: every query word matched beats one word, "lending" reaches
+	// LoanPeriod through the synonym table, a kind word boosts that kind, and
+	// the hit carries the doc and what matched.
+	hits2 := mcp.Search(g, "lending period", "", "", "", 5)
+	if len(hits2) == 0 || hits2[0].Curie != "lib:LoanPeriod" || hits2[0].Doc == "" || !strings.HasPrefix(hits2[0].Matched, "name:") {
+		t.Errorf("lending period = %+v", hits2)
 	}
 	if len(hits2) > 1 && hits2[1].Score == hits2[0].Score {
-		t.Errorf("foal birth: FoalBorn should rank strictly first, got %+v", hits2[:2])
+		t.Errorf("lending period: LoanPeriod should rank strictly first, got %+v", hits2[:2])
 	}
-	if ev := mcp.Search(hf, "foal event", "", "", "", 3); len(ev) == 0 || ev[0].Curie != "zoo:FoalBorn" || !strings.HasSuffix(ev[0].Matched, "+kind") {
-		t.Errorf("foal event = %+v", ev)
+	if ev := mcp.Search(g, "return event", "", "", "", 3); len(ev) == 0 || ev[0].Curie != "lib:ItemReturned" || !strings.HasSuffix(ev[0].Matched, "+kind") {
+		t.Errorf("return event = %+v", ev)
 	}
-	// One hop: the impl handler is found through the core concept it realizes.
-	hits := mcp.Search(g, "authorization", "pa", "", "", 5)
-	if len(hits) == 0 || hits[0].Curie != "pa:AuthorizeHandler" || !strings.HasPrefix(hits[0].Matched, "via") && !strings.HasPrefix(hits[0].Matched, "name") {
+	// One hop: the circ handler is found through the core concept it realizes.
+	hits := mcp.Search(g, "checkout", "circ", "", "", 5)
+	if len(hits) == 0 || hits[0].Curie != "circ:CheckoutHandler" || !strings.HasPrefix(hits[0].Matched, "via") && !strings.HasPrefix(hits[0].Matched, "name") {
 		t.Errorf("one-hop search = %+v", hits)
+	}
+	// Across the import: holds-worker finds its measure from the core name.
+	_, hw, _, _ := build(t, example(t, "library/holds-worker"))
+	if h := mcp.Search(hw, "pickup window", "hw", "", "", 3); len(h) == 0 || h[0].Curie != "hw:PickupClock" {
+		t.Errorf("pickup window in hw = %+v", h)
 	}
 }
 
 // TestTouched: what a change to a file touches.
 func TestTouched(t *testing.T) {
-	ws, g, _, _ := build(t, example(t, "payments/settlement-worker"))
-	ts := gate.Touched(g, ws, []string{"internal/batch/cutoff.go", "internal/batch/settler.go", "ontology/sw.gloss.yaml"})
+	ws, g, _, _ := build(t, example(t, "library/holds-worker"))
+	ts := gate.Touched(g, ws, []string{"internal/holds/window.go", "internal/holds/queue.go", "ontology/hw.gloss.yaml"})
 	if len(ts) != 3 {
 		t.Fatalf("touched %d files", len(ts))
 	}
-	cut := ts[0]
-	if cut.Gate != gate.HARD {
-		t.Errorf("cutoff.go should be HARD (published seam): %+v", cut)
+	win := ts[0]
+	if win.Gate != gate.HARD {
+		t.Errorf("window.go should be HARD (published seam): %+v", win)
 	}
 	found := false
-	for _, c := range cut.Concepts {
-		if c.Curie == "sw:CutoffClock" && c.Published == "pay:SettlementCutoff" {
+	for _, c := range win.Concepts {
+		if c.Curie == "hw:PickupClock" && c.Published == "lib:PickupWindow" {
 			found = true
 		}
-		if c.Curie == "pay:SettlementCutoff" && (len(c.Constrains) != 1 || c.Constrains[0] != "pay:Settlement") {
-			t.Errorf("SettlementCutoff should constrain Settlement: %+v", c)
+		if c.Curie == "lib:PickupWindow" && (len(c.Constrains) != 1 || c.Constrains[0] != "lib:HoldFulfillment") {
+			t.Errorf("PickupWindow should constrain HoldFulfillment: %+v", c)
 		}
 	}
 	if !found {
-		t.Errorf("cutoff.go concepts: %+v", cut.Concepts)
+		t.Errorf("window.go concepts: %+v", win.Concepts)
 	}
-	// settler.go implements sw:BatchSettler, which inherits critical from pay:Settlement;
-	// the default policy makes anything critical HARD (docs/GOVERNANCE.md).
-	if ts[1].Gate != gate.HARD || ts[1].Criticality != "critical" || ts[1].CriticalityFrom != "sw:BatchSettler" {
-		t.Errorf("settler.go should be HARD with criticality critical via the concept it implements: %+v", ts[1])
+	// queue.go implements hw:HoldQueue, which inherits high from lib:HoldFulfillment:
+	// high asks for an owning reviewer (SOFT); only critical is HARD by default
+	// (docs/GOVERNANCE.md).
+	if ts[1].Gate != gate.SOFT || ts[1].Criticality != "high" || ts[1].CriticalityFrom != "hw:HoldQueue" {
+		t.Errorf("queue.go should be SOFT with criticality high via the concept it implements: %+v", ts[1])
 	}
 	for _, c := range ts[1].Concepts {
-		if c.Curie == "sw:BatchSettler" && (c.Criticality != "critical" || c.CriticalityFrom != "pay:Settlement") {
-			t.Errorf("BatchSettler should inherit critical from pay:Settlement: %+v", c)
+		if c.Curie == "hw:HoldQueue" && (c.Criticality != "high" || c.CriticalityFrom != "lib:HoldFulfillment") {
+			t.Errorf("HoldQueue should inherit high from lib:HoldFulfillment: %+v", c)
 		}
 	}
 	if ts[2].Gate != gate.HARD || len(ts[2].Concepts) < 3 {
@@ -755,9 +783,9 @@ func TestTouched(t *testing.T) {
 // the lockfile notices an upstream change under the same version number.
 func TestImportRangesAndLock(t *testing.T) {
 	tmp := t.TempDir()
-	copyTree(t, example(t, "payments/payments-api"), filepath.Join(tmp, "payments-api"))
-	copyTree(t, example(t, "payments/settlement-worker"), filepath.Join(tmp, "settlement-worker"))
-	root := filepath.Join(tmp, "settlement-worker")
+	copyTree(t, example(t, "library/circulation"), filepath.Join(tmp, "circulation"))
+	copyTree(t, example(t, "library/holds-worker"), filepath.Join(tmp, "holds-worker"))
+	root := filepath.Join(tmp, "holds-worker")
 	// The example ships a lockfile; start from the unlocked state.
 	os.Remove(filepath.Join(root, load.LockName))
 	codes := func() []string {
@@ -771,7 +799,7 @@ func TestImportRangesAndLock(t *testing.T) {
 		}
 		return out
 	}
-	// No lock yet → GM108; range ^1.2 satisfied by 1.2.1 → no GM106.
+	// No lock yet → GM108; range ^1.0 satisfied by 1.0.0 → no GM106.
 	c := codes()
 	if !has(c, "GM108") || has(c, "GM106") {
 		t.Fatalf("initial diags = %v", c)
@@ -785,29 +813,29 @@ func TestImportRangesAndLock(t *testing.T) {
 		t.Fatalf("after lock diags = %v", c)
 	}
 	// The lock vendored the ontology; the import now resolves from the copy.
-	pin := load.PinPath(root, "pay", "1.2.1")
-	if ws, _ := load.Load(root); ws.Ontologies["pay"].Path != pin || !ws.Resolved["pay"].Pinned {
-		t.Fatalf("pay: should resolve from %s, got %s", pin, ws.Ontologies["pay"].Path)
+	pin := load.PinPath(root, "lib", "1.0.0")
+	if ws, _ := load.Load(root); ws.Ontologies["lib"].Path != pin || !ws.Resolved["lib"].Pinned {
+		t.Fatalf("lib: should resolve from %s, got %s", pin, ws.Ontologies["lib"].Path)
 	}
 	// Upstream edits the ontology without bumping → GM116, still pinned.
-	up := filepath.Join(tmp, "payments-api", "ontology", "pay.gloss.yaml")
+	up := filepath.Join(tmp, "circulation", "ontology", "lib.gloss.yaml")
 	b, _ := os.ReadFile(up)
-	os.WriteFile(up, append(b, []byte("  Chargeback: { kind: entity }\n")...), 0o644)
+	os.WriteFile(up, append(b, []byte("  Periodical: { kind: entity }\n")...), 0o644)
 	if c := codes(); !has(c, "GM116") || has(c, "GM107") {
 		t.Fatalf("content change not noticed: %v", c)
 	}
-	// Upstream bumps to 2.0.0 → outside ^1.2: reported, and the pin holds (no GM106).
-	os.WriteFile(up, []byte(strings.Replace(string(b), "version: 1.2.1", "version: 2.0.0", 1)), 0o644)
+	// Upstream bumps to 2.0.0 → outside ^1.0: reported, and the pin holds (no GM106).
+	os.WriteFile(up, []byte(strings.Replace(string(b), "version: 1.0.0", "version: 2.0.0", 1)), 0o644)
 	ws, _ = load.Load(root)
 	var msgs []string
 	for _, d := range ws.Diags {
 		msgs = append(msgs, d.Code+" "+d.Msg)
 	}
-	if c := codes(); !has(c, "GM116") || has(c, "GM106") || has(c, "GM107") || !strings.Contains(strings.Join(msgs, "\n"), "2.0.0 available, outside ^1.2") {
+	if c := codes(); !has(c, "GM116") || has(c, "GM106") || has(c, "GM107") || !strings.Contains(strings.Join(msgs, "\n"), "2.0.0 available, outside ^1.0") {
 		t.Fatalf("major bump not reported: %v", msgs)
 	}
-	if v := ws.Ontologies["pay"].Version; v != "1.2.1" {
-		t.Fatalf("pay: resolved %s, want the pinned 1.2.1", v)
+	if v := ws.Ontologies["lib"].Version; v != "1.0.0" {
+		t.Fatalf("lib: resolved %s, want the pinned 1.0.0", v)
 	}
 	// Without the vendored copy the lock is a tripwire again: GM106 and GM107 (version).
 	os.Remove(pin)
@@ -824,14 +852,14 @@ func TestImportRangesAndLock(t *testing.T) {
 }
 
 // TestImportedPathsRelative: an importer's graph records imported ontology
-// files relative to its root (../payments-api/...), so a rebuild in another
+// files relative to its root (../circulation/...), so a rebuild in another
 // checkout writes the same bytes (issue #94).
 func TestImportedPathsRelative(t *testing.T) {
 	render := func() string {
 		tmp := t.TempDir()
-		copyTree(t, example(t, "payments/payments-api"), filepath.Join(tmp, "payments-api"))
-		copyTree(t, example(t, "payments/settlement-worker"), filepath.Join(tmp, "settlement-worker"))
-		_, g, _, _ := build(t, filepath.Join(tmp, "settlement-worker"))
+		copyTree(t, example(t, "library/circulation"), filepath.Join(tmp, "circulation"))
+		copyTree(t, example(t, "library/holds-worker"), filepath.Join(tmp, "holds-worker"))
+		_, g, _, _ := build(t, filepath.Join(tmp, "holds-worker"))
 		var sb strings.Builder
 		if err := g.WriteJSONL(&sb); err != nil {
 			t.Fatal(err)
@@ -845,8 +873,8 @@ func TestImportedPathsRelative(t *testing.T) {
 	if a != b {
 		t.Fatal("graph differs between two checkouts")
 	}
-	if !strings.Contains(a, `"file":"../payments-api/ontology/pay.gloss.yaml"`) {
-		t.Fatal("imported concepts should record ../payments-api/ontology/pay.gloss.yaml")
+	if !strings.Contains(a, `"file":"../circulation/ontology/lib.gloss.yaml"`) {
+		t.Fatal("imported concepts should record ../circulation/ontology/lib.gloss.yaml")
 	}
 }
 
@@ -1486,13 +1514,13 @@ func TestDerivedAllowed(t *testing.T) {
 // comment groups changes by boundary; a HARD link never carries the SOFT
 // eligibility text; an owned namespace is "added", not a cross-repo import.
 func TestAdoptionDiff(t *testing.T) {
-	ws, head, _, lg := build(t, example(t, "horse-factory"))
+	ws, head, _, lg := build(t, example(t, "library/circulation"))
 	pol := ws.Config.EffectivePolicy()
 	after := rollup.Compare(head, ws, rollup.Options{Ledger: lg.Entries, Policy: pol})
 	empty := graph.New(ws.Prefixes)
 	im := gate.Classify(empty, head, ws, gate.Options{Base: "main (no graph)", Policy: pol, HeadLedger: lg.Entries, AfterReport: after, Adoption: true})
 	a := im.Adoption
-	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 3 || len(a.PerBoundary) < 2 || len(a.PerView) != len(ws.Views.Views) || a.Hidden == 0 {
+	if a == nil || a.Concepts == 0 || a.Markers == 0 || a.Rogues != 1 || a.Proposed != 4 || len(a.PerBoundary) < 2 || len(a.PerView) != len(ws.Views.Views) || a.Hidden == 0 {
 		t.Fatalf("adoption summary = %+v", a)
 	}
 	for _, ch := range im.Changes {
@@ -1504,7 +1532,7 @@ func TestAdoptionDiff(t *testing.T) {
 	if n := strings.Count(md, "\n"); n > 60 {
 		t.Errorf("adoption comment is %d lines; want under 60", n)
 	}
-	if !strings.Contains(md, "Decisions requested") || !strings.Contains(md, "acme:horse-factory-svc") || strings.Contains(md, "cross-repo") {
+	if !strings.Contains(md, "Decisions requested") || !strings.Contains(md, "acme:circulation-svc") || strings.Contains(md, "cross-repo") {
 		t.Errorf("markdown:\n%s", md)
 	}
 	// Without adoption mode the same diff lists every link, grouped by boundary, and names the owned namespaces as added.
@@ -1528,7 +1556,7 @@ func TestAdoptionDiff(t *testing.T) {
 		t.Error("expected namespace-added changes")
 	}
 	md = gate.RenderMarkdown(full)
-	if !strings.Contains(md, "<details open><summary><b>acme:horse-factory-svc</b>") || !strings.Contains(md, "<b>Ontology, manifests and glossmark.yaml</b>") {
+	if !strings.Contains(md, "<details open><summary><b>acme:circulation-svc</b>") || !strings.Contains(md, "<b>Ontology, manifests and glossmark.yaml</b>") {
 		t.Errorf("grouped markdown:\n%s", md)
 	}
 }
@@ -2206,15 +2234,15 @@ func TestPlacement(t *testing.T) {
 			}
 		}
 	}
-	expect(t, example(t, "payments/payments-api"), []want{
-		{"engineering", "pay:Authorization", views.PlacementHoused, "inside acme:payments-api"},
-		{"engineering", "pay:Refund", views.PlacementFlow, "produced by acme:payments-api"},
-		{"engineering", "pay:Merchant", views.PlacementUnlinked, "no boundary realizes"},
-	})
-	expect(t, example(t, "horse-factory"), []want{
-		{"engineering", "zoo:Foal", views.PlacementHoused, "inside "},
-		{"engineering", "zoo:FoalBorn", views.PlacementFlow, "published by acme:horse-factory-svc"},
-		{"engineering", "impl:TailQueue", views.PlacementUnlinked, "no boundary realizes"},
+	expect(t, example(t, "library/circulation"), []want{
+		{"engineering", "lib:Checkout", views.PlacementHoused, "inside acme:circulation-svc"},
+		{"engineering", "lib:Loan", views.PlacementHoused, "inside acme:library-platform"},
+		{"engineering", "lib:Laptop", views.PlacementFlow, "produced by acme:circulation-svc"},
+		{"engineering", "lib:ItemReturned", views.PlacementHoused, "inside acme:circulation-svc"},
+		{"engineering", "lib:HoldReady", views.PlacementFlow, "published by acme:library-platform"},
+		{"engineering", "lib:Hold", views.PlacementSurface, "presented by acme:opac"},
+		{"engineering", "lib:InterlibraryLoan", views.PlacementUnlinked, "no boundary realizes"},
+		{"engineering", "circ:CoverImageCache", views.PlacementUnlinked, "no boundary realizes"},
 	})
 
 	root := t.TempDir()

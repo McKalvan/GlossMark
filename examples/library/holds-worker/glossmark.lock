@@ -1,0 +1,8 @@
+# glossmark.lock: resolved import versions, written by gloss lock. Commit it.
+format: 1
+imports:
+    lib:
+        version: 1.0.0
+        range: ^1.0
+        source: ../circulation/ontology/lib.gloss.yaml
+        hash: sha256:8776367408cb2868896ce7500670601507ae922616f6cd4125fc540aece54ee3

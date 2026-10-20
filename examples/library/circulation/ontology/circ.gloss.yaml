@@ -1,0 +1,23 @@
+# ontology/circ.gloss.yaml  (implementation tier: the concrete system that realizes lib:)
+namespace: circ
+version: 0.3.0
+concepts:
+  CirculationService: { kind: system-type, realizes: lib:CirculationDesk }
+  CatalogIntake:      { kind: process, realizes: lib:Cataloging }
+  MarcParser:         { kind: process, part-of: CatalogIntake, internal: true }     # unpublished: private to this repo
+  MarcFieldMapper:    { kind: process, part-of: MarcParser, internal: true }
+  CoverImageCache:    { kind: resource, internal: true }
+  BookIntake:         { kind: process, realizes: lib:Cataloging, produces: [lib:Book] }
+  SubjectSuggester:   { kind: process, realizes: lib:Cataloging }
+  CheckoutHandler:    { kind: process, realizes: lib:Checkout }
+  ReturnPipeline:     { kind: process, realizes: lib:Return }
+  ReturnNotifier:     { kind: process, part-of: ReturnPipeline, realizes: lib:ItemReturned, publishes: [lib:ItemReturned] }   # announces the return as part of checking in
+  ReturnEventBus:     { kind: resource, internal: true, publishes: [lib:ItemReturned] }
+  LoanStore:          { kind: resource, internal: true }
+  DefaultLoanPeriod:
+    kind: measure
+    criticality: low                 # a wrong number confuses patrons; nobody's data is at risk
+    realizes: lib:LoanPeriod
+    published: { as: lib:LoanPeriod }
+    value: 21
+    value-from: { path: services/circulation/loans/policy.py, symbol: LOAN_PERIOD_DAYS }

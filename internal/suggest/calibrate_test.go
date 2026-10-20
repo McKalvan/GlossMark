@@ -27,9 +27,8 @@ var calibrationSets = []calibrationSet{
 	// are mostly file-level; a proposal they do not state counts as wrong
 	// even where a reviewer might keep it, so this set is conservative.
 	{name: "self", src: filepath.Join("..", ".."), skip: []string{".git", ".glossmark", "examples", "corpus", "dist", ".claude"}},
-	{name: "horse-factory", src: filepath.Join("..", "..", "examples", "horse-factory")},
-	{name: "payments-api", src: filepath.Join("..", "..", "examples", "payments", "payments-api")},
-	{name: "settlement-worker", src: filepath.Join("..", "..", "examples", "payments", "settlement-worker")},
+	{name: "circulation", src: filepath.Join("..", "..", "examples", "library", "circulation")},
+	{name: "holds-worker", src: filepath.Join("..", "..", "examples", "library", "holds-worker")},
 	// Fixtures built from the adoption findings (#58-#69): concept-poor
 	// legacy code, and a monorepo full of package clauses, fakes, DTOs,
 	// Terraform, Kubernetes and docs.

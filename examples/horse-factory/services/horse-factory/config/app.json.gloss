@@ -1,3 +1,0 @@
-# Sidecar for app.json (JSON has no comments); scopes are JSON Pointers.
-@gloss configures .FoalEventBus scope=range note="/bus"
-@gloss configures .FoalRegistry scope=range note="/registry"

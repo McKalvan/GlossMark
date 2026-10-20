@@ -1,0 +1,31 @@
+# ontology/lib.gloss.yaml  (core tier: what the library recognises; never mentions circ: or hw:)
+namespace: lib
+version: 1.0.0
+doc: What the library recognises about its collection, its patrons and how items move between them.
+concepts:
+  # The collection
+  Item:            { kind: entity, doc: Anything a patron can borrow. }
+  Media:           { kind: entity, is-a: Item, doc: A recorded work in any format. }
+  Book:            { kind: entity, is-a: Media, aliases: [volume, paperback, hardcover] }
+  DVD:             { kind: entity, is-a: Media, aliases: [disc, film] }
+  Laptop:          { kind: entity, is-a: Item, doc: A device lent from the tech desk. }
+  # Patrons and what they hold
+  Patron:          { kind: entity, aliases: [borrower, cardholder], criticality: critical, doc: "A library card holder; reading records are confidential by law." }
+  Loan:            { kind: entity, criticality: high, doc: One item checked out to one patron until a due date. }
+  Hold:            { kind: entity, aliases: [reservation], criticality: high, doc: A patron's place in line for an item. }
+  # How items move
+  CirculationDesk: { kind: system-type, doc: The system that lends items and takes them back. }
+  Cataloging:      { kind: process, produces: [Media], criticality: medium, doc: "Turning a new acquisition into a shelf-ready, findable item." }
+  Checkout:        { kind: process, consumes: [Item, Patron], criticality: high }
+  Renewal:         { kind: process, consumes: [Loan] }
+  Return:          { kind: process, consumes: [Item], publishes: [ItemReturned] }
+  ItemReturned:    { kind: event, doc: "An item is back; the holds queue and the shelvers react." }
+  HoldFulfillment: { kind: process, consumes: [Hold, Item], publishes: [HoldReady], criticality: high, doc: Setting a returned item aside for the next patron in line. }
+  HoldReady:       { kind: event, doc: A held item is on the pickup shelf; the patron is told. }
+  InterlibraryLoan: { kind: process, consumes: [Item], doc: Borrowing an item from another library system for a patron. }
+  # Rules engineering sets the value of
+  LoanPeriod:      { kind: constraint, constrains: [Loan], doc: How long a patron keeps an item; the value comes from engineering. }
+  PickupWindow:    { kind: constraint, constrains: [HoldFulfillment], aliases: [hold shelf time], criticality: medium, doc: How long a ready hold waits on the pickup shelf before it goes to the next patron. }
+relations:
+  produces: { lift: range-lcs }
+  consumes: { lift: range-lcs }

@@ -83,10 +83,10 @@ func TestParseFlagsInterspersed(t *testing.T) {
 
 // Issue #122: the QUICKSTART order, flags after the file, parses.
 func TestImportFlagsAfterFile(t *testing.T) {
-	root := workspace(t, "horse-factory")
+	root := workspace(t, "library/circulation")
 	md := filepath.Join(root, "glossary.md")
-	os.WriteFile(md, []byte("# Glossary\n\n## Paddock\n\n**Def.** A fenced field where horses graze.\n"), 0o644)
-	code, out := gloss(t, "import", "--from", "markdown-glossary", md, "--namespace", "zoo", "--dry-run", "--root", root)
+	os.WriteFile(md, []byte("# Glossary\n\n## Reading Room\n\n**Def.** A quiet room where patrons read on site.\n"), 0o644)
+	code, out := gloss(t, "import", "--from", "markdown-glossary", md, "--namespace", "lib", "--dry-run", "--root", root)
 	if code != 0 || !strings.Contains(out, "1 added") {
 		t.Fatalf("import exit %d, out %q", code, out)
 	}
@@ -104,17 +104,17 @@ func TestVersionFlags(t *testing.T) {
 }
 
 // Issue #120: propose --from-new honours the entry flags when one concept is
-// lifted (horse-factory carries one impl:NEW:Gelding marker).
+// lifted (circulation carries one circ:NEW:DamageCheck marker).
 func TestProposeFromNewEntryFlags(t *testing.T) {
-	root := workspace(t, "horse-factory")
-	if code, _ := gloss(t, "propose", "--from-new", "--realizes", "zoo:Breeding", "--aliases", "gelding, castration", "--doc", "Castrating a colt.", "--root", root); code != 0 {
+	root := workspace(t, "library/circulation")
+	if code, _ := gloss(t, "propose", "--from-new", "--realizes", "lib:Return", "--aliases", "damage check, condition check", "--doc", "Inspecting a returned item for damage.", "--root", root); code != 0 {
 		t.Fatalf("propose --from-new: exit %d", code)
 	}
-	b, _ := os.ReadFile(filepath.Join(root, "ontology", "impl.gloss.yaml"))
-	_, entry, _ := strings.Cut(string(b), "  Gelding:")
-	for _, want := range []string{"realizes: zoo:Breeding", "gelding", "castration", "kind: process", "proposed: true"} {
+	b, _ := os.ReadFile(filepath.Join(root, "ontology", "circ.gloss.yaml"))
+	_, entry, _ := strings.Cut(string(b), "  DamageCheck:")
+	for _, want := range []string{"realizes: lib:Return", "damage check", "condition check", "kind: process", "proposed: true"} {
 		if !strings.Contains(entry, want) {
-			t.Errorf("Gelding entry %q lacks %q", entry, want)
+			t.Errorf("DamageCheck entry %q lacks %q", entry, want)
 		}
 	}
 }
@@ -122,26 +122,26 @@ func TestProposeFromNewEntryFlags(t *testing.T) {
 // Issue #119: the reviewer's reason survives a marker note= in its own field
 // and reaches the PROV export.
 func TestRejectReasonBesideNote(t *testing.T) {
-	root := workspace(t, "horse-factory")
-	sel := "services/horse-factory/breeding/engine.py:22" // the impl:NEW:Gelding proposal, which carries note=
-	if code, _ := gloss(t, "reject", sel, "--reason", "gelding is not a step we run", "--root", root); code != 0 {
+	root := workspace(t, "library/circulation")
+	sel := "services/circulation/loans/returns.py:10" // the circ:NEW:DamageCheck proposal, which carries note=
+	if code, _ := gloss(t, "reject", sel, "--reason", "damage checks belong to the bindery", "--root", root); code != 0 {
 		t.Fatalf("reject: exit %d", code)
 	}
 	b, _ := os.ReadFile(filepath.Join(root, ".glossmark", "ledger.jsonl"))
 	var row string
 	for _, l := range strings.Split(string(b), "\n") {
-		if strings.Contains(l, "impl:NEW:Gelding") {
+		if strings.Contains(l, "circ:NEW:DamageCheck") {
 			row = l
 		}
 	}
-	if !strings.Contains(row, `"review_reason":"gelding is not a step we run"`) || !strings.Contains(row, `"rationale":"castration step has no concept yet"`) {
+	if !strings.Contains(row, `"review_reason":"damage checks belong to the bindery"`) || !strings.Contains(row, `"rationale":"inspecting returned items has no concept yet"`) {
 		t.Errorf("ledger row = %s", row)
 	}
 	prov := filepath.Join(root, "prov.jsonld")
 	if code, _ := gloss(t, "export", "--prov", prov, "--root", root); code != 0 {
 		t.Fatalf("export --prov: exit %d", code)
 	}
-	if b, _ := os.ReadFile(prov); !strings.Contains(string(b), `"gm:reviewReason": "gelding is not a step we run"`) {
+	if b, _ := os.ReadFile(prov); !strings.Contains(string(b), `"gm:reviewReason": "damage checks belong to the bindery"`) {
 		t.Errorf("PROV export lacks the reason")
 	}
 }
@@ -410,23 +410,23 @@ func addConcept(t *testing.T, root, file, lines string) {
 // that is part-of one that realizes is accepted; one that stands for nothing
 // is still refused.
 func TestAcceptConceptPartOf(t *testing.T) {
-	root := workspace(t, "horse-factory")
-	addConcept(t, root, "impl.gloss.yaml", "  MareSelection: { kind: process, part-of: HorseBuilder, proposed: true }\n  Loose: { kind: process, proposed: true }")
-	if code, _ := gloss(t, "accept", "--concept", "impl:MareSelection", "--root", root); code != 0 {
+	root := workspace(t, "library/circulation")
+	addConcept(t, root, "circ.gloss.yaml", "  BarcodeAssignment: { kind: process, part-of: CatalogIntake, proposed: true }\n  Loose: { kind: process, proposed: true }")
+	if code, _ := gloss(t, "accept", "--concept", "circ:BarcodeAssignment", "--root", root); code != 0 {
 		t.Fatalf("accept --concept part-of: exit %d", code)
 	}
-	b, _ := os.ReadFile(filepath.Join(root, "ontology", "impl.gloss.yaml"))
-	if strings.Contains(string(b), "MareSelection: { kind: process, part-of: HorseBuilder, proposed: true }") {
-		t.Errorf("MareSelection still proposed:\n%s", b)
+	b, _ := os.ReadFile(filepath.Join(root, "ontology", "circ.gloss.yaml"))
+	if strings.Contains(string(b), "BarcodeAssignment: { kind: process, part-of: CatalogIntake, proposed: true }") {
+		t.Errorf("BarcodeAssignment still proposed:\n%s", b)
 	}
-	if code, _ := gloss(t, "accept", "--concept", "impl:Loose", "--root", root); code == 0 {
+	if code, _ := gloss(t, "accept", "--concept", "circ:Loose", "--root", root); code == 0 {
 		t.Errorf("accept --concept on a concept that stands for nothing succeeded")
 	}
 	// Issue #122: flags after the CURIE, as QUICKSTART writes it.
-	if code, _ := gloss(t, "reject", "--concept", "impl:Loose", "--reason", "not a thing", "--remove", "--root", root); code != 0 {
+	if code, _ := gloss(t, "reject", "--concept", "circ:Loose", "--reason", "not a thing", "--remove", "--root", root); code != 0 {
 		t.Fatalf("reject --concept <curie> --reason ... --remove: exit %d", code)
 	}
-	b, _ = os.ReadFile(filepath.Join(root, "ontology", "impl.gloss.yaml"))
+	b, _ = os.ReadFile(filepath.Join(root, "ontology", "circ.gloss.yaml"))
 	if strings.Contains(string(b), "Loose:") {
 		t.Errorf("reject --remove left the entry")
 	}

@@ -1,0 +1,9 @@
+# .gloss.yaml: the root boundary, the whole library platform. holds-worker joins it from its own repo.
+boundary: acme:library-platform
+level: system
+label: Library platform
+realizes: [inherit]                     # whatever the containers below declare
+produces: [lib:Item]
+publishes: [lib:ItemReturned, lib:HoldReady]
+owner: library-services
+criticality: critical

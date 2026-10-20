@@ -1,0 +1,7 @@
+# holds-worker/glossmark.yaml: owns its implementation tier, imports the library core from circulation.
+owns:
+  hw: { iri: https://onto.acme.dev/holds/, file: ontology/hw.gloss.yaml, tier: implementation, owner: holds-eng }
+imports:
+  lib: { iri: https://onto.acme.dev/library/, version: "^1.0", source: ../circulation/ontology/lib.gloss.yaml }
+prefixes:
+  acme: https://arch.acme.dev/boundaries/

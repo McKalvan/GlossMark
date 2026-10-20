@@ -15,19 +15,19 @@ import (
 
 var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 
-// TestSliceCaptureRecorded: gloss slice pay:Capture over the payments
-// landscape returns the recorded result (issue #34): the capture
-// implementation concepts, their artifacts, the boundary that realizes it,
-// pay:CaptureConfirmed as context and the settlement worker as the
-// subscriber on the other side, and nothing of refunding.
-func TestSliceCaptureRecorded(t *testing.T) {
-	api := filepath.Join("..", "..", "examples", "payments", "payments-api")
-	sw := filepath.Join("..", "..", "examples", "payments", "settlement-worker")
-	code, out := gloss(t, "slice", "pay:Capture", "--repo", api, "--repo", sw)
+// TestSliceReturnRecorded: gloss slice lib:Return over the library
+// landscape returns the recorded result (issue #34): the return
+// implementation concepts, their artifacts, the boundaries that realize it,
+// lib:ItemReturned as context and the holds worker as the subscriber on the
+// other side, and nothing of renewal.
+func TestSliceReturnRecorded(t *testing.T) {
+	circ := filepath.Join("..", "..", "examples", "library", "circulation")
+	hw := filepath.Join("..", "..", "examples", "library", "holds-worker")
+	code, out := gloss(t, "slice", "lib:Return", "--repo", circ, "--repo", hw)
 	if code != 0 {
 		t.Fatalf("exit %d:\n%s", code, out)
 	}
-	golden := filepath.Join("testdata", "slice-capture.txt")
+	golden := filepath.Join("testdata", "slice-return.txt")
 	if *updateGolden {
 		os.MkdirAll("testdata", 0o755)
 		os.WriteFile(golden, []byte(out), 0o644)
@@ -37,22 +37,22 @@ func TestSliceCaptureRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out != string(want) {
-		t.Errorf("gloss slice pay:Capture differs from %s (go test ./cmd/gloss -run TestSliceCaptureRecorded -update rewrites it):\n%s", golden, out)
+		t.Errorf("gloss slice lib:Return differs from %s (go test ./cmd/gloss -run TestSliceReturnRecorded -update rewrites it):\n%s", golden, out)
 	}
-	for _, s := range []string{"pa:CaptureHandler", "pa:CaptureEmitter", "capture.py#capture", "acme:payments-api", "pay:CaptureConfirmed", "acme:settlement-worker", "sw:BatchSettler"} {
+	for _, s := range []string{"circ:ReturnPipeline", "circ:ReturnNotifier", "returns.py#check_in", "acme:circulation-svc", "lib:ItemReturned", "acme:holds-worker", "hw:HoldQueue"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("slice lacks %s", s)
 		}
 	}
-	for _, s := range []string{"Refunding", "refund.py"} {
+	for _, s := range []string{"Renewal", "renew.py"} {
 		if strings.Contains(out, s) {
 			t.Errorf("slice contains unrelated %s", s)
 		}
 	}
-	if code, _ := gloss(t, "slice", "pay:Capture", "--context", "2", "--root", api); code != 2 {
+	if code, _ := gloss(t, "slice", "lib:Return", "--context", "2", "--root", circ); code != 2 {
 		t.Errorf("--context 2 exits %d, want 2", code)
 	}
-	if code, _ := gloss(t, "slice", "pay:Capture", "--follow", "calls", "--root", api); code != 2 {
+	if code, _ := gloss(t, "slice", "lib:Return", "--follow", "calls", "--root", circ); code != 2 {
 		t.Errorf("--follow calls exits %d, want 2", code)
 	}
 }
@@ -61,8 +61,8 @@ func TestSliceCaptureRecorded(t *testing.T) {
 // views.yaml and the viewer's precomputed index return the same nodes for
 // the same seed, and impact and context --concept use the saved slice.
 func TestSliceSameEverywhere(t *testing.T) {
-	dir := workspace(t, "payments/payments-api")
-	writeTree(t, dir, map[string]string{"ontology/views.yaml": "views:\n  capture:\n    doc: Everything about capturing a payment.\n    slice: [pay:Capture]\n    zoom: code\n"})
+	dir := workspace(t, "library/circulation")
+	writeTree(t, dir, map[string]string{"ontology/views.yaml": "views:\n  return:\n    doc: Everything about taking an item back.\n    slice: [lib:Return]\n    zoom: code\n"})
 	ids := func(nodes []struct {
 		ID string `json:"id"`
 	}) []string {
@@ -79,7 +79,7 @@ func TestSliceSameEverywhere(t *testing.T) {
 		} `json:"nodes"`
 	}
 	// CLI.
-	code, out := gloss(t, "slice", "pay:Capture", "--format", "json", "--root", dir)
+	code, out := gloss(t, "slice", "lib:Return", "--format", "json", "--root", dir)
 	if code != 0 {
 		t.Fatalf("slice exit %d: %s", code, out)
 	}
@@ -92,7 +92,7 @@ func TestSliceSameEverywhere(t *testing.T) {
 		t.Fatalf("slice too small: %v", want)
 	}
 	// MCP.
-	req := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"slice_of","arguments":{"seeds":["pay:Capture"]}}}` + "\n"
+	req := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"slice_of","arguments":{"seeds":["lib:Return"]}}}` + "\n"
 	var buf strings.Builder
 	if err := mcp.New(&mcpBackend{root: dir}, strings.NewReader(req), &buf, "test").Serve(); err != nil {
 		t.Fatal(err)
@@ -130,33 +130,33 @@ func TestSliceSameEverywhere(t *testing.T) {
 	if err := json.Unmarshal(b, &data); err != nil {
 		t.Fatal(err)
 	}
-	if len(data.Views) != 1 || data.Views[0].Name != "capture" || !reflect.DeepEqual(data.Views[0].Slice, []string{"pay:Capture"}) {
+	if len(data.Views) != 1 || data.Views[0].Name != "return" || !reflect.DeepEqual(data.Views[0].Slice, []string{"lib:Return"}) {
 		t.Fatalf("views = %+v", data.Views)
 	}
 	if got := ids(data.Views[0].Nodes); !reflect.DeepEqual(got, want) {
 		t.Errorf("saved slice view = %v\nCLI = %v", got, want)
 	}
 	var idx []string
-	for _, m := range data.Slices.Of["pay:Capture"] {
+	for _, m := range data.Slices.Of["lib:Return"] {
 		idx = append(idx, data.Slices.IDs[m[0]])
 	}
 	sort.Strings(idx)
 	if !reflect.DeepEqual(idx, want) {
 		t.Errorf("viewer index = %v\nCLI = %v", idx, want)
 	}
-	// Impact names the saved slice a change touches; a refund change does not touch it.
-	if code, out := gloss(t, "impact", "services/api/handlers/capture.py", "--root", dir); code != 0 || !strings.Contains(out, "Saved slices touched") || !strings.Contains(out, "capture [pay:Capture]") {
-		t.Errorf("impact (exit %d) does not name the capture slice:\n%s", code, out)
+	// Impact names the saved slice a change touches; a renewal change does not touch it.
+	if code, out := gloss(t, "impact", "services/circulation/loans/returns.py", "--root", dir); code != 0 || !strings.Contains(out, "Saved slices touched") || !strings.Contains(out, "return [lib:Return]") {
+		t.Errorf("impact (exit %d) does not name the return slice:\n%s", code, out)
 	}
-	if _, out := gloss(t, "impact", "services/api/handlers/refund.py", "--root", dir); strings.Contains(out, "Saved slices touched") {
-		t.Errorf("a refund change touches the capture slice:\n%s", out)
+	if _, out := gloss(t, "impact", "services/circulation/loans/renew.py", "--root", dir); strings.Contains(out, "Saved slices touched") {
+		t.Errorf("a renewal change touches the return slice:\n%s", out)
 	}
 	// context --concept briefs on the feature.
-	if code, out := gloss(t, "context", "--concept", "pay:Capture", "--root", dir); code != 0 || !strings.Contains(out, "feature slice of pay:Capture") || !strings.Contains(out, "pa:CaptureHandler") {
+	if code, out := gloss(t, "context", "--concept", "lib:Return", "--root", dir); code != 0 || !strings.Contains(out, "feature slice of lib:Return") || !strings.Contains(out, "circ:ReturnPipeline") {
 		t.Errorf("context --concept (exit %d):\n%s", code, out)
 	}
 	// slice and include together are refused.
-	writeTree(t, dir, map[string]string{"ontology/views.yaml": "views:\n  bad:\n    slice: [pay:Capture]\n    include: [pay:*]\n"})
+	writeTree(t, dir, map[string]string{"ontology/views.yaml": "views:\n  bad:\n    slice: [lib:Return]\n    include: [lib:*]\n"})
 	if code, out := gloss(t, "view", "--json", "-o", vj, "--root", dir); code == 0 && !strings.Contains(out, "slice and include") {
 		t.Errorf("slice with include accepted (exit %d): %s", code, out)
 	}

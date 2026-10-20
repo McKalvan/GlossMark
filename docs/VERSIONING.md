@@ -56,7 +56,7 @@ Importers state a range and get it enforced:
 
 ```yaml
 imports:
-  pay: { iri: https://onto.acme.dev/pay/, version: "^1.2", source: ../payments-api/ontology/pay.gloss.yaml }
+  lib: { iri: https://onto.acme.dev/library/, version: "^1.0", source: ../circulation/ontology/lib.gloss.yaml }
 ```
 
 Ranges accept `1.2.3`, `^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0` and `*`. A resolved ontology outside the range fails `gloss check` (GM106); an imported ontology without a version warns (GM105).

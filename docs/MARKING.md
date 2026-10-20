@@ -14,7 +14,7 @@ Five relations cover almost every marker in a real repository. Learn these first
 Add `scope=file` when the whole file is about one concept and nothing inside it deserves its own link:
 
 ```python
-# @gloss implements impl:ReportRenderer scope=file
+# @gloss implements circ:OverdueReport scope=file
 ```
 
 ## One marker per public surface
@@ -32,17 +32,17 @@ Either the file is about one concept (`scope=file`, one line in the header comme
 Directly above the declaration, above any decorators:
 
 ```python
-# @gloss implements impl:FoalingPipeline
-@app.route("/foal", methods=["POST"])
-def foal():
+# @gloss implements circ:ReturnPipeline
+@app.route("/returns", methods=["POST"])
+def check_in():
     ...
 ```
 
-The declaration detector skips the decorator stack, including multi-line arguments, and anchors to `foal`. The stack is part of the anchor's fingerprint, so deleting or changing a decorator such as `@requires_role("approver")` stales the link and shows in `gloss diff` as `decorators changed` ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)). Formatters leave the comment there. Inside a block comment or a docstring is fine as long as the text is a comment; a marker inside a string literal is ignored.
+The declaration detector skips the decorator stack, including multi-line arguments, and anchors to `check_in`. The stack is part of the anchor's fingerprint, so deleting or changing a decorator such as `@requires_role("approver")` stales the link and shows in `gloss diff` as `decorators changed` ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)). Formatters leave the comment there. Inside a block comment or a docstring is fine as long as the text is a comment; a marker inside a string literal is ignored.
 
 ## Core or implementation target?
 
-Target the implementation concept when the artifact is a mechanism (`implements impl:AuthorizeHandler`), and the core concept directly when the artifact *is* the domain thing (`represents pay:Payment` on the Payment model, `verifies pay:Authorization` on the test of the business rule). The implementation concept's `realizes:` line carries the link to core; you do not repeat it in the marker.
+Target the implementation concept when the artifact is a mechanism (`implements circ:CheckoutHandler`), and the core concept directly when the artifact *is* the domain thing (`represents lib:Loan` on the loans table, `verifies lib:Checkout` on the test of the business rule). The implementation concept's `realizes:` line carries the link to core; you do not repeat it in the marker.
 
 ## Pages and shells
 

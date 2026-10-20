@@ -26,7 +26,7 @@
       ]
     },
     "curiePattern": {
-      "description": "A CURIE or CURIE glob selecting nodes, for example zoo:* or impl:Foal*.",
+      "description": "A CURIE or CURIE glob selecting nodes, for example lib:* or circ:Catalog*.",
       "anyOf": [
         { "type": "string", "pattern": "^[A-Za-z][\\w-]*:[\\w.*-]+$" },
         {
