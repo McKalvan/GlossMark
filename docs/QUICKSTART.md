@@ -58,12 +58,14 @@ Litmus test: if a domain expert would nod at the term, it is core; if only an en
 If the repository already keeps its vocabulary, import it instead of retyping it, and feed the result back to whatever checks it:
 
 ```sh
-gloss import --from markdown-glossary docs/glossary.md --namespace pay   # headings → concepts, Def. → doc, Aliases, Status (not implemented → proposed: true)
-gloss import --from enums enums.yaml --namespace pay [--values]          # each enum an entity; --values adds each value as is-a the enum
+gloss import --from markdown-glossary docs/glossary.md --namespace pay   # headings → concepts, Def. → doc, Aliases, Kind, Status (not implemented → proposed: true)
+gloss import --from enums enums.yaml --namespace pay [--values]          # each enum an entity; --values adds each value as is-a the enum (--value-names prefixed: LoanStatusActive)
 gloss export --status -o status.json                                     # implemented / untested / unimplemented / orphan / proposed per concept
 ```
 
-Imports are re-runnable: new terms are appended, a changed definition or alias list updates that one line, everything else in the file (kinds you fixed, comments, alignment) is left alone. Kinds are guessed when the source has none; review them.
+A glossary entry is a `##` to `####` heading followed by field lines: `**Def.**` (the doc; else the first paragraph), `**Aliases:**`, `**Kind:**` (`entity`, `process`, `event`, `constraint`, `measure`, ...), `**Is-a:**` and `**Status:**` (`planned` makes it `proposed: true`; `deprecated ... use Patron` or `replaced by Patron` sets `deprecated: true` and `replaced-by:`). A heading with no field line that is followed by a deeper heading is a section (`## Retired terms` above `### Borrower`) and is skipped. Without a `Kind:` line the kind is guessed from the definition (one that starts "Lending ..." or "The process of ..." is a process; one that says "never", "at most" or "how long" is a constraint), then from the name's ending; `gloss import` prints each added name with its kind and where the guess came from. Review them.
+
+Imports are re-runnable: new terms are appended, and everything else in the file (kinds you fixed, comments, alignment) is left alone. `.glossmark/import-record.jsonl` (commit it) records what each import read from the source, so a re-run updates a definition or alias list only when the source changed since the last import: a doc you improved by hand stays until the source changes, and a concept you deleted or renamed after an import is not added again.
 
 ## 3. Write the implementation that realizes it
 
