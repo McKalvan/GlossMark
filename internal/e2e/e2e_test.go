@@ -1064,6 +1064,43 @@ func TestVerifiesCanonical(t *testing.T) {
 	}
 }
 
+// TestOneDiagnosticPerKey: an undeclared relation with several targets is
+// one GM200 per ontology key, and a tests marker with several targets is one
+// GM240 (issue #82).
+func TestOneDiagnosticPerKey(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    guards: [A, B, C]\n  Log:\n    kind: process\n    guards: [A, B]\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:A }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("app.py", "# @gloss implements .Doer\ndef go(): pass\n")
+	write("tests/test_app.py", "# @gloss tests z:A, z:B, z:C\ndef test_go(): pass\n")
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := extract.Build(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollup.Derive(res.Graph, ws.Vocab)
+	codes := map[string][]int{}
+	for _, d := range check.Run(ws, res.Graph) {
+		codes[d.Code] = append(codes[d.Code], d.Line)
+	}
+	if got := codes["GM200"]; len(got) != 2 {
+		t.Errorf("GM200 lines = %v, want one per guards: key", got)
+	}
+	if got := codes["GM240"]; len(got) != 1 || got[0] != 1 {
+		t.Errorf("GM240 lines = %v, want [1]", got)
+	}
+}
+
 // TestDerivedAllowed: a manifest without allowed: gets a derived set (default
 // namespace, declared concepts, descendants, realized cores, nested
 // boundaries); a link outside it is GM503 in check and HARD in the gate. A

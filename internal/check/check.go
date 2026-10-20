@@ -41,13 +41,25 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 }
 
 type checker struct {
-	ws  *load.Workspace
-	g   *graph.Graph
-	out []marker.Diagnostic
+	ws   *load.Workspace
+	g    *graph.Graph
+	out  []marker.Diagnostic
+	seen map[marker.Diagnostic]bool
 }
 
+// add records a diagnostic once. Edge checks run per target, so a marker or
+// ontology key with several targets would otherwise repeat one finding about
+// its relation once per target.
 func (c *checker) add(path string, line int, sev, code, msg string) {
-	c.out = append(c.out, marker.Diagnostic{Path: path, Line: line, Severity: sev, Code: code, Msg: msg})
+	d := marker.Diagnostic{Path: path, Line: line, Severity: sev, Code: code, Msg: msg}
+	if c.seen == nil {
+		c.seen = map[marker.Diagnostic]bool{}
+	}
+	if c.seen[d] {
+		return
+	}
+	c.seen[d] = true
+	c.out = append(c.out, d)
 }
 
 func (c *checker) prefixOf(curie string) string {
