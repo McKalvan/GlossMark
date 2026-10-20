@@ -18,7 +18,7 @@ Concepts have `deprecated` and `replaced-by`; boundaries had nothing. During a m
 
 ## Not decided here
 
-Drift does not yet treat a retiring boundary differently: its gaps and violations are reported as usual, and `retire-by` passing raises nothing. Those rules need the decomposition semantics (what moves where, and when a gap becomes expected) and can be added without a format change.
+Drift does not yet treat a retiring boundary differently: its gaps and violations are reported as usual, and `retire-by` passing raises nothing. Those rules need the decomposition semantics (what moves where, and when a gap becomes expected) and can be added without a format change. ADR 0019 adds the `overlap` and `overdue` findings.
 
 ## Alternatives considered
 

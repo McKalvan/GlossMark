@@ -28,6 +28,11 @@ const (
 	KindPresentedOnly = "presented-only"
 	// KindValueDrift: the code a published value is bound to changed and the value did not.
 	KindValueDrift = "value-drift"
+	// KindOverlap: two boundaries, neither nested in the other, realize or
+	// hold the same concept, and no manifest declares it a migration.
+	KindOverlap = "overlap"
+	// KindOverdue: a deprecated boundary past its retire-by date still has code.
+	KindOverdue = "overdue"
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
@@ -126,6 +131,8 @@ func Compare(g *graph.Graph, ws *load.Workspace, opt Options) *Report {
 	c.rogues()
 	c.untested()
 	c.presentedOnly()
+	c.overlaps()
+	c.overdue()
 	c.stale()
 	c.metrics()
 	c.waive()
@@ -157,10 +164,129 @@ func rank(kind string) int {
 		return 6
 	case KindPresentedOnly:
 		return 7
-	case KindValueDrift:
+	case KindValueDrift, KindOverdue:
 		return 1
+	case KindOverlap:
+		return 8
 	}
 	return 9
+}
+
+// Migrating reports whether boundary a is declared as being replaced by b,
+// or b by a: deprecated: true with replaced-by naming the other.
+func Migrating(a, b *graph.Node) bool {
+	return (a.Deprecated && a.ReplacedBy == b.CURIE) || (b.Deprecated && b.ReplacedBy == a.CURIE)
+}
+
+// overlaps reports each concept that two or more unrelated boundaries
+// realize or hold, unless every one of them is linked to another by a
+// declared migration (deprecated + replaced-by), which says the overlap is
+// intended and ends when the old side is deleted.
+func (c *comparer) overlaps() {
+	for _, rel := range []string{"realizes", "holds"} {
+		sets := Realizers(c.g, rel)
+		names := make([]string, 0, len(sets))
+		for k := range sets {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		for _, cu := range names {
+			bs := sets[cu]
+			if len(bs) < 2 {
+				continue
+			}
+			nodes := make([]*graph.Node, len(bs))
+			for i, b := range bs {
+				nodes[i] = c.g.NodeByCurie(b)
+			}
+			// Union the boundaries joined by a declared migration.
+			comp := make([]int, len(nodes))
+			for i := range comp {
+				comp[i] = i
+			}
+			var find func(int) int
+			find = func(i int) int {
+				for comp[i] != i {
+					i = comp[i]
+				}
+				return i
+			}
+			for i := range nodes {
+				for j := i + 1; j < len(nodes); j++ {
+					if nodes[i] != nil && nodes[j] != nil && Migrating(nodes[i], nodes[j]) {
+						comp[find(i)] = find(j)
+					}
+				}
+			}
+			one := true
+			for i := range nodes {
+				one = one && find(i) == find(0)
+			}
+			if one {
+				continue
+			}
+			verb := "realized"
+			if rel == "holds" {
+				verb = "held"
+			}
+			path, line := "", 0
+			if nodes[0] != nil {
+				path, line = nodes[0].File, nodes[0].Line
+			}
+			c.add(Finding{Kind: KindOverlap, Severity: "info", Relation: rel, Concept: cu, Derived: bs, Path: path, Line: line,
+				Msg: fmt.Sprintf("%s is %s by %s; if one replaces the other, mark the old manifest deprecated: true with replaced-by: and retire-by:", cu, verb, andList(bs))})
+		}
+	}
+}
+
+// overdue reports each deprecated boundary whose retire-by date has passed
+// while code still sits under it.
+func (c *comparer) overdue() {
+	contained := map[string]int{}
+	for _, a := range c.g.NodesOf(model.NodeArtifact) {
+		if a.Boundary == "" {
+			continue
+		}
+		contained[a.Boundary]++
+		for _, b := range c.g.PartOfChain(a.Boundary) {
+			contained[b]++
+		}
+	}
+	for _, b := range c.g.NodesOf(model.NodeBoundary) {
+		if !b.Deprecated || b.RetireBy == "" || contained[b.ID] == 0 {
+			continue
+		}
+		due, err := time.Parse(WaiverDate, b.RetireBy)
+		if err != nil || !c.opt.Now.After(due.Add(24*time.Hour)) {
+			continue
+		}
+		var still []string
+		for _, rel := range []string{"realizes", "holds"} {
+			for _, e := range c.g.Out(b.ID, rel) {
+				if e.Source == graph.SourceDerived {
+					still = append(still, c.g.Curie(e.O))
+				}
+			}
+		}
+		sort.Strings(still)
+		still = uniqStrings(still)
+		msg := fmt.Sprintf("%s was due to retire by %s", b.CURIE, b.RetireBy)
+		if b.ReplacedBy != "" {
+			msg += " (replaced-by " + b.ReplacedBy + ")"
+		}
+		msg += fmt.Sprintf(" and still has %d artifact(s)", contained[b.ID])
+		if len(still) > 0 {
+			msg += "; it still realizes or holds " + strings.Join(still, ", ")
+		}
+		c.add(Finding{Kind: KindOverdue, Severity: "error", Boundary: b.CURIE, Derived: still, Path: b.File, Line: b.Line, Msg: msg})
+	}
+}
+
+func andList(xs []string) string {
+	if len(xs) < 2 {
+		return strings.Join(xs, "")
+	}
+	return strings.Join(xs[:len(xs)-1], ", ") + " and " + xs[len(xs)-1]
 }
 
 type comparer struct {
@@ -1030,7 +1156,7 @@ func (c *comparer) waive() {
 }
 
 // FindingKinds are the kinds a finding can have, in the order --fail-on lists them.
-var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindStale, KindProposed, KindConsistent}
+var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindOverdue, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindOverlap, KindStale, KindProposed, KindConsistent}
 
 // ParseFailOn splits a --fail-on list and rejects unknown kinds, so a typo
 // cannot silently disable part of a gate. "none" (or nothing) fails on nothing.

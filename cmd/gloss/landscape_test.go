@@ -28,6 +28,25 @@ func TestLandscapePathsCarryRepo(t *testing.T) {
 	}
 }
 
+// TestLandscapeOverlap: two repositories implementing one capability are an
+// overlap in the landscape as in one workspace (#95).
+func TestLandscapeOverlap(t *testing.T) {
+	tmp := t.TempDir()
+	writeTree(t, tmp, map[string]string{
+		"hq/glossmark.yaml":           "owns:\n  hire: { iri: https://x.test/hire/, tier: core }\nprefixes:\n  bw: https://x.test/b/\n",
+		"hq/ontology/hire.gloss.yaml": "version: 1.0.0\nconcepts:\n  Invoicing: { kind: process }\n",
+		"hq/.gloss.yaml":              "boundary: bw:hirehq-invoicing\nlevel: container\n",
+		"hq/gen.py":                   "# @gloss implements hire:Invoicing\ndef gen(): pass\n",
+		"inv/glossmark.yaml":          "imports:\n  hire: { iri: https://x.test/hire/, version: \"^1.0\", source: ../hq/ontology/hire.gloss.yaml }\nprefixes:\n  bw: https://x.test/b/\n",
+		"inv/.gloss.yaml":             "boundary: bw:invoicing-service\nlevel: container\n",
+		"inv/run.go":                  "package inv\n\n// @gloss implements hire:Invoicing\nfunc Run() {}\n",
+	})
+	out, _ := capture(t, "landscape", "--all", "--fail-on", "none", filepath.Join(tmp, "hq"), filepath.Join(tmp, "inv"))
+	if !strings.Contains(out, "hire:Invoicing is realized by bw:hirehq-invoicing and bw:invoicing-service") {
+		t.Errorf("no overlap across repositories:\n%s", out)
+	}
+}
+
 // TestLandscapeContextMap: the context map reads consumer → producer, as its
 // header says, and draws no edge between a boundary and one that contains it,
 // by directory nesting or part-of (issue #103).

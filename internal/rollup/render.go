@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var kindOrder = []string{KindViolation, KindValueDrift, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested}
+var kindOrder = []string{KindViolation, KindValueDrift, KindOverdue, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested, KindOverlap}
 
 var kindTitle = map[string]string{
 	KindViolation:     "Violations (boundary exceeds its declared capability)",
@@ -20,15 +20,20 @@ var kindTitle = map[string]string{
 	KindOrphan:        "Orphan concepts (no artifacts)",
 	KindUntested:      "Implemented but untested",
 	KindPresentedOnly: "Presented but not implemented (a surface with no mechanism)",
+	KindOverlap:       "Overlaps (one concept, several unrelated boundaries, no declared migration)",
+	KindOverdue:       "Overdue retirements (retire-by passed, code still there)",
 }
 
-var kindGlyph = map[string]string{KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
+var kindGlyph = map[string]string{KindOverlap: "⇉", KindOverdue: "⌛", KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
 
 // RenderText renders the report for a terminal.
 func RenderText(r *Report, all bool) string {
 	var sb strings.Builder
 	sb.WriteString("Ontology drift\n")
 	for _, k := range kindOrder {
+		if k == KindOverlap && !all {
+			continue // informational; listed with --all, always in JSON
+		}
 		var fs []Finding
 		for _, f := range r.Findings {
 			if f.Kind == k {
@@ -95,7 +100,7 @@ func RenderMarkdown(r *Report, all bool) string {
 	var sb strings.Builder
 	sb.WriteString("### Ontology drift\n\n| | Derived from code | Declared | Result |\n| --- | --- | --- | --- |\n")
 	for _, f := range r.Findings {
-		if f.Kind == KindConsistent && !all {
+		if (f.Kind == KindConsistent || f.Kind == KindOverlap) && !all {
 			continue
 		}
 		derived := strings.Join(f.Derived, ", ")

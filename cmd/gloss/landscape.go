@@ -150,7 +150,7 @@ func newLandscapeFlags() *landscapeFlags {
 	fs.StringVar(&f.format, "format", "text", "text | json | markdown")
 	fs.StringVar(&f.viewOut, "view", "", "write the landscape viewer HTML here")
 	fs.StringVar(&f.graphOut, "graph", "", "write the union graph.jsonl here")
-	fs.StringVar(&f.failOn, "fail-on", "violation,dangling", "finding kinds that fail the command")
+	fs.StringVar(&f.failOn, "fail-on", "violation,dangling,overdue", "finding kinds that fail the command")
 	fs.BoolVar(&f.all, "all", false, "also list consistent pairs")
 	f.fs = fs
 	return f

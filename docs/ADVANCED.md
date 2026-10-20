@@ -55,6 +55,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | gap | a manifest declares something nothing under it implements | ✓ |
 | value-drift | the code a published value is bound to (`value-from`, `publishes-value`) changed and the ontology `value` did not | ✓ |
 | dangling | a marker, a manifest relation key or `allowed:` entry, or a relation in the workspace's own ontology files targets a concept that does not exist (in a marker, write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
+| overdue | a deprecated boundary whose `retire-by` date has passed still has code under it ([ADR 0019](adr/0019-migration-overlap.md)) | ✓ |
+| overlap | two boundaries, neither nested in the other, realize or hold the same concept, and no manifest declares one `deprecated` with `replaced-by` the other (listed with `--all`, like consistent pairs; always in JSON) | |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |
 | untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts) | |
@@ -62,7 +64,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
 
-`gloss drift --fail-on` and `gloss landscape --fail-on` take a comma-separated list of these kind names, spelled as in the first column (`value-drift`, `presented-only`), or `none`; any of them fails the command when listed, `stale`, `rogue` and `proposed` included, and an unknown kind exits 2 with the list of valid ones. The defaults are `violation,value-drift,gap,dangling` for `drift` (the ticks above) and `violation,dangling` for `landscape`. `gloss diff --fail-on` takes a gate class instead (`HARD`, `SOFT` or `none`). `policy.waivers` in `glossmark.yaml` silences one finding until a date. `gloss check` fails a waiver whose `expires:` is missing or not a `YYYY-MM-DD` date (GM610; such a waiver waives nothing) and warns about one whose `finding:` matches no finding id or concept (GM611).
+`gloss drift --fail-on` and `gloss landscape --fail-on` take a comma-separated list of these kind names, spelled as in the first column (`value-drift`, `presented-only`), or `none`; any of them fails the command when listed, `stale`, `rogue` and `proposed` included, and an unknown kind exits 2 with the list of valid ones. The defaults are `violation,value-drift,gap,dangling,overdue` for `drift` (the ticks above) and `violation,dangling,overdue` for `landscape`. `gloss diff --fail-on` takes a gate class instead (`HARD`, `SOFT` or `none`). `policy.waivers` in `glossmark.yaml` silences one finding until a date. `gloss check` fails a waiver whose `expires:` is missing or not a `YYYY-MM-DD` date (GM610; such a waiver waives nothing) and warns about one whose `finding:` matches no finding id or concept (GM611).
 
 ## Gates (`gloss diff`)
 
