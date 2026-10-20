@@ -42,7 +42,7 @@ The reference regex and the conformance corpus in `corpus/` are the definition o
 
 ## Namespaces
 
-Every namespace carries semver, owned ones in `glossmark.yaml` (`owns.<prefix>.version`) or in the ontology file, imported ones from the file that is resolved. The bump a change requires is classified by `gloss diff`:
+Every namespace carries semver in its ontology file (`version:` at the top of `<prefix>.gloss.yaml`). That file is what importers resolve and what `gloss diff` compares, so it is the only source. `owns.<prefix>.version` in `glossmark.yaml` may repeat it: when the two disagree `gloss check` fails (GM115), and a version given only in `glossmark.yaml` warns (GM114) because importers do not see it. The bump a change requires is classified by `gloss diff`:
 
 | Bump | Change |
 | --- | --- |
@@ -72,4 +72,6 @@ Ranges accept `1.2.3`, `^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0` and `*`. A resolved
 | GM107 | lockfile disagrees with the resolved imports |
 | GM108 | imports exist but no lockfile; run `gloss lock` |
 | GM109 | lockfile unreadable or written by a newer tool |
+| GM114 | `owns.<prefix>.version` is set but the ontology file has no `version:` |
+| GM115 | `owns.<prefix>.version` and the ontology file's `version:` disagree |
 | GM113 | imported namespace states no tier but has `published:` or `realizes:` concepts; it is read as core and the published seam is not enforced |

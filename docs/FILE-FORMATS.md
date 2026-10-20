@@ -29,7 +29,7 @@ policy:
     - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }
 ```
 
-- `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`.
+- `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`. `version` may repeat the ontology file's `version:`, which is the namespace version; `gloss check` fails when they disagree (GM115) and warns when only this one is set (GM114).
 - `imports.<prefix>`: a namespace defined elsewhere. `source` is a local path (file or directory) today; `git+` and `https://` sources are parsed and rejected with a message until the fetcher lands (vendor the directory, or point at a sibling checkout). `version` is a range (`^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0`) enforced against the resolved ontology's version; `gloss lock` pins the result in `glossmark.lock`. Only **published** concepts of an imported implementation namespace are referenceable (GM230). `tier` (`core` or `implementation`) applies when the imported file states none; a top-level `tier:` in the imported file wins, and `gloss publish` writes one. With neither, the namespace is read as core, and `gloss check` warns (GM113) when it has `published:` or `realizes:` concepts, because the published seam is then not enforced.
 - Authoring uses CURIEs; the graph stores IRIs. Concept IDs are permanent: a rename is `deprecated: true` plus `replaced-by:`.
 - Versions are semver: MAJOR removes or retypes a concept or changes is-a/part-of; MINOR adds; PATCH touches labels and docs. `gloss diff` classifies the bump.

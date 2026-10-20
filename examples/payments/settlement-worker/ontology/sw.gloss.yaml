@@ -1,5 +1,6 @@
 # settlement-worker/ontology/sw.gloss.yaml
 namespace: sw
+version: 0.4.0
 concepts:
   BatchSettler:      { kind: process, realizes: pay:Settlement, subscribes: [pay:CaptureConfirmed] }
   PartialSettlement: { is-a: pay:Settlement }            # extension in sw:, allowed (subject is ours)

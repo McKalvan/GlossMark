@@ -112,8 +112,15 @@ func Load(root string) (*Workspace, error) {
 		if o.Tier == "" {
 			o.Tier = decl.Tier
 		}
-		if o.Version == "" {
-			o.Version = decl.Version
+		// The ontology file's version: is the namespace version, because it is
+		// what importers resolve; owns.<prefix>.version may only repeat it.
+		switch {
+		case decl.Version != "" && o.Version == "" && !errors.Is(err, fs.ErrNotExist):
+			ws.Diags = append(ws.Diags, marker.Diagnostic{Path: ConfigName, Line: 1, Severity: "warning", Code: "GM114",
+				Msg: fmt.Sprintf("owns.%s.version is %s but %s has no version:, which is what importers and gloss diff read; move it into the ontology file", p, decl.Version, decl.File)})
+		case decl.Version != "" && o.Version != "" && decl.Version != o.Version:
+			ws.Diags = append(ws.Diags, marker.Diagnostic{Path: ConfigName, Line: 1, Severity: "error", Code: "GM115",
+				Msg: fmt.Sprintf("owns.%s.version is %s but %s says version: %s; the ontology file is the version importers resolve, so make them agree (or drop owns.%s.version)", p, decl.Version, decl.File, o.Version, p)})
 		}
 		if decl.Version == "" {
 			decl.Version = o.Version

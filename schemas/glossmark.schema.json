@@ -135,7 +135,7 @@
           "$ref": "#/$defs/tier"
         },
         "version": {
-          "description": "Semantic version of the namespace.",
+          "description": "Optional repeat of the ontology file's version:, which is the namespace version; gloss check fails when they disagree (GM115) and warns when only this one is set (GM114).",
           "type": "string",
           "pattern": "^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
         },

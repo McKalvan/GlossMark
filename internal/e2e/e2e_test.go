@@ -803,6 +803,52 @@ func TestImportRangesAndLock(t *testing.T) {
 	}
 }
 
+// TestNamespaceVersionSource: the ontology file's version: is the namespace
+// version; owns.<prefix>.version may only repeat it (issue #108).
+func TestNamespaceVersionSource(t *testing.T) {
+	for _, tc := range []struct {
+		name, owns, file string
+		code, sev, want  string // expected diagnostic ("" for none) and resolved version
+	}{
+		{"both agree", "1.0.1", "1.0.1", "", "", "1.0.1"},
+		{"file only", "", "1.0.1", "", "", "1.0.1"},
+		{"disagree", "1.0.2", "1.0.1", "GM115", "error", "1.0.1"},
+		{"owns only", "1.0.2", "", "GM114", "warning", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			decl := "  grid: { iri: https://x/grid/, tier: core"
+			if tc.owns != "" {
+				decl += ", version: " + tc.owns
+			}
+			os.WriteFile(filepath.Join(root, "glossmark.yaml"), []byte("owns:\n"+decl+" }\n"), 0o644)
+			os.MkdirAll(filepath.Join(root, "ontology"), 0o755)
+			onto := "concepts:\n  Meter: { kind: entity }\n"
+			if tc.file != "" {
+				onto = "version: " + tc.file + "\n" + onto
+			}
+			os.WriteFile(filepath.Join(root, "ontology", "grid.gloss.yaml"), []byte(onto), 0o644)
+			ws, err := load.Load(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, d := range ws.Diags {
+				if strings.HasPrefix(d.Code, "GM11") {
+					got = append(got, d.Severity+" "+d.Code)
+				}
+			}
+			if want := strings.TrimSpace(tc.sev + " " + tc.code); strings.Join(got, ",") != want {
+				t.Errorf("diags = %v, want %q", got, want)
+			}
+			// gloss diff and importers read the same version.
+			if v := ws.Ontologies["grid"].Version; v != tc.want {
+				t.Errorf("namespace version = %q, want %q", v, tc.want)
+			}
+		})
+	}
+}
+
 // TestGraphFormatGuard: a graph written by a newer format is refused.
 func TestGraphFormatGuard(t *testing.T) {
 	newer := `{"type":"context","format":99,"generator":"gloss 9.0.0","prefixes":{}}` + "\n"
