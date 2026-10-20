@@ -8,6 +8,7 @@ package doctor
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/ledger"
@@ -42,6 +44,8 @@ type Check struct {
 type Env struct {
 	Actor    string // GLOSS_ACTOR
 	LookPath func(string) (string, error)
+	// Version runs `<path> version` and returns the first line of its output.
+	Version func(path string) (string, error)
 }
 
 // Run performs every check. diags are the build and lint diagnostics of the
@@ -49,6 +53,9 @@ type Env struct {
 func Run(ws *load.Workspace, g *graph.Graph, diags []marker.Diagnostic, env Env) []Check {
 	if env.LookPath == nil {
 		env.LookPath = exec.LookPath
+	}
+	if env.Version == nil {
+		env.Version = runVersion
 	}
 	d := &doctor{ws: ws, g: g, diags: diags, env: env, git: isGitRepo(ws.Root)}
 	d.binary()
@@ -110,7 +117,29 @@ func (d *doctor) binary() {
 			"curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh, or go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0, then add the directory to PATH")
 		return
 	}
-	d.add("gloss on PATH", OK, fmt.Sprintf("%s (this build is %s)", p, version.String()), "")
+	// The hook and the MCP server run whatever `gloss` PATH finds, so ask it
+	// what it is instead of reporting this build's version.
+	fix := "put GlossMark's gloss first on PATH, or re-run gloss hook install, which writes this binary's absolute path when PATH finds another"
+	first, err := d.env.Version(p)
+	got := strings.Fields(first)
+	if err != nil || len(got) != 2 || got[0] != "gloss" {
+		d.add("gloss on PATH", Fail, fmt.Sprintf("%s is not GlossMark (`%s version` printed %q)", p, p, first), fix)
+		return
+	}
+	if got[1] != version.String() {
+		d.add("gloss on PATH", Warn, fmt.Sprintf("%s is gloss %s, this build is %s", p, got[1], version.String()), fix)
+		return
+	}
+	d.add("gloss on PATH", OK, fmt.Sprintf("%s (gloss %s)", p, got[1]), "")
+}
+
+// runVersion runs `<path> version` with a timeout and returns its first line.
+func runVersion(path string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, path, "version").Output()
+	first, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	return first, err
 }
 
 func (d *doctor) actor() {

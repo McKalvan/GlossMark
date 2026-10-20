@@ -290,6 +290,41 @@ func TestHookInstallSkillChecksClean(t *testing.T) {
 	}
 }
 
+// Issue #37: the hook names this binary by path when PATH finds another gloss.
+func TestGlossCommandFor(t *testing.T) {
+	dir := t.TempDir()
+	self := filepath.Join(dir, "bin", "gloss")
+	other := filepath.Join(dir, "usr", "gloss")
+	for _, p := range []string{self, other} {
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755)
+	}
+	found := func(p string) func(string) (string, error) {
+		return func(string) (string, error) { return p, nil }
+	}
+	missing := func(string) (string, error) { return "", os.ErrNotExist }
+	cases := []struct {
+		name string
+		look func(string) (string, error)
+		want string
+	}{
+		{"PATH finds this binary", found(self), "gloss"},
+		{"PATH finds another gloss", found(other), self},
+		{"no gloss on PATH", missing, self},
+	}
+	for _, c := range cases {
+		if got := glossCommandFor(self, c.look); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	if got := glossCommandFor("/tmp/go-build123/b001/exe/gloss", missing); got != "gloss" {
+		t.Errorf("go run binary: %q, want gloss", got)
+	}
+	if got := shellWord("/opt/my tools/gloss"); got != "'/opt/my tools/gloss'" {
+		t.Errorf("shellWord = %q", got)
+	}
+}
+
 // addConcept inserts ontology lines right after the "concepts:" key.
 func addConcept(t *testing.T, root, file, lines string) {
 	t.Helper()

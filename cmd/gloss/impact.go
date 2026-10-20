@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -193,9 +194,44 @@ func installSkills(root string) error {
 	return nil
 }
 
+// glossCommand is how the hook and the MCP server invoke gloss: by name when
+// PATH finds this binary, else by this binary's absolute path, so another
+// program named gloss earlier on PATH cannot silently stand in (issue #37).
+func glossCommand() string {
+	self, err := os.Executable()
+	if err != nil {
+		return "gloss"
+	}
+	return glossCommandFor(self, exec.LookPath)
+}
+
+func glossCommandFor(self string, lookPath func(string) (string, error)) string {
+	if r, err := filepath.EvalSymlinks(self); err == nil {
+		self = r
+	}
+	if strings.Contains(self, "go-build") {
+		return "gloss" // go run or go test: a temporary binary
+	}
+	if p, err := lookPath("gloss"); err == nil {
+		if r, err := filepath.EvalSymlinks(p); err == nil && r == self {
+			return "gloss"
+		}
+	}
+	return self
+}
+
+// shellWord quotes s for a shell command line when it needs it.
+func shellWord(s string) string {
+	if strings.ContainsAny(s, " '\"$\\") {
+		return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	}
+	return s
+}
+
 // installHooks registers the SessionStart hook and the MCP server for a
 // repository, both running with GLOSS_ACTOR=actor.
 func installHooks(root, actor string, hook, mcp bool) error {
+	bin := glossCommand()
 	if hook {
 		path := filepath.Join(root, ".claude", "settings.json")
 		settings := map[string]any{}
@@ -206,7 +242,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor)}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s %s context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor, shellWord(bin))}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
 		for i, it := range list {
@@ -238,7 +274,10 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		}
 		srv, _ := servers["glossmark"].(map[string]any)
 		if srv == nil {
-			srv = map[string]any{"command": "gloss", "args": []string{"mcp"}}
+			srv = map[string]any{"args": []string{"mcp"}}
+		}
+		if c, _ := srv["command"].(string); c == "" || c == "gloss" {
+			srv["command"] = bin
 		}
 		env, _ := srv["env"].(map[string]any)
 		if env == nil {
