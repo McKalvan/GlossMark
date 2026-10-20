@@ -364,6 +364,20 @@ func (ws *Workspace) StatePath(name string) string {
 	return filepath.Join(ws.Root, StateDir, name)
 }
 
+// Rel returns path relative to the root, slash-separated. A file outside the
+// root, such as an import from a sibling checkout, keeps its ../ form, so
+// nothing written to the graph depends on where the repository is checked out.
+func (ws *Workspace) Rel(path string) string {
+	if !filepath.IsAbs(path) {
+		return filepath.ToSlash(path)
+	}
+	rel, err := filepath.Rel(ws.Root, path)
+	if err != nil {
+		return filepath.ToSlash(path)
+	}
+	return filepath.ToSlash(rel)
+}
+
 // Abs returns the absolute path of a repo-relative file.
 func (ws *Workspace) Abs(rel string) string { return filepath.Join(ws.Root, filepath.FromSlash(rel)) }
 

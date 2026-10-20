@@ -473,7 +473,7 @@ func ExplainAllowed(ws *load.Workspace, g *graph.Graph) string {
 }
 
 func relFile(ws *load.Workspace, path string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(path, ws.Root), "/")
+	return ws.Rel(path)
 }
 
 func types(ts []model.NodeType) string {

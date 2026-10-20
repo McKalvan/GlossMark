@@ -803,6 +803,33 @@ func TestImportRangesAndLock(t *testing.T) {
 	}
 }
 
+// TestImportedPathsRelative: an importer's graph records imported ontology
+// files relative to its root (../payments-api/...), so a rebuild in another
+// checkout writes the same bytes (issue #94).
+func TestImportedPathsRelative(t *testing.T) {
+	render := func() string {
+		tmp := t.TempDir()
+		copyTree(t, example(t, "payments/payments-api"), filepath.Join(tmp, "payments-api"))
+		copyTree(t, example(t, "payments/settlement-worker"), filepath.Join(tmp, "settlement-worker"))
+		_, g, _, _ := build(t, filepath.Join(tmp, "settlement-worker"))
+		var sb strings.Builder
+		if err := g.WriteJSONL(&sb); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(sb.String(), tmp) {
+			t.Fatalf("graph holds the checkout path %s", tmp)
+		}
+		return sb.String()
+	}
+	a, b := render(), render()
+	if a != b {
+		t.Fatal("graph differs between two checkouts")
+	}
+	if !strings.Contains(a, `"file":"../payments-api/ontology/pay.gloss.yaml"`) {
+		t.Fatal("imported concepts should record ../payments-api/ontology/pay.gloss.yaml")
+	}
+}
+
 // TestNamespaceVersionSource: the ontology file's version: is the namespace
 // version; owns.<prefix>.version may only repeat it (issue #108).
 func TestNamespaceVersionSource(t *testing.T) {

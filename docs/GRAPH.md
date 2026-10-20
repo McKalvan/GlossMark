@@ -24,6 +24,8 @@ Edge records (`"type":"edge"`), sorted by subject, predicate, object, source, pa
 
 `source` is `declared` (ontology files, manifests), `inline` (markers), `inferred` (inferrers such as test paths) or `derived` (rollup rules). Proposals carry `"proposed":true`; confidences `"conf":0.72`.
 
+Every `file`, `path` and `prov.path` is relative to the repository root, so the graph does not depend on where it is checked out. An imported ontology outside the root keeps its `../` form (`"file":"../payments-api/ontology/pay.gloss.yaml"`).
+
 Special object IRIs: `urn:gloss:new:impl:NEW:Gelding` (a proposed new concept), `urn:gloss:glob:pa:*` (a `may-modify` glob), `urn:gloss:unresolved:x:Y` (unknown prefix).
 
 ## Derivation rules
