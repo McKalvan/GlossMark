@@ -68,6 +68,7 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 			fmt.Fprintf(&head, "; criticality %s (%s)", b.Criticality, from)
 		}
 		head.WriteString("\n")
+		head.WriteString(retiring(g, m, opt.Dir))
 		if len(allowed.Patterns) > 0 {
 			how := ""
 			if allowed.Derived {
@@ -128,6 +129,64 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 		out = out[:opt.Budget*4-4] + "...\n"
 	}
 	return out
+}
+
+// retiring is the "Retiring here" line: the boundary (or one enclosing it)
+// being retired, and the deprecated concepts the directory's code links to,
+// each with its successor and the boundary that realizes the successor, so
+// an agent builds on the replacement instead of extending legacy code.
+func retiring(g *graph.Graph, m *model.Manifest, dir string) string {
+	var parts []string
+	if b := g.NodeByCurie(m.Boundary); b != nil {
+		for _, id := range append([]string{b.ID}, g.PartOfChain(b.ID)...) {
+			n := g.Node(id)
+			if n == nil || !n.Deprecated {
+				continue
+			}
+			p := n.CURIE + " is deprecated"
+			if n.ReplacedBy != "" {
+				p += " → " + n.ReplacedBy
+			}
+			if n.RetireBy != "" {
+				p += ", retire by " + n.RetireBy
+			}
+			parts = append(parts, p)
+			break
+		}
+	}
+	dir = strings.Trim(filepath.ToSlash(dir), "/")
+	if dir == "." {
+		dir = ""
+	}
+	realizers := rollup.Realizers(g, "realizes")
+	seen := map[string]bool{}
+	var concepts []string
+	for _, a := range g.NodesOf(model.NodeArtifact) {
+		if dir != "" && a.Path != dir && !strings.HasPrefix(a.Path, dir+"/") {
+			continue
+		}
+		for _, e := range g.Out(a.ID, "") {
+			o := g.Node(e.O)
+			if e.Source != graph.SourceInline || o == nil || o.NodeType != model.NodeConcept || !o.Deprecated || seen[o.ID] {
+				continue
+			}
+			seen[o.ID] = true
+			p := o.CURIE
+			if o.ReplacedBy != "" {
+				p += " → " + o.ReplacedBy
+				if bs := realizers[o.ReplacedBy]; len(bs) > 0 {
+					p += " (" + strings.Join(bs, ", ") + ")"
+				}
+			}
+			concepts = append(concepts, p)
+		}
+	}
+	sort.Strings(concepts)
+	parts = append(parts, concepts...)
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Retiring here: " + strings.Join(parts, "; ") + ". Do not add links to deprecated concepts or extend retiring code; build on the replacement.\n"
 }
 
 type conceptRow struct {

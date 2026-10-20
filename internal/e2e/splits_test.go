@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/rollup"
@@ -133,6 +134,31 @@ func TestReplacedByEdgeAndViews(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(diags, "\n"), `ontology/views.yaml:4: error: unknown key "views.migration.where"`) || ws.Views.Views["migration"] == nil {
 		t.Errorf("diags %v, views %v", diags, ws.Views.Views)
+	}
+}
+
+// TestBriefingRetiring: the briefing in a retiring module says so, names the
+// successor of each deprecated concept its code links to and the boundary
+// realizing it (#105).
+func TestBriefingRetiring(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  hire: { iri: https://x/hire/, tier: core }\n  hq: { iri: https://x/hq/, tier: implementation }\n  inv: { iri: https://x/inv/, tier: implementation }\nprefixes:\n  bw: https://x/bw/\n")
+	write("ontology/hire.gloss.yaml", "concepts:\n  Invoicing: { kind: process }\n")
+	write("ontology/hq.gloss.yaml", "concepts:\n  InvoiceGenerator: { kind: process, realizes: hire:Invoicing, deprecated: true, replaced-by: inv:InvoiceRun }\n  InvoicingRouter: { kind: process, realizes: hire:Invoicing }\n")
+	write("ontology/inv.gloss.yaml", "concepts:\n  InvoiceRun: { kind: process, realizes: hire:Invoicing }\n")
+	write(".gloss.yaml", "boundary: bw:hirehq\nlevel: system\n")
+	write("monolith/invoicing/.gloss.yaml", "boundary: bw:hirehq-invoicing\nlevel: component\ndeprecated: true\nreplaced-by: bw:invoicing-service\nretire-by: 2026-12-31\n")
+	write("monolith/invoicing/generator.py", "# @gloss implements hq:InvoiceGenerator\ndef generate(): pass\n\n# @gloss implements hq:InvoicingRouter\ndef route(): pass\n")
+	write("services/invoicing/.gloss.yaml", "boundary: bw:invoicing-service\nlevel: container\n")
+	write("services/invoicing/run.go", "package invoicing\n\n// @gloss implements inv:InvoiceRun\nfunc Run() {}\n")
+	ws, g, _, _ := build(t, root)
+	out := agents.Context(ws, g, ws.ManifestFor("monolith/invoicing/x"), nil, agents.ContextOptions{Dir: "monolith/invoicing"})
+	want := "Retiring here: bw:hirehq-invoicing is deprecated → bw:invoicing-service, retire by 2026-12-31; hq:InvoiceGenerator → inv:InvoiceRun (bw:invoicing-service). Do not add links to deprecated concepts"
+	if !strings.Contains(out, want) {
+		t.Errorf("briefing lacks %q:\n%s", want, out)
+	}
+	if out := agents.Context(ws, g, ws.ManifestFor("services/invoicing/x"), nil, agents.ContextOptions{Dir: "services/invoicing"}); strings.Contains(out, "Retiring here") {
+		t.Errorf("the new service is not retiring:\n%s", out)
 	}
 }
 
