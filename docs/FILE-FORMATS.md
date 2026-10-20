@@ -65,7 +65,7 @@ Concept keys:
 | `is-a`, `part-of`, `has-part` | Taxonomy and partonomy. Bare names are in the file's namespace. |
 | `realizes` | Implementation → core. Every impl concept carries this or `internal: true` (GM320). |
 | `published: { as: <core> }` | The single seam into the business view and across repos. `as:` must name an existing core concept (GM330). |
-| `internal: true` | Engineering-private mechanism; realizes nothing, never crosses repos. |
+| `internal: true` | Engineering-private mechanism; realizes nothing, never crosses repos. Left out of concept coverage and the `untested` finding unless its effective criticality is `high` or `critical`. |
 | `deprecated`, `replaced-by` | Renames. |
 | `value` | A concrete value (used by published measures and constraints). |
 | `value-from` | `{ path: pfinance/fire.py, symbol: swr }` or `{ path, line: 42 }`: the code the value comes from (the first line that assigns, annotates or defaults the symbol). The first build records the line; a later change to it without a change to `value` is a **published value drifted** finding in `gloss drift` (fails by default) and HARD in `gloss diff`. Changing both together moves the baseline; `gloss accept --value ns:X` confirms the code as is. The marker form is `@gloss publishes-value .X scope=line` above the line. The viewer shows the live line. |

@@ -131,3 +131,35 @@ func TestDecoratorFingerprintMigrates(t *testing.T) {
 		t.Errorf("guard deleted: %s, want stale", e.Status)
 	}
 }
+
+// TestInternalCriticalUntested: an internal concept is left out of untested
+// and concept coverage unless its effective criticality is high or critical;
+// then losing its only test shows (#74).
+func TestInternalCriticalUntested(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Auth: { kind: process, internal: true, criticality: high }\n  Logging: { kind: process, internal: true, criticality: low }\n  Flags: { kind: capability, internal: true }\n")
+	write("auth.py", "# @gloss implements i:Auth scope=file\n")
+	write("log.py", "# @gloss implements i:Logging scope=file\n")
+	write("flags.py", "# @gloss implements i:Flags scope=file\n")
+	write("tests/test_auth.py", "# @gloss verifies i:Auth scope=file\n")
+	report := func() *rollup.Report {
+		ws, g, _, lg := build(t, root)
+		return rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	}
+	rep := report()
+	if u := concepts(findings(rep, rollup.KindUntested)); len(u) != 0 {
+		t.Errorf("untested = %v, want none (the high one is tested, the others are below high)", u)
+	}
+	if m := rep.Metrics; m.ConceptsInScope != 1 || m.ConceptsCovered != 1 {
+		t.Errorf("coverage %d of %d, want 1 of 1 (only the high internal concept counts)", m.ConceptsCovered, m.ConceptsInScope)
+	}
+	write("tests/test_auth.py", "def test_auth(): pass\n")
+	rep = report()
+	if u := concepts(findings(rep, rollup.KindUntested)); !reflect.DeepEqual(u, []string{"i:Auth"}) {
+		t.Errorf("without its test: untested = %v, want [i:Auth]", u)
+	}
+	if m := rep.Metrics; m.ConceptsInScope != 1 || m.ConceptsCovered != 0 {
+		t.Errorf("without its test: coverage %d of %d, want 0 of 1", m.ConceptsCovered, m.ConceptsInScope)
+	}
+}

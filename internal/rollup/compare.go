@@ -630,9 +630,17 @@ func (c *comparer) represented(id string) bool {
 	return false
 }
 
+// InternalExempt reports whether an internal concept stays out of the
+// untested finding and the concept-coverage denominator: an internal
+// concept is an engineering detail unless its effective criticality is high
+// or critical, when losing its only test matters as much as any other's.
+func InternalExempt(n *graph.Node) bool {
+	return n.Internal && model.CriticalityRank(n.Criticality) < model.CriticalityRank("high")
+}
+
 func (c *comparer) untested() {
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Internal {
+		if n.Imported || InternalExempt(n) {
 			continue
 		}
 		if !c.implemented(n.ID, 0) || n.Kind == "event" {
@@ -841,10 +849,11 @@ func (c *comparer) metrics() {
 			m.Rejected++
 		}
 	}
-	// Concept coverage: owned implementation concepts (not internal,
-	// deprecated or still proposed) with an artifact and a verifier.
+	// Concept coverage: owned implementation concepts (not deprecated, still
+	// proposed, or internal below high criticality) with an artifact and a
+	// verifier.
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Tier != model.TierImpl || n.Internal || n.Deprecated || n.Proposed {
+		if n.Imported || n.Tier != model.TierImpl || InternalExempt(n) || n.Deprecated || n.Proposed {
 			continue
 		}
 		m.ConceptsInScope++
