@@ -253,6 +253,60 @@ func TestWholePlacedWithItsMechanism(t *testing.T) {
 	}
 }
 
+// TestViolationsByCause (#88): the number of violations follows the
+// mistake, not the depth. One marker on a deep part is one finding that
+// lists the wholes it lifts; an omission under realizes: inherit is reported
+// once, at the boundary that omitted it, naming its manifest, and not again
+// at every inheriting ancestor.
+func TestViolationsByCause(t *testing.T) {
+	root, write := catalogue(t)
+	violations := func() []rollup.Finding {
+		t.Helper()
+		ws, g, _, lg := build(t, root)
+		return findings(rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries}), rollup.KindViolation)
+	}
+	// Fan-out: picking declares only cyc:Picking; spk:ScanVerifier is five part-of levels deep.
+	write("services/fulfilment/picking/.gloss.yaml", "boundary: spw:picking\nlevel: component\npart-of: spw:fulfilment\nrealizes: [cyc:Picking]\n")
+	v := violations()
+	if len(v) != 1 || v[0].Concept != "spk:ScanVerifier" || v[0].Path != "services/fulfilment/picking/scanning/verifier.py" || v[0].Line != 1 {
+		t.Fatalf("fan-out: violations = %+v, want one for spk:ScanVerifier at verifier.py:1", v)
+	}
+	if got := strings.Join(v[0].Lifted, ","); got != "cyc:OrderFulfilment,spk:BinRouter,spk:FulfilmentEngine,spk:PickPlanner,spk:WaveBuilder" {
+		t.Errorf("lifted = %s", got)
+	}
+	if strings.Contains(v[0].Msg, "rollup:") {
+		t.Errorf("a realizes violation should not repeat the derived set: %s", v[0].Msg)
+	}
+	// Two inherit levels: ingest inherits only, feeds declares no realizes.
+	write("services/fulfilment/picking/.gloss.yaml", "boundary: spw:picking\nlevel: component\npart-of: spw:fulfilment\nrealizes: [inherit, cyc:Picking]\n")
+	write("services/catalogue/ingest/.gloss.yaml", "boundary: spw:ingest\nlevel: component\npart-of: spw:catalogue\nrealizes: inherit\n")
+	write("services/catalogue/ingest/feeds/.gloss.yaml", "boundary: spw:feeds\nlevel: component\npart-of: spw:ingest\nproduces: [cyc:Component]\n")
+	v = violations()
+	byB := map[string]rollup.Finding{}
+	for _, f := range v {
+		byB[f.Boundary] = f
+	}
+	if len(v) != 2 || byB["spw:catalogue"].Kind != "" || byB["spw:spokewise"].Kind != "" {
+		t.Fatalf("inherit: violations = %+v, want one at spw:feeds and one at spw:ingest only", v)
+	}
+	feeds := byB["spw:feeds"]
+	if feeds.Path != "services/catalogue/ingest/feeds/.gloss.yaml" || feeds.Concept != "spk:CsvFeedImporter, spk:CsvRowParser, spk:ShimanoXmlImporter" || !strings.Contains(feeds.Msg, "spw:catalogue, spw:spokewise inherit from it") {
+		t.Errorf("feeds omission = %+v", feeds)
+	}
+	// spk:IngestScheduler is code in spw:ingest itself, whose inherit resolves to nothing.
+	if ing := byB["spw:ingest"]; ing.Concept != "spk:IngestScheduler" || ing.Path != "services/catalogue/ingest/.gloss.yaml" {
+		t.Errorf("ingest omission = %+v", ing)
+	}
+	// A child that declares something reports its own violation; the inheriting parent stays quiet.
+	write("services/catalogue/ingest/.gloss.yaml", "boundary: spw:ingest\nlevel: component\npart-of: spw:catalogue\nrealizes: [inherit, cyc:CatalogueIngestion]\n")
+	write("services/catalogue/ingest/feeds/.gloss.yaml", "boundary: spw:feeds\nlevel: component\npart-of: spw:ingest\nrealizes: [cyc:CatalogueIngestion]\nproduces: [cyc:Component]\n")
+	write("services/catalogue/ingest/feeds/extra.py", "# @gloss implements spk:FulfilmentEngine\ndef extra(): pass\n")
+	v = violations()
+	if len(v) != 1 || v[0].Boundary != "spw:feeds" || v[0].Concept != "spk:FulfilmentEngine" {
+		t.Errorf("explicit child: violations = %+v, want one at spw:feeds", v)
+	}
+}
+
 // TestExplainBySource (#93): check --explain groups a derived set by source
 // and collapses a declared concept with what it covers, so a manifest that
 // declares two concepts reads in two lines however deep the taxonomy.
