@@ -34,6 +34,11 @@ func cmdLandscape(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: gloss landscape [--format text|json|markdown] [--view out.html] [--graph out.jsonl] <repo-root>...")
 		return 2
 	}
+	failKinds, err := rollup.ParseFailOn(fs.failOn)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "gloss landscape:", err)
+		return 2
+	}
 	var wss []*load.Workspace
 	var graphs []*graph.Graph
 	for _, r := range repos {
@@ -113,7 +118,7 @@ func cmdLandscape(args []string) int {
 		}
 		fmt.Fprintf(os.Stderr, "gloss landscape: viewer → %s\n", fs.viewOut)
 	}
-	if n := len(rep.Failing(strings.Split(fs.failOn, ","))); n > 0 {
+	if n := len(rep.Failing(failKinds)); n > 0 {
 		fmt.Fprintf(os.Stderr, "gloss landscape: %s (%s)\n", plural(n, "failing finding"), fs.failOn)
 		return 1
 	}

@@ -23,7 +23,7 @@ source-url: https://github.com/acme/horse-factory/blob/main/{path}#L{line}   # v
 policy:
   soft-conf-threshold: 0.7                      # proposals at or above are SOFT
   hard-paths: ["ontology/**", "**/.gloss.yaml", "glossmark.yaml"]
-  coverage-fail-under: 0
+  coverage-fail-under: 0                        # a percentage, or current (fail only below the base's)
   criticality-gates: { critical: HARD }         # minimum gate by criticality (docs/GOVERNANCE.md)
   waivers:
     - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }

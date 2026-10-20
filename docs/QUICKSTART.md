@@ -190,6 +190,8 @@ jobs:
 
 On the first PR (the base has no graph) the comment reports counts per boundary and per view plus the decision requests instead of one row per link; later PRs list changes grouped by boundary in collapsible sections, each capped. `coverage-fail-under: current` fails only when a PR lowers the base's concept coverage.
 
+A repository with several workspaces runs the Action once per `root:` (a matrix); each root keeps its own comment, keyed by `<!-- glossmark-impact:<root> -->` and named in its heading, and a re-run updates it in place.
+
 The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
 
 Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hooks from `.pre-commit-hooks.yaml` to your `.pre-commit-config.yaml` with `rev: v0.1.0`.

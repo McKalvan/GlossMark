@@ -114,9 +114,18 @@ policy:
 Bookkeeping changes (an accepted proposal, a stale fingerprint) are reported
 with their level but never raised by it.
 
+One classifier gates a link everywhere: `gloss diff`, `gloss impact`,
+`gloss context --changed`, `gloss status`, `gloss accept --policy` and the MCP
+`propose_link` and `impact_of` tools apply the same rules, `criticality-gates`
+included, so `accept --policy` never auto-accepts a link the PR gate would
+stop. A link through `presents` or `hosts` takes no level from its target,
+in the gate as in the graph.
+
 **`gloss impact`** and the MCP `impact_of` tool report a level per changed
 file (`criticality`, `criticality_from`) and per concept, with a hint when a
-file touches a `high` or `critical` area so an agent knows to flag it.
+file touches a `high` or `critical` area so an agent knows to flag it. A
+file's level is the one the graph stamps on its artifacts; a page that
+presents a critical concept says so in a hint without being rated by it.
 
 **`gloss context`** names the boundary's level in the session-start briefing,
 and tags `high`/`critical` concepts in the vocabulary list.

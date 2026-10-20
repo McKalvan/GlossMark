@@ -68,7 +68,8 @@ func cmdImpact(args []string) int {
 		}
 		pol := p.WS.Config.EffectivePolicy()
 		after := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: pol, Now: time.Now()})
-		im = gate.Classify(bg, p.Graph, p.WS, gate.Options{Base: *base, Policy: pol, HeadLedger: p.Ledger.Entries, ChangedFiles: files, AfterReport: after})
+		before := baseReport(p.WS, *base, bg, pol)
+		im = gate.Classify(bg, p.Graph, p.WS, gate.Options{Base: *base, Policy: pol, HeadLedger: p.Ledger.Entries, ChangedFiles: files, BeforeReport: before, AfterReport: after})
 	}
 	if *format == "json" {
 		enc := json.NewEncoder(os.Stdout)
