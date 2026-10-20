@@ -122,6 +122,17 @@ A view whose `include:` names at least one concept (not only `ns:*` globs) is **
 
 In a projection every concept also carries the boundary it sits in (`boundary`). Candidates are the boundaries whose code realizes or represents it; one whose own code links to the concept directly beats one whose manifest only declares it, which beats one that reaches it by lifting through another concept. Among the strongest candidates the deepest wins, or the nearest boundary enclosing all of them when several unrelated ones remain. Pages that `presents` a concept never place it. The viewer draws a boundary as a box around those concepts, closed at first; the reader opens boxes to drill in. Projections also carry each node's effective `criticality` (the highest of its own and of everything folded into it).
 
+A concept no boundary realizes or represents stays **unplaced**: the viewer draws it outside every box, in a dashed group named for its `placement`. Every concept in a projection carries one, with the reason in `placementReason` (such as `produced by acme:payments-api`); the first value that applies wins:
+
+- `housed`: inside a boundary box (`boundary` is set).
+- `shared`: unrelated boundaries realize or represent it (itself or its parts) and no boundary encloses them all; give them a common parent manifest, or let the concept stay shared.
+- `flow`: a boundary `produces`, `consumes`, `publishes` or `subscribes` to it, the expected case for outputs, inputs and events that pass between boundaries.
+- `bound`: its value is bound to code with `value-from` or `publishes-value`.
+- `surface`: only pages `presents` it or shells `hosts` it.
+- `unlinked`: none of the above. Usually nothing links to it at all, which `gloss drift` reports as an orphan; otherwise the reason names the links it has, such as `documents` from code.
+
+Boundaries and artifacts carry no `placement`. The viewer draws a part under its whole when the whole is shown, so only concepts without a shown whole go in a group.
+
 ## Tool-maintained files under `.glossmark/`
 
 - `graph.jsonl` — the canonical graph, one JSON record per line, deterministically sorted so `git diff` is meaningful (see `docs/GRAPH.md`). Its first line carries `"format"`; a newer format is refused, not misread.

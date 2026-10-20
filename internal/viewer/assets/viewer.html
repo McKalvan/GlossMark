@@ -67,7 +67,7 @@ canvas.drag{cursor:grabbing}canvas.hit{cursor:pointer}
 #msg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--muted);font-size:15px;white-space:pre-wrap}
 #msg.on{display:flex}
 #tip{position:absolute;pointer-events:none;display:none;max-width:340px;background:var(--tip-bg);color:var(--tip-fg);padding:7px 9px;border-radius:6px;font-size:12px;line-height:1.35;z-index:3;box-shadow:0 4px 14px rgba(0,0,0,.25)}
-#tip b{font-weight:650}#tip .k{opacity:.7}#tip ul{margin:3px 0 0;padding-left:16px}
+#tip b{font-weight:650}#tip .k{opacity:.7}#tip .def{margin:3px 0}#tip ul{margin:3px 0 0;padding-left:16px}
 #status{position:absolute;left:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none}
 #hint{position:absolute;right:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none;text-align:right}
 aside{width:340px;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:10px 14px;font-size:12px}
@@ -81,10 +81,15 @@ aside .via{color:var(--muted);font-size:11px;word-break:break-all}
 aside .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 aside a.n{color:var(--accent);cursor:pointer;text-decoration:none}aside a.n:hover{text-decoration:underline}
 aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
-.legend span{display:inline-flex;align-items:center;gap:6px;margin:2px 12px 2px 0}
+.legend>span{display:inline-flex;align-items:center;gap:6px;margin:2px 12px 2px 0}
+.legend .defs{margin-top:6px}.legend .defs summary{cursor:pointer;color:var(--accent)}
+.legend .defs h3{font-size:11px;font-weight:650;color:var(--muted);margin:8px 0 2px}
+.legend .defs dl{grid-template-columns:1fr;gap:0}.legend .defs dt{color:var(--fg);display:flex;align-items:center;gap:6px;margin-top:4px}
+.legend .defs dd{color:var(--muted)}.legend .defs p{color:var(--muted);margin:2px 0}
 .sw{display:inline-block;width:14px;height:14px;border:2px solid var(--boundary-stroke);background:var(--boundary-fill)}
 .sw.c{border-radius:50%}.sw.r{border-radius:4px}.sw.a{width:10px;height:10px;background:var(--artifact-fill)}
 .sw.o{background:var(--boundary-open);width:22px;height:16px;border-radius:4px}
+.sw.u{background:transparent;border:1.5px dashed var(--muted);width:22px;height:16px;border-radius:4px}
 .sw.i{border-style:dashed}.sw.p{box-shadow:0 0 0 2px var(--gold)}
 .sw.k{background:transparent;border-width:2.5px}
 .sw.k.low{border-color:var(--crit-low)}.sw.k.medium{border-color:var(--crit-medium)}.sw.k.high{border-color:var(--crit-high)}.sw.k.critical{border-color:var(--crit-critical)}
@@ -179,6 +184,18 @@ const HOUSING=new Set(['realizes','represents']);
 const CRIT=['low','medium','high','critical'];
 const critRank=l=>CRIT.indexOf(l||'');
 const PAD=22,TITLE=24;
+/* Placement of a concept (see docs/FILE-FORMATS.md), in precedence order. Unplaced
+   concepts are drawn in one labelled group per value, outside the boundary boxes. */
+const PLACEMENTS=['housed','shared','flow','bound','surface','unlinked'];
+const PLACEDEFS={
+  housed:'Inside a boundary box: a boundary\u2019s code realizes or represents it.',
+  shared:'Unplaced: several unrelated boundaries realize or represent it and no boundary encloses them all. A common parent manifest may be missing.',
+  flow:'Unplaced: a boundary produces, consumes, publishes or subscribes to it. Expected for outputs, inputs and events that pass between boundaries.',
+  bound:'Unplaced: its value is bound to a line of code with value-from or publishes-value.',
+  surface:'Unplaced: only pages present it or shells host it.',
+  unlinked:'Unplaced: no boundary or artifact places it or flows it. Usually nothing links to it; gloss drift reports such a concept as an orphan.'};
+const placeRank=v=>{const i=PLACEMENTS.indexOf(v);return i<0?PLACEMENTS.length:i;};
+const GROUP='__placement:';
 
 /* Per-view diff overlay: sets of added/removed/changed ids and edge keys. */
 const ekey=e=>e.s+'|'+e.p+'|'+e.o;
@@ -219,8 +236,8 @@ function nodeColours(n){
 const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
-const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set()});
-const S={vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,
+const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set()});
+const S={vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
 const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage');
@@ -239,11 +256,14 @@ function loadView(i){
   // Ghost nodes for removed ids so removed edges have endpoints.
   D.rn.forEach(id=>{if(!byId.has(id)){const g={id,label:id,type:'concept',kind:'',ghost:true};byId.set(id,g);nodes.push(g);}});
   D.re.forEach((e,k)=>{if(!edges.some(x=>ekey(x)===k))edges.push(Object.assign({ghost:true,source:'declared'},e));});
+  // One always-open group per placement value that leaves concepts outside every box.
+  [...new Set(nodes.filter(n=>n.type==='concept'&&n.placement&&n.placement!=='housed').map(n=>n.placement))].sort((a,b)=>placeRank(a)-placeRank(b)).forEach(v=>{
+    const g={id:GROUP+v,label:'unplaced · '+v,type:'placement',placement:v,group:true,doc:PLACEDEFS[v]||''};byId.set(g.id,g);nodes.push(g);});
   // Drop self-references and dangling parents/boundaries.
   nodes.forEach(n=>{if(n.parent===n.id||!byId.has(n.parent))n.parent='';if(n.boundary===n.id||!byId.has(n.boundary))n.boundary='';});
   V._nodes=nodes;V._edges=edges;
   // The top of the system: everything closed; drill in by clicking.
-  S.expanded=new Set();S.pos=new Map();S.pinned=new Set();S.sel=null;S.hover=null;S.focus=null;S.f=emptyFilters();
+  S.expanded=groupIds();S.pos=new Map();S.pinned=new Set();S.sel=null;S.hover=null;S.focus=null;S.f=emptyFilters();
   S.rels=new Set(edges.map(e=>e.p));
   rng=mulberry(hash(V.name||'view')+1);
   buildFilters();
@@ -255,8 +275,11 @@ function loadView(i){
   renderPanel();
 }
 
+const groupIds=()=>new Set(V._nodes.filter(n=>n.group).map(n=>n.id));
+
 /* ---- filters ---- */
 function hiddenByFilter(n){
+  if(n.group)return false;
   if(n.internal&&!S.internal)return true;
   const F=S.f;
   if(F.type.has(n.type))return true;
@@ -264,14 +287,16 @@ function hiddenByFilter(n){
   if(n.type==='concept'){
     if(F.tier.has(n.tier||''))return true;
     if(F.kind.has(n.kind||''))return true;
+    if(F.place.has(n.placement||''))return true;
   }
   if(n.type==='boundary'&&F.level.has(n.kind||''))return true;
   if(F.crit.has(n.criticality||''))return true;
   return false;
 }
+const ONLY_TIP='Click to toggle, Shift+click to show only this';
 function buildFilters(){
   const box=$('filters');box.innerHTML='';
-  const count=(f,label)=>{const m=new Map();V._nodes.forEach(n=>{const v=f(n);if(v===undefined)return;m.set(v,(m.get(v)||0)+1);});return m;};
+  const count=(f,label)=>{const m=new Map();V._nodes.forEach(n=>{if(n.group)return;const v=f(n);if(v===undefined)return;m.set(v,(m.get(v)||0)+1);});return m;};
   const groups=[
     {key:'type',label:'Type',counts:count(n=>n.type)},
     {key:'tier',label:'Tier',counts:count(n=>n.type==='concept'?(n.tier||''):undefined)},
@@ -279,6 +304,7 @@ function buildFilters(){
     {key:'kind',label:'Kind',counts:count(n=>n.type==='concept'?(n.kind||''):undefined)},
     {key:'level',label:'Level',counts:count(n=>n.type==='boundary'?(n.kind||''):undefined)},
     {key:'crit',label:'Criticality',counts:count(n=>n.criticality||''),order:v=>critRank(v),dot:true},
+    {key:'place',label:'Placement',counts:count(n=>n.type==='concept'&&!n.ghost?(n.placement||''):undefined),order:v=>placeRank(v),tip:v=>PLACEDEFS[v]},
   ];
   groups.forEach(g=>{
     const vals=[...g.counts.keys()];
@@ -289,8 +315,15 @@ function buildFilters(){
     vals.forEach(v=>{
       const c=document.createElement('button');c.className='chip'+(S.f[g.key].has(v)?' off':'');c.type='button';
       c.innerHTML=(g.dot?`<i class="dot ${esc(v||'none')}"></i>`:'')+esc(v===''?(g.key==='crit'?'unclassified':'(none)'):v)+` <span class="n">${g.counts.get(v)}</span>`;
-      c.title=(g.key==='crit'&&v==='')?'Nodes with no criticality declared or inherited':'Toggle';
-      c.onclick=()=>{S.f[g.key].has(v)?S.f[g.key].delete(v):S.f[g.key].add(v);c.classList.toggle('off');rebuild(false);renderPanel();draw();};
+      c.title=((g.key==='crit'&&v==='')?'Nodes with no criticality declared or inherited. ':g.tip&&g.tip(v)?g.tip(v)+' ':'')+ONLY_TIP;
+      c.onclick=ev=>{
+        const f=S.f[g.key];
+        if(ev.shiftKey){
+          const alone=!f.has(v)&&vals.every(x=>x===v||f.has(x));
+          f.clear();if(!alone)vals.forEach(x=>{if(x!==v)f.add(x);});
+          row.querySelectorAll('.chip').forEach((el,i)=>el.classList.toggle('off',f.has(vals[i])));
+        }else{f.has(v)?f.delete(v):f.add(v);c.classList.toggle('off');}
+        rebuild(false);renderPanel();draw();};
       row.appendChild(c);
     });
     box.appendChild(row);
@@ -301,8 +334,13 @@ function buildFilters(){
     const row=document.createElement('div');row.className='fgroup';
     const gl=document.createElement('span');gl.className='gl';gl.textContent='Relations';row.appendChild(gl);
     rels.forEach(r=>{
-      const c=document.createElement('button');c.className='chip';c.type='button';c.textContent=r;
-      c.onclick=()=>{S.rels.has(r)?S.rels.delete(r):S.rels.add(r);c.classList.toggle('off');rebuild(false);draw();};
+      const c=document.createElement('button');c.className='chip'+(S.rels.has(r)?'':' off');c.type='button';c.textContent=r;c.title=relDef(r)+' '+ONLY_TIP;
+      c.onclick=ev=>{
+        if(ev.shiftKey){
+          S.rels=(S.rels.size===1&&S.rels.has(r))?new Set(rels):new Set([r]);
+          row.querySelectorAll('.chip').forEach((el,i)=>el.classList.toggle('off',!S.rels.has(rels[i])));
+        }else{S.rels.has(r)?S.rels.delete(r):S.rels.add(r);c.classList.toggle('off');}
+        rebuild(false);draw();};
       row.appendChild(c);
     });
     box.appendChild(row);
@@ -329,6 +367,8 @@ function containerOf(n){
   else{const p=byId.get(n.parent);c=(p&&!hiddenByFilter(p)&&p!==n)?p:byId.get(n.boundary);}
   let g=0;const seen=new Set([n.id]);
   while(c&&g++<64&&!seen.has(c.id)){seen.add(c.id);if(!hiddenByFilter(c))return c;c=byId.get(c.parent);}
+  // An unplaced concept with no shown whole sits in the group for its placement.
+  if(n.type==='concept'&&n.placement&&n.placement!=='housed')return byId.get(GROUP+n.placement)||null;
   return null;
 }
 function isContainer(n){return (kidsOf.get(n.id)||[]).length>0;}
@@ -359,6 +399,7 @@ function rebuild(seedAll){
   kidsOf=new Map();
   nodes.forEach(n=>{if(n._c){if(!kidsOf.has(n._c.id))kidsOf.set(n._c.id,[]);kidsOf.get(n._c.id).push(n);}});
   nodes.forEach(n=>{n._vis=isVisible(n);});
+  nodes.forEach(n=>{if(n.group&&!(kidsOf.get(n.id)||[]).some(k=>k._vis))n._vis=false;});
   if(S.focus&&!(byId.has(S.focus)&&byId.get(S.focus)._vis))S.focus=null;
   VN=nodes.filter(n=>n._vis);
   VN.forEach(n=>{
@@ -591,6 +632,13 @@ function draw(){
   open.forEach(b=>{
     const r=rectOf(b),hl=b===selNode||b===S.hover,cc=critColour(b.criticality);
     ctx.globalAlpha=nodeAlpha(b);
+    if(b.group){ // placement group: a dashed frame with its value and count
+      ctx.strokeStyle=hl?C.select:C.muted;ctx.lineWidth=(hl?2:1.2)*u;ctx.setLineDash([6,4]);roundRect(r.x,r.y,r.w,r.h,10);ctx.stroke();ctx.setLineDash([]);
+      ctx.font=(12*u)+'px system-ui,sans-serif';ctx.fillStyle=hl?C.select:C.muted;ctx.fillText(b.label,r.x+10*u,r.y+TITLE/2);
+      const n=(kidsOf.get(b.id)||[]).filter(k=>k._vis&&k._lc===b).length,tx=r.x+18*u+ctx.measureText(b.label).width;
+      ctx.font=(10*u)+'px system-ui,sans-serif';ctx.fillText(n+' concept'+(n===1?'':'s'),tx,r.y+TITLE/2);
+      return;
+    }
     ctx.fillStyle=C.bOpen;roundRect(r.x,r.y,r.w,r.h,10);ctx.fill();
     ctx.strokeStyle=b._diff==='added'?C.added:b._diff==='removed'?C.removed:hl?C.select:(cc||C.bStroke);
     ctx.lineWidth=(hl?2.5:cc?2:1.4)*u;ctx.setLineDash(b.ghost?[4,3]:[]);ctx.stroke();ctx.setLineDash([]);
@@ -684,7 +732,7 @@ function draw(){
   });
   ctx.globalAlpha=1;
   const nb2=VN.filter(n=>n.type==='boundary').length;
-  $('status').textContent=`${VN.length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(filtersActive()?' · filtered':'');
+  $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(filtersActive()?' · filtered':'');
   $('hint').textContent=S.focus?'Esc leaves focus':(VN.some(n=>n.type==='boundary'&&!n._open&&n._kids)?'click a boundary to open it · double-click to focus':'');
 }
 
@@ -712,6 +760,7 @@ function hitEdge(w){
 const critPill=l=>l?`<span class="crit ${esc(l)}">${esc(l)}</span>`:'';
 function critText(n){if(!n.criticality)return '';return n.criticality+(n.criticalityFrom&&n.criticalityFrom!=='declared'?' (via '+n.criticalityFrom+')':n.criticalityFrom?' (declared)':'');}
 function nodeTip(n){
+  if(n.group)return `<b>${esc(n.label)}</b><div class="def">${esc(n.doc)}</div><span class="k">${n._kids} concept${n._kids===1?'':'s'}</span>`;
   let h=`<b>${esc(n.label||n.id)}</b><br><span class="k">${esc(n.id)}</span><br>${esc(n.type)}${n.kind?' · '+esc(n.kind):''}${n.tier?' · '+esc(n.tier):''}${n.ghost?' · <i>removed</i>':''}`;
   if(n.criticality)h+=`<br><span class="k">criticality</span> ${esc(critText(n))}`;
   if(n.owner)h+=`<br><span class="k">owner</span> ${esc(n.owner)}`;
@@ -720,14 +769,15 @@ function nodeTip(n){
   if(n.liveValue)h+=`<br><span class="k">live</span> <span class="mono">${esc(n.liveValue)}</span>`;
   if(n.doc)h+=`<br>${esc(n.doc)}`;
   if(n.path)h+=`<br><span class="k">path</span> ${esc(n.path)}`;
-  if(n._c&&n.type!=='boundary')h+=`<br><span class="k">in</span> ${esc(n._c.label||n._c.id)}`;
+  if(n._c&&n.type!=='boundary'&&!n._c.group)h+=`<br><span class="k">in</span> ${esc(n._c.label||n._c.id)}`;
+  if(n.placement)h+=`<br><span class="k">placement</span> ${esc(n.placement)}${n.placementReason?': '+esc(n.placementReason):''}`;
   if(n._kids){const inside=n._hidden-((n.folded&&n.folded.length)||0);h+=`<br><span class="k">${n._kids} inside${inside?' · '+inside+' hidden':''} · click to ${S.expanded.has(n.id)?'close':'open'}${n.type==='boundary'?' · double-click to focus':''}</span>`;}
   if(n.folded&&n.folded.length)h+=`<br><span class="k">folded (${n.folded.length})</span><ul>${n.folded.slice(0,12).map(f=>'<li>'+esc(f)+'</li>').join('')}${n.folded.length>12?'<li>…</li>':''}</ul>`;
   return h;
 }
 function edgeTip(e){
   const iface=(e.s._open&&under(e.o,e.s))||(e.o._open&&under(e.s,e.o));
-  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><br><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
+  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
   if(e.via&&e.via.size)h+=`<br><span class="k">via</span><ul>${[...e.via].slice(0,10).map(v=>'<li>'+esc(v)+'</li>').join('')}${e.via.size>10?'<li>…</li>':''}</ul>`;
   return h;
 }
@@ -752,6 +802,10 @@ function renderPanel(){
   if(D.on)h+=`<div style="margin-top:4px"><span style="color:var(--added)">+${D.an.size} nodes, +${D.ae.size} edges</span> · <span style="color:var(--removed)">−${D.rn.size} nodes, −${D.re.size} edges</span> · <span style="color:var(--changed)">~${D.cn.size} changed</span></div>`;
   if(sel&&sel.id){
     const n=sel;
+    if(n.group){
+      const kids=(kidsOf.get(n.id)||[]).slice().sort((a,b)=>(a.label||a.id).localeCompare(b.label||b.id));
+      h+=`<h2>Placement group</h2><div><b>${esc(n.label)}</b></div><div style="color:var(--muted)">${esc(n.doc)}</div><ul>${kids.map(k=>'<li>'+nodeLink(k)+(k.placementReason?' <div class="via">'+esc(k.placementReason)+'</div>':'')+'</li>').join('')}</ul>`;
+    }else{
     h+=`<h2>Selected ${esc(n.type)}</h2><div><b>${esc(n.label||n.id)}</b> ${critPill(n.criticality)}</div><div class="id">${esc(n.id)}</div>`;
     h+=`<div class="acts">`;
     if(n._kids)h+=`<button data-act="${S.expanded.has(n.id)?'close':'open'}">${S.expanded.has(n.id)?'Close':'Open'}</button>`;
@@ -762,8 +816,9 @@ function renderPanel(){
     row('type',esc(n.type));row(n.type==='boundary'?'level':'kind',esc(n.kind));row('tier',esc(n.tier));row('ns',esc(n.ns));row('branch',n.branch&&n.branch!=='boundary'&&n.branch!=='artifact'?esc(n.branch):'');
     row('criticality',n.criticality?esc(critText(n)):'<span class="via">unclassified</span>');
     row('owner',esc(n.owner));
-    if(n._c)row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
+    if(n._c&&!n._c.group)row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
     else if(n.type!=='boundary'&&!n.ghost)row('in boundary','<span class="via">none: no boundary’s code realizes it</span>');
+    if(n.placement)row('placement',(n.placement==='housed'?'':'unplaced: ')+'<b>'+esc(n.placement)+'</b>'+(n.placementReason?'<div class="via">'+esc(n.placementReason)+'</div>':''));
     row('published as',n.published?esc(n.publishedAs||'yes'):'');
     row('value',n.value!=null?esc(typeof n.value==='object'?JSON.stringify(n.value):n.value):'');
     if(n.liveValue){const at=n.valueFrom||'',i=at.lastIndexOf(':');row('live value','<span class="mono">'+esc(n.liveValue)+'</span><br>'+srcLink(i>0?at.slice(0,i):at,i>0?+at.slice(i+1):0));}
@@ -783,20 +838,21 @@ function renderPanel(){
     if(kids.length)h+=`<div><span style="color:var(--muted)">inside (${kids.length}) · ${S.expanded.has(n.id)?'open':'closed'}</span><ul>${kids.map(k=>'<li>'+nodeLink(k)+(k.type==='boundary'?' <span class="badge">'+esc(k.kind||'boundary')+'</span>':'')+(k.criticality?' '+critPill(k.criticality):'')+(k.internal?' <span class="via">internal</span>':'')+'</li>').join('')}</ul></div>`;
     if(n.folded&&n.folded.length)h+=`<div><span style="color:var(--muted)">folded into this node (${n.folded.length})</span><ul>${n.folded.map(f=>'<li class="mono">'+esc(f)+'</li>').join('')}</ul></div>`;
     const out=VE.filter(e=>!e.contain&&e.s===n),inn=VE.filter(e=>!e.contain&&e.o===n);
-    const edgeLi=(e,other,arrow)=>`<li>${arrow} <b>${esc(e.p)}</b> ${arrow} ${nodeLink(other)} <span class="via">${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''}${e.count>1?' · ×'+e.count:''}</span>${e.via.size?'<div class="via">via '+[...e.via].map(esc).join(', ')+'</div>':''}</li>`;
+    const edgeLi=(e,other,arrow)=>`<li>${arrow} <b title="${esc(relDef(e.p))}">${esc(e.p)}</b> ${arrow} ${nodeLink(other)} <span class="via">${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''}${e.count>1?' · ×'+e.count:''}</span>${e.via.size?'<div class="via">via '+[...e.via].map(esc).join(', ')+'</div>':''}</li>`;
     h+=`<h2>Outgoing (${out.length})</h2><ul>${out.map(e=>edgeLi(e,e.o,'→')).join('')||'<li class="via">none</li>'}</ul>`;
     h+=`<h2>Incoming (${inn.length})</h2><ul>${inn.map(e=>edgeLi(e,e.s,'←')).join('')||'<li class="via">none</li>'}</ul>`;
+    }
   }else if(sel){
     const e=sel;
-    h+=`<h2>Selected edge</h2><div>${nodeLink(e.s)} <b>—${esc(e.p)}→</b> ${nodeLink(e.o)}</div><dl><dt>source</dt><dd>${esc(e.source)}</dd><dt>count</dt><dd>${e.count}</dd>`;
+    h+=`<h2>Selected edge</h2><div>${nodeLink(e.s)} <b>—${esc(e.p)}→</b> ${nodeLink(e.o)}</div><dl><dt>meaning</dt><dd>${esc(relDef(e.p))}</dd><dt>source</dt><dd>${esc(e.source)}</dd><dt>count</dt><dd>${e.count}</dd>`;
     if(e.proposed)h+='<dt>proposed</dt><dd>yes</dd>';if(e.lifted)h+='<dt>lifted</dt><dd>yes</dd>';if(e.diff)h+=`<dt>diff</dt><dd>${esc(e.diff)}</dd>`;
     if(e.rerouted)h+=`<dt>underlying</dt><dd>${e.parts.map(p=>esc(p.s)+' → '+esc(p.o)).join('<br>')}</dd>`;
     if(e.via.size)h+=`<dt>via</dt><dd class="via">${[...e.via].map(esc).join('<br>')}</dd>`;h+='</dl>';
   }else{
-    const tops=VN.filter(n=>n.type==='boundary'&&!n._lc),loose=VN.filter(n=>n.type==='concept'&&!n._lc);
+    const tops=VN.filter(n=>n.type==='boundary'&&!n._lc),loose=VN.filter(n=>n.type==='concept'&&n._lc&&n._lc.group);
     h+=`<h2>Where you are</h2><div style="color:var(--muted)">`;
     if(S.focus&&byId.has(S.focus))h+=`Focused on <b>${esc(byId.get(S.focus).label||S.focus)}</b>: its contents and what they connect to. `;
-    else h+=`The top of the system: ${tops.length} top-level boundar${tops.length===1?'y':'ies'}${loose.length?` and ${loose.length} concept${loose.length===1?'':'s'} no boundary’s code realizes`:''}. `;
+    else h+=`The top of the system: ${tops.length} top-level boundar${tops.length===1?'y':'ies'}${loose.length?` and ${loose.length} unplaced concept${loose.length===1?'':'s'} outside them (${VN.filter(n=>n.group).map(g=>loose.filter(k=>k._lc===g).length+' '+esc(g.placement)).join(', ')||'no placement'})`:''}. `;
     h+=`Click a boundary to open it, double-click to focus on it. Drag to pan, wheel to zoom, Esc to step back.</div>`;
     if(tops.length){
       const sorted=tops.slice().sort((a,b)=>critRank(b.criticality)-critRank(a.criticality)||(a.label||a.id).localeCompare(b.label||b.id));
@@ -815,12 +871,9 @@ function renderPanel(){
       });
     }
   }
-  h+=`<h2>Legend</h2><div class="legend"><span><i class="sw r"></i>closed boundary</span><span><i class="sw o"></i>open boundary</span><span><i class="sw c"></i>concept</span><span><i class="sw a"></i>artifact</span><br>
-  <span><i class="sw c i"></i>implementation tier</span><span><i class="sw c p"></i>published</span><br>
-  <span><i class="sw c k low"></i>low</span><span><i class="sw c k medium"></i>medium</span><span><i class="sw c k high"></i>high</span><span><i class="sw c k critical"></i>critical</span><br>
-  <span><i class="ln"></i>declared</span><span><i class="ln thin"></i>inline</span><span><i class="ln d"></i>derived</span><span><i class="ln dot"></i>proposed</span><span><i class="ln thick"></i>lifted</span>`;
-  if(D.on)h+=`<br><span><i class="ln add"></i>added</span><span><i class="ln rem"></i>removed</span><span style="color:var(--changed)">◌ changed</span>`;
-  h+=`</div>`;
+  const groups=LEGEND.filter(g=>(!g.diff||D.on)&&(!g.unplaced||V._nodes.some(n=>n.group)));
+  h+=`<h2>Legend</h2><div class="legend">${groups.map(g=>g.items.map(([sw,l,d])=>`<span title="${esc(d)}">${sw}${esc(l)}</span>`).join('')).join('<br>')}`;
+  h+=`<details class="defs"${S.legendOpen?' open':''}><summary>What these mean</summary>${groups.map(g=>`<h3>${esc(g.name)}</h3>${g.note?`<p>${esc(g.note)}</p>`:''}<dl>${g.items.map(([sw,l,d])=>`<dt>${sw}${esc(l)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>`).join('')}<h3>Relations</h3><p>Read each edge as A, relation, B in the direction of its arrow.</p><dl>${[...new Set(V._edges.map(e=>e.p))].sort().map(r=>`<dt>${esc(r)}</dt><dd>${esc(relDef(r))}</dd>`).join('')}</dl></details></div>`;
   if(diff&&Array.isArray(diff.changes)&&diff.changes.length){
     h+=`<h2>Changes (${diff.changes.length})${diff.criticality?' '+critPill(diff.criticality):''}</h2>`;
     if(Array.isArray(diff.critical)&&diff.critical.length)h+=`<div class="via" style="margin-bottom:6px">criticality touched: ${diff.critical.slice(0,8).map(c=>esc(c.curie)+' '+esc(c.level)).join(', ')}${diff.critical.length>8?', …':''}</div>`;
@@ -832,6 +885,71 @@ function renderPanel(){
   }
   $('panel').innerHTML=h;
 }
+// Legend items: swatch, label and a definition worded as in docs/GRAPH.md,
+// docs/GOVERNANCE.md, docs/MARKING.md and docs/ADVANCED.md.
+const LEGEND=[
+  {name:'Shapes',items:[
+    ['<i class="sw r"></i>','closed boundary','A boundary (a directory with a .gloss.yaml manifest) drawn as one box with its contents hidden; its outline colour is its criticality. Click to open it.'],
+    ['<i class="sw o"></i>','open boundary','An opened boundary: a box around the concepts its code realizes or represents and the boundaries nested in it.'],
+    ['<i class="sw c"></i>','concept','A term the ontology (*.gloss.yaml) defines: an entity, process, capability, event, measure, constraint, resource or system-type.'],
+    ['<i class="sw a"></i>','artifact','A function, class, file, test or page that a @gloss marker links to a concept or boundary.']]},
+  {name:'Concept styles',items:[
+    ['<i class="sw c i"></i>','implementation tier','Dashed outline: a concept in an implementation-tier namespace (such as impl:), a mechanism such as a handler, pipeline or queue that realizes a core concept.'],
+    ['<i class="sw c p"></i>','published','Gold ring: a concept written as published: { as: core:X }, the only seam between tiers and across repositories.']]},
+  {name:'Placement',unplaced:true,items:PLACEMENTS.map(v=>[v==='housed'?'<i class="sw o"></i>':'<i class="sw u"></i>',v,PLACEDEFS[v]]),
+   note:'A concept no boundary houses is drawn in a dashed group outside the boxes, one group per value. The first value that applies wins, in this order.'},
+  {name:'Criticality',items:[
+    ['<i class="sw c k low"></i>','low','A mistake here is an annoyance: telemetry, dashboards, internal tooling.'],
+    ['<i class="sw c k medium"></i>','medium','A mistake here degrades the product.'],
+    ['<i class="sw c k high"></i>','high','A mistake here costs money, trust or compliance: PII, access control, audit.'],
+    ['<i class="sw c k critical"></i>','critical','A mistake here moves money, breaks the law or stops the business.']],
+   note:'Rings on concepts and artifacts, outline colour on boundaries. No ring means unclassified.'},
+  {name:'Edges',items:[
+    ['<i class="ln"></i>','declared','Solid line: declared in an ontology file or a boundary manifest.'],
+    ['<i class="ln thin"></i>','inline','Thin line: from a @gloss marker in the code.'],
+    ['<i class="ln d"></i>','derived','Dashed line: derived by the rollup rules (such as the realization lift); written by the tool, never by hand.'],
+    ['<i class="ln dot"></i>','proposed','Dotted line: a proposal (@gloss? or a proposed: true entry) that a human has not yet accepted.'],
+    ['<i class="ln thick"></i>','lifted','Thick line marked ↑: a boundary’s links to several concepts lifted to their least common subsumer (is-a); the panel lists the originals under via.']]},
+  {name:'Diff',diff:true,items:[
+    ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.'],
+    ['<i class="ln rem"></i>','removed','Red: removed since the base; a removed node is drawn hollow and dashed.'],
+    ['<span style="color:var(--changed)">◌</span>','changed','Orange dashed ring: a node whose definition changed since the base.']]},
+];
+// Relation definitions, read as "A <relation> B" in the direction the edge is drawn.
+// Worded from docs/ADVANCED.md and internal/model/vocab.go.
+const RELDEFS={
+  'realizes':'A stands for B. An implementation concept realizes the core concept it is the mechanism for; a boundary realizes what its code implements. Places B inside A\u2019s box. Often derived by rollup from implements.',
+  'implements':'A is the code that does the work of B: the handler, pipeline or module behind a process, capability or event. Lifts to the boundary as realizes.',
+  'represents':'A is the data shape of B: a model, table or schema. On an entity it lifts to the boundary as holds.',
+  'holds':'Boundary A stores B\u2019s data. Derived from represents on an entity or declared in a manifest; gloss drift compares the two.',
+  'presents':'A is a UI surface that shows B: a page or screen. Lifts as presents, never as realizes, and carries no criticality.',
+  'hosts':'A is a shell or container for B: the app frame or a router. Lifts as hosts, never as realizes.',
+  'verifies':'A is a test that checks B.',
+  'tests':'Alias of verifies: A is a test that checks B.',
+  'documents':'A is Markdown that explains B.',
+  'instructs':'A is an agent file whose instructions concern B.',
+  'may-modify':'Agent A may change B. A link outside this remit by that agent is HARD in gloss diff.',
+  'publishes-value':'The line at A holds B\u2019s published value. Changing it without updating the ontology value is value-drift.',
+  'provisions':'A is infrastructure code that creates B. On a resource or system-type it lifts to the boundary as realizes.',
+  'configures':'A is configuration for B. On a resource or system-type it lifts to the boundary as realizes.',
+  'deploys':'A is a CI or release job that ships B. On a resource or system-type it lifts to the boundary as realizes.',
+  'produces':'A creates or outputs B. Declared on concepts and manifests (intended) or marked on code (actual); lifted to boundaries, where producing something undeclared is a violation.',
+  'consumes':'A takes B as input. Intended (declared) or actual (code); lifted to boundaries and compared like produces.',
+  'publishes':'A emits event B. Lifted to boundaries; a publisher in one repository and a subscriber in another get a context-map edge in gloss landscape.',
+  'subscribes':'A listens for event B. Lifted to boundaries and matched against publishers across repositories.',
+  'constrains':'A limits B: a constraint or measure that applies to B, such as a cut-off time that constrains settlement. Declared in the ontology.',
+  'reverses':'A undoes B, such as a refund that reverses a capture. Declared in the ontology.',
+  'attaches-to':'A exists only alongside B and is attached to it. Declared in the ontology.',
+  'is-a':'A is a kind of B. A inherits what B realizes, and lifting rolls links up this taxonomy.',
+  'part-of':'A is a part of B. A part realizes what its whole realizes.',
+  'has-part':'B is a part of A (the inverse of part-of).',
+  'published-as':'Implementation concept A surfaces in the business view as core concept B: the only seam between tiers and across repositories.',
+  'depends-on':'A depends on B. Derived from imports and lifted to boundaries; written by the tool, never by hand.',
+  'calls':'A calls B. Reserved for code-index data; not yet produced.',
+  'owns':'A owns B. Imported from CODEOWNERS or Backstage; not yet produced.',
+  'same-as':'A and B are the same concept in different vocabularies (SSSOM). Reserved.',
+  'derived-from':'A is derived from B. Reserved.'};
+const relDef=r=>RELDEFS[r]||'A domain relation declared under relations: in an ontology file.';
 function reveal(n){ // expand every container, then select and centre
   let c=n._c||containerOf(n),g=0;while(c&&g++<64){S.expanded.add(c.id);c=c._c||containerOf(c);}
   if(n.internal&&!S.internal){S.internal=true;const el=$('internal');if(el)el.checked=true;}
@@ -839,6 +957,7 @@ function reveal(n){ // expand every container, then select and centre
   rebuild(false);S.sel=n;const p=centre(n);if(p){S.cam.x=cv.clientWidth/2-p.x*S.cam.k;S.cam.y=cv.clientHeight/2-p.y*S.cam.k;}
   renderPanel();draw();
 }
+$('panel').addEventListener('toggle',ev=>{if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;},true);
 $('panel').addEventListener('click',ev=>{
   const b=ev.target.closest('button[data-act]');
   if(b&&S.sel&&S.sel.id){
@@ -885,7 +1004,7 @@ cv.addEventListener('pointermove',ev=>{
 // A single click selects and (after a short wait, so a double-click can cancel
 // it) opens or closes the node; a double-click focuses a boundary.
 let pendingToggle=null,lastClick={id:null,t:0};
-function toggle(n){S.expanded.has(n.id)?collapse(n):S.expanded.add(n.id);rebuild(false);renderPanel();draw();}
+function toggle(n){if(n.group)return;S.expanded.has(n.id)?collapse(n):S.expanded.add(n.id);rebuild(false);renderPanel();draw();}
 function endDrag(ev){
   if(!drag)return;cv.classList.remove('drag');
   drag=null;
@@ -897,12 +1016,12 @@ function endDrag(ev){
     lastClick={id:n.id,t:now};
     if(pendingToggle){clearTimeout(pendingToggle);pendingToggle=null;}
     if(dbl){lastClick={id:null,t:0};if(n.type==='boundary'){setFocus(n.id);return;}if(n._kids)toggle(n);}
-    else if(n._kids)pendingToggle=setTimeout(()=>{pendingToggle=null;toggle(n);},240);
+    else if(n._kids&&!n.group)pendingToggle=setTimeout(()=>{pendingToggle=null;toggle(n);},240);
   }
   else{const e=hitEdge(w);S.sel=e||null;}
   renderPanel();draw();
 }
-function collapse(n){S.expanded.delete(n.id);descendants(n,[]).forEach(k=>S.expanded.delete(k.id));if(S.focus&&(S.focus===n.id||under(byId.get(S.focus),n)))S.focus=null;}
+function collapse(n){if(n.group)return;S.expanded.delete(n.id);descendants(n,[]).forEach(k=>{if(!k.group)S.expanded.delete(k.id);});if(S.focus&&(S.focus===n.id||under(byId.get(S.focus),n)))S.focus=null;}
 cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',()=>{drag=null;cv.classList.remove('drag');});
 cv.addEventListener('pointerleave',()=>{if(!drag){S.hover=null;tip.style.display='none';draw();}});
 cv.addEventListener('wheel',ev=>{
@@ -922,7 +1041,7 @@ sel.onchange=()=>loadView(+sel.value);
 $('search').oninput=ev=>{S.q=ev.target.value.trim().toLowerCase();draw();};
 $('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');};
 $('expandAll').onclick=()=>{V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(false);fit();renderPanel();};
-$('collapseAll').onclick=()=>{S.expanded.clear();S.focus=null;rebuild(false);fit();renderPanel();};
+$('collapseAll').onclick=()=>{S.expanded=groupIds();S.focus=null;rebuild(false);fit();renderPanel();};
 $('fit').onclick=fit;
 $('relayout').onclick=()=>{S.pinned.clear();rebuild(true);fit();};
 const themes=['auto','light','dark'];

@@ -7,6 +7,7 @@
 package views
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -58,6 +59,12 @@ type PNode struct {
 	// viewer draws the boundary as a box around its members. Empty when no
 	// boundary houses the node or several unrelated boundaries do.
 	Boundary string `json:"boundary,omitempty"`
+	// Placement says why a concept sits where it does: housed (inside
+	// Boundary), or why it is unplaced (shared, flow, bound, surface,
+	// unlinked); PlacementReason names what produces it, such as "produced by
+	// acme:payments-api". Concepts only.
+	Placement       string `json:"placement,omitempty"`
+	PlacementReason string `json:"placementReason,omitempty"`
 	// Criticality is the effective governance level of the node (the highest
 	// of its own and of everything folded into it); CriticalityFrom says where
 	// the level comes from. Owner is the boundary's owner.
@@ -421,6 +428,7 @@ func (p *projector) house() {
 			}
 		}
 	}
+	strongest := map[string]map[string]bool{}
 	for cu, byB := range cand {
 		best := -1
 		for _, st := range byB {
@@ -434,6 +442,7 @@ func (p *projector) house() {
 				set[b] = true
 			}
 		}
+		strongest[cu] = set
 		p.nodes[p.byID[cu]].Boundary = p.resolveBoundary(set)
 	}
 	// Part-of trees: the root adopts the common boundary of its descendants
@@ -469,6 +478,9 @@ func (p *projector) house() {
 	for r, set := range trees {
 		if p.nodes[r].Boundary == "" && len(set) > 0 {
 			p.nodes[r].Boundary = p.resolveBoundary(set)
+			if p.nodes[r].Boundary == "" && len(strongest[p.nodes[r].ID]) == 0 {
+				strongest[p.nodes[r].ID] = set // its parts are housed apart
+			}
 		}
 	}
 	for i := range p.nodes {
@@ -478,6 +490,128 @@ func (p *projector) house() {
 			}
 		}
 	}
+	p.place(strongest)
+}
+
+// Placement values, in precedence order: the first that applies wins.
+const (
+	PlacementHoused   = "housed"
+	PlacementShared   = "shared"
+	PlacementFlow     = "flow"
+	PlacementBound    = "bound"
+	PlacementSurface  = "surface"
+	PlacementUnlinked = "unlinked"
+)
+
+// flowRels and surfaceRels are the boundary → concept relations that explain
+// an unplaced concept, with the wording its reason uses.
+var flowRels = [][2]string{{"produces", "produced by"}, {"consumes", "consumed by"}, {"publishes", "published by"}, {"subscribes", "subscribed to by"}}
+var surfaceRels = [][2]string{{"presents", "presented by"}, {"hosts", "hosted by"}}
+
+// place gives every concept node its placement and the reason for it.
+// strongest holds each concept's strongest housing candidates; a concept left
+// without a boundary that has any is shared.
+func (p *projector) place(strongest map[string]map[string]bool) {
+	links := map[string]map[string]map[string]bool{} // concept CURIE → relation → who
+	add := func(iri, rel, who string) {
+		for _, t := range p.target(iri, 0) {
+			tc := p.g.Curie(t)
+			if i, ok := p.byID[tc]; !p.included[t] || !ok || p.nodes[i].Type != "concept" {
+				continue
+			}
+			if links[tc] == nil {
+				links[tc] = map[string]map[string]bool{}
+			}
+			if links[tc][rel] == nil {
+				links[tc][rel] = map[string]bool{}
+			}
+			links[tc][rel][who] = true
+		}
+	}
+	explained := map[string]bool{}
+	for _, r := range append(append([][2]string{}, flowRels...), surfaceRels...) {
+		explained[r[0]] = true
+	}
+	for _, b := range p.g.NodesOf(model.NodeBoundary) {
+		who := b.CURIE
+		if bt := p.fold[b.ID]; len(bt) > 0 && p.included[bt[0]] {
+			who = p.g.Curie(bt[0])
+		}
+		for _, e := range p.g.Out(b.ID, "") {
+			rel := e.P
+			if !explained[rel] {
+				rel = "other:" + rel
+			}
+			add(e.O, rel, who)
+		}
+	}
+	for _, a := range p.g.NodesOf(model.NodeArtifact) {
+		for _, e := range p.g.Out(a.ID, "") {
+			add(e.O, "other:"+e.P, "code")
+		}
+	}
+	for _, n := range p.g.NodesOf(model.NodeConcept) {
+		if n.ValueFrom != "" {
+			add(n.ID, "value-from", n.ValueFrom)
+		}
+	}
+	reason := func(l map[string]map[string]bool, rels [][2]string) string {
+		var parts []string
+		for _, r := range rels {
+			if len(l[r[0]]) > 0 {
+				parts = append(parts, r[1]+" "+list(p.deepest(l[r[0]])))
+			}
+		}
+		return strings.Join(parts, "; ")
+	}
+	for i := range p.nodes {
+		n := &p.nodes[i]
+		if n.Type != "concept" {
+			continue
+		}
+		l := links[n.ID]
+		switch {
+		case n.Boundary != "":
+			n.Placement, n.PlacementReason = PlacementHoused, "inside "+n.Boundary
+		case len(strongest[n.ID]) > 0:
+			n.Placement, n.PlacementReason = PlacementShared, "realized or represented by "+list(p.deepest(strongest[n.ID]))+", and no boundary encloses them all"
+		case reason(l, flowRels) != "":
+			n.Placement, n.PlacementReason = PlacementFlow, reason(l, flowRels)
+		case len(l["value-from"]) > 0:
+			n.Placement, n.PlacementReason = PlacementBound, "value bound to code at "+list(keys(l["value-from"]))
+		case reason(l, surfaceRels) != "":
+			n.Placement, n.PlacementReason = PlacementSurface, reason(l, surfaceRels)
+		default:
+			var other []string
+			for rel, who := range l {
+				if strings.HasPrefix(rel, "other:") {
+					other = append(other, strings.TrimPrefix(rel, "other:")+" from "+list(p.deepest(who)))
+				}
+			}
+			sort.Strings(other)
+			n.Placement, n.PlacementReason = PlacementUnlinked, "no boundary realizes, represents, produces, consumes, publishes, subscribes, presents or hosts it"
+			if len(other) > 0 {
+				n.PlacementReason += "; linked only by " + strings.Join(other, "; ")
+			}
+		}
+	}
+}
+
+func keys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// list joins names for a reason, naming at most three.
+func list(xs []string) string {
+	if len(xs) > 3 {
+		return strings.Join(xs[:3], ", ") + fmt.Sprintf(" and %d more", len(xs)-3)
+	}
+	return strings.Join(xs, ", ")
 }
 
 // boundaryChain returns the boundary and its enclosing boundaries, nearest first.
@@ -495,9 +629,8 @@ func (p *projector) boundaryChain(curie string) []string {
 	return out
 }
 
-// resolveBoundary picks one boundary for a set of candidates: drop any that
-// encloses another candidate, then take the nearest common enclosing boundary.
-func (p *projector) resolveBoundary(set map[string]bool) string {
+// deepest returns the candidates that enclose no other candidate, sorted.
+func (p *projector) deepest(set map[string]bool) []string {
 	var deepest []string
 	for b := range set {
 		enclosesOther := false
@@ -505,9 +638,11 @@ func (p *projector) resolveBoundary(set map[string]bool) string {
 			if o == b {
 				continue
 			}
-			for _, anc := range p.boundaryChain(o)[1:] {
-				if anc == b {
-					enclosesOther = true
+			if chain := p.boundaryChain(o); len(chain) > 1 {
+				for _, anc := range chain[1:] {
+					if anc == b {
+						enclosesOther = true
+					}
 				}
 			}
 		}
@@ -516,6 +651,13 @@ func (p *projector) resolveBoundary(set map[string]bool) string {
 		}
 	}
 	sort.Strings(deepest)
+	return deepest
+}
+
+// resolveBoundary picks one boundary for a set of candidates: drop any that
+// encloses another candidate, then take the nearest common enclosing boundary.
+func (p *projector) resolveBoundary(set map[string]bool) string {
+	deepest := p.deepest(set)
 	if len(deepest) == 0 {
 		return ""
 	}
