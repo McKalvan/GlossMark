@@ -257,7 +257,7 @@ func (c *comparer) overdue() {
 			continue
 		}
 		due, err := time.Parse(WaiverDate, b.RetireBy)
-		if err != nil || !c.opt.Now.After(due.Add(24*time.Hour)) {
+		if err != nil || !WaiverExpired(due, c.opt.Now) {
 			continue
 		}
 		var still []string
@@ -1106,6 +1106,12 @@ func (c *comparer) metrics() {
 // WaiverDate is the layout of a waiver's expires: date.
 const WaiverDate = "2006-01-02"
 
+// WaiverExpired reports whether a waiver expiring on exp (a date) no longer
+// holds at now: expires is inclusive, so the waiver holds through that day.
+func WaiverExpired(exp, now time.Time) bool {
+	return now.After(exp.Add(24 * time.Hour))
+}
+
 // UnmatchedWaivers returns the policy's waivers that name no finding of the
 // report, by finding id or concept: a mistyped id waives nothing. Waivers of
 // stale findings are left out, since those need the ledger to be found.
@@ -1145,7 +1151,7 @@ func (c *comparer) waive() {
 				f.Msg += fmt.Sprintf(" [waiver by %s ignored: expires %q is not a YYYY-MM-DD date]", w.Owner, w.Expires)
 				continue
 			}
-			if c.opt.Now.After(exp.Add(24 * time.Hour)) {
+			if WaiverExpired(exp, c.opt.Now) {
 				f.Msg += fmt.Sprintf(" [waiver by %s expired %s]", w.Owner, w.Expires)
 				continue
 			}

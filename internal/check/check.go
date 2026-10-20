@@ -572,13 +572,25 @@ func (c *checker) waivers() {
 	if len(pol.Waivers) == 0 {
 		return
 	}
+	dead := map[string]bool{}
 	for _, w := range pol.Waivers {
-		if _, err := time.Parse(rollup.WaiverDate, w.Expires); err != nil {
+		exp, err := time.Parse(rollup.WaiverDate, w.Expires)
+		if err != nil {
 			c.add(load.ConfigName, 1, "error", "GM610", fmt.Sprintf("waiver for %s by %s: expires %q is not a YYYY-MM-DD date; a waiver must expire", w.Finding, w.Owner, w.Expires))
+			dead[w.Finding+"|"+w.Owner] = true
+			continue
+		}
+		// expires is inclusive: the waiver holds through that day.
+		if rollup.WaiverExpired(exp, time.Now()) {
+			c.add(load.ConfigName, 1, "warning", "GM612", fmt.Sprintf("waiver for %s by %s expired %s; it waives nothing: fix the finding, renew the date or remove the waiver", w.Finding, w.Owner, w.Expires))
+			dead[w.Finding+"|"+w.Owner] = true
 		}
 	}
 	rep := rollup.Compare(c.g, c.ws, rollup.Options{Policy: pol})
 	for _, w := range rollup.UnmatchedWaivers(rep, pol) {
+		if dead[w.Finding+"|"+w.Owner] {
+			continue // already reported as invalid or expired
+		}
 		c.add(load.ConfigName, 1, "warning", "GM611", fmt.Sprintf("waiver for %s by %s matches no finding (by id or concept); gloss drift --format json lists the ids", w.Finding, w.Owner))
 	}
 }

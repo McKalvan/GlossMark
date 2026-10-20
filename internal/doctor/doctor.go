@@ -22,6 +22,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
+	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/internal/version"
 )
 
@@ -46,6 +47,8 @@ type Env struct {
 	LookPath func(string) (string, error)
 	// Version runs `<path> version` and returns the first line of its output.
 	Version func(path string) (string, error)
+	// Now is the time waivers are judged at (zero: time.Now()).
+	Now time.Time
 }
 
 // Run performs every check. diags are the build and lint diagnostics of the
@@ -66,7 +69,42 @@ func Run(ws *load.Workspace, g *graph.Graph, diags []marker.Diagnostic, env Env)
 	d.lock()
 	d.pins()
 	d.docs()
+	d.waivers()
 	return d.out
+}
+
+// waivers lists waivers that have expired or expire within 30 days, so a
+// deadline is seen before drift starts failing on it. No line without waivers.
+func (d *doctor) waivers() {
+	ws := d.ws.Config.EffectivePolicy().Waivers
+	if len(ws) == 0 {
+		return
+	}
+	now := d.env.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	var expired, soon []string
+	for _, w := range ws {
+		exp, err := time.Parse(rollup.WaiverDate, w.Expires)
+		if err != nil {
+			continue // gloss check reports it (GM610)
+		}
+		switch {
+		case rollup.WaiverExpired(exp, now):
+			expired = append(expired, fmt.Sprintf("%s (expired %s)", w.Finding, w.Expires))
+		case rollup.WaiverExpired(exp, now.AddDate(0, 0, 30)):
+			soon = append(soon, fmt.Sprintf("%s (expires %s)", w.Finding, w.Expires))
+		}
+	}
+	switch {
+	case len(expired) > 0:
+		d.add("waivers", Warn, strings.Join(append(expired, soon...), ", "), "fix the finding, renew the date or remove the waiver in "+load.ConfigName)
+	case len(soon) > 0:
+		d.add("waivers", Warn, "expiring within 30 days: "+strings.Join(soon, ", "), "fix the finding before then, or renew the date")
+	default:
+		d.add("waivers", OK, fmt.Sprintf("%d waiver(s), none expiring within 30 days", len(ws)), "")
+	}
 }
 
 // String renders the report, one line per check.

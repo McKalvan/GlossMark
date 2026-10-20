@@ -26,7 +26,7 @@ policy:
   coverage-fail-under: 0                        # a percentage, or current (fail only below the base's)
   criticality-gates: { critical: HARD }         # minimum gate by criticality (docs/GOVERNANCE.md)
   waivers:
-    - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }
+    - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }  # expires is inclusive
 ```
 
 - `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`. `version` may repeat the ontology file's `version:`, which is the namespace version; `gloss check` fails when they disagree (GM115) and warns when only this one is set (GM114).

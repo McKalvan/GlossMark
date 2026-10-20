@@ -112,6 +112,10 @@ func TestWaiverValidation(t *testing.T) {
 		{"{ finding: z:Lonely, owner: alice, expires: 30 June 2020 }", "GM610", false},
 		{"{ finding: z:Lonely, owner: alice }", "GM610", false},
 		{"{ finding: orphan:z:Lonley, owner: alice, expires: 2999-12-31 }", "GM611", false},
+		{"{ finding: bogus:Nothing, owner: alice, expires: 2999-12-31 }", "GM611", false},
+		// An expired waiver is reported as expired, not also as matching nothing (#102).
+		{"{ finding: z:Lonely, owner: alice, expires: 2026-01-31 }", "GM612", false},
+		{"{ finding: z:Gone, owner: alice, expires: 2026-01-31 }", "GM612", false},
 	} {
 		write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\npolicy:\n  waivers:\n    - "+c.waiver+"\n")
 		ws, g, _, _ := build(t, root)
@@ -127,6 +131,8 @@ func TestWaiverValidation(t *testing.T) {
 			want = "GM610 error"
 		case "GM611":
 			want = "GM611 warning"
+		case "GM612":
+			want = "GM612 warning"
 		}
 		if strings.Join(codes, ";") != want {
 			t.Errorf("%s: check %v, want %q", c.waiver, codes, want)
