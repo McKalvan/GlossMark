@@ -1,5 +1,9 @@
 {
   "@context": {
+    "applies-to": {
+      "@id": "gm:applies-to",
+      "@type": "@id"
+    },
     "arch": "https://github.com/mckalvan/glossmark/boundaries/",
     "attaches-to": {
       "@id": "gm:attaches-to",
@@ -42,6 +46,10 @@
     },
     "gm": "https://github.com/mckalvan/glossmark/ontology/gm/",
     "gmi": "https://github.com/mckalvan/glossmark/ontology/gmi/",
+    "guards": {
+      "@id": "gm:guards",
+      "@type": "@id"
+    },
     "has-part": {
       "@id": "gm:has-part",
       "@type": "@id"

@@ -42,6 +42,7 @@ var byExt = map[string]CommentStyle{
 	".sql": dash, ".lua": dash, ".hs": dash, ".elm": dash, ".ada": dash, ".psql": dash, ".ddl": dash,
 	".md": md, ".mdx": md, ".html": xml, ".htm": xml, ".xml": xml, ".svg": xml, ".vue": xml, ".xsl": xml, ".xhtml": xml,
 	".lisp": semi, ".clj": semi, ".cljs": semi, ".edn": semi, ".el": semi, ".scm": semi, ".rkt": semi, ".asm": semi, ".s": semi,
+	".graphql": hash, ".graphqls": hash, ".gql": hash,
 	".gloss": sidecar,
 }
 

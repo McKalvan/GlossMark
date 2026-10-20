@@ -299,31 +299,61 @@ var (
 	revRe  = regexp.MustCompile(`(?is)repo:\s*https://github\.com/mckalvan/glossmark[^\n]*\n\s*rev:\s*["']?([^\s"'#]+)`)
 )
 
+// GitRoot returns the top level of the git repository holding dir, or "".
+func GitRoot(dir string) string {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return ""
+	}
+	return filepath.Clean(strings.TrimSpace(string(out)))
+}
+
 func (d *doctor) pins() {
 	var found, unpinned []string
-	matches, _ := filepath.Glob(filepath.Join(d.ws.Root, ".github", "workflows", "*.y*ml"))
-	for _, f := range matches {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			continue
+	// GitHub runs workflows only at the git root; a workspace below it is
+	// covered by a workflow there that runs the Action with its root:.
+	scan := func(base, wsRel string) {
+		matches, _ := filepath.Glob(filepath.Join(base, ".github", "workflows", "*.y*ml"))
+		for _, f := range matches {
+			b, err := os.ReadFile(f)
+			if err != nil {
+				continue
+			}
+			if wsRel != "" && !mentionsRoot(string(b), wsRel) {
+				continue
+			}
+			for _, m := range usesRe.FindAllStringSubmatch(string(b), -1) {
+				rel, _ := filepath.Rel(d.ws.Root, f)
+				found = append(found, filepath.ToSlash(rel))
+				if !strings.HasPrefix(m[1], "v") {
+					unpinned = append(unpinned, fmt.Sprintf("%s uses @%s", filepath.ToSlash(rel), m[1]))
+				}
+			}
 		}
-		for _, m := range usesRe.FindAllStringSubmatch(string(b), -1) {
-			rel, _ := filepath.Rel(d.ws.Root, f)
-			found = append(found, filepath.ToSlash(rel))
-			if !strings.HasPrefix(m[1], "v") {
-				unpinned = append(unpinned, fmt.Sprintf("%s uses @%s", filepath.ToSlash(rel), m[1]))
+		if b, err := os.ReadFile(filepath.Join(base, ".pre-commit-config.yaml")); err == nil {
+			if m := revRe.FindStringSubmatch(strings.ToLower(string(b))); m != nil {
+				rel, _ := filepath.Rel(d.ws.Root, filepath.Join(base, ".pre-commit-config.yaml"))
+				found = append(found, filepath.ToSlash(rel))
+				if !strings.HasPrefix(m[1], "v") {
+					unpinned = append(unpinned, filepath.ToSlash(rel)+" rev: "+m[1])
+				}
 			}
 		}
 	}
-	if b, err := os.ReadFile(filepath.Join(d.ws.Root, ".pre-commit-config.yaml")); err == nil {
-		if m := revRe.FindStringSubmatch(strings.ToLower(string(b))); m != nil {
-			found = append(found, ".pre-commit-config.yaml")
-			if !strings.HasPrefix(m[1], "v") {
-				unpinned = append(unpinned, ".pre-commit-config.yaml rev: "+m[1])
+	scan(d.ws.Root, "")
+	gitRoot := ""
+	if d.git {
+		root, _ := filepath.EvalSymlinks(d.ws.Root)
+		if g := GitRoot(d.ws.Root); g != "" && g != filepath.Clean(root) && g != filepath.Clean(d.ws.Root) {
+			gitRoot = g
+			if rel, err := filepath.Rel(g, root); err == nil {
+				scan(g, filepath.ToSlash(rel))
 			}
 		}
 	}
 	switch {
+	case len(found) == 0 && gitRoot != "":
+		d.add("CI pins", Warn, "no GitHub workflow at the git root ("+gitRoot+") or in this workspace references GlossMark for this workspace", "add the Action pinned to a release to a workflow at the git root, with root: set to this workspace: uses: mckalvan/glossmark@v0.1.0")
 	case len(found) == 0:
 		d.add("CI pins", Warn, "no GitHub workflow or pre-commit config references GlossMark", "add the Action (docs/QUICKSTART.md, section 7) pinned to a release: uses: mckalvan/glossmark@v0.1.0")
 	case len(unpinned) > 0:
@@ -355,6 +385,42 @@ func (d *doctor) docs() {
 	default:
 		d.add("ontology docs", OK, "no truncated docs or null keys; gloss check reports no errors", "")
 	}
+}
+
+// mentionsRoot reports whether a workflow at the git root names the
+// workspace at rel (in a root: input, a matrix entry or a working
+// directory) as a whole path: "showcase/clinic-booking" or
+// "./showcase/clinic-booking/", not "showcase/clinic-booking-v2".
+func mentionsRoot(text, rel string) bool {
+	rel = strings.Trim(rel, "/")
+	at := func(i int) byte {
+		if i < 0 || i >= len(text) {
+			return ' '
+		}
+		return text[i]
+	}
+	for i := 0; ; {
+		j := strings.Index(text[i:], rel)
+		if j < 0 {
+			return false
+		}
+		start, end := i+j, i+j+len(rel)
+		i = end
+		before, after := at(start-1), at(end)
+		if before == '/' && at(start-2) == '.' && !pathChar(at(start-3)) && at(start-3) != '/' {
+			before = ' ' // ./showcase/...
+		}
+		if after == '/' && !pathChar(at(end+1)) {
+			after = ' ' // showcase/clinic-booking/
+		}
+		if !pathChar(before) && before != '/' && !pathChar(after) && after != '/' {
+			return true
+		}
+	}
+}
+
+func pathChar(c byte) bool {
+	return c == '-' || c == '_' || c == '.' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 // graphBody returns a graph.jsonl without its header line.

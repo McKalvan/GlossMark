@@ -74,7 +74,7 @@ func TestReplacedByEdgeAndViews(t *testing.T) {
 	var gm []string
 	for _, d := range append(append(ws.Diags, res.Diags...), check.Run(ws, g)...) {
 		switch d.Code {
-		case "GM341", "GM215", "GM230", "GM222", "GM117":
+		case "GM341", "GM215", "GM230", "GM222", "GM118":
 			gm = append(gm, d.String())
 		}
 	}
@@ -162,29 +162,33 @@ func TestBriefingRetiring(t *testing.T) {
 	}
 }
 
-// TestRetypeExplained: a manifest holds a concept that is no longer an
-// entity; check says so (GM223) and the drift gap names the link that did
-// not lift instead of claiming nothing represents it (#111).
+// TestRetypeExplained (#111): a represents of a retyped concept still lifts
+// to holds (ADR 0013), so the analytics case has no gap; a manifest that
+// subscribes to a concept that is no longer an event is warned (GM225); and
+// a gap over code that links to the concept only by relations that do not
+// lift names those links instead of claiming nothing links to it.
 func TestRetypeExplained(t *testing.T) {
 	root, write := tempRepo(t)
 	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\nprefixes:\n  o: https://x/o/\n")
-	write("ontology/z.gloss.yaml", "concepts:\n  Tariff: { kind: constraint }\n")
-	write(".gloss.yaml", "boundary: o:analytics\nlevel: system\nholds: [z:Tariff]\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Tariff: { kind: constraint }\n  Outage: { kind: entity }\n  Rate: { kind: measure }\n")
+	write(".gloss.yaml", "boundary: o:analytics\nlevel: system\nholds: [z:Tariff, z:Rate]\nsubscribes: [z:Outage]\n")
 	write("models/tariff_bands.sql", "-- @gloss represents z:Tariff\nCREATE TABLE tariff_bands (id int);\n")
+	write("src/outages.ts", "// @gloss subscribes z:Outage\nexport function on() {}\n")
+	write("docs/rate.md", "<!-- @gloss documents z:Rate -->\n# Rate\n")
 	ws, g, _, _ := build(t, root)
-	var gm223 []string
+	var gm225 []string
 	for _, d := range check.Run(ws, g) {
-		if d.Code == "GM223" {
-			gm223 = append(gm223, d.String())
+		if d.Code == "GM225" {
+			gm225 = append(gm225, d.String())
 		}
 	}
-	if len(gm223) != 1 || !strings.Contains(gm223[0], ".gloss.yaml:1") || !strings.Contains(gm223[0], "z:Tariff is a constraint; holds takes entities") {
-		t.Errorf("GM223 = %v", gm223)
+	if len(gm225) != 1 || !strings.Contains(gm225[0], ".gloss.yaml:1") || !strings.Contains(gm225[0], "z:Outage is a entity; subscribes takes events") {
+		t.Errorf("GM225 = %v", gm225)
 	}
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
 	gaps := findings(rep, rollup.KindGap)
-	if len(gaps) != 1 || !strings.Contains(gaps[0].Msg, "models/tariff_bands.sql:1 represents") || strings.Contains(gaps[0].Msg, "nothing under it") {
-		t.Errorf("gap = %+v", gaps)
+	if len(gaps) != 1 || gaps[0].Concept != "z:Rate" || !strings.Contains(gaps[0].Msg, "docs/rate.md:1 documents") || strings.Contains(gaps[0].Msg, "nothing under it") {
+		t.Errorf("gaps = %+v", gaps)
 	}
 }
 

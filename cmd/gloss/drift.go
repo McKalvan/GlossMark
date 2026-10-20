@@ -111,7 +111,7 @@ func cmdCoverage(args []string) int {
 		enc.SetIndent("", "  ")
 		enc.Encode(m)
 	} else {
-		fmt.Printf("concepts %.1f%% (%d of %d implementation concepts have an artifact and a verifier)\n", m.ConceptCoveragePct, m.ConceptsCovered, m.ConceptsInScope)
+		fmt.Printf("concepts %s (%d of %d concepts in scope have an artifact and a verifier: implementation concepts, and core concepts code implements directly)\n", m.ConceptCoverage("%.1f%%"), m.ConceptsCovered, m.ConceptsInScope)
 		scope := "in-scope files"
 		if *changedOnly {
 			scope = "files changed since " + *base
@@ -120,7 +120,8 @@ func cmdCoverage(args []string) int {
 		fmt.Printf("markers %d (%d targets): accepted %d, proposed %d, stale %d, rejected %d; proposed concepts %d; review backlog oldest %d days\n", m.Markers, m.Targets, m.Accepted, m.Proposed, m.Stale, m.Rejected, m.ProposedConcepts, m.BacklogOldestDay)
 		fmt.Printf("orphans %d, rogues %d, violations %d, gaps %d, untested %d, dangling %d\n", m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Untested, m.Dangling)
 	}
-	if threshold > 0 && m.ConceptCoveragePct < threshold {
+	// With nothing in scope coverage is n/a, which no threshold fails.
+	if threshold > 0 && m.ConceptsInScope > 0 && m.ConceptCoveragePct < threshold {
 		what := fmt.Sprintf("--fail-under %.1f%%", threshold)
 		if strings.EqualFold(*failUnder, "current") {
 			what = fmt.Sprintf("the base's %.1f%% (--fail-under current)", threshold)

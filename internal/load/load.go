@@ -6,11 +6,13 @@
 package load
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -198,7 +200,7 @@ func Load(root string) (*Workspace, error) {
 	if v, unknown, err := model.LoadViews(vpath); err == nil {
 		ws.Views = v
 		for _, k := range unknown {
-			ws.Diags = append(ws.Diags, marker.Diagnostic{Path: filepath.ToSlash(cfg.Views), Line: k.Line, Severity: "error", Code: "GM117", Msg: fmt.Sprintf("unknown key %q in the views file; the rest of the file still applies", k.Key)})
+			ws.Diags = append(ws.Diags, marker.Diagnostic{Path: filepath.ToSlash(cfg.Views), Line: k.Line, Severity: "error", Code: "GM118", Msg: fmt.Sprintf("unknown key %q in the views file; the rest of the file still applies", k.Key)})
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
@@ -340,6 +342,10 @@ func (ws *Workspace) walk() error {
 			return nil
 		}
 		if _, ok := marker.StyleFor(rel, ws.Config.CommentStyles); !ok {
+			if line := unscannedMarker(path, rel); line > 0 {
+				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: line, Severity: "warning", Code: "GM117",
+					Msg: fmt.Sprintf("this file has a @gloss marker but %s has no comment style, so it is not scanned; add it under comment-styles: in %s (JSON takes a sidecar, %s.gloss)", styleKey(rel), ConfigName, filepath.Base(rel))})
+			}
 			return nil
 		}
 		files = append(files, rel)
@@ -369,6 +375,38 @@ func (ws *Workspace) walk() error {
 	sort.Strings(kept)
 	ws.Files = kept
 	return nil
+}
+
+// markerLike matches text that reads as a marker: the marker keyword, an
+// optional question mark, a relation word and the start of a target.
+var markerLike = regexp.MustCompile(`@gloss\??[ \t]+[a-z][a-z-]*[ \t]+[A-Za-z.]`)
+
+// unscannedMarker returns the first line of a file the walk skips (its type
+// has no comment style) that reads as a marker, or 0. Binary files, and
+// files a sidecar already annotates, are not reported.
+func unscannedMarker(path, rel string) int {
+	if _, err := os.Stat(path + ".gloss"); err == nil {
+		return 0
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || bytes.IndexByte(b[:min(len(b), 8000)], 0) >= 0 {
+		return 0
+	}
+	loc := markerLike.FindIndex(b)
+	if loc == nil {
+		return 0
+	}
+	return bytes.Count(b[:loc[0]], []byte("\n")) + 1
+}
+
+// styleKey is the comment-styles key that would cover rel: its extension,
+// or its base name when it has none.
+func styleKey(rel string) string {
+	base := filepath.Base(rel)
+	if ext := strings.ToLower(filepath.Ext(base)); ext != "" {
+		return ext
+	}
+	return base
 }
 
 // generated reports whether a file matches its manifest's generated globs.

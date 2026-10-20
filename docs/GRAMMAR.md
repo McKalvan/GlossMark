@@ -34,7 +34,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 
 ## Rules
 
-- Only text inside a comment is a marker. `"@gloss implements x"` in a string literal, a docstring or prose is ignored. Comment tokens come from a per-extension table (`#`, `//`, `/* */`, `--`, `<!-- -->`, `;`) that `comment-styles:` in `glossmark.yaml` can extend.
+- Only text inside a comment is a marker. `"@gloss implements x"` in a string literal, a docstring or prose is ignored. Comment tokens come from a per-extension table (`#`, `//`, `/* */`, `--`, `<!-- -->`, `;`) that `comment-styles:` in `glossmark.yaml` can extend. GraphQL SDL (`.graphql`, `.graphqls`, `.gql`) uses `#`. A file whose type has no comment style is not scanned; when it contains text that reads as a marker, `gloss check` says so (GM117) instead of skipping it silently.
 - Inside a comment, text between a pair of backticks is quoted prose, so a comment can talk about `` `@gloss` `` or quote a whole marker without being one. In Markdown the body of a fenced code block (```` ``` ```` or `~~~`) is quoted as well. This is a scanner rule; the reference regex is unchanged.
 - Malformed markers are build warnings at `file:line:col` (codes `GM001`–`GM007`), never silent drops. Positions are physical columns.
 - Multi-line YAML-in-comment blocks are not supported; one marker, one line.
@@ -48,7 +48,7 @@ A marker binds, in order of precedence, to an explicit `scope=`, else to the nex
 
 1. path plus line range;
 2. a symbol string (`breed_stallion`, `HorseBuilder.AttachHoof`, `resource.aws_sqs_queue.capture`, `Deployment/horse-factory`, `table.foals`, `feature:Stallion production`) — a SCIP symbol once an indexer is joined;
-3. a content fingerprint of the normalized signature line (`sha256:` prefix).
+3. a content fingerprint of the normalized signature line (`sha256:` prefix), preceded by the decorator or annotation stack the detector skipped, so deleting `@requires_role(...)` stales the link like a signature change ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)).
 
 Go methods are always qualified by their receiver. In other languages a method keeps its bare name unless another marked declaration in the same file has the same name; then each is qualified by its enclosing classes (`InboundHandler.process`, `OutboundHandler.process`), and declarations that still share a name, such as overloads, take an ordinal in file order (`StringUtils.check`, `StringUtils.check#2`). A qualified symbol's fingerprint covers the qualified name, so identical signatures in two classes differ ([ADR 0008](adr/0008-same-named-declarations.md)).
 
@@ -102,9 +102,14 @@ Feature: Stallion production
 | GM006 | conf outside [0,1] |
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
+| GM117 | a file contains a marker but its type has no comment style, so it is not scanned: add it under `comment-styles:` (JSON takes a sidecar) |
+| GM118 | unknown key in `views.yaml` (at the top or in a view); the rest of the file still applies |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
-| GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
+| GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them (two in a row is fine). The hint names what spans the run: for methods, one marker on the enclosing class or block; for top-level functions, where `scope=block` covers only the next one, one `scope=file` marker at the top of the file, one on the shared entry point, or, for a cross-cutting mechanism, `guards:` on its concept ([ADR 0015](adr/0015-guards.md)) |
 | GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |
+| GM223 | `hosts` on a concept that is not a system-type (nor a page concept that presents or hosts one): write `implements` if the code does the work, `presents` if it shows it |
+| GM224 | `presents` on a constraint: a page that edits the value `configures` it, code that enforces it `implements` it |
+| GM225 | a manifest `publishes` or `subscribes` a concept that is not an event (often after an upstream retype) |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
-| GM360 | a `value-from` names a file, line or symbol that does not exist |
+| GM360 | a `value-from` names a file, line or symbol that does not exist, or, in YAML, TOML or JSON, a key that ends several key paths (the message lists them) |
 | GM502 / GM503 | link outside the manifest's written `allowed` list (error) / outside the set derived from what it declares (warning); both are HARD in the gate |

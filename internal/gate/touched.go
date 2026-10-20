@@ -15,25 +15,39 @@ import (
 
 // ConceptTouch describes one concept a change touches and what constrains it.
 type ConceptTouch struct {
-	Curie          string   `json:"curie"`
-	Kind           string   `json:"kind,omitempty"`
-	Tier           string   `json:"tier,omitempty"`
-	Doc            string   `json:"doc,omitempty"`
-	Published      string   `json:"published_as,omitempty"`    // this concept is published under that core name
-	PublishedBy    []string `json:"published_by,omitempty"`    // impl concepts published under this core name
-	Realizes       []string `json:"realizes,omitempty"`        // core concepts this stands for
-	Constrains     []string `json:"constrains,omitempty"`      // what this constrains
-	ConstrainedBy  []string `json:"constrained_by,omitempty"`  // constraints on this
-	Boundaries     []string `json:"boundaries,omitempty"`      // boundaries that declare or derive it
-	Tests          []string `json:"tests,omitempty"`           // artifacts that test or verify it
-	OtherArtifacts []string `json:"other_artifacts,omitempty"` // other files linked to it (blast radius)
-	Proposed       bool     `json:"proposed,omitempty"`
-	Deprecated     bool     `json:"deprecated,omitempty"`
-	Internal       bool     `json:"internal,omitempty"`
+	Curie         string   `json:"curie"`
+	Kind          string   `json:"kind,omitempty"`
+	Tier          string   `json:"tier,omitempty"`
+	Doc           string   `json:"doc,omitempty"`
+	Published     string   `json:"published_as,omitempty"`   // this concept is published under that core name
+	PublishedBy   []string `json:"published_by,omitempty"`   // impl concepts published under this core name
+	Realizes      []string `json:"realizes,omitempty"`       // core concepts this stands for
+	Constrains    []string `json:"constrains,omitempty"`     // what this constrains
+	ConstrainedBy []string `json:"constrained_by,omitempty"` // constraints on this
+	// ConstrainedCode lists the files linked to what this constrains.
+	ConstrainedCode []string `json:"constrained_code,omitempty"`
+	Guards          []string `json:"guards,omitempty"`       // what this mechanism guards (ADR 0015)
+	GuardedBy       []string `json:"guarded_by,omitempty"`   // mechanisms guarding this, with their level
+	GuardedCode     []string `json:"guarded_code,omitempty"` // files linked to what this guards
+	Boundaries      []string `json:"boundaries,omitempty"`   // boundaries that declare or derive it
+	Tests           []string `json:"tests,omitempty"`        // artifacts that test or verify it
+	// TestsVia lists the tests of the concepts that realize this one, which
+	// gloss drift counts for it.
+	TestsVia       []ViaTests `json:"tests_via,omitempty"`
+	OtherArtifacts []string   `json:"other_artifacts,omitempty"` // other files linked to it (blast radius)
+	Proposed       bool       `json:"proposed,omitempty"`
+	Deprecated     bool       `json:"deprecated,omitempty"`
+	Internal       bool       `json:"internal,omitempty"`
 	// Criticality is the concept's effective governance level and where it comes from.
 	Criticality     string   `json:"criticality,omitempty"`
 	CriticalityFrom string   `json:"criticality_from,omitempty"`
 	Warnings        []string `json:"warnings,omitempty"`
+}
+
+// ViaTests is the tests of one concept that realizes a touched concept.
+type ViaTests struct {
+	Via   string   `json:"via"`
+	Tests []string `json:"tests"`
 }
 
 // FileTouch is what one changed file touches.
@@ -133,6 +147,10 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 					// Each link is gated as gloss diff gates it.
 					cls, _ := ClassifyLink(g, ws, e, pol)
 					ft.Gate = Max(ft.Gate, cls)
+					// A guard raises the file's review level, not its own (ADR 0015).
+					if gn := topGuard(g, e.P, e.O); gn != nil && model.CriticalityRank(gn.Criticality) > model.CriticalityRank(ft.Criticality) {
+						ft.Criticality, ft.CriticalityFrom = gn.Criticality, gn.CURIE+" (guard)"
+					}
 					if on := g.Node(e.O); on != nil && on.Criticality != "" && !rollup.CarriesCriticality(e.P) {
 						ft.Hints = append(ft.Hints, fmt.Sprintf("%s %s (%s): this file shows a %s concept; it is not rated by it", e.P, on.CURIE, on.Criticality, on.Criticality))
 					}
@@ -177,6 +195,53 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 	return out
 }
 
+// testsVia collects the tests of the concepts that realize id, directly or
+// through each other, by realizer.
+func testsVia(g *graph.Graph, id string) []ViaTests {
+	var out []ViaTests
+	seen := map[string]bool{id: true}
+	var walk func(x string, d int)
+	walk = func(x string, d int) {
+		if d > 8 {
+			return
+		}
+		for _, e := range g.In(x, "realizes") {
+			sn := g.Node(e.S)
+			if e.Source == graph.SourceDerived || sn == nil || sn.NodeType != model.NodeConcept || seen[e.S] {
+				continue
+			}
+			seen[e.S] = true
+			var ts []string
+			for _, te := range g.In(e.S, "") {
+				if te.P != "verifies" && te.P != "tests" {
+					continue
+				}
+				if a := g.Node(te.S); a != nil && a.NodeType == model.NodeArtifact {
+					ts = append(ts, a.Path)
+				}
+			}
+			if len(ts) > 0 {
+				sort.Strings(ts)
+				out = append(out, ViaTests{Via: sn.CURIE, Tests: uniq(ts)})
+			}
+			walk(e.S, d+1)
+		}
+	}
+	walk(id, 0)
+	sort.Slice(out, func(i, j int) bool { return out[i].Via < out[j].Via })
+	return out
+}
+
+func without(xs []string, x string) []string {
+	var out []string
+	for _, y := range xs {
+		if y != x {
+			out = append(out, y)
+		}
+	}
+	return out
+}
+
 func realizesChain(g *graph.Graph, id string) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -213,6 +278,20 @@ func describeTouch(g *graph.Graph, n *graph.Node, self string) ConceptTouch {
 	for _, s := range g.Subjects(n.ID, "constrains") {
 		c.ConstrainedBy = append(c.ConstrainedBy, g.Curie(s))
 	}
+	for _, o := range g.Objects(n.ID, "guards") {
+		c.Guards = append(c.Guards, g.Curie(o))
+	}
+	for _, s := range g.Subjects(n.ID, "guards") {
+		label := g.Curie(s)
+		if sn := g.Node(s); sn != nil && sn.Criticality != "" {
+			label += " (" + sn.Criticality + ")"
+		}
+		c.GuardedBy = append(c.GuardedBy, label)
+	}
+	c.GuardedCode = without(rollup.AppliedCode(g, n.ID, "guards"), self)
+	c.ConstrainedCode = without(rollup.AppliedCode(g, n.ID, "constrains"), self)
+	sort.Strings(c.Guards)
+	sort.Strings(c.GuardedBy)
 	bset := map[string]bool{}
 	others := map[string]bool{}
 	for _, e := range g.In(n.ID, "") {
@@ -249,7 +328,9 @@ func describeTouch(g *graph.Graph, n *graph.Node, self string) ConceptTouch {
 	if n.Tier == model.TierCore && n.NodeType == model.NodeConcept && n.Imported {
 		c.Warnings = append(c.Warnings, "imported core concept: extend it in your namespace, never edit it here")
 	}
-	if len(c.Tests) == 0 && (n.Kind == "process" || n.Kind == "capability") {
+	c.TestsVia = testsVia(g, n.ID)
+	// Warn exactly when gloss drift would call the concept untested.
+	if len(c.Tests) == 0 && (n.Kind == "process" || n.Kind == "capability") && !rollup.Tested(g, n.ID) {
 		c.Warnings = append(c.Warnings, "no tests or verifies link; consider adding one")
 	}
 	return c

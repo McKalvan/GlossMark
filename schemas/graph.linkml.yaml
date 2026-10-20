@@ -175,6 +175,10 @@ enums:
       subscribes:
         comments: ["domain: artifact, concept, boundary; range: concept; inline, ontology, manifest, derived; lift: range-lcs; range kinds: event"]
       constrains:
+        description: A rule that applies to a concept. gloss impact and gloss context show it on both ends; it carries no criticality.
+        comments: ["domain: concept; range: concept; ontology"]
+      guards:
+        description: A cross-cutting mechanism applies to a concept and the code that implements it (ADR 0015). Written applies-to too; stored as guards.
         comments: ["domain: concept; range: concept; ontology"]
       reverses:
         comments: ["domain: concept; range: concept; ontology"]
@@ -296,8 +300,11 @@ slots:
     minimum_value: 1
   signature:
     description: Whitespace-normalized signature line.
+  decorators:
+    description: Whitespace-normalized decorator or annotation stack between the marker and the declaration, in order; part of the fingerprint (ADR 0014).
+    multivalued: true
   fingerprint:
-    description: sha256:<hex prefix> of the signature (symbol/block/line) or of the whole file (file).
+    description: sha256:<hex prefix> of the decorator stack and signature (symbol/block), the line (line) or the whole file (file).
     pattern: "^sha256:[0-9a-f]+$"
 
   # Edge
@@ -481,6 +488,7 @@ classes:
       - start
       - end
       - signature
+      - decorators
       - fingerprint
     slot_usage:
       scope:

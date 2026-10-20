@@ -65,6 +65,16 @@
     }
   },
   "$defs": {
+    "valueFrom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "symbol": { "type": "string", "minLength": 1, "description": "In code, the first line that assigns, annotates or defaults it. In YAML, TOML or JSON, a dotted key path (policies.claims-write.per_minute), or a key or tail of one that ends exactly one path." },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
     "prefix": {
       "type": "string",
       "pattern": "^[A-Za-z][\\w-]*$"
@@ -187,15 +197,11 @@
           "description": "Reserved for SHACL-style instance validation (Phase 3). Any YAML value."
         },
         "value-from": {
-          "description": "The code a published value comes from; a change to that line without a change to value is a HARD published-value drift.",
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["path"],
-          "properties": {
-            "path": { "type": "string", "minLength": 1 },
-            "symbol": { "type": "string", "minLength": 1, "description": "The first line that assigns, annotates or defaults it." },
-            "line": { "type": "integer", "minimum": 1 }
-          }
+          "description": "The code a published value comes from: one location, or a list when the value is duplicated (an API and a page). A change to any of those lines without a change to value is a HARD published-value drift.",
+          "oneOf": [
+            { "$ref": "#/$defs/valueFrom" },
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/valueFrom" } }
+          ]
         },
         "proposed": {
           "type": "boolean",
@@ -217,7 +223,7 @@
       },
       "patternProperties": {
         "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|aliases|criticality)$)[a-z][a-z0-9-]*$": {
-          "description": "A relation (produces, consumes, publishes, subscribes, constrains, reverses, attaches-to, or one declared under relations:) and its target(s).",
+          "description": "A relation (produces, consumes, publishes, subscribes, constrains, guards or its alias applies-to, reverses, attaches-to, or one declared under relations:) and its target(s).",
           "$ref": "#/$defs/stringOrList"
         }
       },

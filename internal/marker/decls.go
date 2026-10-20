@@ -14,6 +14,9 @@ type Decl struct {
 	Insert int    // 1-based line a marker goes above: the first decorator, else Line
 	Indent string // leading whitespace of the insertion line
 	Doc    string // first line of the docstring or the comment just above, if any
+	// Fingerprint is what a symbol anchor on this declaration records:
+	// its decorator stack and signature line (ADR 0014).
+	Fingerprint string
 }
 
 // Declarations lists the top-level declarations of a file with the regex
@@ -28,6 +31,7 @@ func Declarations(path string, lines []string, style CommentStyle) []Decl {
 	}
 	var out []Decl
 	decoStart := -1
+	var decos []string
 	for j := 0; j < len(lines); j++ {
 		ln := lines[j]
 		t := strings.TrimSpace(ln)
@@ -43,9 +47,11 @@ func Declarations(path string, lines []string, style CommentStyle) []Decl {
 		}
 		if isDecorator(t, path) {
 			if decoStart < 0 {
-				decoStart = j
+				decoStart, decos = j, nil
 			}
-			j = decoratorEnd(lines, j)
+			k := decoratorEnd(lines, j)
+			decos = append(decos, norm(strings.Join(lines[j:k+1], " ")))
+			j = k
 			continue
 		}
 		for _, r := range rules {
@@ -63,10 +69,12 @@ func Declarations(path string, lines []string, style CommentStyle) []Decl {
 				break
 			}
 			ins := j
+			var stack []string
 			if decoStart >= 0 {
-				ins = decoStart
+				ins, stack = decoStart, decos
 			}
-			out = append(out, Decl{Symbol: sym, Kind: r.kind, Line: j + 1, Insert: ins + 1, Indent: lines[ins][:len(lines[ins])-len(strings.TrimLeft(lines[ins], " \t"))], Doc: docFor(lines, ins, j, style)})
+			f, _ := declFingerprint(stack, norm(ln))
+			out = append(out, Decl{Symbol: sym, Kind: r.kind, Line: j + 1, Insert: ins + 1, Indent: lines[ins][:len(lines[ins])-len(strings.TrimLeft(lines[ins], " \t"))], Doc: docFor(lines, ins, j, style), Fingerprint: f})
 			break
 		}
 		decoStart = -1

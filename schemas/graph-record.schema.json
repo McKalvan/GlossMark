@@ -21,7 +21,7 @@
       "minLength": 1
     },
     "fingerprint": {
-      "description": "sha256: followed by a hex prefix of the digest of the normalized signature (symbol/block/line anchors) or of the whole file (file anchors).",
+      "description": "sha256: followed by a hex prefix of the digest of the normalized decorator stack and signature (symbol/block anchors, ADR 0014), the line (line anchors) or the whole file (file anchors).",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]+$"
     },
@@ -178,7 +178,7 @@
           "type": "boolean"
         },
         "value-from": {
-          "description": "path:line of the code a published value is bound to.",
+          "description": "path:line of the code a published value is bound to; several locations are joined with \", \" in path order, and live-value then joins their lines with \" | \".",
           "type": "string"
         },
         "live-value": {
@@ -305,6 +305,11 @@
         "signature": {
           "description": "Whitespace-normalized signature line.",
           "type": "string"
+        },
+        "decorators": {
+          "description": "The whitespace-normalized decorator or annotation stack between the marker and the declaration, in order, one entry per decorator; part of the fingerprint (ADR 0014).",
+          "type": "array",
+          "items": { "type": "string" }
         },
         "fingerprint": {
           "$ref": "#/$defs/fingerprint"

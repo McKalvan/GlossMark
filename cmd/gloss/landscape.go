@@ -41,38 +41,10 @@ func cmdLandscape(args []string) int {
 		fmt.Fprintln(os.Stderr, "gloss landscape:", err)
 		return 2
 	}
-	var wss []*load.Workspace
-	var graphs []*graph.Graph
-	for _, r := range repos {
-		p, err := buildGraph(r, false)
-		if err != nil {
-			return fail(fmt.Errorf("%s: %w", r, err))
-		}
-		// Prefix every path with the repo name so it stays unique in the
-		// union and every finding says which repository it is in. An
-		// imported ontology's ../sibling/ path cleans to sibling/.
-		name := filepath.Base(p.WS.Root)
-		for _, n := range p.Graph.Nodes() {
-			if n.NodeType == model.NodeArtifact {
-				n.Path = name + "/" + n.Path
-				n.Label = name + "/" + n.Label
-			}
-			n.File = inRepo(name, n.File)
-		}
-		for _, e := range p.Graph.Edges() {
-			if e.Prov != nil {
-				e.Prov.Path = inRepo(name, e.Prov.Path)
-			}
-		}
-		wss = append(wss, p.WS)
-		graphs = append(graphs, p.Graph)
-	}
-	ws, err := load.Merge(wss)
+	ws, g, wss, err := assembleLandscapeRepos(repos)
 	if err != nil {
 		return fail(err)
 	}
-	g := union(graphs, ws)
-	rollup.Derive(g, ws.Vocab)
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy(), Now: time.Now()})
 	// Version state per repository, and who still uses deprecated concepts.
 	entries, imports, outOfRange := landscapeVersions(repos, wss)
@@ -132,7 +104,7 @@ func cmdLandscape(args []string) int {
 		}
 	}
 	if fs.viewOut != "" {
-		data := viewer.Data{Generated: time.Now().UTC().Format(time.RFC3339), Repo: "landscape: " + strings.Join(baseNames(repos), ", "), Views: views.ProjectAll(g, ws.Views)}
+		data := viewer.Data{Generated: time.Now().UTC().Format(time.RFC3339), Repo: "landscape: " + strings.Join(baseNames(repos), ", "), Views: views.ProjectAll(g, ws.Views), Slices: viewer.Slices(g, viewer.SliceBudget)}
 		b, err := viewer.Render(data)
 		if err != nil {
 			return fail(err)
@@ -147,6 +119,52 @@ func cmdLandscape(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// assembleLandscape builds each repository, prefixes its artifact paths with
+// the repository name so they stay unique, unions the graphs by IRI and
+// re-derives the rollups on the union.
+func assembleLandscape(repos []string) (*load.Workspace, *graph.Graph, error) {
+	ws, g, _, err := assembleLandscapeRepos(repos)
+	return ws, g, err
+}
+
+// assembleLandscapeRepos is assembleLandscape that also returns each
+// repository's own workspace (for its imports, lock and versions).
+func assembleLandscapeRepos(repos []string) (*load.Workspace, *graph.Graph, []*load.Workspace, error) {
+	var wss []*load.Workspace
+	var graphs []*graph.Graph
+	for _, r := range repos {
+		p, err := buildGraph(r, false)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("%s: %w", r, err)
+		}
+		// Prefix every path with the repo name so it stays unique in the
+		// union and every finding says which repository it is in. An
+		// imported ontology's ../sibling/ path cleans to sibling/.
+		name := filepath.Base(p.WS.Root)
+		for _, n := range p.Graph.Nodes() {
+			if n.NodeType == model.NodeArtifact {
+				n.Path = name + "/" + n.Path
+				n.Label = name + "/" + n.Label
+			}
+			n.File = inRepo(name, n.File)
+		}
+		for _, e := range p.Graph.Edges() {
+			if e.Prov != nil {
+				e.Prov.Path = inRepo(name, e.Prov.Path)
+			}
+		}
+		wss = append(wss, p.WS)
+		graphs = append(graphs, p.Graph)
+	}
+	ws, err := load.Merge(wss)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	g := union(graphs, ws)
+	rollup.Derive(g, ws.Vocab)
+	return ws, g, wss, nil
 }
 
 type landscapeFlags struct {

@@ -12,9 +12,11 @@ import (
 
 // TestSelfHost runs GlossMark on its own repository: the root glossmark.yaml,
 // the gm: and gmi: ontologies and the markers in this source tree must lint
-// clean and declare what the code derives. Orphans and untested concepts are
-// reported by `gloss drift` but do not fail here; violations, gaps and
-// dangling references do.
+// clean and declare what the code derives. Violations, gaps, dangling
+// references, orphans, untested mechanisms and proposed concepts fail here.
+// Stale links do not: a scope=file link goes stale on any edit to its file
+// (ADR 0006), so stale is review churn re-confirmed with `gloss accept`, not a
+// defect in the self-description.
 func TestSelfHost(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -37,8 +39,10 @@ func TestSelfHost(t *testing.T) {
 			t.Errorf("%s missing from the self-hosted graph", curie)
 		}
 	}
-	// Orphans and presented-only pages would mean the self-description has a hole.
-	for _, kind := range []string{rollup.KindOrphan, rollup.KindPresentedOnly} {
+	// Orphans and presented-only pages would mean the self-description has a
+	// hole; an untested mechanism or a concept still awaiting review means it
+	// is unfinished (issue #32).
+	for _, kind := range []string{rollup.KindOrphan, rollup.KindPresentedOnly, rollup.KindUntested, rollup.KindProposed} {
 		for _, f := range findings(rep, kind) {
 			t.Errorf("gloss drift: %s: %s", kind, f.Msg)
 		}

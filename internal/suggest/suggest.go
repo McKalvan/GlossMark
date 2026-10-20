@@ -125,7 +125,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 				target = "." + strings.TrimPrefix(target, m.DefaultNamespace+":")
 			}
 			if le := opt.Ledger[extract.MarkerID(rel, relName, []string{target}, d.Symbol, "symbol")]; (le != nil && le.Status == model.StatusRejected) ||
-				rejected[link{marker.LineFingerprint(lines[d.Line-1]), relName, target}] {
+				rejected[link{d.Fingerprint, relName, target}] {
 				skipped++
 				continue
 			}

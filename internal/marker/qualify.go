@@ -49,7 +49,8 @@ func Disambiguate(path string, lines []string, anchors []Anchor) {
 		}
 	}
 	for i := range changed {
-		anchors[i].Fingerprint = fp(anchors[i].Symbol + " " + anchors[i].Signature)
+		a := &anchors[i]
+		a.Fingerprint, a.Legacy = declFingerprint(a.Decorators, a.Symbol+" "+a.Signature)
 	}
 }
 

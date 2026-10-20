@@ -14,7 +14,7 @@ Status: accepted, 2026-10-20. Closes issues #100 (F-SPLIT-7) and #101 (F-SPLIT-8
 2. **No reverse import.** A concept's `replaced-by` may be a CURIE whose prefix is only under `prefixes:`, or a full IRI (shown as a CURIE when a prefix matches). `gloss check` reports GM341 when the successor's namespace is owned or imported and the concept is missing, or when the reference cannot be resolved at all; otherwise the check is deferred. `gloss drift` does the same for its dangling finding, and `gloss landscape`, which loads both repositories, reports a dangling successor. A boundary's successor is never required to exist.
 3. **GM222** names the replacement as "use X" only when X resolves; otherwise it says the replacement is unresolved here.
 4. **The seam still applies** when the successor is loaded: naming an unpublished concept of an imported implementation namespace is GM230, as for any reference.
-5. **`views.yaml`** decodes leniently: an unknown key is GM117 (error) at its line, and the rest of the file applies.
+5. **`views.yaml`** decodes leniently: an unknown key is GM118 (error) at its line, and the rest of the file applies.
 
 `views.yaml` selection by property (`where:`) is not added: the edge and the node flags make a migration view expressible with `include:` and `relations:`.
 

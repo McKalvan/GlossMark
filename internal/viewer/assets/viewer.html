@@ -49,6 +49,8 @@ input[type=text]{min-width:160px}
 #crumbs a:hover{background:var(--bg)}
 #crumbs .cur{font-weight:650}
 #crumbs .arr{color:var(--muted)}
+#crumbs .slicechip{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 4px 1px 8px;border-radius:12px;border:1px solid var(--accent);color:var(--accent);font-size:11.5px}
+#crumbs .slicechip a{padding:0 5px;border-radius:10px}
 #filters{display:none;flex-direction:column;gap:4px;padding:6px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12px}
 #filters.on{display:flex}
 .fgroup{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
@@ -174,6 +176,14 @@ function srcLink(path,line){
   return `<a class="mono" href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
 }
 const views=Array.isArray(data.views)?data.views:[];
+/* Precomputed feature slices (docs/adr/0023-feature-slices.md): for each concept and
+   boundary, its members as [node, role, via step...] indexes into ids, roles and steps. */
+const SL=(data.slices&&typeof data.slices==='object'&&data.slices.of)?data.slices:null;
+const SROLES=SL&&Array.isArray(SL.roles)?SL.roles:[];
+const SLICEDEFS={seed:'What the slice was asked for.',housed:'A concept the seed boundary realizes, holds, presents or hosts.',kind:'A kind of a member (is-a).',
+  part:'A part of a member (part-of).',realization:'An implementation concept that realizes a member.',published:'Linked to a member by published-as.',
+  flow:'Reached along a followed flow relation.',artifact:'Code, docs, pages or infrastructure linked to a member.',test:'A test whose only links to members are verifies.',
+  boundary:'A boundary that realizes, holds or flows a member, or contains a member artifact.',context:'Explains the feature without belonging to it: drawn faded and never expanded further.'};
 const diff=(data.diff&&typeof data.diff==='object')?data.diff:null;
 $('repo').textContent=data.repo?('repo: '+data.repo):'';
 $('generated').textContent=data.generated?('generated '+data.generated):'';
@@ -237,7 +247,7 @@ const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
 const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set()});
-const S={vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
+const S={slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
 const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage');
@@ -264,12 +274,14 @@ function loadView(i){
   V._nodes=nodes;V._edges=edges;
   // The top of the system: everything closed; drill in by clicking.
   S.expanded=groupIds();S.pos=new Map();S.pinned=new Set();S.sel=null;S.hover=null;S.focus=null;S.f=emptyFilters();
-  S.rels=new Set(edges.map(e=>e.p));
+  S.rels=new Set(edges.map(e=>e.p));S.slice=null;
   rng=mulberry(hash(V.name||'view')+1);
   buildFilters();
   rebuild(true);
   // A curated view (one that names its concepts) opens with every box open.
   if(V.curated){V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(true);}
+  // A saved slice (slice: in views.yaml) opens with its slice active.
+  if(Array.isArray(V.slice)&&V.slice.length&&SL){setSlice(resolveSeeds(V.slice),true);return;}
   fit();
   renderCrumbs();
   renderPanel();
@@ -280,6 +292,7 @@ const groupIds=()=>new Set(V._nodes.filter(n=>n.group).map(n=>n.id));
 /* ---- filters ---- */
 function hiddenByFilter(n){
   if(n.group)return false;
+  if(S.slice&&!S.slice.roles.has(n.id))return true;
   if(n.internal&&!S.internal)return true;
   const F=S.f;
   if(F.type.has(n.type))return true;
@@ -356,6 +369,47 @@ function buildFilters(){
   $('internal').onchange=ev=>{S.internal=ev.target.checked;rebuild(false);renderPanel();draw();};
 }
 function filtersActive(){return Object.values(S.f).some(s=>s.size)||S.rels.size!==new Set(V._edges.map(e=>e.p)).size;}
+
+/* ---- slices ---- */
+// A slice is computed by gloss view (Go is the one implementation); the page only
+// maps its members onto this view's nodes, a folded member onto the node it folds into.
+function sliceOf(seed){const m=SL&&SL.of[seed];return Array.isArray(m)?m.map(x=>({id:SL.ids[x[0]],role:SROLES[x[1]]||'context',via:x.slice(2).map(i=>SL.steps[i])})):null;}
+function resolveSeeds(pats){
+  const out=[];
+  pats.forEach(p=>{if(SL.of[p]){out.push(p);return;}
+    const re=new RegExp('^'+String(p).split('*').map(x=>x.replace(/[.+?^${}()|[\]\\]/g,'\\$&')).join('.*')+'$');
+    Object.keys(SL.of).sort().forEach(k=>{if(re.test(k))out.push(k);});});
+  return [...new Set(out)];
+}
+// The seeds a node slices on: itself, or for an artifact the concepts it links to.
+function sliceSeedsFor(n){
+  if(n.type!=='artifact')return [n.id];
+  const out=V._edges.filter(e=>e.s===n.id&&byId.has(e.o)&&byId.get(e.o).type==='concept').map(e=>e.o);
+  return out.length?[...new Set(out)].sort():[n.id];
+}
+function setSlice(seeds,keepHash){
+  if(!seeds||!seeds.length){S.slice=null;}
+  else{
+    const km=new Map();V._nodes.forEach(n=>{if(n.group||n.ghost)return;km.set(n.id,n.id);(n.folded||[]).forEach(f=>{if(!km.has(f))km.set(f,n.id);});});
+    const roles=new Map(),missing=[],rank=r=>{const i=SROLES.indexOf(r);return i<0?SROLES.length:i;};
+    const put=(vid,x)=>{const c=roles.get(vid);if(!c||rank(x.role)<c.rank)roles.set(vid,{role:x.role,via:x.via,rank:rank(x.role),member:x.id});};
+    seeds.forEach(sd=>{const ms=sliceOf(sd);if(!ms){missing.push(sd);if(km.has(sd))put(km.get(sd),{id:sd,role:'seed',via:[]});return;}
+      ms.forEach(x=>{if(km.has(x.id))put(km.get(x.id),x);});});
+    S.slice={seeds:seeds.slice(),roles,missing};
+  }
+  S.focus=null;S.sel=null;S.expanded=groupIds();rebuild(false);
+  if(S.slice){V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});}
+  rebuild(true);fit();renderCrumbs();renderPanel();
+  if(!keepHash)writeHash();
+}
+function writeHash(){
+  try{const h=S.slice?'#slice='+S.slice.seeds.map(encodeURIComponent).join(','):'';
+    if(location.hash!==h)history.replaceState(null,'',h||location.pathname+location.search);}catch(e){}
+}
+function readHash(){
+  const m=/^#slice=(.*)$/.exec(location.hash||'');if(!m)return null;
+  return m[1].split(',').map(x=>{try{return decodeURIComponent(x);}catch(e){return x;}}).filter(Boolean);
+}
 
 /* ---- containment ---- */
 // containerOf: the node drawn around n. A concept sits in its part-of parent
@@ -625,7 +679,7 @@ function draw(){
   const sel=S.sel,q=S.q,selNode=sel&&sel.id?sel:null,selEdge=sel&&!sel.id?sel:null;
   const nb=new Set();if(selNode)VE.forEach(e=>{if(e.s===selNode)nb.add(e.o.id);if(e.o===selNode)nb.add(e.s.id);});
   const match=n=>!q||(n.id||'').toLowerCase().includes(q)||(n.label||'').toLowerCase().includes(q);
-  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;return a;};
+  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;if(S.slice&&!n.group){const r=S.slice.roles.get(n.id);if(r&&r.role==='context')a*=.45;}return a;};
   // open boundaries, outermost first
   const open=VN.filter(n=>n._open).sort((a,b)=>depthOf(a)-depthOf(b));
   ctx.textAlign='left';ctx.textBaseline='middle';
@@ -733,8 +787,8 @@ function draw(){
   });
   ctx.globalAlpha=1;
   const nb2=VN.filter(n=>n.type==='boundary').length;
-  $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(filtersActive()?' · filtered':'');
-  $('hint').textContent=S.focus?'Esc leaves focus':(VN.some(n=>n.type==='boundary'&&!n._open&&n._kids)?'click a boundary to open it · double-click to focus':'');
+  $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(filtersActive()?' · filtered':'')+(S.slice?' · slice':'');
+  $('hint').textContent=S.focus?'Esc leaves focus':S.slice?'Esc clears the slice':(VN.some(n=>n.type==='boundary'&&!n._open&&n._kids)?'click a boundary to open it · double-click to focus · alt+click to slice':'alt+click a node to slice on it');
 }
 
 /* ---- hit testing ---- */
@@ -790,9 +844,10 @@ function renderCrumbs(){
     const chain=[];let c=byId.get(S.focus);let g=0;while(c&&g++<64){chain.unshift(c);c=c._c;}
     chain.filter(c=>c.type==='boundary').forEach((c,i,arr)=>{h+=`<span class="arr">▸</span><a data-focus="${esc(c.id)}" class="${i===arr.length-1?'cur':''}">${esc(c.label||c.id)}</a>`;});
   }
+  if(S.slice)h+=`<span class="slicechip" title="Showing only this feature slice; context is faded">Slice: <b>${S.slice.seeds.map(esc).join(', ')}</b><a data-clearslice="1" title="Clear the slice">×</a></span>`;
   box.innerHTML=h;
 }
-$('crumbs').addEventListener('click',ev=>{const a=ev.target.closest('a');if(!a)return;setFocus(a.dataset.focus||null);});
+$('crumbs').addEventListener('click',ev=>{const a=ev.target.closest('a');if(!a)return;if(a.dataset.clearslice){setSlice(null);return;}setFocus(a.dataset.focus||null);});
 function setFocus(id){
   S.focus=id||null;
   if(S.focus){let c=byId.get(S.focus);let g=0;while(c&&g++<64){S.expanded.add(c.id);c=c._c||containerOf(c);}}
@@ -801,6 +856,11 @@ function setFocus(id){
 function renderPanel(){
   const sel=S.sel;let h='';
   if(V.doc||V.zoom)h+=`<h2>View</h2><div><b>${esc(V.name)}</b>${V.zoom?' <span class="badge">'+esc(V.zoom)+'</span>':''}</div><div style="color:var(--muted)">${esc(V.doc||'')}</div>`;
+  if(S.slice){
+    const by=new Map();S.slice.roles.forEach(r=>by.set(r.role,(by.get(r.role)||0)+1));
+    h+=`<h2>Slice</h2><div><b>${S.slice.seeds.map(esc).join(', ')}</b> <a class="n" data-clearslice="1">clear</a></div><div class="via">${SROLES.filter(r=>by.has(r)).map(r=>`<span title="${esc(SLICEDEFS[r]||'')}">${by.get(r)} ${esc(r)}</span>`).join(' · ')}</div>`;
+    if(S.slice.missing.length)h+=`<div class="via">Not precomputed for ${S.slice.missing.map(esc).join(', ')}${SL&&SL.omitted?' (the index reached its size cap)':''}: run <span class="mono">gloss slice ${S.slice.missing.map(esc).join(' ')}</span>.</div>`;
+  }
   if(D.on)h+=`<div style="margin-top:4px"><span style="color:var(--added)">+${D.an.size} nodes, +${D.ae.size} edges</span> · <span style="color:var(--removed)">−${D.rn.size} nodes, −${D.re.size} edges</span> · <span style="color:var(--changed)">~${D.cn.size} changed</span></div>`;
   if(sel&&sel.id){
     const n=sel;
@@ -813,6 +873,7 @@ function renderPanel(){
     if(n._kids)h+=`<button data-act="${S.expanded.has(n.id)?'close':'open'}">${S.expanded.has(n.id)?'Close':'Open'}</button>`;
     if(n.type==='boundary')h+=S.focus===n.id?`<button data-act="unfocus">Leave focus</button>`:`<button data-act="focus">Focus</button>`;
     if(n._c)h+=`<button data-act="up">Select container</button>`;
+    if(!n.ghost&&(n.type==='concept'||n.type==='boundary'||n.type==='artifact'))h+=`<button data-act="slice" title="Show only what belongs to this feature (alt+click)">Slice on this</button>`;
     h+=`</div><dl>`;
     const row=(k,v)=>{if(v!=null&&v!=='')h+=`<dt>${k}</dt><dd>${v}</dd>`;};
     row('type',esc(n.type));row(n.type==='boundary'?'level':'kind',esc(n.kind));row('tier',esc(n.tier));row('ns',esc(n.ns));row('branch',n.branch&&n.branch!=='boundary'&&n.branch!=='artifact'?esc(n.branch):'');
@@ -821,6 +882,8 @@ function renderPanel(){
     if(n._c&&!n._c.group)row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
     else if(n.type!=='boundary'&&!n.ghost)row('in boundary','<span class="via">none: no boundary’s code realizes it</span>');
     if(n.placement)row('placement',(n.placement==='housed'?'':'unplaced: ')+'<b>'+esc(n.placement)+'</b>'+(n.placementReason?'<div class="via">'+esc(n.placementReason)+'</div>':''));
+    const sr=S.slice&&S.slice.roles.get(n.id);
+    if(sr)row('slice role','<b title="'+esc(SLICEDEFS[sr.role]||'')+'">'+esc(sr.role)+'</b>'+(sr.member!==n.id?' <span class="via">as '+esc(sr.member)+'</span>':'')+(sr.via.length?'<div class="via">via '+sr.via.map(esc).join('<br>→ ')+'</div>':''));
     row('published as',n.published?esc(n.publishedAs||'yes'):'');
     row('deprecated',n.deprecated?'<b>yes</b>'+(n.replacedBy?' · replaced by '+(byId.get(n.replacedBy)?nodeLink(byId.get(n.replacedBy)):esc(n.replacedBy)):'')+(n.retireBy?' · retire by '+esc(n.retireBy):''):'');
     row('value',n.value!=null?esc(typeof n.value==='object'?JSON.stringify(n.value):n.value):'');
@@ -973,10 +1036,12 @@ $('panel').addEventListener('click',ev=>{
       case 'focus':setFocus(n.id);return;
       case 'unfocus':setFocus(null);return;
       case 'up':if(n._c){S.sel=n._c;}break;
+      case 'slice':setSlice(sliceSeedsFor(n));return;
     }
     renderPanel();draw();return;
   }
   const a=ev.target.closest('a.n');if(!a)return;
+  if(a.dataset.clearslice){setSlice(null);return;}
   const n=byId.get(a.dataset.id);if(!n)return;
   reveal(n);
 });
@@ -1015,6 +1080,7 @@ function endDrag(ev){
   drag=null;
   if(moved)return;
   const w=toWorld(ev.offsetX,ev.offsetY),n=hitNode(w);
+  if(n&&ev.altKey&&!n.group&&!n.ghost){setSlice(sliceSeedsFor(n));if(n._vis)S.sel=n;renderPanel();draw();return;}
   if(n){
     S.sel=n;
     const now=performance.now(),dbl=lastClick.id===n.id&&now-lastClick.t<350;
@@ -1035,7 +1101,7 @@ cv.addEventListener('wheel',ev=>{
   S.cam.x=ev.offsetX-(ev.offsetX-S.cam.x)*r;S.cam.y=ev.offsetY-(ev.offsetY-S.cam.y)*r;S.cam.k=k;draw();
 },{passive:false});
 window.addEventListener('keydown',ev=>{if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
-  if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}}
+  if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
   if(ev.key==='f')fit();});
 new ResizeObserver(()=>draw()).observe(stage);
 
@@ -1071,12 +1137,15 @@ window.glossViewer={
   select(id){const n=byId.get(id);if(!n)return false;reveal(n);return true;},
   panel(){return $('panel').innerText;},
   filter(group,value){if(!S.f[group])return false;S.f[group].has(value)?S.f[group].delete(value):S.f[group].add(value);buildFilters();rebuild(false);renderPanel();draw();return true;},
-  state(){return {view:V.name,focus:S.focus,expanded:[...S.expanded],nodes:VN.length,edges:VE.filter(e=>!e.contain).length};}
+  slice(seeds){setSlice(seeds&&seeds.length?seeds:null);return S.slice?[...S.slice.roles.keys()].sort():null;},
+  sliceOf(seed){const m=sliceOf(seed);return m?m.map(x=>x.id).sort():null;},
+  state(){return {view:V.name,slice:S.slice?S.slice.seeds:null,focus:S.focus,expanded:[...S.expanded],nodes:VN.length,edges:VE.filter(e=>!e.contain).length};}
 };
 
 /* ---- go ---- */
 applyTheme(saved);
-try{loadView(0);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
+try{loadView(0);const hs=readHash();if(hs&&SL)setSlice(hs,true);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
+window.addEventListener('hashchange',()=>{if(SL)setSlice(readHash(),true);});
 })();
 </script>
 </body>

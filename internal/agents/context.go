@@ -77,6 +77,7 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 			fmt.Fprintf(&head, "Allowed targets: %s (others are HARD-gated%s)\n", strings.Join(allowed.Patterns, ", "), how)
 		}
 	}
+	head.WriteString(applied(g, opt.Dir))
 	head.WriteString(remits(g, opt.Actor))
 
 	if rep != nil {
@@ -311,6 +312,72 @@ func conceptLine(g *graph.Graph, n *graph.Node) string {
 		line += " — " + d
 	}
 	return line
+}
+
+// applied names the mechanisms and rules that apply to the code under dir:
+// what guards (ADR 0015) or constrains a concept an artifact there links to,
+// or a concept that one stands for, so an agent editing a handler knows the
+// authentication and rate limits it sits behind.
+func applied(g *graph.Graph, dir string) string {
+	dir = strings.Trim(filepath.ToSlash(dir), "/")
+	if dir == "." {
+		dir = ""
+	}
+	type key struct{ src, rel string }
+	on := map[key]map[string]bool{}
+	var order []key
+	for _, a := range g.NodesOf(model.NodeArtifact) {
+		if dir != "" && a.Path != dir && !strings.HasPrefix(a.Path, dir+"/") {
+			continue
+		}
+		for _, e := range g.Out(a.ID, "") {
+			if e.Source == graph.SourceDerived || !rollup.GuardedLink(e.P) {
+				continue
+			}
+			if o := g.Node(e.O); o == nil || o.NodeType != model.NodeConcept {
+				continue
+			}
+			for _, x := range append([]string{e.O}, rollup.RealizesStar(g, e.O)...) {
+				for _, rel := range rollup.AppliesRelations {
+					for _, s := range g.Subjects(x, rel) {
+						k := key{s, rel}
+						if on[k] == nil {
+							on[k] = map[string]bool{}
+							order = append(order, k)
+						}
+						on[k][g.Curie(x)] = true
+					}
+				}
+			}
+		}
+	}
+	if len(order) == 0 {
+		return ""
+	}
+	sort.Slice(order, func(i, j int) bool {
+		if order[i].rel != order[j].rel {
+			return order[i].rel > order[j].rel // guards before constrains
+		}
+		return g.Curie(order[i].src) < g.Curie(order[j].src)
+	})
+	var parts []string
+	note := ""
+	for _, k := range order {
+		if k.rel == "guards" {
+			note = " (a change to guarded code is reviewed at the guard's level)"
+		}
+		label := g.Curie(k.src)
+		if n := g.Node(k.src); n != nil && n.Criticality != "" {
+			label += " (" + n.Criticality + ")"
+		}
+		var ts []string
+		for t := range on[k] {
+			ts = append(ts, t)
+		}
+		sort.Strings(ts)
+		parts = append(parts, fmt.Sprintf("%s %s %s", label, k.rel, strings.Join(ts, ", ")))
+	}
+	return "Applies here: " + strings.Join(parts, "; ") + note + "\n"
 }
 
 // remits lists the agent remits: only the acting agent's when GLOSS_ACTOR

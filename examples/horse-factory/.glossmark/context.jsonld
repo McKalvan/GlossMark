@@ -1,6 +1,10 @@
 {
   "@context": {
     "acme": "https://arch.acme.dev/boundaries/",
+    "applies-to": {
+      "@id": "gm:applies-to",
+      "@type": "@id"
+    },
     "attaches-to": {
       "@id": "gm:attaches-to",
       "@type": "@id"
@@ -41,6 +45,10 @@
       "@type": "@id"
     },
     "gm": "https://glossmark.dev/vocab#",
+    "guards": {
+      "@id": "gm:guards",
+      "@type": "@id"
+    },
     "has-part": {
       "@id": "gm:has-part",
       "@type": "@id"

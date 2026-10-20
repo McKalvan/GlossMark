@@ -19,6 +19,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 func init() {
@@ -98,8 +99,11 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 		return graph.New(ws.Prefixes), nil
 	}
 	if out, err := gitOut(ws.Root, "show", ref+":"+prefix+load.StateDir+"/graph.jsonl"); err == nil {
+		// A graph another release committed may fingerprint anchors
+		// differently (ADR 0006, ADR 0014); re-extracting the base with this
+		// release keeps an upgrade from reading as a change to every link.
 		g, err := graph.ReadJSONL(strings.NewReader(out))
-		if err == nil {
+		if err == nil && g.Generator == version.Generator() {
 			return g, nil
 		}
 	}
