@@ -11,8 +11,10 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
+	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/ledger"
+	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
@@ -183,7 +185,54 @@ func TestRepeatedMarkerRemedy(t *testing.T) {
 	}
 }
 
-// TestInternalCriticalUntested:an internal concept is left out of untested
+// TestValueFromConfigKey: value-from symbol: in a YAML file is a dotted key
+// path (or a key that ends only one path); it binds, and changing the
+// value in the config drifts (#77). A key that ends several paths is an
+// error naming them.
+func TestValueFromConfigKey(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  i: { iri: https://x/i/, tier: implementation }\n")
+	ont := "concepts:\n  WriteLimit:\n    kind: constraint\n    internal: true\n    value: \"30\"\n    value-from: { path: config/ratelimit.yaml, symbol: policies.claims-write.per_minute }\n"
+	write("ontology/i.gloss.yaml", ont)
+	cfg := "policies:\n  claims-write:\n    per_minute: 30\n  export:\n    per_minute: 2\n"
+	write("config/ratelimit.yaml", cfg)
+	lgPath := filepath.Join(root, ".glossmark", "ledger.jsonl")
+	run := func() []string {
+		t.Helper()
+		ws, g, res, _ := build(t, root)
+		lg, _ := ledger.Open(lgPath)
+		lg.Sync(g, res.Markers, "human:test", time.Now())
+		lg.Save()
+		if n := g.NodeByCurie("i:WriteLimit"); n.ValueFrom != "config/ratelimit.yaml:3" {
+			t.Errorf("bound to %q, want config/ratelimit.yaml:3", n.ValueFrom)
+		}
+		return concepts(findings(rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries}), rollup.KindValueDrift))
+	}
+	if d := run(); len(d) != 0 {
+		t.Errorf("baseline drift = %v", d)
+	}
+	write("config/ratelimit.yaml", strings.Replace(cfg, "per_minute: 30", "per_minute: 60", 1))
+	if d := run(); !reflect.DeepEqual(d, []string{"i:WriteLimit"}) {
+		t.Errorf("after the config changed: drift = %v, want [i:WriteLimit]", d)
+	}
+	// A tail that names one key binds too; a bare key that names two is an error.
+	write("ontology/i.gloss.yaml", strings.Replace(ont, "symbol: policies.claims-write.per_minute", "symbol: claims-write.per_minute", 1))
+	run()
+	write("ontology/i.gloss.yaml", strings.Replace(ont, "symbol: policies.claims-write.per_minute", "symbol: per_minute", 1))
+	ws, _ := load.Load(root)
+	res, _ := extract.Build(ws)
+	var msgs []string
+	for _, d := range res.Diags {
+		if d.Code == "GM360" {
+			msgs = append(msgs, d.Msg)
+		}
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "policies.claims-write.per_minute, policies.export.per_minute") {
+		t.Errorf("GM360 = %v, want one naming both candidates", msgs)
+	}
+}
+
+// TestInternalCriticalUntested: an internal concept is left out of untested
 // and concept coverage unless its effective criticality is high or critical;
 // then losing its only test shows (#74).
 func TestInternalCriticalUntested(t *testing.T) {

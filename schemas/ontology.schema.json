@@ -193,7 +193,7 @@
           "required": ["path"],
           "properties": {
             "path": { "type": "string", "minLength": 1 },
-            "symbol": { "type": "string", "minLength": 1, "description": "The first line that assigns, annotates or defaults it." },
+            "symbol": { "type": "string", "minLength": 1, "description": "In code, the first line that assigns, annotates or defaults it. In YAML, TOML or JSON, a dotted key path (policies.claims-write.per_minute), or a key or tail of one that ends exactly one path." },
             "line": { "type": "integer", "minimum": 1 }
           }
         },
