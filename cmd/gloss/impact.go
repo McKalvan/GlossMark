@@ -177,7 +177,7 @@ func cmdHook(args []string) int {
 // installSkills copies the shipped skills into .claude/skills/.
 func installSkills(root string) error {
 	for _, name := range skills.Names {
-		b, err := skills.FS.ReadFile(name + "/SKILL.md")
+		b, err := skills.Installable(name)
 		if err != nil {
 			return err
 		}

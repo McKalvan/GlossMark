@@ -275,6 +275,21 @@ func TestRejectedProposalSticks(t *testing.T) {
 	}
 }
 
+// Issue #118: the installed skill does not bring GlossMark's own gm: marker.
+func TestHookInstallSkillChecksClean(t *testing.T) {
+	root := tiny(t, nil)
+	if code, _ := gloss(t, "hook", "install", "--skill", "--no-hook", "--no-mcp", "--root", root); code != 0 {
+		t.Fatalf("hook install --skill: exit %d", code)
+	}
+	b, err := os.ReadFile(filepath.Join(root, ".claude", "skills", "adopt-glossmark", "SKILL.md"))
+	if err != nil || strings.Contains(string(b), "gm:Onboarding") {
+		t.Fatalf("installed skill: %v\n%s", err, b)
+	}
+	if code, _ := gloss(t, "check", "--root", root); code != 0 {
+		t.Errorf("check after hook install --skill: exit %d", code)
+	}
+}
+
 // addConcept inserts ontology lines right after the "concepts:" key.
 func addConcept(t *testing.T, root, file, lines string) {
 	t.Helper()
