@@ -2,7 +2,7 @@
 
 // Package mcp serves the graph to agents over the Model Context Protocol
 // (JSON-RPC 2.0 on stdio): lookup_concept, search_concepts, concepts_for_path,
-// propose_link and impact_of.
+// propose_link, impact_of, propose_concept, context, slice_of and drift.
 package mcp
 
 import (
@@ -14,12 +14,14 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/slice"
 )
 
 // Protocol version implemented.
@@ -162,6 +164,9 @@ var tools = []tool{
 			"realizes": map[string]any{"type": "array", "items": str("core concept CURIE")}, "is_a": map[string]any{"type": "array", "items": str("parent CURIE")}, "internal": map[string]any{"type": "boolean"}, "aliases": map[string]any{"type": "array", "items": str("")}}, "curie", "kind")},
 	{"context", "The compact briefing for a directory: its boundary, allowed targets, your remit, the concepts most relevant to the directory first, and current state. Call it once when you start working in a directory.",
 		obj(map[string]any{"dir": str("Repo-relative directory (default: repo root)"), "budget": map[string]any{"type": "integer", "description": "Approximate token budget (default 2000)"}, "changed": map[string]any{"type": "boolean", "description": "Open with what the uncommitted changes touch"}})},
+	{"slice_of", "Everything relevant to a feature (docs/adr/0023-feature-slices.md): from seeds (concept or boundary CURIEs, artifacts path#symbol, or paths) the kinds, parts, realizations, artifacts, tests and boundaries that belong to it, plus a faded context ring. Each node carries its role and the via path of edges that brought it in, its criticality and its drift findings; the summary lists what is untested. Same JSON as gloss slice --format json.",
+		obj(map[string]any{"seeds": map[string]any{"type": "array", "items": str("CURIE, path#symbol or repo-relative path")}, "context": map[string]any{"type": "boolean", "description": "Keep the context ring (default true)"},
+			"follow": map[string]any{"type": "array", "items": str("produces | consumes | publishes | subscribes: flow relations to follow end to end")}}, "seeds")},
 	{"drift", "Run the drift comparison on the current tree and return violations, gaps, orphans, rogues and metrics.", obj(map[string]any{})},
 }
 
@@ -285,6 +290,21 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 			return nil, err
 		}
 		return map[string]any{"context": txt}, nil
+	case "slice_of":
+		a := struct {
+			Seeds   []string `json:"seeds"`
+			Context *bool    `json:"context"`
+			Follow  []string `json:"follow"`
+		}{}
+		if err := json.Unmarshal(args, &a); err != nil {
+			return nil, err
+		}
+		fl, err := slice.ParseFollow(strings.Join(a.Follow, ","))
+		if err != nil {
+			return nil, err
+		}
+		rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: ws.Config.EffectivePolicy(), Now: time.Now()})
+		return slice.Of(g, ws.Root, a.Seeds, slice.Options{Context: a.Context == nil || *a.Context, Follow: fl}, rep.Findings)
 	case "drift":
 		rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: ws.Config.EffectivePolicy()})
 		return rep, nil

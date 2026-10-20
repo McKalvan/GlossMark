@@ -40,7 +40,7 @@ func cmdView(args []string) int {
 		}
 	}
 	data := viewer.Data{Generated: time.Now().UTC().Format(time.RFC3339), Repo: filepath.Base(p.WS.Root), Views: views.ProjectAll(p.Graph, p.WS.Views),
-		Concepts: viewer.Details(p.Graph, rep), Findings: findings, SourceURL: p.WS.Config.SourceURL}
+		Concepts: viewer.Details(p.Graph, rep), Findings: findings, SourceURL: p.WS.Config.SourceURL, Slices: viewer.Slices(p.Graph, viewer.SliceBudget)}
 	for _, n := range p.Graph.NodesOf(model.NodeConcept) {
 		if n.Criticality != "" && !n.Imported {
 			data.Classified++

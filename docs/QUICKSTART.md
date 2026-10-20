@@ -169,7 +169,7 @@ The briefing ranks concepts by relevance: those linked by code under the directo
 
 A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [chargeback]` on `pay:Refund`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "settlement cutoff" finds `sw:CutoffClock`.
 
-Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept` and `drift`.
+Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept`, `slice_of` and `drift`. `gloss slice <curie>` (MCP `slice_of`, `gloss context --concept`) shows everything relevant to one feature; see [ADVANCED.md](ADVANCED.md#feature-slices-gloss-slice).
 
 ## 7. Wire CI
 

@@ -68,7 +68,7 @@ cd ../payments
 
 ## For agents
 
-`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius), `slice_of` (everything relevant to one feature, like `gloss slice`) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## GlossMark on GlossMark
 

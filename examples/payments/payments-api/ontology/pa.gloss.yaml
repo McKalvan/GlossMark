@@ -5,4 +5,4 @@ concepts:
   AuthorizeHandler: { kind: process, realizes: pay:Authorization }
   CaptureHandler:   { kind: process, realizes: pay:Capture }
   CaptureQueue:     { kind: resource, internal: true }
-  CaptureEmitter:   { kind: process, realizes: pay:CaptureConfirmed, publishes: [pay:CaptureConfirmed] }
+  CaptureEmitter:   { kind: process, part-of: CaptureHandler, realizes: pay:CaptureConfirmed, publishes: [pay:CaptureConfirmed] }   # emits the confirmation as part of capturing

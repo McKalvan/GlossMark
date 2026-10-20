@@ -123,11 +123,16 @@ views:
   capacity:                                   # curated: it names its concepts
     include: [zoo:ProductionCapacity, zoo:HorseOrder, impl:FoalingPipelineThroughput]
     zoom: code
+  breeding:                                   # a saved slice
+    slice: [zoo:Breeding]
+    zoom: code
 ```
 
 Two presets ship (business, engineering) and are generated when the file is absent. Zoom (`landscape`, `system`, `container`, `component`, `code`) decides which boundary levels appear; artifacts appear only at `code`.
 
 A view whose `include:` names at least one concept (not only `ns:*` globs) is **curated**: the viewer opens it with every box open, and it keeps only the artifacts that link to a named concept and the edges with at least one named end.
+
+A view with `slice:` (CURIEs or globs of concepts and boundaries) is a **saved slice**: instead of an `include:` list it shows the feature slice of those seeds, with context, computed by the same rules as `gloss slice` ([ADR 0023](adr/0023-feature-slices.md)) on every build, so it tracks the code instead of a hand-kept list. Its concepts, boundaries and artifacts are the slice's nodes; it is curated, and the viewer opens it with the slice active. `slice:` and `include:` together are an error. The projection repeats the seeds as `slice`, `gloss impact` and MCP `impact_of` name the saved slices a change touches, and `gloss diff` reports a change to the slice as a change to that view.
 
 In a projection every concept also carries the boundary it sits in (`boundary`). Candidates are the boundaries whose code realizes or represents it; one whose own code links to the concept directly beats one whose manifest only declares it, which beats one that reaches it by lifting through another concept. Among the strongest candidates the deepest wins, or the nearest boundary enclosing all of them when several unrelated ones remain. Pages that `presents` a concept never place it. The viewer draws a boundary as a box around those concepts, closed at first; the reader opens boxes to drill in. Projections also carry each node's effective `criticality` (the highest of its own and of everything folded into it).
 
@@ -148,5 +153,5 @@ Boundaries and artifacts carry no `placement`. The viewer draws a part under its
 - `glossmark.lock` (repo root, committed) — resolved version, range, source and content hash per import, written by `gloss lock`.
 - `imports/<prefix>@<version>.gloss.yaml` (committed) — the copy of each locked import that `gloss lock` vendors; commands resolve the import from it while its hash matches the lock ([ADR 0002](adr/0002-lock-pins-imports.md)).
 - `context.jsonld` — the JSON-LD context that makes `graph.jsonl` RDF-loadable.
-- `viewer.html`, `views.js`, `views.json` (not committed) — `gloss view` writes the page, the data script it loads (a plain `<script src>`, so opening the file from disk works) and the same data as JSON for tools; `--inline` embeds the data in one page instead.
+- `viewer.html`, `views.js`, `views.json` (not committed) — `gloss view` writes the page, the data script it loads (a plain `<script src>`, so opening the file from disk works) and the same data as JSON for tools; `--inline` embeds the data in one page instead. The data includes `slices`, the precomputed feature slice of every concept and boundary as interned index lists (`ids`, `roles`, `steps`, and `of`: seed → `[node, role, via step...]`), capped in size ([ADR 0023](adr/0023-feature-slices.md)).
 - `ledger.jsonl` (committed) — provenance and review state per marker: `{marker_id, path, relation, targets, actor, model, conf, created, status, reviewed_by, reviewed_at, anchor_fingerprint, rationale, review_reason}`. `rationale` is the author's `note=`; `review_reason` is the reviewer's `gloss reject --reason`. It is the only store of accepted, rejected and stale decisions, so it belongs in git like the graph. `actor` is fixed at the marker's first appearance (see `docs/QUICKSTART.md`). Exportable as PROV-O with `gloss export --prov`.

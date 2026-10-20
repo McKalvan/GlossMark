@@ -23,7 +23,7 @@ import (
 )
 
 func init() {
-	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, drift)", cmdMCP})
+	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, slice_of, drift)", cmdMCP})
 }
 
 type mcpBackend struct {
@@ -155,7 +155,11 @@ func (b *mcpBackend) ImpactOfChange(base string, paths []string) (any, error) {
 		}
 		files = append(files, ch...)
 	}
-	out := map[string]any{"files": gate.Touched(g, ws, uniqStrings(files))}
+	touched := gate.Touched(g, ws, uniqStrings(files))
+	out := map[string]any{"files": touched}
+	if ss := slicesTouched(g, ws, touched); len(ss) > 0 {
+		out["slices"] = ss
+	}
 	if base != "" {
 		bg, err := loadBaseGraph(ws, base)
 		if err != nil {

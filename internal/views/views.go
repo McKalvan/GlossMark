@@ -28,6 +28,10 @@ type Projection struct {
 	Curated bool    `json:"curated,omitempty"`
 	Nodes   []PNode `json:"nodes"`
 	Edges   []PEdge `json:"edges"`
+
+	// Slice holds the seeds of a saved slice (slice: in views.yaml); the
+	// viewer opens such a view with that slice active.
+	Slice []string `json:"slice,omitempty"`
 }
 
 // PNode is a node as the view shows it.
@@ -141,7 +145,8 @@ func Project(g *graph.Graph, name string, v *model.View) *Projection {
 	if zoom == "" {
 		zoom = "component"
 	}
-	pr := &Projection{Name: name, Doc: v.Doc, Zoom: zoom, Curated: curated(v)}
+	p.slice = SliceMembers(g, v)
+	pr := &Projection{Name: name, Doc: v.Doc, Zoom: zoom, Curated: curated(v) || p.slice != nil, Slice: v.Slice}
 	p.curated = pr.Curated
 	p.zoom = zoomIndex[zoom]
 	p.concepts()
@@ -168,6 +173,7 @@ type projector struct {
 	byID     map[string]int
 	outEdges []PEdge
 	curated  bool
+	slice    map[string]bool // CURIEs of a saved slice; nil for other views
 }
 
 // curated reports whether a view's include list names at least one concept.
@@ -181,6 +187,9 @@ func curated(v *model.View) bool {
 }
 
 func (p *projector) matchesInclude(curie string) bool {
+	if p.slice != nil {
+		return p.slice[curie]
+	}
 	if len(p.v.Include) == 0 {
 		return true
 	}
@@ -354,6 +363,9 @@ func (p *projector) boundaries() {
 		return
 	}
 	for _, b := range p.g.NodesOf(model.NodeBoundary) {
+		if p.slice != nil && !p.slice[b.CURIE] {
+			continue // a saved slice shows only its own boundaries
+		}
 		lvl := boundaryLevel(p.g, b.ID, map[string]bool{})
 		if lvl > p.zoom {
 			// Deeper than the zoom: fold into the nearest shown ancestor.
@@ -388,7 +400,7 @@ func (p *projector) boundaries() {
 
 func (p *projector) artifacts() {
 	for _, a := range p.g.NodesOf(model.NodeArtifact) {
-		if p.curated && !p.linksNamed(a.ID) {
+		if p.slice != nil && !p.slice[p.g.Curie(a.ID)] || p.slice == nil && p.curated && !p.linksNamed(a.ID) {
 			continue // a curated view shows only the code behind the concepts it names
 		}
 		p.included[a.ID] = true
