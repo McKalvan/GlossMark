@@ -145,15 +145,21 @@ func cmdPublish(args []string) int {
 				if on != nil && on.NodeType == model.NodeConcept && on.Tier == model.TierImpl && on.Published == "" && on.NS == ns {
 					continue // internal structure stays private
 				}
+				// published: { as: X } is both n.Published and a declared
+				// published-as edge; a target already written is not repeated.
 				key := e.P
 				cur := g.Curie(e.O)
 				switch v := item[key].(type) {
 				case nil:
 					item[key] = cur
 				case string:
-					item[key] = []string{v, cur}
+					if v != cur {
+						item[key] = []string{v, cur}
+					}
 				case []string:
-					item[key] = append(v, cur)
+					if !containsStr(v, cur) {
+						item[key] = append(v, cur)
+					}
 				}
 			}
 			items = append(items, item)
