@@ -58,7 +58,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | value-drift | the code a published value is bound to (`value-from`, `publishes-value`) changed and the ontology `value` did not | ✓ |
 | dangling | a marker targets a concept that does not exist (write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
-| orphan | a concept no artifact links to | |
+| orphan | a concept nothing is built for: no artifact links to it, to a concept that realizes it or is part of it, or to anything below it in `is-a` by any of those routes (an abstract supertype whose subtype is realized by code is not an orphan) | |
 | untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts). An `internal: true` concept is left out unless its effective criticality is `high` or `critical`; then it is reported, and counted in concept coverage, like any other | |
 | presented-only | a page presents the concept, or a shell hosts a concept that is not a system-type, but nothing implements it | |
 | stale | an accepted link whose anchored signature changed since acceptance | |

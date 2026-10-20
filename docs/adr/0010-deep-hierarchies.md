@@ -15,6 +15,10 @@ The deep-hierarchies lab in glossmark-examples (a product taxonomy seven `is-a` 
 2. ADR 0009 still holds: a declared implementation concept adds the cores it realizes, not the wholes it is part of, and a declared part admits neither its whole nor the whole's other parts.
 3. Every entry of a derived set records why it is there (`default-namespace`, `declared`, `covered` from a declared concept, `realized` by a declared implementation concept, `listed` next to `derived`, `nested` from a child boundary). `gloss check --explain` prints the reasons.
 
+### An abstract supertype is built when anything below it is (issue #90, F-DEEP-8)
+
+4. A concept is not an orphan when an `is-a` descendant is reached by any route that would make the descendant itself not an orphan: a direct link, a concept that realizes it, a part, or a deeper subtype. Before, only a direct link to a descendant counted, so `cyc:Lighting` was an orphan although `spk:LightListing`, which has code, realizes its subtype `cyc:FrontLight`, and the orphan list changed with unrelated `produces` markers. `orphan` now means "nothing below it is built".
+
 ## Alternatives considered
 
 - **Admit the default namespace instead.** Rejected: `default-namespace: spk` admits every `spk:` concept, including unrelated ones, which is not "the implementation of what I declare".

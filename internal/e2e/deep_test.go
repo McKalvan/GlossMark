@@ -136,6 +136,32 @@ func TestAllowedSetFollowsCoverage(t *testing.T) {
 	}
 }
 
+// TestSupertypeReachedByRealization (#90): an abstract supertype is not an
+// orphan when anything below it is built, whether code links the subtype
+// directly or implements a concept that realizes it.
+func TestSupertypeReachedByRealization(t *testing.T) {
+	root, write := catalogue(t)
+	orphans := func() []string {
+		t.Helper()
+		ws, g, _, lg := build(t, root)
+		return concepts(findings(rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries}), rollup.KindOrphan))
+	}
+	// cyc:FrontLight is realized by spk:LightListing, which has code; its supertypes are reached.
+	if got := orphans(); len(got) != 1 || got[0] != "cyc:ScanConfirm" {
+		t.Errorf("orphans = %v, want only cyc:ScanConfirm", got)
+	}
+	// Without the produces markers only what nothing below is built becomes an orphan:
+	// cyc:Cassette, cyc:ElectronicFrontDerailleur and cyc:FrontDerailleur (whose only
+	// subtype is cyc:ElectronicFrontDerailleur). The Derailleur line is still
+	// reached through spk:DerailleurListing.
+	write("services/catalogue/ingest/feeds/shimano_xml.py", "# @gloss implements spk:ShimanoXmlImporter\ndef parse_feed(): pass\n")
+	write("services/catalogue/ingest/feeds/csv_feed.py", "# @gloss implements spk:CsvRowParser\ndef parse_row(): pass\n\n\n# @gloss implements spk:CsvFeedImporter\ndef import_csv(): pass\n")
+	want := []string{"cyc:Cassette", "cyc:ElectronicFrontDerailleur", "cyc:FrontDerailleur", "cyc:ScanConfirm"}
+	if got := orphans(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("orphans without produces = %v, want %v", got, want)
+	}
+}
+
 // TestExplainBySource (#93): check --explain groups a derived set by source
 // and collapses a declared concept with what it covers, so a manifest that
 // declares two concepts reads in two lines however deep the taxonomy.

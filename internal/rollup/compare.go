@@ -550,12 +550,12 @@ func (c *comparer) reached(id string, seen map[string]bool) (bool, string) {
 			}
 		}
 	}
-	// Through subclasses.
+	// Through subclasses, by any route: an abstract supertype is built when
+	// something below it is, whether code links the subtype directly or
+	// implements a concept that realizes it (ADR 0010).
 	for _, d := range c.g.Descendants(id) {
-		for _, e := range c.g.In(d, "") {
-			if n := c.g.Node(e.S); n != nil && n.NodeType == model.NodeArtifact && e.P != "may-modify" && e.P != "instructs" && e.P != "documents" {
-				return true, e.P
-			}
+		if ok, rel := c.reached(d, seen); ok {
+			return true, rel
 		}
 	}
 	// Through parts (has-part / part-of chains): a mechanism with implemented parts is implemented.
