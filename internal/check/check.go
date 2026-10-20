@@ -144,10 +144,7 @@ func (c *checker) concepts() {
 			}
 		case model.TierImpl:
 			realizes := c.g.Objects(n.ID, "realizes")
-			// realizes is inherited through is-a and part-of (RealizesStar), so
-			// only a concept that stands for nothing at all is incomplete.
-			surface := len(c.g.Out(n.ID, "presents"))+len(c.g.Out(n.ID, "hosts")) > 0
-			if len(realizes) == 0 && !surface && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 && len(rollup.RealizesStar(c.g, n.ID)) == 0 {
+			if !ImplComplete(c.g, n) {
 				sev := "error"
 				if n.Proposed {
 					sev = "warning" // a proposal may be incomplete; acceptance requires the full entry
@@ -504,4 +501,18 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// ImplComplete reports whether an implementation concept stands for
+// something, the GM320 rule that gloss accept --concept also applies.
+// realizes is inherited through is-a and part-of (RealizesStar), so only a
+// concept that stands for nothing at all is incomplete.
+func ImplComplete(g *graph.Graph, n *graph.Node) bool {
+	if n.Internal || n.Deprecated {
+		return true
+	}
+	if len(g.Objects(n.ID, "realizes")) > 0 || len(g.Out(n.ID, "presents"))+len(g.Out(n.ID, "hosts")) > 0 || len(g.Out(n.ID, "is-a")) > 0 {
+		return true
+	}
+	return len(rollup.RealizesStar(g, n.ID)) > 0
 }

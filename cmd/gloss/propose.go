@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/ontoedit"
@@ -271,8 +272,8 @@ func acceptConcepts(p *pipeline, curies []string, rev string, dry bool) (int, er
 			continue
 		}
 		// A proposed implementation concept must be complete before acceptance.
-		if node := p.Graph.NodeByCurie(c); node != nil && node.Tier == model.TierImpl && !node.Internal && len(p.Graph.Objects(node.ID, "realizes")) == 0 && len(p.Graph.Objects(node.ID, "is-a")) == 0 {
-			return n, fmt.Errorf("%s: add realizes: <core concept> or internal: true before accepting", c)
+		if node := p.Graph.NodeByCurie(c); node != nil && node.Tier == model.TierImpl && !check.ImplComplete(p.Graph, node) {
+			return n, fmt.Errorf("%s: add realizes: <core concept> (or presents:/hosts:), is-a or part-of a concept that does, or internal: true before accepting (GM320)", c)
 		}
 		fmt.Printf("%s concept %s\n", map[bool]string{true: "would accept", false: "accept"}[dry], c)
 		if dry {

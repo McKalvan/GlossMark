@@ -102,3 +102,43 @@ func TestVersionFlags(t *testing.T) {
 		}
 	}
 }
+
+// addConcept inserts ontology lines right after the "concepts:" key.
+func addConcept(t *testing.T, root, file, lines string) {
+	t.Helper()
+	p := filepath.Join(root, "ontology", file)
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := strings.Replace(string(b), "concepts:\n", "concepts:\n"+lines+"\n", 1)
+	if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Issue #121: accept --concept applies the GM320 rule, so a proposed concept
+// that is part-of one that realizes is accepted; one that stands for nothing
+// is still refused.
+func TestAcceptConceptPartOf(t *testing.T) {
+	root := workspace(t, "horse-factory")
+	addConcept(t, root, "impl.gloss.yaml", "  MareSelection: { kind: process, part-of: HorseBuilder, proposed: true }\n  Loose: { kind: process, proposed: true }")
+	if code, _ := gloss(t, "accept", "--concept", "impl:MareSelection", "--root", root); code != 0 {
+		t.Fatalf("accept --concept part-of: exit %d", code)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "ontology", "impl.gloss.yaml"))
+	if strings.Contains(string(b), "MareSelection: { kind: process, part-of: HorseBuilder, proposed: true }") {
+		t.Errorf("MareSelection still proposed:\n%s", b)
+	}
+	if code, _ := gloss(t, "accept", "--concept", "impl:Loose", "--root", root); code == 0 {
+		t.Errorf("accept --concept on a concept that stands for nothing succeeded")
+	}
+	// Issue #122: flags after the CURIE, as QUICKSTART writes it.
+	if code, _ := gloss(t, "reject", "--concept", "impl:Loose", "--reason", "not a thing", "--remove", "--root", root); code != 0 {
+		t.Fatalf("reject --concept <curie> --reason ... --remove: exit %d", code)
+	}
+	b, _ = os.ReadFile(filepath.Join(root, "ontology", "impl.gloss.yaml"))
+	if strings.Contains(string(b), "Loose:") {
+		t.Errorf("reject --remove left the entry")
+	}
+}
