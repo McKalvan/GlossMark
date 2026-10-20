@@ -29,6 +29,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
 | `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |
 | `published-as` | | ✓ | | written as `published: { as: core:X }`: the only seam between tiers and across repositories |
+| `replaced-by` | | ✓ | ✓ | written as the `replaced-by:` key on a deprecated concept or boundary; stored as an edge so views can select and draw it; the successor may be in a namespace known only under `prefixes:` ([ADR 0020](adr/0020-replacements-across-repos.md)) |
 | `constrains`, `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
 | `depends-on`, `calls`, `derived-from`, `same-as` | | | | derived or reserved (imports, SCIP, SSSOM) |
 

@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/mckalvan/glossmark/internal/check"
+	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/views"
 )
 
 // TestOverlapAndOverdue pins ADR 0019 (#95): two unrelated boundaries
@@ -51,6 +53,86 @@ func TestOverlapAndOverdue(t *testing.T) {
 	kinds, _ := rollup.ParseFailOn("overdue")
 	if len(rep.Failing(kinds)) != 1 {
 		t.Errorf("--fail-on overdue should fail")
+	}
+}
+
+// TestReplacedByEdgeAndViews pins ADR 0020 (#100, #101): replaced-by is a
+// declared edge views can select and draw; view nodes carry deprecated and
+// replaced-by; a successor in a namespace known only under prefixes: needs
+// no import and is no error, and GM222 says it is unresolved here; an unknown
+// views.yaml key is a diagnostic, not an abort.
+func TestReplacedByEdgeAndViews(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  hire: { iri: https://x/hire/, tier: core }\n  hq: { iri: https://x/hq/, tier: implementation }\nprefixes:\n  o: https://x/o/\n  inv: https://x/inv/\n")
+	write("ontology/hire.gloss.yaml", "concepts:\n  Invoicing: { kind: process }\n")
+	write("ontology/hq.gloss.yaml", "concepts:\n  InvoiceGenerator: { kind: process, realizes: hire:Invoicing, deprecated: true, replaced-by: inv:InvoiceRun }\n  Router: { kind: process, realizes: hire:Invoicing }\n")
+	write("ontology/views.yaml", "views:\n  migration:\n    include: [hire:Invoicing, hq:InvoiceGenerator, hq:Router]\n    relations: [realizes, replaced-by]\n    zoom: code\n")
+	write(".gloss.yaml", "boundary: o:hirehq-invoicing\nlevel: container\ndeprecated: true\nreplaced-by: o:invoicing-service\n")
+	write("gen.py", "# @gloss implements hq:InvoiceGenerator\ndef gen(): pass\n")
+	ws, g, res, _ := build(t, root)
+	var gm []string
+	for _, d := range append(append(ws.Diags, res.Diags...), check.Run(ws, g)...) {
+		switch d.Code {
+		case "GM341", "GM215", "GM230", "GM222", "GM117":
+			gm = append(gm, d.String())
+		}
+	}
+	all := strings.Join(gm, "\n")
+	if strings.Contains(all, "GM341") || strings.Contains(all, "GM215") {
+		t.Errorf("a successor under prefixes: needs no import:\n%s", all)
+	}
+	if !strings.Contains(all, "hq:InvoiceGenerator is deprecated; its replacement inv:InvoiceRun is unresolved here") {
+		t.Errorf("GM222 should say the replacement is unresolved:\n%s", all)
+	}
+	n := 0
+	for _, e := range g.Edges() {
+		if e.P == "replaced-by" {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Errorf("%d replaced-by edges, want one for the concept and one for the boundary", n)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+	if d := findings(rep, rollup.KindDangling); len(d) != 0 {
+		t.Errorf("an unloaded successor is not dangling in one workspace: %+v", d)
+	}
+
+	// With the successor in the workspace the view draws the edge.
+	write("glossmark.yaml", "owns:\n  hire: { iri: https://x/hire/, tier: core }\n  hq: { iri: https://x/hq/, tier: implementation }\n  inv: { iri: https://x/inv/, tier: implementation }\nprefixes:\n  o: https://x/o/\n")
+	write("ontology/inv.gloss.yaml", "concepts:\n  InvoiceRun: { kind: process, realizes: hire:Invoicing }\n")
+	write("ontology/views.yaml", "views:\n  migration:\n    include: [hire:Invoicing, hq:InvoiceGenerator, inv:InvoiceRun]\n    relations: [realizes, replaced-by]\n    zoom: code\n")
+	ws, g, _, _ = build(t, root)
+	p := views.Project(g, "migration", ws.Views.Views["migration"])
+	var dep *views.PNode
+	for i := range p.Nodes {
+		if p.Nodes[i].ID == "hq:InvoiceGenerator" {
+			dep = &p.Nodes[i]
+		}
+	}
+	if dep == nil || !dep.Deprecated || dep.ReplacedBy != "inv:InvoiceRun" {
+		t.Errorf("view node = %+v", dep)
+	}
+	found := false
+	for _, e := range p.Edges {
+		found = found || (e.S == "hq:InvoiceGenerator" && e.P == "replaced-by" && e.O == "inv:InvoiceRun")
+	}
+	if !found {
+		t.Errorf("view edges %+v lack the replaced-by edge", p.Edges)
+	}
+
+	// An unknown key in a view is a diagnostic at its line; the view still loads.
+	write("ontology/views.yaml", "views:\n  migration:\n    include: [hire:Invoicing]\n    where: { deprecated: true }\n")
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatalf("an unknown view key aborted the load: %v", err)
+	}
+	var diags []string
+	for _, d := range ws.Diags {
+		diags = append(diags, d.String())
+	}
+	if !strings.Contains(strings.Join(diags, "\n"), `ontology/views.yaml:4: error: unknown key "views.migration.where"`) || ws.Views.Views["migration"] == nil {
+		t.Errorf("diags %v, views %v", diags, ws.Views.Views)
 	}
 }
 

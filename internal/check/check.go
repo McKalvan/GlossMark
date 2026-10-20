@@ -208,8 +208,16 @@ func (c *checker) concepts() {
 		if n.Deprecated && n.ReplacedBy == "" {
 			c.add(n.File, n.Line, "warning", "GM340", fmt.Sprintf("%s: deprecated concepts should carry replaced-by:", n.CURIE))
 		}
-		if n.ReplacedBy != "" && c.g.NodeByCurie(n.ReplacedBy) == nil {
-			c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s does not exist", n.CURIE, n.ReplacedBy))
+		if n.ReplacedBy != "" && c.g.NodeByCurie(n.ReplacedBy) == nil && !n.Imported {
+			// The successor may live in a namespace this workspace does not
+			// import (a new service's): it is checked where it is loaded, and
+			// gloss landscape checks it across repositories (ADR 0020).
+			switch rp := c.prefixOf(n.ReplacedBy); {
+			case c.ws.Ontologies[rp] != nil:
+				c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s does not exist", n.CURIE, n.ReplacedBy))
+			case !strings.Contains(n.ReplacedBy, "://") && c.ws.Prefixes[rp] == "":
+				c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s cannot be resolved; declare %s: under prefixes: in %s (no import needed) or write the full IRI", n.CURIE, n.ReplacedBy, rp, load.ConfigName))
+			}
 		}
 	}
 }
@@ -464,7 +472,11 @@ func (c *checker) edges() {
 				c.add(path, line, "error", "GM203", fmt.Sprintf("relation %q cannot be declared in a manifest", e.P))
 			}
 		}
-		// Object resolution.
+		// Object resolution. A replaced-by successor need not be loaded:
+		// GM341 judges a concept's, and a boundary's may be in another repo.
+		if e.P == "replaced-by" && c.g.Node(e.O) == nil {
+			continue
+		}
 		switch {
 		case strings.HasPrefix(e.O, "urn:gloss:unresolved:"):
 			raw := strings.TrimPrefix(e.O, "urn:gloss:unresolved:")
@@ -518,7 +530,11 @@ func (c *checker) edges() {
 		if on.Deprecated {
 			msg := fmt.Sprintf("%s is deprecated", on.CURIE)
 			if on.ReplacedBy != "" {
-				msg += "; use " + on.ReplacedBy
+				if c.g.NodeByCurie(on.ReplacedBy) != nil {
+					msg += "; use " + on.ReplacedBy
+				} else {
+					msg += "; its replacement " + on.ReplacedBy + " is unresolved here (not in this workspace or its imports)"
+				}
 			}
 			c.add(path, line, "warning", "GM222", msg)
 		}

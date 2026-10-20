@@ -713,7 +713,12 @@ func (c *comparer) danglingDeclared() {
 		if sn == nil || (sn.NodeType == model.NodeConcept && sn.Imported) || (sn.NodeType != model.NodeConcept && sn.NodeType != model.NodeBoundary) {
 			continue
 		}
-		if c.g.Node(e.O) != nil || (sn.NodeType == model.NodeBoundary && e.P == "part-of") {
+		if c.g.Node(e.O) != nil || (sn.NodeType == model.NodeBoundary && (e.P == "part-of" || e.P == "replaced-by")) {
+			continue
+		}
+		// A successor in a namespace this workspace does not load is checked
+		// where it is loaded: in its own repository, or in gloss landscape.
+		if e.P == "replaced-by" && c.ws.Ontologies[nsOf(c.g.Curie(e.O))] == nil {
 			continue
 		}
 		cur := c.g.Curie(e.O)

@@ -168,7 +168,7 @@ func baseViews(ws *load.Workspace, ref string) *model.Views {
 	if err != nil {
 		return nil
 	}
-	v, err := model.ParseViews(ws.Config.Views, []byte(out))
+	v, _, err := model.ParseViews(ws.Config.Views, []byte(out))
 	if err != nil {
 		return nil
 	}

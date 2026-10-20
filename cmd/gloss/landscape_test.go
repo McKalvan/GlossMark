@@ -47,6 +47,33 @@ func TestLandscapeOverlap(t *testing.T) {
 	}
 }
 
+// TestLandscapeReplacedBy: a successor named across repositories without an
+// import is checked in the landscape, which sees both (#101).
+func TestLandscapeReplacedBy(t *testing.T) {
+	for _, tc := range []struct{ successor, want string }{
+		{"inv:InvoiceRun", ""},
+		{"inv:InvoiceRunner", "replaced-by inv:InvoiceRunner: concept does not exist"},
+	} {
+		tmp := t.TempDir()
+		writeTree(t, tmp, map[string]string{
+			"hirehq/glossmark.yaml":             "owns:\n  hq: { iri: https://x.test/hq/, tier: core }\nprefixes:\n  inv: https://x.test/inv/\n",
+			"hirehq/ontology/hq.gloss.yaml":     "concepts:\n  InvoiceGenerator: { kind: process, deprecated: true, replaced-by: " + tc.successor + " }\n",
+			"invoicing/glossmark.yaml":          "owns:\n  inv: { iri: https://x.test/inv/, tier: core }\n",
+			"invoicing/ontology/inv.gloss.yaml": "concepts:\n  InvoiceRun: { kind: process }\n",
+		})
+		if out, _ := capture(t, "check", filepath.Join(tmp, "hirehq")); strings.Contains(out, "GM341") {
+			t.Errorf("%s: check needs no import for the successor:\n%s", tc.successor, out)
+		}
+		out, _ := capture(t, "landscape", "--fail-on", "none", filepath.Join(tmp, "hirehq"), filepath.Join(tmp, "invoicing"))
+		if tc.want == "" && strings.Contains(out, "replaced-by") {
+			t.Errorf("%s: unexpected finding:\n%s", tc.successor, out)
+		}
+		if tc.want != "" && !strings.Contains(out, tc.want) {
+			t.Errorf("%s: landscape lacks %q:\n%s", tc.successor, tc.want, out)
+		}
+	}
+}
+
 // TestLandscapeContextMap: the context map reads consumer → producer, as its
 // header says, and draws no edge between a boundary and one that contains it,
 // by directory nesting or part-of (issue #103).

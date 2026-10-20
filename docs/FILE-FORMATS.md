@@ -66,7 +66,7 @@ Concept keys:
 | `realizes` | Implementation → core. Every impl concept carries this or `internal: true` (GM320). |
 | `published: { as: <core> }` | The single seam into the business view and across repos. `as:` must name an existing core concept (GM330). |
 | `internal: true` | Engineering-private mechanism; realizes nothing, never crosses repos. |
-| `deprecated`, `replaced-by` | Renames. |
+| `deprecated`, `replaced-by` | Renames and successors. `replaced-by` is a CURIE or a full IRI; its namespace need not be imported when its prefix is under `prefixes:` (the successor is often in a new repository): `gloss check` reports it (GM341) only when the namespace is owned or imported, and `gloss landscape` reports a dangling successor across repositories. It is stored as a `replaced-by` edge ([ADR 0020](adr/0020-replacements-across-repos.md)). |
 | `value` | A concrete value (used by published measures and constraints). |
 | `value-from` | `{ path: pfinance/fire.py, symbol: swr }` or `{ path, line: 42 }`: the code the value comes from (the first line that assigns, annotates or defaults the symbol). The first build records the line; a later change to it without a change to `value` is a **published value drifted** finding in `gloss drift` (fails by default) and HARD in `gloss diff`. Changing both together moves the baseline; `gloss accept --value ns:X` confirms the code as is. The marker form is `@gloss publishes-value .X scope=line` above the line. The viewer shows the live line. |
 | `proposed: true`, `proposed-by` | The entry is a proposal, the ontology's `@gloss?`. Links to it resolve; it is HARD-gated until `gloss accept --concept` drops the flag. `gloss propose` writes these entries. |
@@ -125,11 +125,11 @@ views:
     zoom: code
 ```
 
-Two presets ship (business, engineering) and are generated when the file is absent. Zoom (`landscape`, `system`, `container`, `component`, `code`) decides which boundary levels appear; artifacts appear only at `code`.
+Two presets ship (business, engineering) and are generated when the file is absent. An unknown key, at the top or in a view, is an error (GM117) at its own line; the rest of the file still applies. Zoom (`landscape`, `system`, `container`, `component`, `code`) decides which boundary levels appear; artifacts appear only at `code`.
 
 A view whose `include:` names at least one concept (not only `ns:*` globs) is **curated**: the viewer opens it with every box open, and it keeps only the artifacts that link to a named concept and the edges with at least one named end.
 
-In a projection every concept also carries the boundary it sits in (`boundary`). Candidates are the boundaries whose code realizes or represents it; one whose own code links to the concept directly beats one whose manifest only declares it, which beats one that reaches it by lifting through another concept. Among the strongest candidates the deepest wins, or the nearest boundary enclosing all of them when several unrelated ones remain. Pages that `presents` a concept never place it. The viewer draws a boundary as a box around those concepts, closed at first; the reader opens boxes to drill in. Projections also carry each node's effective `criticality` (the highest of its own and of everything folded into it).
+In a projection every concept also carries the boundary it sits in (`boundary`). Candidates are the boundaries whose code realizes or represents it; one whose own code links to the concept directly beats one whose manifest only declares it, which beats one that reaches it by lifting through another concept. Among the strongest candidates the deepest wins, or the nearest boundary enclosing all of them when several unrelated ones remain. Pages that `presents` a concept never place it. The viewer draws a boundary as a box around those concepts, closed at first; the reader opens boxes to drill in. Projections also carry each node's effective `criticality` (the highest of its own and of everything folded into it), and `deprecated`, `replacedBy` (and `retireBy` on boundaries) for what is being retired; the viewer draws deprecated nodes dotted and names the successor in the concept pane. A migration view reads old next to new with `relations: [realizes, holds, replaced-by]`.
 
 A concept no boundary realizes or represents stays **unplaced**: the viewer draws it outside every box, in a dashed group named for its `placement`. Every concept in a projection carries one, with the reason in `placementReason` (such as `produced by acme:payments-api`); the first value that applies wins:
 

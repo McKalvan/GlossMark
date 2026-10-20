@@ -71,6 +71,11 @@ type PNode struct {
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticalityFrom,omitempty"`
 	Owner           string `json:"owner,omitempty"`
+	// Deprecated, ReplacedBy and RetireBy (boundaries only) mark what is being
+	// retired and its successor; the viewer draws such nodes dashed.
+	Deprecated bool   `json:"deprecated,omitempty"`
+	ReplacedBy string `json:"replacedBy,omitempty"`
+	RetireBy   string `json:"retireBy,omitempty"`
 }
 
 // PEdge is an edge as the view shows it.
@@ -300,7 +305,7 @@ func (p *projector) concepts() {
 		p.included[n.ID] = true
 		p.fold[n.ID] = []string{n.ID}
 		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom,
-			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom}
+			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom, Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy}
 		pn.Branch = p.branch(n.ID)
 		if n.Published != "" {
 			pn.Published = true
@@ -367,7 +372,7 @@ func (p *projector) boundaries() {
 		}
 		p.included[b.ID] = true
 		p.fold[b.ID] = []string{b.ID}
-		pn := PNode{ID: b.CURIE, Label: p.g.Label(b.ID), Type: "boundary", Kind: b.Kind, NS: b.NS, Depth: lvl, Doc: b.Doc, Branch: "boundary", Criticality: b.Criticality, CriticalityFrom: b.CriticalityFrom, Owner: b.Owner}
+		pn := PNode{ID: b.CURIE, Label: p.g.Label(b.ID), Type: "boundary", Kind: b.Kind, NS: b.NS, Depth: lvl, Doc: b.Doc, Branch: "boundary", Criticality: b.Criticality, CriticalityFrom: b.CriticalityFrom, Owner: b.Owner, Deprecated: b.Deprecated, ReplacedBy: b.ReplacedBy, RetireBy: b.RetireBy}
 		if chain := p.g.PartOfChain(b.ID); len(chain) > 0 {
 			pn.Parent = p.g.Curie(chain[0])
 		}
@@ -962,7 +967,7 @@ func Diff(base, head *Projection) *Delta {
 			d.AddedNodes = append(d.AddedNodes, id)
 			continue
 		}
-		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Doc != n.Doc || b.Kind != n.Kind || b.Criticality != n.Criticality {
+		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Doc != n.Doc || b.Deprecated != n.Deprecated || b.ReplacedBy != n.ReplacedBy || b.Kind != n.Kind || b.Criticality != n.Criticality {
 			d.ChangedNodes = append(d.ChangedNodes, id)
 		}
 	}

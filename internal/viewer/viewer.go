@@ -48,6 +48,11 @@ type ConceptDetail struct {
 	Verifiers []Link   `json:"verifiers,omitempty"`
 	Findings  []string `json:"findings,omitempty"`
 	More      int      `json:"more,omitempty"` // links left out by the cap
+	// Deprecated and ReplacedBy say the concept is being retired and what
+	// takes over; Replaces lists the deprecated concepts it succeeds.
+	Deprecated bool     `json:"deprecated,omitempty"`
+	ReplacedBy string   `json:"replacedBy,omitempty"`
+	Replaces   []string `json:"replaces,omitempty"`
 }
 
 // Link is one artifact linked to a concept.
@@ -74,7 +79,11 @@ func Details(g *graph.Graph, rep *rollup.Report) map[string]*ConceptDetail {
 		}
 	}
 	for _, n := range g.NodesOf(model.NodeConcept) {
-		d := &ConceptDetail{}
+		d := &ConceptDetail{Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy}
+		for _, e := range g.In(n.ID, "replaced-by") {
+			d.Replaces = append(d.Replaces, g.Curie(e.S))
+		}
+		sort.Strings(d.Replaces)
 		for _, c := range rollup.RealizesStar(g, n.ID) {
 			d.Realizes = append(d.Realizes, g.Curie(c))
 		}
@@ -116,7 +125,7 @@ func Details(g *graph.Graph, rep *rollup.Report) map[string]*ConceptDetail {
 		}
 	}
 	for k, d := range out {
-		if len(d.Realizes)+len(d.Artifacts)+len(d.Verifiers)+len(d.Findings) == 0 {
+		if len(d.Realizes)+len(d.Artifacts)+len(d.Verifiers)+len(d.Findings)+len(d.Replaces) == 0 && !d.Deprecated {
 			delete(out, k)
 		}
 	}
