@@ -77,7 +77,7 @@
       }
     },
     "node": {
-      "description": "One graph node (graph.Node). Which attributes appear depends on the node type: concept nodes carry tier, kind, published-as, internal, deprecated, replaced-by, value and imported; boundary nodes carry kind (= level), owner and dir; artifact nodes carry path, anchor and boundary; namespace nodes carry tier, version and owner; actor nodes carry kind (human, agent, ...).",
+      "description": "One graph node (graph.Node). Which attributes appear depends on the node type: concept nodes carry tier, kind, published-as, internal, deprecated, replaced-by, value and imported; boundary nodes carry kind (= level), owner and dir, and deprecated, replaced-by and retire-by when retiring; artifact nodes carry path, anchor and boundary; namespace nodes carry tier, version and owner; actor nodes carry kind (human, agent, ...).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -137,10 +137,17 @@
           "type": "boolean"
         },
         "deprecated": {
+          "description": "Concept or boundary: being retired; see replaced-by.",
           "type": "boolean"
         },
         "replaced-by": {
+          "description": "Concept or boundary: the CURIE that supersedes it.",
           "type": "string"
+        },
+        "retire-by": {
+          "description": "Boundary: the date (YYYY-MM-DD) a deprecated boundary is due to be retired.",
+          "type": "string",
+          "format": "date"
         },
         "value": {
           "description": "Concept: the documented attribute value from the ontology (any JSON value)."

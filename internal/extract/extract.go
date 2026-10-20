@@ -189,6 +189,7 @@ func (ex *extractor) manifests() {
 			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
 		}
 		n.CriticalityFloor = m.CriticalityFloor
+		n.Deprecated, n.ReplacedBy, n.RetireBy = m.Deprecated, m.ReplacedBy, m.RetireBy
 		if i := strings.Index(m.Boundary, ":"); i > 0 {
 			n.NS = m.Boundary[:i]
 		}

@@ -1097,6 +1097,64 @@ func TestVerifiesCanonical(t *testing.T) {
 	}
 }
 
+// TestRetiringBoundaryAndUnknownManifestKey: a manifest may mark its
+// boundary as retiring, and an unknown key is GM110 at its own line without
+// dropping the boundary, so its files do not fall to the parent (issue #99).
+func TestRetiringBoundaryAndUnknownManifestKey(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\nprefixes:\n  o: https://x/o/\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Billing: { kind: process }\n  Hiring: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Invoicer: { kind: process, realizes: z:Billing }\n  Hirer: { kind: process, realizes: z:Hiring }\n")
+	write(".gloss.yaml", "boundary: o:mono\nlevel: system\nrealizes: [z:Hiring, z:Billing]\ndefault-namespace: i\nallowed: [i:Hirer, z:Hiring]\n")
+	write("hire.py", "# @gloss implements .Hirer\ndef hire(): pass\n")
+	write("invoicing/.gloss.yaml", "boundary: o:invoicing\nlevel: container\npart-of: o:mono\nrealizes: [z:Billing]\ndefault-namespace: i\ndeprecated: true\nreplaced-by: o:billing-svc\nretire-by: 2027-03-31\n")
+	write("invoicing/inv.py", "# @gloss implements .Invoicer\ndef invoice(): pass\n")
+	write("payroll/.gloss.yaml", "boundary: o:payroll\nlevel: container\npart-of: o:mono\ndefault-namespace: i\nrealises: [z:Billing]\n")
+	write("payroll/pay.py", "# @gloss implements .Invoicer\ndef pay(): pass\n")
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := extract.Build(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollup.Derive(res.Graph, ws.Vocab)
+	g := res.Graph
+	var gm110 []string
+	for _, d := range append(res.Diags, check.Run(ws, g)...) {
+		switch d.Code {
+		case "GM110":
+			gm110 = append(gm110, fmt.Sprintf("%s:%d %s", d.Path, d.Line, d.Msg))
+		case "GM502", "GM503":
+			t.Errorf("no marker should fall to the parent boundary: %s", d)
+		}
+	}
+	if len(gm110) != 1 || !strings.HasPrefix(gm110[0], "payroll/.gloss.yaml:5 ") || !strings.Contains(gm110[0], `"realises"`) {
+		t.Errorf("GM110 = %v, want one at payroll/.gloss.yaml:5 naming realises", gm110)
+	}
+	inv := g.NodeByCurie("o:invoicing")
+	if inv == nil || !inv.Deprecated || inv.ReplacedBy != "o:billing-svc" || inv.RetireBy != "2027-03-31" {
+		t.Errorf("invoicing boundary should carry deprecated, replaced-by and retire-by: %+v", inv)
+	}
+	pay := g.NodeByCurie("o:payroll")
+	if pay == nil {
+		t.Fatal("payroll boundary was dropped")
+	}
+	if a := g.Node(graph.ArtifactPrefix + "payroll/pay.py#pay"); a == nil || a.Boundary != pay.ID {
+		t.Errorf("payroll/pay.py should stay in o:payroll: %+v", a)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+	for _, f := range findings(rep, rollup.KindViolation) {
+		t.Errorf("unexpected violation: %s", f.Msg)
+	}
+}
+
 // TestOneDiagnosticPerKey: an undeclared relation with several targets is
 // one GM200 per ontology key, and a tests marker with several targets is one
 // GM240 (issue #82).

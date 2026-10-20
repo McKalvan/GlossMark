@@ -71,8 +71,10 @@ type Node struct {
 	Anchor *marker.Anchor `json:"anchor,omitempty"`
 	// Boundary (IRI) that contains an artifact, from the nearest manifest.
 	Boundary string `json:"boundary,omitempty"`
-	// Boundary: directory of its manifest.
-	Dir string `json:"dir,omitempty"`
+	// Boundary: directory of its manifest, and the date a deprecated
+	// boundary is due to be retired (deprecated and replaced-by above).
+	Dir      string `json:"dir,omitempty"`
+	RetireBy string `json:"retire-by,omitempty"`
 	// Source location of the declaration, for diagnostics.
 	File string `json:"file,omitempty"`
 	Line int    `json:"line,omitempty"`
