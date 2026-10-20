@@ -68,10 +68,12 @@ func cmdLandscape(args []string) int {
 	g := union(graphs, ws)
 	rollup.Derive(g, ws.Vocab)
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy(), Now: time.Now()})
-	// Context-map edges: implied depends-on between boundaries of different repos.
+	// Context-map edges: implied depends-on (consumer → producer) between
+	// boundaries, except between a boundary and one that contains it.
 	var ctx []string
+	anc := boundaryAncestors(g, ws)
 	for _, e := range g.Edges() {
-		if e.P == "depends-on" && e.Source == graph.SourceDerived {
+		if e.P == "depends-on" && e.Source == graph.SourceDerived && !anc[e.S][e.O] && !anc[e.O][e.S] {
 			ctx = append(ctx, fmt.Sprintf("%s → %s via %s", g.Curie(e.S), g.Curie(e.O), strings.Join(e.Prov.Via, ", ")))
 		}
 	}
@@ -84,7 +86,7 @@ func cmdLandscape(args []string) int {
 	case "markdown":
 		fmt.Printf("### Landscape: %s\n\n", strings.Join(baseNames(repos), ", "))
 		if len(ctx) > 0 {
-			fmt.Print("**Context map**\n\n")
+			fmt.Print("**Context map** (consumer → producer)\n\n")
 			for _, c := range ctx {
 				fmt.Printf("- %s\n", c)
 			}
@@ -94,7 +96,7 @@ func cmdLandscape(args []string) int {
 	default:
 		fmt.Printf("Landscape: %s\n", strings.Join(baseNames(repos), ", "))
 		if len(ctx) > 0 {
-			fmt.Println("\nContext map (publishes → subscribes, produces → consumes across boundaries)")
+			fmt.Println("\nContext map (consumer → producer: depends on what it subscribes to or consumes)")
 			for _, c := range ctx {
 				fmt.Printf("  %s\n", c)
 			}
@@ -175,6 +177,45 @@ func union(gs []*graph.Graph, ws *load.Workspace) *graph.Graph {
 			ee := *e
 			out.AddEdge(&ee)
 		}
+	}
+	return out
+}
+
+// boundaryAncestors maps each boundary IRI to the boundaries that contain it:
+// what it is part-of, and the boundary of every manifest whose directory
+// encloses its own (merged manifest directories carry the repo name, so
+// nesting never crosses repositories), transitively.
+func boundaryAncestors(g *graph.Graph, ws *load.Workspace) map[string]map[string]bool {
+	byCurie := map[string]string{}
+	for _, b := range g.NodesOf(model.NodeBoundary) {
+		byCurie[b.CURIE] = b.ID
+	}
+	parents := map[string][]string{}
+	for _, b := range g.NodesOf(model.NodeBoundary) {
+		parents[b.ID] = append(parents[b.ID], g.Objects(b.ID, "part-of")...)
+	}
+	for _, m := range ws.Manifests {
+		id := byCurie[m.Boundary]
+		for _, o := range ws.Manifests {
+			if oid := byCurie[o.Boundary]; id != "" && oid != "" && oid != id && strings.HasPrefix(m.Dir, o.Dir+"/") {
+				parents[id] = append(parents[id], oid)
+			}
+		}
+	}
+	out := map[string]map[string]bool{}
+	for id := range parents {
+		seen := map[string]bool{}
+		stack := append([]string{}, parents[id]...)
+		for len(stack) > 0 {
+			p := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if p == id || seen[p] {
+				continue
+			}
+			seen[p] = true
+			stack = append(stack, parents[p]...)
+		}
+		out[id] = seen
 	}
 	return out
 }

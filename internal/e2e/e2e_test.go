@@ -784,17 +784,35 @@ func TestImportRangesAndLock(t *testing.T) {
 	if c := codes(); has(c, "GM108") || has(c, "GM107") {
 		t.Fatalf("after lock diags = %v", c)
 	}
-	// Upstream edits the ontology without bumping → GM107 (hash).
+	// The lock vendored the ontology; the import now resolves from the copy.
+	pin := load.PinPath(root, "pay", "1.2.1")
+	if ws, _ := load.Load(root); ws.Ontologies["pay"].Path != pin || !ws.Resolved["pay"].Pinned {
+		t.Fatalf("pay: should resolve from %s, got %s", pin, ws.Ontologies["pay"].Path)
+	}
+	// Upstream edits the ontology without bumping → GM116, still pinned.
 	up := filepath.Join(tmp, "payments-api", "ontology", "pay.gloss.yaml")
 	b, _ := os.ReadFile(up)
 	os.WriteFile(up, append(b, []byte("  Chargeback: { kind: entity }\n")...), 0o644)
-	if c := codes(); !has(c, "GM107") {
+	if c := codes(); !has(c, "GM116") || has(c, "GM107") {
 		t.Fatalf("content change not noticed: %v", c)
 	}
-	// Upstream bumps to 2.0.0 → outside ^1.2 → GM106 and GM107 (version).
+	// Upstream bumps to 2.0.0 → outside ^1.2: reported, and the pin holds (no GM106).
 	os.WriteFile(up, []byte(strings.Replace(string(b), "version: 1.2.1", "version: 2.0.0", 1)), 0o644)
+	ws, _ = load.Load(root)
+	var msgs []string
+	for _, d := range ws.Diags {
+		msgs = append(msgs, d.Code+" "+d.Msg)
+	}
+	if c := codes(); !has(c, "GM116") || has(c, "GM106") || has(c, "GM107") || !strings.Contains(strings.Join(msgs, "\n"), "2.0.0 available, outside ^1.2") {
+		t.Fatalf("major bump not reported: %v", msgs)
+	}
+	if v := ws.Ontologies["pay"].Version; v != "1.2.1" {
+		t.Fatalf("pay: resolved %s, want the pinned 1.2.1", v)
+	}
+	// Without the vendored copy the lock is a tripwire again: GM106 and GM107 (version).
+	os.Remove(pin)
 	if c := codes(); !has(c, "GM106") || !has(c, "GM107") {
-		t.Fatalf("major bump not caught: %v", c)
+		t.Fatalf("major bump not caught without the pin: %v", c)
 	}
 	// An unsupported grammar directive is refused outright.
 	cfg := filepath.Join(root, "glossmark.yaml")
@@ -802,6 +820,79 @@ func TestImportRangesAndLock(t *testing.T) {
 	os.WriteFile(cfg, append([]byte("grammar: 99\n"), cb...), 0o644)
 	if _, err := load.Load(root); err == nil || !strings.Contains(err.Error(), "grammar 99") {
 		t.Fatalf("grammar 99 should be refused, got %v", err)
+	}
+}
+
+// TestImportedPathsRelative: an importer's graph records imported ontology
+// files relative to its root (../payments-api/...), so a rebuild in another
+// checkout writes the same bytes (issue #94).
+func TestImportedPathsRelative(t *testing.T) {
+	render := func() string {
+		tmp := t.TempDir()
+		copyTree(t, example(t, "payments/payments-api"), filepath.Join(tmp, "payments-api"))
+		copyTree(t, example(t, "payments/settlement-worker"), filepath.Join(tmp, "settlement-worker"))
+		_, g, _, _ := build(t, filepath.Join(tmp, "settlement-worker"))
+		var sb strings.Builder
+		if err := g.WriteJSONL(&sb); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(sb.String(), tmp) {
+			t.Fatalf("graph holds the checkout path %s", tmp)
+		}
+		return sb.String()
+	}
+	a, b := render(), render()
+	if a != b {
+		t.Fatal("graph differs between two checkouts")
+	}
+	if !strings.Contains(a, `"file":"../payments-api/ontology/pay.gloss.yaml"`) {
+		t.Fatal("imported concepts should record ../payments-api/ontology/pay.gloss.yaml")
+	}
+}
+
+// TestNamespaceVersionSource: the ontology file's version: is the namespace
+// version; owns.<prefix>.version may only repeat it (issue #108).
+func TestNamespaceVersionSource(t *testing.T) {
+	for _, tc := range []struct {
+		name, owns, file string
+		code, sev, want  string // expected diagnostic ("" for none) and resolved version
+	}{
+		{"both agree", "1.0.1", "1.0.1", "", "", "1.0.1"},
+		{"file only", "", "1.0.1", "", "", "1.0.1"},
+		{"disagree", "1.0.2", "1.0.1", "GM115", "error", "1.0.1"},
+		{"owns only", "1.0.2", "", "GM114", "warning", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			decl := "  grid: { iri: https://x/grid/, tier: core"
+			if tc.owns != "" {
+				decl += ", version: " + tc.owns
+			}
+			os.WriteFile(filepath.Join(root, "glossmark.yaml"), []byte("owns:\n"+decl+" }\n"), 0o644)
+			os.MkdirAll(filepath.Join(root, "ontology"), 0o755)
+			onto := "concepts:\n  Meter: { kind: entity }\n"
+			if tc.file != "" {
+				onto = "version: " + tc.file + "\n" + onto
+			}
+			os.WriteFile(filepath.Join(root, "ontology", "grid.gloss.yaml"), []byte(onto), 0o644)
+			ws, err := load.Load(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, d := range ws.Diags {
+				if strings.HasPrefix(d.Code, "GM11") {
+					got = append(got, d.Severity+" "+d.Code)
+				}
+			}
+			if want := strings.TrimSpace(tc.sev + " " + tc.code); strings.Join(got, ",") != want {
+				t.Errorf("diags = %v, want %q", got, want)
+			}
+			// gloss diff and importers read the same version.
+			if v := ws.Ontologies["grid"].Version; v != tc.want {
+				t.Errorf("namespace version = %q, want %q", v, tc.want)
+			}
+		})
 	}
 }
 

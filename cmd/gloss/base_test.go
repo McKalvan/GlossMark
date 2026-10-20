@@ -55,7 +55,7 @@ func TestBaseSummary(t *testing.T) {
 		if before.InScopeFiles != 2 || before.CoveredFiles != 1 {
 			t.Errorf("committed=%v: base files %d/%d, want 1/2", committed, before.CoveredFiles, before.InScopeFiles)
 		}
-		out := capture(t, func() { cmdImpact([]string{"--root", root, "--base", "HEAD", "--format", "json"}) })
+		out := captureFunc(t, func() { cmdImpact([]string{"--root", root, "--base", "HEAD", "--format", "json"}) })
 		var res struct {
 			Impact struct{ Before, After rollup.Metrics }
 		}
@@ -119,8 +119,8 @@ func gitRepo(t *testing.T) (string, func(rel, content string), func(args ...stri
 	return root, write, git
 }
 
-// capture returns what f writes to stdout.
-func capture(t *testing.T, f func()) []byte {
+// captureFunc returns what f writes to stdout.
+func captureFunc(t *testing.T, f func()) []byte {
 	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {

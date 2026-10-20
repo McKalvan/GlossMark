@@ -109,10 +109,7 @@ func (ex *extractor) ontologies() {
 	sort.Strings(names)
 	for _, ns := range names {
 		o := ex.ws.Ontologies[ns]
-		file := o.Path
-		if rel, err := relPath(ex.ws.Root, file); err == nil {
-			file = rel
-		}
+		file := ex.ws.Rel(o.Path)
 		cnames := make([]string, 0, len(o.Concepts))
 		for c := range o.Concepts {
 			cnames = append(cnames, c)
@@ -485,11 +482,4 @@ func MarkerID(path, relation string, targets []string, symbol, scope string) str
 	sort.Strings(ts)
 	h := sha1.Sum([]byte(path + "\x00" + relation + "\x00" + strings.Join(ts, ",") + "\x00" + symbol + "\x00" + scope))
 	return "m-" + hex.EncodeToString(h[:])[:10]
-}
-
-func relPath(root, path string) (string, error) {
-	if !strings.HasPrefix(path, root) {
-		return path, fmt.Errorf("outside root")
-	}
-	return strings.TrimPrefix(strings.TrimPrefix(path, root), "/"), nil
 }

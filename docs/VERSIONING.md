@@ -42,7 +42,7 @@ The reference regex and the conformance corpus in `corpus/` are the definition o
 
 ## Namespaces
 
-Every namespace carries semver, owned ones in `glossmark.yaml` (`owns.<prefix>.version`) or in the ontology file, imported ones from the file that is resolved. The bump a change requires is classified by `gloss diff`:
+Every namespace carries semver in its ontology file (`version:` at the top of `<prefix>.gloss.yaml`). That file is what importers resolve and what `gloss diff` compares, so it is the only source. `owns.<prefix>.version` in `glossmark.yaml` may repeat it: when the two disagree `gloss check` fails (GM115), and a version given only in `glossmark.yaml` warns (GM114) because importers do not see it. The bump a change requires is classified by `gloss diff`:
 
 | Bump | Change |
 | --- | --- |
@@ -61,7 +61,11 @@ imports:
 
 Ranges accept `1.2.3`, `^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0` and `*`. A resolved ontology outside the range fails `gloss check` (GM106); an imported ontology without a version warns (GM105).
 
-`gloss lock` writes `glossmark.lock` with the resolved version, range, source and content hash of every import. `gloss check` then reports (GM107) when the resolved version differs from the lock, when the content changed under the same version number (the upstream forgot to bump), or when the lock is stale. Commit the lockfile; run `gloss lock` after a deliberate upgrade.
+`gloss lock` writes `glossmark.lock` with the resolved version, range, source and content hash of every import, and vendors each locked ontology to `.glossmark/imports/<prefix>@<version>.gloss.yaml`. Commit both. From then on every command resolves the import from that copy, so the lock is a pin: an upstream release does not change your build until you take it. `gloss check` warns (GM116) when the upstream now resolves to something else, naming the version and whether it is inside the range (`2.0.0 available, outside ~1.0.0`), or saying the content changed under the same version number (the upstream forgot to bump). Review it, then run `gloss lock --update` to move.
+
+`gloss lock` refuses, exit 1 and the lockfile untouched, to record a version that is absent, not semver or outside the range; `--allow-out-of-range` overrides. A plain `gloss lock` keeps pinned imports where they are and pins new ones.
+
+Without the vendored copy (a lock from an earlier release, or a deleted copy) the lock is a tripwire: `gloss check` reports (GM107) when the resolved version differs from the lock, when the content changed under the same version number, or when the lock is stale. See [ADR 0002](adr/0002-lock-pins-imports.md).
 
 ## Diagnostics
 
@@ -72,3 +76,7 @@ Ranges accept `1.2.3`, `^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0` and `*`. A resolved
 | GM107 | lockfile disagrees with the resolved imports |
 | GM108 | imports exist but no lockfile; run `gloss lock` |
 | GM109 | lockfile unreadable or written by a newer tool |
+| GM113 | imported namespace states no tier but has `published:` or `realizes:` concepts; it is read as core and the published seam is not enforced |
+| GM114 | `owns.<prefix>.version` is set but the ontology file has no `version:` |
+| GM115 | `owns.<prefix>.version` and the ontology file's `version:` disagree |
+| GM116 | a pinned import's upstream now resolves to another version or content; run `gloss lock --update` after review |

@@ -29,8 +29,8 @@ policy:
     - { finding: "gap:acme:payments-platform:produces:pay:Payout", owner: alice, expires: 2026-12-31, reason: "settled by another repo" }
 ```
 
-- `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`.
-- `imports.<prefix>`: a namespace defined elsewhere. `source` is a local path (file or directory) today; `git+` and `https://` sources are parsed and rejected with a message until the fetcher lands (vendor the directory, or point at a sibling checkout). `version` is a range (`^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0`) enforced against the resolved ontology's version; `gloss lock` pins the result in `glossmark.lock`. Only **published** concepts of an imported implementation namespace are referenceable.
+- `owns.<prefix>`: a namespace this repo defines. `file` defaults to `ontology/<prefix>.gloss.yaml`. `tier` is `core` or `implementation`. `version` may repeat the ontology file's `version:`, which is the namespace version; `gloss check` fails when they disagree (GM115) and warns when only this one is set (GM114).
+- `imports.<prefix>`: a namespace defined elsewhere. `source` is a local path (file or directory) today; `git+` and `https://` sources are parsed and rejected with a message until the fetcher lands (vendor the directory, or point at a sibling checkout). `version` is a range (`^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0`) enforced against the resolved ontology's version; `gloss lock` pins the result in `glossmark.lock`. Only **published** concepts of an imported implementation namespace are referenceable (GM230). `tier` (`core` or `implementation`) applies when the imported file states none; a top-level `tier:` in the imported file wins, and `gloss publish` writes one. With neither, the namespace is read as core, and `gloss check` warns (GM113) when it has `published:` or `realizes:` concepts, because the published seam is then not enforced.
 - Authoring uses CURIEs; the graph stores IRIs. Concept IDs are permanent: a rename is `deprecated: true` plus `replaced-by:`.
 - Versions are semver: MAJOR removes or retypes a concept or changes is-a/part-of; MINOR adds; PATCH touches labels and docs. `gloss diff` classifies the bump.
 
@@ -52,6 +52,10 @@ concepts:
 relations:
   produces: { lift: range-lcs }
 ```
+
+Top-level keys: `namespace`, `version`, `tier` (optional; an owned file defaults to `owns.<prefix>.tier`, and an importer reads it before `imports.<prefix>.tier`), `doc`, `concepts`, `relations`.
+
+`gloss publish` writes `<out>/<ns>/` with `ontology.jsonld`, a copy of this file and, for an implementation namespace, `graph.jsonl`. The copy states `tier:` and, for an implementation namespace, holds only the published concepts, like `ontology.jsonld`; an importer can point `source:` at the directory.
 
 Concept keys:
 
@@ -142,6 +146,7 @@ Boundaries and artifacts carry no `placement`. The viewer draws a part under its
 
 - `graph.jsonl` — the canonical graph, one JSON record per line, deterministically sorted so `git diff` is meaningful (see `docs/GRAPH.md`). Its first line carries `"format"`; a newer format is refused, not misread.
 - `glossmark.lock` (repo root, committed) — resolved version, range, source and content hash per import, written by `gloss lock`.
+- `imports/<prefix>@<version>.gloss.yaml` (committed) — the copy of each locked import that `gloss lock` vendors; commands resolve the import from it while its hash matches the lock ([ADR 0002](adr/0002-lock-pins-imports.md)).
 - `context.jsonld` — the JSON-LD context that makes `graph.jsonl` RDF-loadable.
 - `viewer.html`, `views.js`, `views.json` (not committed) — `gloss view` writes the page, the data script it loads (a plain `<script src>`, so opening the file from disk works) and the same data as JSON for tools; `--inline` embeds the data in one page instead.
 - `ledger.jsonl` (committed) — provenance and review state per marker: `{marker_id, path, relation, targets, actor, model, conf, created, status, reviewed_by, reviewed_at, anchor_fingerprint, rationale}`. It is the only store of accepted, rejected and stale decisions, so it belongs in git like the graph. `actor` is fixed at the marker's first appearance (see `docs/QUICKSTART.md`). Exportable as PROV-O with `gloss export --prov`.
