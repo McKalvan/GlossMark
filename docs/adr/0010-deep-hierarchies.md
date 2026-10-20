@@ -26,6 +26,11 @@ The deep-hierarchies lab in glossmark-examples (a product taxonomy seven `is-a` 
 7. `collapse: via realizes` folds a concept with no `realizes`, `published-as` or `part-of` where its `is-a` parent folds, so `spk:ShimanoXmlImporter` is folded into `cyc:CatalogueIngestion` with the `spk:Importer` that realizes it.
 8. `is-a` ancestors stay out of a boundary's derived set while the wholes above a part are in it. Implementing a step implements part of the whole; implementing a subtype does not implement the supertype in general. The asymmetry is deliberate and now visible in `steps`.
 
+### A whole sits with the code that runs it (issue #92, F-DEEP-10)
+
+9. In view placement, code implementing a concept whose own `realizes` (or `published-as`) names the target counts as a direct link, read from the edge's `steps`. It beats a manifest that only declares the target, so `cyc:OrderFulfilment` sits in `spw:fulfilment`, whose `engine.py` implements `spk:FulfilmentEngine`, and not in the leaf `spw:scanning` that declares it to cover a deep part.
+10. A `part-of` whole is never placed inside the box of one of its parts; it moves to the nearest boundary enclosing its own box and its parts'.
+
 ## Alternatives considered
 
 - **Admit the default namespace instead.** Rejected: `default-namespace: spk` admits every `spk:` concept, including unrelated ones, which is not "the implementation of what I declare".

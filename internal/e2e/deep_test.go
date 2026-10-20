@@ -219,6 +219,40 @@ func TestDeepProvenance(t *testing.T) {
 	}
 }
 
+// TestWholePlacedWithItsMechanism (#92): code implementing a concept whose
+// own realizes names a core concept places the core concept as firmly as a
+// direct link, so a top-level whole sits in the container that runs it, not
+// in the leaf component whose manifest declares it to cover a deep part.
+func TestWholePlacedWithItsMechanism(t *testing.T) {
+	root, _ := catalogue(t)
+	ws, g, _, _ := build(t, root)
+	_, comp := view(t, views.ProjectAll(g, ws.Views), "components")
+	for curie, want := range map[string]string{
+		"cyc:OrderFulfilment":    "spw:fulfilment",
+		"spk:FulfilmentEngine":   "spw:fulfilment",
+		"cyc:CatalogueIngestion": "spw:ingest", // spk:IngestScheduler, implemented in ingest, realizes it
+		"spk:ScanVerifier":       "spw:scanning",
+	} {
+		if got := comp[curie].Boundary; got != want {
+			t.Errorf("components: %s in %q, want %q", curie, got, want)
+		}
+	}
+	// A whole is never drawn inside the box of one of its parts.
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Whole: { kind: process }\n  Part: { kind: process, part-of: Whole }\n")
+	write("ontology/views.yaml", "views:\n  all:\n    include: [z:*]\n    zoom: component\n")
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\nrealizes: [z:Whole]\n")
+	write("svc/part.py", "# @gloss implements z:Part\ndef part(): pass\n")
+	write("svc/leaf/.gloss.yaml", "boundary: o:leaf\nlevel: component\npart-of: o:svc\nrealizes: [z:Whole]\n")
+	write("svc/leaf/x.py", "def x(): pass\n")
+	ws, g, _, _ = build(t, root)
+	_, all := view(t, views.ProjectAll(g, ws.Views), "all")
+	if all["z:Part"].Boundary != "o:svc" || all["z:Whole"].Boundary != "o:svc" {
+		t.Errorf("Part in %q, Whole in %q; want both in o:svc", all["z:Part"].Boundary, all["z:Whole"].Boundary)
+	}
+}
+
 // TestExplainBySource (#93): check --explain groups a derived set by source
 // and collapses a declared concept with what it covers, so a manifest that
 // declares two concepts reads in two lines however deep the taxonomy.

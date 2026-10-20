@@ -551,6 +551,7 @@ func (p *projector) house() {
 			}
 		}
 	}
+	p.notBelowParts()
 	p.place(strongest)
 }
 
@@ -572,6 +573,65 @@ func (p *projector) ownCode(e *graph.Edge) bool {
 					return true
 				}
 			}
+		}
+	}
+	return false
+}
+
+// notBelowParts lifts a whole whose box sits inside the box of one of its
+// parts to the nearest boundary enclosing its own and all its parts' boxes:
+// a whole is never drawn deeper than a part of it.
+func (p *projector) notBelowParts() {
+	parts := map[int]map[string]bool{} // whole → boundaries of its parts, at any depth
+	for i := range p.nodes {
+		if p.nodes[i].Type != "concept" || p.nodes[i].Boundary == "" {
+			continue
+		}
+		cur := i
+		for g := 0; g < 32; g++ {
+			j, ok := p.byID[p.nodes[cur].Parent]
+			if p.nodes[cur].Parent == "" || !ok || p.nodes[j].Type != "concept" {
+				break
+			}
+			if parts[j] == nil {
+				parts[j] = map[string]bool{}
+			}
+			parts[j][p.nodes[i].Boundary] = true
+			cur = j
+		}
+	}
+	for w, set := range parts {
+		bw := p.nodes[w].Boundary
+		if bw == "" {
+			continue
+		}
+		deeper := false
+		for b := range set {
+			if b != bw && has(p.boundaryChain(bw), b) {
+				deeper = true
+			}
+		}
+		if !deeper {
+			continue
+		}
+		all := append([]string{bw}, keys(set)...)
+		for _, anc := range p.boundaryChain(bw) {
+			common := true
+			for _, b := range all {
+				common = common && has(p.boundaryChain(b), anc)
+			}
+			if common {
+				p.nodes[w].Boundary = anc
+				break
+			}
+		}
+	}
+}
+
+func has(xs []string, x string) bool {
+	for _, y := range xs {
+		if y == x {
+			return true
 		}
 	}
 	return false
