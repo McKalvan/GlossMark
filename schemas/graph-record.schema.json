@@ -123,6 +123,10 @@
           "description": "Concept kind (entity, process, capability, event, measure, constraint, resource, system-type); boundary level (domain, system, container, component); declaration kind of an artifact (file, function, class, resource, table, sql, heading, ...); actor kind (human, agent).",
           "type": "string"
         },
+        "kind-from": {
+          "description": "Concept: CURIE of the nearest is-a ancestor its kind was inherited from; absent when the kind is declared.",
+          "type": "string"
+        },
         "label": {
           "type": "string"
         },
