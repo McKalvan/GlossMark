@@ -262,20 +262,25 @@ func (ex *extractor) files() error {
 		if m != nil {
 			boundary = ex.boundaryIRI(m.Boundary, m.Path, 1)
 		}
-		for _, fd := range found {
-			ex.marker(rel, target, fd, lines, style, m, boundary)
+		anchors := make([]marker.Anchor, len(found))
+		for i, fd := range found {
+			anchors[i] = marker.Resolve(rel, fd, lines, style)
+			if marker.IsSidecar(rel) && anchors[i].Scope == "symbol" {
+				anchors[i].Scope = "file"
+				anchors[i].Symbol = ""
+			}
+		}
+		// Same-named declarations in one file must not share an artifact.
+		marker.Disambiguate(rel, lines, anchors)
+		for i, fd := range found {
+			ex.marker(rel, target, fd, anchors[i], lines, m, boundary)
 		}
 	}
 	return nil
 }
 
-func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string, style marker.CommentStyle, m *model.Manifest, boundary string) {
+func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.Anchor, lines []string, m *model.Manifest, boundary string) {
 	mk := fd.Marker
-	anchor := marker.Resolve(rel, fd, lines, style)
-	if marker.IsSidecar(rel) && anchor.Scope == "symbol" {
-		anchor.Scope = "file"
-		anchor.Symbol = ""
-	}
 	if mk.Scope() == "symbol" && anchor.Kind == "unresolved-symbol" {
 		ex.diag(rel, mk.Line, "warning", "GM122", "scope=symbol requested but no declaration was detected after the marker; anchored to the next block")
 	}

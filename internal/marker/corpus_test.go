@@ -88,6 +88,11 @@ func TestCorpus(t *testing.T) {
 			t.Errorf("%s: expected %d markers, found %d: %+v", rel, len(exp), len(found), summarize(found))
 			continue
 		}
+		anchors := make([]Anchor, len(found))
+		for i, fd := range found {
+			anchors[i] = Resolve(rel, fd, lines, style)
+		}
+		Disambiguate(rel, lines, anchors)
 		for i, fd := range found {
 			e := exp[i]
 			m := fd.Marker
@@ -104,7 +109,7 @@ func TestCorpus(t *testing.T) {
 			if !reflect.DeepEqual(got, e.Keys) {
 				t.Errorf("%s:%d: keys got %v want %v", rel, m.Line, got, e.Keys)
 			}
-			a := Resolve(rel, fd, lines, style)
+			a := anchors[i]
 			if a.Scope != e.Scope || a.Symbol != e.Symbol {
 				t.Errorf("%s:%d: anchor got scope=%s symbol=%q want scope=%s symbol=%q (kind=%s lines %d-%d)", rel, m.Line, a.Scope, a.Symbol, e.Scope, e.Symbol, a.Kind, a.StartLine, a.EndLine)
 			}

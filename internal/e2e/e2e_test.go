@@ -1097,6 +1097,46 @@ func TestVerifiesCanonical(t *testing.T) {
 	}
 }
 
+// TestSameNamedMethods: methods with one name on two classes in one file are
+// two artifacts, qualified by their class, with different fingerprints; a
+// method whose name is unique in its file keeps its bare symbol (issue #61).
+func TestSameNamedMethods(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Replenishment: { kind: process, realizes: z:Doing }\n  WavePlanning: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("core/handlers.py", "class InboundHandler:\n    # @gloss implements .Replenishment\n    def process(self):\n        pass\n\n    # @gloss implements .Replenishment\n    def drain(self):\n        pass\n\n\nclass OutboundHandler:\n    # @gloss implements .WavePlanning\n    def process(self):\n        pass\n")
+	write("core/k.ts", "export class Inbound {\n  // @gloss implements .Replenishment\n  process(): void {}\n}\n\nexport class Outbound {\n  // @gloss implements .WavePlanning\n  process(): void {}\n}\n")
+	_, g, _, lg := build(t, root)
+	var ids []string
+	for _, n := range g.NodesOf(model.NodeArtifact) {
+		ids = append(ids, strings.TrimPrefix(n.ID, graph.ArtifactPrefix))
+	}
+	for _, want := range []string{"core/handlers.py#InboundHandler.process", "core/handlers.py#OutboundHandler.process", "core/handlers.py#drain", "core/k.ts#Inbound.process", "core/k.ts#Outbound.process"} {
+		if !has(ids, want) {
+			t.Errorf("artifact %s missing; have %v", want, ids)
+		}
+	}
+	if len(ids) != 5 {
+		t.Errorf("artifacts = %v, want 5", ids)
+	}
+	fps := map[string]bool{}
+	for _, e := range lg.Entries {
+		if e.Path == "core/handlers.py" {
+			fps[e.AnchorFingerprint] = true
+		}
+	}
+	if len(fps) != 3 {
+		t.Errorf("the three handlers.py markers should have three fingerprints, got %v", fps)
+	}
+}
+
 // TestRetiringBoundaryAndUnknownManifestKey: a manifest may mark its
 // boundary as retiring, and an unknown key is GM110 at its own line without
 // dropping the boundary, so its files do not fall to the parent (issue #99).
