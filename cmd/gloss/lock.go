@@ -28,7 +28,8 @@ func cmdLock(args []string) int {
 	if err := load.WriteLock(p.WS.Root, p.WS.Resolved); err != nil {
 		return fail(err)
 	}
-	for prefix, r := range p.WS.Resolved {
+	for _, prefix := range load.SortedPrefixes(p.WS.Resolved) {
+		r := p.WS.Resolved[prefix]
 		fmt.Printf("gloss lock: %s: %s (%s) %s\n", prefix, orNone(r.Version), orNone(r.Range), r.Hash[:19])
 	}
 	fmt.Printf("gloss lock: written %s; commit it\n", load.LockName)

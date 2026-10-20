@@ -81,6 +81,17 @@ func WriteLock(root string, resolved map[string]*Resolved) error {
 	return os.WriteFile(filepath.Join(root, LockName), append([]byte(head), b...), 0o644)
 }
 
+// SortedPrefixes returns the prefixes of resolved imports in order, so every
+// listing of them is stable.
+func SortedPrefixes(resolved map[string]*Resolved) []string {
+	out := make([]string, 0, len(resolved))
+	for p := range resolved {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // hashFile returns sha256:<hex> of a file.
 func hashFile(path string) string {
 	b, err := os.ReadFile(path)
@@ -94,11 +105,7 @@ func hashFile(path string) string {
 // verifyImports checks version ranges and the lockfile, returning diagnostics.
 func verifyImports(ws *Workspace) []marker.Diagnostic {
 	var out []marker.Diagnostic
-	prefixes := make([]string, 0, len(ws.Resolved))
-	for p := range ws.Resolved {
-		prefixes = append(prefixes, p)
-	}
-	sort.Strings(prefixes)
+	prefixes := SortedPrefixes(ws.Resolved)
 	for _, p := range prefixes {
 		r := ws.Resolved[p]
 		if r.Range == "" {
