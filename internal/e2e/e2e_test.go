@@ -1635,3 +1635,67 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 		t.Error("a declared level is never overridden")
 	}
 }
+
+// TestPlacement: every concept in a projection says why it sits where it
+// does. housed, flow and unlinked come from the examples; shared, bound and
+// surface do not occur there, so a small fixture covers them.
+func TestPlacement(t *testing.T) {
+	type want struct{ view, concept, placement, reason string }
+	expect := func(t *testing.T, root string, wants []want) {
+		t.Helper()
+		ws, g, _, _ := build(t, root)
+		byName := map[string]*views.Projection{}
+		for _, p := range views.ProjectAll(g, ws.Views) {
+			byName[p.Name] = p
+			for _, n := range p.Nodes {
+				if (n.Type == "concept") != (n.Placement != "") {
+					t.Errorf("%s: %s %s has placement %q", p.Name, n.Type, n.ID, n.Placement)
+				}
+			}
+		}
+		for _, w := range wants {
+			var got *views.PNode
+			for i, n := range byName[w.view].Nodes {
+				if n.ID == w.concept {
+					got = &byName[w.view].Nodes[i]
+				}
+			}
+			if got == nil || got.Placement != w.placement || !strings.Contains(got.PlacementReason, w.reason) {
+				t.Errorf("%s %s = %+v, want placement %s with reason containing %q", w.view, w.concept, got, w.placement, w.reason)
+			}
+		}
+	}
+	expect(t, example(t, "payments/payments-api"), []want{
+		{"engineering", "pay:Authorization", views.PlacementHoused, "inside acme:payments-api"},
+		{"engineering", "pay:Refund", views.PlacementFlow, "produced by acme:payments-api"},
+		{"engineering", "pay:Merchant", views.PlacementUnlinked, "no boundary realizes"},
+	})
+	expect(t, example(t, "horse-factory"), []want{
+		{"engineering", "zoo:Foal", views.PlacementHoused, "inside "},
+		{"engineering", "zoo:FoalBorn", views.PlacementFlow, "published by acme:horse-factory-svc"},
+		{"engineering", "impl:TailQueue", views.PlacementUnlinked, "no boundary realizes"},
+	})
+
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Thing: { kind: process }\n  Budgeting: { kind: process }\n"+
+		"  Cutoff: { kind: constraint, value: \"3\", value-from: { path: cfg.py, symbol: CUTOFF } }\n")
+	write("ontology/views.yaml", "views:\n  all:\n    include: [z:*]\n    zoom: container\n")
+	write("cfg.py", "CUTOFF = 3\n")
+	write("a/.gloss.yaml", "boundary: o:a\nlevel: container\nrealizes: [z:Thing]\n")
+	write("a/x.py", "# @gloss implements z:Thing\ndef x(): pass\n")
+	write("b/.gloss.yaml", "boundary: o:b\nlevel: container\nrealizes: [z:Thing]\n")
+	write("b/y.py", "# @gloss implements z:Thing\ndef y(): pass\n")
+	write("web/.gloss.yaml", "boundary: o:web\nlevel: container\npresents: [z:Budgeting]\n")
+	write("web/page.tsx", "// @gloss presents z:Budgeting\nexport function Page() {}\n")
+	expect(t, root, []want{
+		{"all", "z:Thing", views.PlacementShared, "realized or represented by o:a, o:b"},
+		{"all", "z:Cutoff", views.PlacementBound, "value bound to code at cfg.py:1"},
+		{"all", "z:Budgeting", views.PlacementSurface, "presented by o:web"},
+	})
+}
