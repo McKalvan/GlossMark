@@ -182,8 +182,13 @@ func (ex *extractor) boundaryIRI(curie, path string, line int) string {
 }
 
 func (ex *extractor) manifests() {
-	for _, m := range ex.ws.Manifests {
+	// Every manifest's own node first: a part-of reference to a boundary
+	// declared in a sibling directory must never create that node from the
+	// child's manifest, which would give it the child's file and no dir.
+	iris := make([]string, len(ex.ws.Manifests))
+	for i, m := range ex.ws.Manifests {
 		iri := ex.boundaryIRI(m.Boundary, m.Path, 1)
+		iris[i] = iri
 		n := &graph.Node{NodeType: model.NodeBoundary, ID: iri, CURIE: m.Boundary, Kind: m.Level, Label: m.Label, Doc: m.Doc, Dir: m.Dir, File: m.Path, Line: 1, Owner: m.Owner}
 		if m.Criticality != "" {
 			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
@@ -193,11 +198,15 @@ func (ex *extractor) manifests() {
 			n.NS = m.Boundary[:i]
 		}
 		ex.g.AddNode(n)
+	}
+	for i, m := range ex.ws.Manifests {
+		iri := iris[i]
 		for _, p := range m.PartOf {
 			piri := ex.boundaryIRI(p, m.Path, 1)
 			if ex.g.Node(piri) == nil {
-				// Implicit parent boundary: declared only by reference.
-				pn := &graph.Node{NodeType: model.NodeBoundary, ID: piri, CURIE: p, Kind: parentLevel(m.Level), File: m.Path, Line: 1}
+				// Implicit parent boundary: declared only by reference. It has
+				// no level of its own; views place it above its children.
+				pn := &graph.Node{NodeType: model.NodeBoundary, ID: piri, CURIE: p, File: m.Path, Line: 1}
 				if i := strings.Index(p, ":"); i > 0 {
 					pn.NS = p[:i]
 				}
@@ -221,15 +230,6 @@ func (ex *extractor) manifests() {
 			ex.g.AddEdge(&graph.Edge{S: aid, P: "owns", O: iri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1}})
 		}
 	}
-}
-
-func parentLevel(level string) string {
-	for i, l := range model.BoundaryLevels {
-		if l == level && i > 0 {
-			return model.BoundaryLevels[i-1]
-		}
-	}
-	return "domain"
 }
 
 func (ex *extractor) files() error {
