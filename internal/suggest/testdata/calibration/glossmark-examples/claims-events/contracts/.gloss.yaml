@@ -1,0 +1,7 @@
+# contracts/.gloss.yaml: the AsyncAPI contract and its test. It documents every
+# event; it publishes and subscribes nothing itself.
+boundary: claimb:contracts
+level: container
+label: Event contract
+part-of: claimb:claims-events
+owner: claims-architecture

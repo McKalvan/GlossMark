@@ -1,0 +1,65 @@
+# ontology/dine.gloss.yaml: the core tier.
+# Litmus test: if a domain expert would nod at the term, it is core; if only an
+# engineer would, it belongs in pepper:. Core concepts never mention pepper:.
+# Write docs quoted: doc: "One account at an institution (checking, savings)."
+namespace: dine
+version: 0.1.0
+concepts:
+  # What a head chef or a floor manager would name
+  Location:
+    kind: entity
+    doc: "One Pepper Row restaurant: Canal Street, Harbour or Market Hall."
+  Menu:
+    kind: entity
+    aliases: [bill of fare]
+    doc: "What one location offers tonight, grouped into sections."
+  MenuItem:
+    kind: entity
+    part-of: Menu
+    aliases: [dish, plate]
+    doc: "One dish with its price, its station and the allergens it contains or may contain."
+  Allergen:
+    kind: entity
+    aliases: [allergy]
+    criticality: high          # the declared list is a legal record (UK Food Information Regulations)
+    doc: "One of the fourteen allergens UK food law requires a restaurant to declare."
+  Order:
+    kind: entity
+    aliases: [check, tab]
+    doc: "What one table asked for, with the allergens the guests declared."
+  KitchenTicket:
+    kind: entity
+    aliases: [chit, docket, ticket]
+    doc: "The part of an order one kitchen station cooks, shown on that station's screen."
+  Station:
+    kind: entity
+    doc: "A section of the kitchen line: grill, fry, saute, cold, pastry or the pass."
+  Payment:
+    kind: entity
+    aliases: [card payment]
+    doc: "Money taken for an order through the card processor, tip included."
+
+  # What happens during a service
+  MenuPublishing:
+    kind: process
+    doc: "Deciding what a location offers and in which sections, and taking a dish off when the kitchen runs out."
+  Ordering:
+    kind: process
+    aliases: [taking an order, firing an order]
+    doc: "Opening an order for a table and firing it to the kitchen."
+  KitchenFulfilment:
+    kind: process
+    aliases: [expo, bumping]
+    doc: "Cooking a fired order station by station until every ticket is bumped."
+  Checkout:
+    kind: process
+    aliases: [paying the bill, settling up]
+    doc: "Taking payment for a served order."
+
+  # The rule nobody may weaken
+  AllergenRule:
+    kind: constraint
+    criticality: critical      # a mistake here can put a guest in hospital
+    constrains: [Ordering, KitchenFulfilment]
+    aliases: [allergy check, allergen check]
+    doc: "No dish containing, or possibly containing, a guest's declared allergen is fired without staff acknowledgement, and every ticket carrying it is flagged at its station."

@@ -1,0 +1,12 @@
+# service/.gloss.yaml: the Spring Boot shipment service.
+boundary: shipcore:shipment-service
+level: container
+label: Shipment service
+part-of: fleet:freight-platform
+default-namespace: shc
+owner: shipment-eng
+realizes: [shc:BookingHandler, shc:CarrierSelector, shc:LabelRenderer, shc:LabelSpec, shc:DeliveryWindowPolicy, shc:ShipmentBookedEmitter, shc:StatusProjector, shc:OnTimeRateCalculator]
+holds: [frt:Shipment, frt:Parcel, frt:Consignment, frt:Carrier, frt:ShippingLabel]
+produces: [frt:Shipment, frt:ShippingLabel]
+publishes: [frt:ShipmentBooked]
+subscribes: [frt:ShipmentPickedUp, frt:ShipmentDelivered]

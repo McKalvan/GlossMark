@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "FireClaimFiled",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "A policyholder filed a home claim for fire or smoke damage.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "lossDate", "type": {"type": "int", "logicalType": "date"}},
+    {"name": "estimatedLoss", "type": "com.tidewater.claims.common.Money"},
+    {"name": "propertyId", "type": "string"},
+    {"name": "fireServiceAttended", "type": "boolean"},
+    {"name": "fireReportNumber", "type": ["null", "string"], "default": null},
+    {"name": "evidenceIds", "type": {"type": "array", "items": "string"}, "default": []}
+  ]
+}

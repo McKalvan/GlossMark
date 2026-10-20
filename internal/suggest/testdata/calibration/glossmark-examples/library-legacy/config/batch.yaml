@@ -1,0 +1,17 @@
+# @gloss configures .NightlyBatch scope=file conf=0.85
+# Nightly batch settings (batch/bin/run_nightly.sh). Times are America/Chicago.
+notices:
+  overdue_days: [7, 14, 28]
+  lost_after_days: 60
+  from: "Riverbend Public Library <circulation@riverbendlibrary.example>"
+  smtp_host: smtp.city.riverbend.example
+  print_queue: /var/spool/circ/notices
+  archive_bucket: riverbend-circ-notices
+fines:
+  procedure: sp_assess_fines
+  dry_run: false
+holds:
+  procedure: sp_expire_holds
+logging:
+  dir: /var/log/circ
+  keep_days: 90

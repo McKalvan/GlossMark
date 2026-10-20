@@ -1,0 +1,163 @@
+# ontology/claim.gloss.yaml: the core tier.
+# Litmus test: if a domain expert would nod at the term, it is core; if only an
+# engineer would, it belongs in tide:. Core concepts never mention tide:.
+# Write docs quoted: doc: "One account at an institution (checking, savings)."
+namespace: claim
+version: 0.1.0
+concepts:
+  # Entities: the claim taxonomy is four levels deep (Claim > PropertyClaim > HomeClaim > FloodClaim)
+  Policy:
+    kind: entity
+    doc: "An insurance contract: who is covered, for which perils, between which dates."
+  Claim:
+    kind: entity
+    criticality: high          # a lost or mis-routed claim is a customer who is not paid
+    doc: "A policyholder's request to be indemnified for a loss under one policy."
+  MotorClaim:
+    is-a: Claim
+    doc: "A claim under a motor policy: collision, theft, glass or vandalism."
+  PropertyClaim:
+    is-a: Claim
+    doc: "A claim for damage to insured property."
+  HomeClaim:
+    is-a: PropertyClaim
+    doc: "A property claim under a household policy."
+  FloodClaim:
+    is-a: HomeClaim
+    doc: "A home claim for water entering the property from outside."
+  FireClaim:
+    is-a: HomeClaim
+    doc: "A home claim for fire or smoke damage."
+  LossEvidence:
+    kind: entity
+    attaches-to: Claim
+    aliases: [evidence, photos, police report]
+    doc: "Photos, reports and receipts a policyholder attaches to a claim."
+  Assessment:
+    kind: entity
+    doc: "What the rules or an adjuster concluded about a claim, and why."
+  Payout:
+    kind: entity
+    criticality: high          # money leaves the company on this
+    doc: "Money cleared for payment to a policyholder for an approved claim."
+
+  # Events: five levels (ClaimEvent > ClaimLifecycleEvent > ClaimFiled > PropertyClaimFiled > FloodClaimFiled)
+  ClaimEvent:
+    kind: event
+    doc: "Anything that happened to a claim that another part of the business needs to hear about."
+  ClaimLifecycleEvent:
+    is-a: ClaimEvent
+    doc: "A claim moved from one stage to the next: filed, withdrawn, decided, referred."
+  ClaimFiled:
+    is-a: ClaimLifecycleEvent
+    doc: "A policyholder filed a claim."
+  MotorClaimFiled:
+    is-a: ClaimFiled
+    doc: "A motor claim was filed."
+  PropertyClaimFiled:
+    is-a: ClaimFiled
+    doc: "A property claim was filed."
+  FloodClaimFiled:
+    is-a: PropertyClaimFiled
+    doc: "A flood claim was filed."
+  FireClaimFiled:
+    is-a: PropertyClaimFiled
+    doc: "A fire claim was filed."
+  ClaimWithdrawn:
+    is-a: ClaimLifecycleEvent
+    doc: "The policyholder withdrew a claim before it was decided."
+  ClaimDecided:
+    is-a: ClaimLifecycleEvent
+    doc: "A claim was approved or denied."
+  ClaimApproved:
+    is-a: ClaimDecided
+    doc: "A claim was approved for a settled amount."
+  ClaimDenied:
+    is-a: ClaimDecided
+    doc: "A claim was denied, with the reason."
+  ClaimReferred:
+    is-a: ClaimLifecycleEvent
+    doc: "A claim the rules could not decide was handed to an adjuster."
+  PayoutEvent:
+    is-a: ClaimEvent
+    doc: "Something happened to the money for a claim."
+  PayoutAuthorized:
+    is-a: PayoutEvent
+    doc: "A payout was cleared for payment."
+  PayoutFailed:
+    is-a: PayoutEvent
+    doc: "The bank rejected a payout."
+  FraudSuspected:
+    is-a: ClaimEvent
+    doc: "Screening thinks a claim may be fraudulent and wants it held."
+
+  # Processes
+  ClaimFiling:
+    kind: process
+    consumes: [Policy]
+    produces: [Claim]
+    publishes: [ClaimFiled]
+    aliases: [first notice of loss, FNOL]
+    doc: "A policyholder reports a loss and files a claim against a policy that covered it on the day."
+  ClaimWithdrawal:
+    kind: process
+    reverses: ClaimFiling
+    consumes: [Claim]
+    publishes: [ClaimWithdrawn]
+    doc: "A policyholder withdraws an undecided claim; everyone working on it stops."
+  ClaimAssessment:
+    kind: process
+    subscribes: [ClaimFiled, ClaimWithdrawn, FraudSuspected]
+    consumes: [Claim]
+    produces: [Assessment, Payout]
+    publishes: [ClaimDecided, PayoutAuthorized]
+    escalates-to: AdjusterReview
+    criticality: high
+    doc: "Deciding a filed claim: approve and authorize the payout, deny, or refer to an adjuster."
+  AdjusterReview:
+    kind: process
+    doc: "A claims adjuster decides a claim the rules referred. Done in the claims workbench, outside this system."
+  FraudScreening:
+    kind: process
+    subscribes: [ClaimFiled]
+    publishes: [FraudSuspected]
+    escalates-to: SpecialInvestigation
+    doc: "Scoring every new claim for signs of fraud and holding the suspicious ones."
+    criticality: high          # raised on review: suggest flagged the scorer and topology, the level belongs on the process
+  SpecialInvestigation:
+    kind: process
+    doc: "The special investigations unit (SIU) examines a claim held for suspected fraud. Outside this system."
+  PayoutNotification:
+    kind: process
+    subscribes: [PayoutAuthorized]
+    consumes: [Payout]
+    doc: "Telling the policyholder that their money is on its way."
+    criticality: medium        # suggested high because a test name contains "Authorized"; an email is not a security control
+
+  # Rules
+  FilingWindow:
+    kind: constraint
+    constrains: [ClaimFiling]
+    doc: "How many days after the loss a claim may still be filed."
+    criticality: high          # gloss criticality suggest: a late-filing refusal is a coverage decision the regulator can audit
+  AutoApprovalLimit:
+    kind: constraint
+    constrains: [ClaimAssessment]
+    doc: "The largest estimated loss the rules may approve without an adjuster."
+    criticality: high          # gloss criticality suggest: above it, money moves without a human
+  FraudReferralThreshold:
+    kind: constraint
+    constrains: [FraudScreening]
+    doc: "The fraud score at or above which a claim is held for investigation."
+    criticality: high          # gloss criticality suggest: too high pays fraud, too low holds honest customers
+relations:
+  # The taxonomic lift for the four flow relations (docs/GRAPH.md rule 3).
+  produces: { lift: range-lcs }
+  consumes: { lift: range-lcs }
+  publishes: { lift: range-lcs }
+  subscribes: { lift: range-lcs }
+  # A domain relation of our own: one process hands a case it cannot finish to another.
+  escalates-to:
+    domain: [concept]
+    range: [concept]
+    doc: "A process hands a case it cannot finish to another process."

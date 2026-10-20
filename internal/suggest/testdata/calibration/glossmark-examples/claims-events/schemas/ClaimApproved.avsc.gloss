@@ -1,0 +1,2 @@
+# Sidecar for ClaimApproved.avsc (Avro is JSON, which has no comments). Scopes are JSON Pointers.
+@gloss represents claim:ClaimApproved scope=range note="/fields" conf=0.9

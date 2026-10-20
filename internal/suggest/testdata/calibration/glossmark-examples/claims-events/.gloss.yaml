@@ -1,0 +1,14 @@
+# .gloss.yaml: the repository's root boundary (docs/FILE-FORMATS.md).
+# The system realizes what its containers declare. Its event and entity flows are
+# declared one level of generality up from what any container publishes: every
+# container's specific events and claims are subsumed by these (is-a).
+boundary: claimb:claims-events
+level: system
+label: Tidewater Mutual claims platform
+realizes: inherit
+publishes: [claim:ClaimEvent]
+subscribes: [claim:ClaimEvent]
+produces: [claim:Claim, claim:Assessment, claim:Payout]
+consumes: [claim:Claim, claim:Policy, claim:Payout]
+default-namespace: tide
+owner: claims-platform

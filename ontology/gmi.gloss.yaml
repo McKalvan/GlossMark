@@ -39,7 +39,7 @@ concepts:
   # Onboarding
   Scaffolder:         { kind: process, realizes: gm:Onboarding, doc: "gloss init: config, tier files, manifests, views, CI job and hook in one command." }
   MarkerSuggester:    { kind: process, realizes: gm:Onboarding, doc: "gloss suggest: proposed links for unmarked public surfaces, from names, docstrings, the tables they touch and the code their tests call." }
-  SuggestCalibration: { kind: process, realizes: gm:Onboarding, doc: "gloss suggest --eval and the calibration harness: precision and auto-accept rate per confidence band on labelled links, and the fitted table conf is read from." }
+  SuggestCalibration: { kind: process, realizes: gm:Onboarding, doc: "gloss suggest --eval, --calibrate and the calibration harness: precision and auto-accept rate per confidence band on labelled links, the counts conf is read from, and the auto-accept threshold derived from a precision target." }
   VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
   AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark Claude Code skill, shipped in the binary." }
   # Agents

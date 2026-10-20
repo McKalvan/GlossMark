@@ -10,12 +10,13 @@ import (
 	"github.com/mckalvan/glossmark/internal/graph"
 )
 
-// TestSoftConfThreshold: a proposed link below the default soft threshold
-// (0.7, gmi:DefaultSoftThreshold) is HARD with the threshold as its reason;
-// one at or above it stays SOFT.
+// TestSoftConfThreshold: with policy.soft-conf-threshold set and no
+// precision target (the rule before ADR 0024, which gloss init wrote), a
+// proposed link below the threshold (0.7, gmi:DefaultSoftThreshold) is HARD
+// with the threshold as its reason; one at or above it stays SOFT.
 func TestSoftConfThreshold(t *testing.T) {
 	root, write := tempRepo(t)
-	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\npolicy:\n  soft-conf-threshold: 0.7\n")
 	write("ontology/z.gloss.yaml", "concepts:\n  Low: { kind: process }\n  High: { kind: process }\n")
 	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
 	write("src/low.py", "# @gloss? implements z:Low conf=0.5\ndef low(): pass\n")
@@ -23,7 +24,7 @@ func TestSoftConfThreshold(t *testing.T) {
 	ws, g, _, _ := build(t, root)
 	pol := ws.Config.EffectivePolicy()
 	if pol.SoftConfThreshold != 0.7 {
-		t.Fatalf("default soft threshold = %v, want 0.7", pol.SoftConfThreshold)
+		t.Fatalf("soft threshold = %v, want 0.7", pol.SoftConfThreshold)
 	}
 	got := map[string]string{}
 	for _, e := range g.Edges() {

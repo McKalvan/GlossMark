@@ -1,0 +1,8 @@
+# .gloss.yaml: the repository's root boundary (docs/FILE-FORMATS.md).
+# The system realizes what its containers declare, plus nothing of its own.
+boundary: clinicb:clinic-booking
+level: system
+label: Larkspur clinic booking
+realizes: inherit
+default-namespace: lark
+owner: booking-platform

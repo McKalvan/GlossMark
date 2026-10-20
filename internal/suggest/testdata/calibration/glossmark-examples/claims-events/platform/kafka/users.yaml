@@ -1,0 +1,65 @@
+# One KafkaUser per service: mTLS identity plus the ACLs it needs and nothing more.
+# @gloss provisions .ServiceIdentities scope=file conf=0.9
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: claim-intake
+  namespace: claims
+  labels: { strimzi.io/cluster: claims-kafka }
+spec:
+  authentication: { type: tls }
+  authorization:
+    type: simple
+    acls:
+      - { resource: { type: topic, name: claims.filed.v1 }, operations: [Write, Describe] }
+      - { resource: { type: topic, name: claims.lifecycle.v1 }, operations: [Write, Describe] }
+      - { resource: { type: transactionalId, name: claim-intake-, patternType: prefix }, operations: [Write, Describe] }
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: assessment
+  namespace: claims
+  labels: { strimzi.io/cluster: claims-kafka }
+spec:
+  authentication: { type: tls }
+  authorization:
+    type: simple
+    acls:
+      - { resource: { type: topic, name: claims.filed.v1 }, operations: [Read, Describe] }
+      - { resource: { type: topic, name: claims.lifecycle.v1 }, operations: [Read, Describe] }
+      - { resource: { type: topic, name: fraud.alerts.v1 }, operations: [Read, Describe] }
+      - { resource: { type: group, name: assessment.v1 }, operations: [Read] }
+      - { resource: { type: topic, name: claims.decisions.v1 }, operations: [Write, Describe] }
+      - { resource: { type: topic, name: claims.referrals.v1 }, operations: [Write, Describe] }
+      - { resource: { type: topic, name: payouts.v1 }, operations: [Write, Describe] }
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: fraud-screening
+  namespace: claims
+  labels: { strimzi.io/cluster: claims-kafka }
+spec:
+  authentication: { type: tls }
+  authorization:
+    type: simple
+    acls:
+      - { resource: { type: topic, name: claims.filed.v1 }, operations: [Read, Describe] }
+      - { resource: { type: group, name: fraud-screening.v2, patternType: prefix }, operations: [Read] }
+      - { resource: { type: topic, name: fraud-screening.v2-, patternType: prefix }, operations: [All] }
+      - { resource: { type: topic, name: fraud.alerts.v1 }, operations: [Write, Describe] }
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: payout-notifier
+  namespace: claims
+  labels: { strimzi.io/cluster: claims-kafka }
+spec:
+  authentication: { type: tls }
+  authorization:
+    type: simple
+    acls:
+      - { resource: { type: topic, name: payouts.v1 }, operations: [Read, Describe] }
+      - { resource: { type: group, name: payout-notifier.v1 }, operations: [Read] }

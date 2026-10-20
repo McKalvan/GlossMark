@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ServiceLevel {
+  STANDARD
+  EXPRESS
+}
+
+enum PickupStatus {
+  QUEUED
+  PLANNED
+  PICKED_UP
+  CANCELLED
+}
+
+enum RouteStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+// A Driver collects parcels from shippers on a daily pickup Route. Drivers cover
+// one or more zones (postcode areas such as "EC" or "NW") and work a fixed shift
+// expressed in depot-local "HH:MM". A driver can only be planned when a vehicle
+// is assigned.
+// @gloss represents frt:Driver conf=0.9
+model Driver {
+  id         String   @id @default(uuid()) @db.Uuid
+  employeeNo String   @unique @map("employee_no")
+  name       String
+  phone      String
+  zones      String[]
+  shiftStart String   @map("shift_start")
+  shiftEnd   String   @map("shift_end")
+  active     Boolean  @default(true)
+  vehicleId  String?  @unique @map("vehicle_id") @db.Uuid
+  vehicle    Vehicle? @relation(fields: [vehicleId], references: [id])
+  routes     Route[]
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("drivers")
+}
+
+// A Vehicle is a van from the depot fleet. Its payload and parcel limits bound
+// how many pickups the driver matcher may assign to the driver who uses it.
+model Vehicle {
+  id           String   @id @default(uuid()) @db.Uuid
+  registration String   @unique
+  payloadGrams Int      @map("payload_grams")
+  maxParcels   Int      @map("max_parcels")
+  driver       Driver?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("vehicles")
+}
+
+// A PickupRequest is the dispatch-side copy of a booked Shipment: one per
+// ShipmentBooked event (keyed by shipmentId, so redelivery is idempotent). It
+// waits in the queue (QUEUED) until the day's plan places it on a Route
+// (PLANNED), and the driver app confirms the collection (PICKED_UP).
+// The delivery window is carried so the planner can derive the latest pickup
+// time that still allows linehaul to the delivery depot.
+// @gloss represents .PickupQueue conf=0.85
+model PickupRequest {
+  id                  String       @id @default(uuid()) @db.Uuid
+  shipmentId          String       @unique @map("shipment_id")
+  trackingNumber      String       @map("tracking_number")
+  shipperId           String       @map("shipper_id")
+  serviceLevel        ServiceLevel @map("service_level")
+  status              PickupStatus @default(QUEUED)
+  pickupDate          DateTime     @map("pickup_date") @db.Date
+  zone                String
+  line1               String       @map("address_line1")
+  city                String
+  postcode            String
+  country             String       @db.Char(2)
+  lat                 Float
+  lng                 Float
+  parcelCount         Int          @map("parcel_count")
+  totalWeightGrams    Int          @map("total_weight_grams")
+  deliveryWindowStart DateTime     @map("delivery_window_start") @db.Timestamptz(3)
+  deliveryWindowEnd   DateTime     @map("delivery_window_end") @db.Timestamptz(3)
+  bookedAt            DateTime     @map("booked_at") @db.Timestamptz(3)
+  pickedUpAt          DateTime?    @map("picked_up_at") @db.Timestamptz(3)
+  pickedUpBy          String?      @map("picked_up_by") @db.Uuid
+  stop                RouteStop?
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([pickupDate, status])
+  @@map("pickup_requests")
+}
+
+// A Route is one driver's ordered pickup run for one day, starting and ending at
+// the depot. There is at most one route per driver per date. It becomes
+// IN_PROGRESS with the first confirmed pickup and COMPLETED with the last.
+// @gloss represents frt:Route conf=0.9
+model Route {
+  id         String      @id @default(uuid()) @db.Uuid
+  driverId   String      @map("driver_id") @db.Uuid
+  driver     Driver      @relation(fields: [driverId], references: [id])
+  date       DateTime    @db.Date
+  status     RouteStatus @default(PLANNED)
+  distanceKm Float       @map("distance_km")
+  stops      RouteStop[]
+  plannedAt  DateTime    @default(now()) @map("planned_at") @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([driverId, date])
+  @@index([date, status])
+  @@map("routes")
+}
+
+// A RouteStop places one PickupRequest on a Route at position `seq` (1-based)
+// with the ETA window promised to the shipper. completedAt is set when the
+// driver confirms the pickup.
+model RouteStop {
+  id              String        @id @default(uuid()) @db.Uuid
+  routeId         String        @map("route_id") @db.Uuid
+  route           Route         @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  pickupRequestId String        @unique @map("pickup_request_id") @db.Uuid
+  pickupRequest   PickupRequest @relation(fields: [pickupRequestId], references: [id])
+  seq             Int
+  etaFrom         DateTime      @map("eta_from") @db.Timestamptz(3)
+  etaTo           DateTime      @map("eta_to") @db.Timestamptz(3)
+  completedAt     DateTime?     @map("completed_at") @db.Timestamptz(3)
+
+  @@unique([routeId, seq])
+  @@map("route_stops")
+}

@@ -166,6 +166,38 @@ func TestDoctorWaivers(t *testing.T) {
 	}
 }
 
+// TestDoctorAutoAccept (ADR 0024): doctor reports the auto-accept rule in
+// force, and warns when no conf meets the target or when the precision
+// target overrides soft-conf-threshold.
+func TestDoctorAutoAccept(t *testing.T) {
+	at := func(cfg string) Check {
+		t.Helper()
+		root := t.TempDir()
+		os.WriteFile(filepath.Join(root, "glossmark.yaml"), []byte("owns:\n  z: { iri: https://x/z/, tier: core }\n"+cfg), 0o644)
+		os.WriteFile(filepath.Join(root, "cal.tsv"), []byte("name-exact/type\t10\t1\n"), 0o644)
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		for _, c := range Run(ws, res.Graph, nil, Env{Actor: "agent:x", LookPath: func(string) (string, error) { return "", errors.New("none") }}) {
+			if c.Name == "auto-accept" {
+				return c
+			}
+		}
+		return Check{}
+	}
+	if c := at(""); c.Status != OK || !strings.Contains(c.Msg, "derived from the target precision 90.0%") || !strings.Contains(c.Msg, "of proposals") {
+		t.Errorf("default = %+v", c)
+	}
+	if c := at("suggest:\n  calibration: cal.tsv\n"); c.Status != Warn || !strings.HasPrefix(c.Msg, "nothing; no conf reaches") || !strings.Contains(c.Msg, "cal.tsv") {
+		t.Errorf("unreachable target = %+v", c)
+	}
+	if c := at("suggest:\n  auto-accept-precision: 0.8\npolicy:\n  soft-conf-threshold: 0.7\n"); c.Status != Warn || !strings.Contains(c.Msg, "soft-conf-threshold 0.70 is ignored") {
+		t.Errorf("both set = %+v", c)
+	}
+}
+
 // TestDoctorCIAtGitRoot: a workspace below the git root is covered by a
 // workflow at the git root that runs the Action with its root: (issue #36),
 // and not by one that names another workspace.

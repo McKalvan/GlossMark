@@ -1,0 +1,35 @@
+# @gloss deploys .PayoutNotifierService conf=0.9
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payout-notifier
+  namespace: claims
+  labels: { app.kubernetes.io/name: payout-notifier, app.kubernetes.io/part-of: claims-platform }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app.kubernetes.io/name: payout-notifier }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: payout-notifier, app.kubernetes.io/part-of: claims-platform }
+    spec:
+      serviceAccountName: payout-notifier
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: payout-notifier
+          image: registry.tidewater.example/claims/payout-notifier:1.2.0
+          ports: [{ name: http, containerPort: 8082 }]
+          envFrom: [{ configMapRef: { name: claims-common } }]
+          env:
+            - { name: NOTIFY_FROM, value: "claims@tidewater.example" }
+            - { name: POLICY_ADMIN_URL, value: "http://policy-admin.policy.svc:8080" }
+            - { name: AWS_REGION, value: eu-west-1 }
+          volumeMounts:
+            - { name: kafka-tls, mountPath: /etc/kafka/tls, readOnly: true }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+      volumes:
+        - name: kafka-tls
+          secret: { secretName: payout-notifier }   # written by the Strimzi user operator for KafkaUser payout-notifier

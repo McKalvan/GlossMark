@@ -1,0 +1,82 @@
+// Self-checkout kiosk API (2022). The kiosks (vendor: ShelfServe SC-400) speak
+// gRPC to the kiosk gateway, which calls the CIRC services over JDBC.
+syntax = "proto3";
+
+package riverbend.selfcheck.v1;
+
+option java_multiple_files = true;
+option java_package = "gov.riverbend.kiosk.api.v1";
+
+import "google/protobuf/timestamp.proto";
+
+// @gloss implements .SelfCheckApi conf=0.85
+service SelfCheckService {
+  // Patron scans their card; the kiosk shows name and items out.
+  rpc StartSession(StartSessionRequest) returns (StartSessionResponse);
+  rpc Checkout(CheckoutRequest) returns (CheckoutResponse);
+  rpc Renew(RenewRequest) returns (RenewResponse);
+  rpc EndSession(EndSessionRequest) returns (EndSessionResponse);
+}
+
+message StartSessionRequest {
+  string kiosk_id = 1;
+  string card_number = 2;
+  string pin = 3;
+}
+
+message StartSessionResponse {
+  string session_id = 1;
+  string display_name = 2;
+  repeated LoanSummary loans = 3;
+  bool blocked = 4;
+  string blocked_reason = 5;
+}
+
+message CheckoutRequest {
+  string session_id = 1;
+  string item_barcode = 2;
+}
+
+message CheckoutResponse {
+  LoanSummary loan = 1;
+  RefusalCode refusal = 2;
+  string message = 3;
+}
+
+message RenewRequest {
+  string session_id = 1;
+  string item_barcode = 2;
+}
+
+message RenewResponse {
+  google.protobuf.Timestamp new_due_date = 1;
+  RefusalCode refusal = 2;
+  string message = 3;
+}
+
+message EndSessionRequest {
+  string session_id = 1;
+  bool print_receipt = 2;
+  bool email_receipt = 3;
+}
+
+message EndSessionResponse {}
+
+// @gloss represents lib:Loan conf=0.8
+message LoanSummary {
+  string item_barcode = 1;
+  string title = 2;
+  string format = 3;
+  google.protobuf.Timestamp due_date = 4;
+  int32 renewals = 5;
+}
+
+enum RefusalCode {
+  REFUSAL_CODE_UNSPECIFIED = 0;
+  REFUSAL_CODE_BLOCKED = 1;
+  REFUSAL_CODE_LIMIT = 2;
+  REFUSAL_CODE_NOT_CIRCULATING = 3;
+  REFUSAL_CODE_ON_HOLD = 4;
+  REFUSAL_CODE_MAX_RENEWALS = 5;
+  REFUSAL_CODE_SEE_STAFF = 6;
+}

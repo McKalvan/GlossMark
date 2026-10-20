@@ -1,0 +1,9 @@
+# config/.gloss.yaml: the files under /etc/circ. enums.yaml and the JSON
+# tables are the code tables every other part reads, so they hold data.
+boundary: libb:config
+level: container
+label: Circulation configuration
+part-of: libb:circ
+holds: [lib:LoanStatus, lib:ItemFormat, lib:PatronType, lib:FineType, lib:Branch]
+default-namespace: circ
+owner: circulation-dept

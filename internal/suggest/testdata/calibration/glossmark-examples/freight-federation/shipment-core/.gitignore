@@ -1,0 +1,13 @@
+.gradle/
+build/
+out/
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+.DS_Store
+# GlossMark: the viewer is generated; graph.jsonl and ledger.jsonl are committed
+.glossmark/viewer.html
+.glossmark/views.js
+.glossmark/views.json

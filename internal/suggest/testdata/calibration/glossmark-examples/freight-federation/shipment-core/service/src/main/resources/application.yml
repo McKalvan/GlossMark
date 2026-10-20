@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: shipment-core
+  datasource:
+    url: ${SHIPMENT_DB_URL:jdbc:postgresql://localhost:5432/shipment_core}
+    username: ${SHIPMENT_DB_USER:shipment_core}
+    password: ${SHIPMENT_DB_PASSWORD:shipment_core}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: shipment-core
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  metrics:
+    tags:
+      service: shipment-core
+
+kestrel:
+  shipment:
+    operating-zone: Europe/London
+  outbox:
+    batch-size: 100
+    poll-interval: PT1S
+  metrics:
+    on-time-refresh: PT5M

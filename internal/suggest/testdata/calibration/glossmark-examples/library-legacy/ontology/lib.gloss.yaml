@@ -1,0 +1,192 @@
+# ontology/lib.gloss.yaml: the core tier.
+# Litmus test: if a domain expert would nod at the term, it is core; if only an
+# engineer would, it belongs in circ:. Core concepts never mention circ:.
+# Write docs quoted: doc: "One account at an institution (checking, savings)."
+namespace: lib
+version: 0.1.0
+concepts:
+  Patron:
+    kind: entity
+    doc: "A person registered with the library who holds a library card."
+    criticality: high          # names, addresses, reading history: PII under state library-records law
+    aliases: [cardholder, member, user]
+  LibraryCard:
+    kind: entity
+    doc: "The barcoded card that identifies a patron at the desk and the kiosks."
+    aliases: card
+  Branch:
+    kind: entity
+    doc: "A library building, or the bookmobile, where items are shelved and loans are made."
+  Title:
+    kind: entity
+    doc: "A bibliographic record: one work in one edition, as the catalogue describes it."
+    aliases: [bib record, work]
+  Item:
+    kind: entity
+    doc: "One physical copy of a title, identified by the barcode on its spine label."
+    aliases: [copy, piece]
+  Loan:
+    kind: entity
+    doc: "One item lent to one patron, from checkout until check-in."
+    aliases: [circ, charge]
+  Checkout:
+    kind: process                # import guessed entity
+    doc: "Lending an item to a patron at the desk or a kiosk, and setting its due date."
+    produces: [Loan]
+    criticality: high
+    aliases: [charge, issue]
+  Checkin:
+    kind: process                # import guessed entity
+    doc: "Receiving a returned item, closing its loan and assessing any fine."
+    consumes: [Loan]
+    reverses: Checkout
+    aliases: [return, discharge]
+  Renewal:
+    kind: process                # import guessed entity
+    doc: "Extending a loan by one more loan period without bringing the item in."
+    consumes: [Loan]
+  LoanPeriod:
+    kind: constraint                # import guessed entity
+    doc: "How long an item may be kept, set by its format."
+    constrains: [Checkout, Renewal]
+    aliases: loan length
+  BorrowingLimit:
+    kind: constraint
+    doc: "The most items a patron may have out at once, set by patron type."
+    constrains: [Checkout]
+  PatronBlock:
+    kind: constraint                # import guessed entity
+    doc: "A patron who owes $10.00 or more, or whose card has expired, cannot borrow."
+    constrains: [Checkout]
+    aliases: blocked card
+  Hold:
+    kind: entity
+    doc: "A patron's request for the next available copy of a title."
+    aliases: [reserve, request]
+  HoldTrapping:
+    kind: process
+    doc: "Setting aside a returned copy for the oldest waiting hold on its title."
+    consumes: [Hold]
+    aliases: [trap, capture]
+  HoldExpiry:
+    kind: process                # import guessed entity
+    doc: "A trapped hold not picked up within seven days lapses and the copy goes to the next patron."
+    consumes: [Hold]
+  Fine:
+    kind: entity
+    doc: "Money a patron owes the library for one loan."
+    criticality: high          # money owed to the city; audited yearly
+    aliases: [charge, fee]
+  FineAssessment:
+    kind: process                # import guessed entity
+    doc: "Working out what a patron owes for an overdue loan: daily rate by format after the grace period."
+    produces: [Fine]
+  GracePeriod:
+    kind: constraint                # import guessed entity
+    doc: "Days after the due date during which no fine accrues."
+    constrains: [FineAssessment]
+  FineCap:
+    kind: constraint                # import guessed entity
+    doc: "A fine for one item never exceeds the item's replacement cost or $20.00, whichever is lower."
+    constrains: [FineAssessment]
+    aliases: maximum fine
+  OverdueNotification:
+    kind: process
+    doc: "Telling a patron, by email or a printed letter, that items are overdue."
+    consumes: [Loan]
+    aliases: [overdue notice, courtesy notice]
+  LostItem:
+    kind: entity
+    doc: "An item the patron has declared lost, or that is 60 days overdue; the patron is billed its replacement cost."
+  SelfCheckout:
+    kind: process                # import guessed entity
+    doc: "A patron checks out or renews their own items at a kiosk."
+    is-a: Checkout
+    aliases: [kiosk checkout, self-check]
+  InterlibraryLoan:
+    kind: process                # import guessed entity
+    doc: "Borrowing a title Riverbend does not own from another library for one patron."
+    aliases: ILL
+  TurnoverRate:
+    kind: measure
+    doc: "Loans per item per year, by branch and format; the collection manager's measure of use."
+    aliases: circulation per item
+    proposed: true
+    proposed-by: agent:claude-code
+  DigitalLending:
+    kind: process
+    doc: "Lending e-books and e-audiobooks through the library's vendor account."
+    aliases: [e-lending, OverDrive]
+    proposed: true
+    proposed-by: agent:claude-code
+  ClaimsReturned:
+    kind: process                # import guessed event
+    doc: "A patron says they returned an item the record shows as still out; staff search the shelves before billing."
+    proposed: true
+    proposed-by: agent:claude-code
+  Borrower:
+    kind: entity
+    doc: "The pre-2016 name for a patron."
+    aliases: borrower class
+    deprecated: true
+    replaced-by: Patron        # added by hand; the importer sets deprecated only
+  LoanStatus:
+    kind: entity
+    doc: "Where a loan is in its life."
+  ItemFormat:
+    kind: entity
+    doc: "The physical form of an item. Drives the loan period and the daily fine."
+  PatronType:
+    kind: entity
+    doc: "One of: ADULT, JUVENILE, SENIOR, NONRESIDENT."
+  FineType:
+    kind: entity
+    doc: "One of: OVERDUE, LOST_ITEM, DAMAGE."
+  Overdue:
+    is-a: FineType
+    doc: "Daily charge for an item kept past its due date and grace period."
+  Damage:
+    is-a: FineType
+    doc: "Assessed by staff at check-in."
+  Book:
+    is-a: ItemFormat
+  LargePrint:
+    is-a: ItemFormat
+  Dvd:
+    is-a: ItemFormat
+  Audiobook:
+    is-a: ItemFormat
+  Magazine:
+    is-a: ItemFormat
+  Active:
+    is-a: LoanStatus
+    doc: "Checked out and not yet due."
+  LoanStatusOverdue:
+    is-a: LoanStatus
+    doc: "Past its due date and not returned."
+  Returned:
+    is-a: LoanStatus
+    doc: "Checked in."
+  Lost:
+    is-a: LoanStatus
+    doc: "Declared lost by the patron, or 60 days overdue."
+  Adult:
+    is-a: PatronType
+    doc: "Resident aged 18 or over."
+  Juvenile:
+    is-a: PatronType
+    doc: "Resident under 18. No overdue fines."
+  Senior:
+    is-a: PatronType
+    doc: "Resident aged 65 or over. Overdue fines are halved."
+  Nonresident:
+    is-a: PatronType
+    doc: "Lives outside the city and pays an annual fee."
+  FinePayment:
+    kind: process
+    doc: "A patron paying some or all of what they owe, at the desk."
+    proposed: true
+    proposed-by: agent:claude-code
+relations:
+  produces: { lift: range-lcs }
+  consumes: { lift: range-lcs }

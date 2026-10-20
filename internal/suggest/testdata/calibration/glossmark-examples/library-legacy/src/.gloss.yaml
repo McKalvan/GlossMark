@@ -1,0 +1,12 @@
+# src/.gloss.yaml: the desk web app (servlets, services, DAOs, JSP).
+boundary: libb:web
+level: container
+label: Desk web app
+part-of: libb:circ
+realizes: [circ:CircWebApp, lib:Checkout, lib:Checkin, lib:Renewal, lib:HoldTrapping,
+           lib:PatronBlock, lib:BorrowingLimit, lib:LoanPeriod, lib:FineAssessment, lib:FineCap, lib:GracePeriod,
+           lib:FinePayment]
+holds: [lib:Patron, lib:Item, lib:Loan, lib:Hold, lib:Fine, lib:Borrower, lib:LoanStatus, lib:ItemFormat]
+default-namespace: circ
+owner: library-it
+criticality: high

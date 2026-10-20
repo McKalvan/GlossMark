@@ -1,0 +1,141 @@
+asyncapi: 3.0.0
+info:
+  title: Tidewater Mutual claims events
+  version: 1.3.0
+  description: |
+    Events exchanged by the claims platform. Payloads are Avro, registered in the
+    Schema Registry under TopicRecordNameStrategy (see schemas/subjects.yaml).
+  contact:
+    name: Claims platform team
+    email: claims-platform@tidewater.example
+defaultContentType: application/vnd.apache.avro+json;version=1.9.0
+
+servers:
+  production:
+    host: kafka-bootstrap.claims.svc:9093
+    protocol: kafka-secure
+    description: Strimzi cluster claims-kafka, mTLS listener
+    bindings:
+      kafka:
+        schemaRegistryUrl: https://schema-registry.claims.svc
+        schemaRegistryVendor: confluent
+
+channels:
+  # @gloss documents claim:ClaimFiled scope=block conf=0.85
+  claimsFiled:
+    address: claims.filed.v1
+    description: One event per newly filed claim, keyed by claimId.
+    messages:
+      motorClaimFiled: { $ref: '#/components/messages/MotorClaimFiled' }
+      floodClaimFiled: { $ref: '#/components/messages/FloodClaimFiled' }
+      fireClaimFiled: { $ref: '#/components/messages/FireClaimFiled' }
+    bindings:
+      kafka: { partitions: 12, replicas: 3, topicConfiguration: { retention.ms: 2592000000, cleanup.policy: [delete] } }
+  # @gloss documents claim:ClaimWithdrawn scope=block conf=0.85
+  claimsLifecycle:
+    address: claims.lifecycle.v1
+    messages:
+      claimWithdrawn: { $ref: '#/components/messages/ClaimWithdrawn' }
+  # @gloss documents claim:ClaimDecided scope=block conf=0.85
+  claimsDecisions:
+    address: claims.decisions.v1
+    messages:
+      claimApproved: { $ref: '#/components/messages/ClaimApproved' }
+      claimDenied: { $ref: '#/components/messages/ClaimDenied' }
+  # @gloss documents claim:PayoutEvent scope=block conf=0.85
+  payouts:
+    address: payouts.v1
+    messages:
+      payoutAuthorized: { $ref: '#/components/messages/PayoutAuthorized' }
+      payoutFailed: { $ref: '#/components/messages/PayoutFailed' }
+  # @gloss documents claim:FraudSuspected scope=block conf=0.85
+  fraudAlerts:
+    address: fraud.alerts.v1
+    messages:
+      fraudSuspected: { $ref: '#/components/messages/FraudSuspected' }
+
+operations:
+  publishClaimFiled:
+    action: send
+    channel: { $ref: '#/channels/claimsFiled' }
+    summary: claim-intake publishes a filed claim after it is persisted.
+  publishClaimWithdrawn:
+    action: send
+    channel: { $ref: '#/channels/claimsLifecycle' }
+  receiveClaimFiledForAssessment:
+    action: receive
+    channel: { $ref: '#/channels/claimsFiled' }
+    bindings: { kafka: { groupId: { type: string, enum: [assessment.v1] } } }
+  receiveClaimFiledForScreening:
+    action: receive
+    channel: { $ref: '#/channels/claimsFiled' }
+    bindings: { kafka: { groupId: { type: string, enum: [fraud-screening.v2] } } }
+  publishDecision:
+    action: send
+    channel: { $ref: '#/channels/claimsDecisions' }
+  publishPayoutAuthorized:
+    action: send
+    channel: { $ref: '#/channels/payouts' }
+    messages: [{ $ref: '#/channels/payouts/messages/payoutAuthorized' }]
+  receivePayouts:
+    action: receive
+    channel: { $ref: '#/channels/payouts' }
+    summary: payout-notifier tells the policyholder their money is on its way, or that it bounced.
+    bindings: { kafka: { groupId: { type: string, enum: [payout-notifier.v1] } } }
+  publishFraudSuspected:
+    action: send
+    channel: { $ref: '#/channels/fraudAlerts' }
+  receiveFraudSuspected:
+    action: receive
+    channel: { $ref: '#/channels/fraudAlerts' }
+    bindings: { kafka: { groupId: { type: string, enum: [assessment.v1] } } }
+
+components:
+  messageTraits:
+    claimKeyed:
+      bindings:
+        kafka:
+          key: { type: string, format: uuid, description: claimId }
+          schemaIdLocation: payload
+          schemaLookupStrategy: TopicRecordNameStrategy
+  messages:
+    MotorClaimFiled:
+      name: MotorClaimFiled
+      title: Motor claim filed
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/MotorClaimFiled.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    FloodClaimFiled:
+      name: FloodClaimFiled
+      title: Flood claim filed
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/FloodClaimFiled.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    FireClaimFiled:
+      name: FireClaimFiled
+      title: Fire claim filed
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/FireClaimFiled.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    ClaimWithdrawn:
+      name: ClaimWithdrawn
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/ClaimWithdrawn.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    ClaimApproved:
+      name: ClaimApproved
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/ClaimApproved.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    ClaimDenied:
+      name: ClaimDenied
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/ClaimDenied.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    PayoutAuthorized:
+      name: PayoutAuthorized
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/PayoutAuthorized.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    PayoutFailed:
+      name: PayoutFailed
+      description: Published by Treasury's payment gateway, outside this repository.
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/PayoutFailed.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]
+    FraudSuspected:
+      name: FraudSuspected
+      payload: { schemaFormat: application/vnd.apache.avro;version=1.9.0, schema: { $ref: '../schemas/FraudSuspected.avsc' } }
+      traits: [{ $ref: '#/components/messageTraits/claimKeyed' }]

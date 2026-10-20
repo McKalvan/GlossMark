@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mckalvan/glossmark/internal/calib"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
 )
@@ -27,14 +28,14 @@ const (
 	Wrong   = "wrong"
 )
 
-// LabelsFromGraph lists the inline links of a built workspace as labels:
-// the markers a reviewed repository carries are the truth its stripped copy
-// is scored against.
+// LabelsFromGraph lists the accepted inline links of a built workspace as
+// labels: the markers a reviewed repository carries are the truth its
+// stripped copy is scored against. A `@gloss?` proposal is not a label.
 func LabelsFromGraph(g *graph.Graph) []Label {
 	var out []Label
 	seen := map[Label]bool{}
 	for _, e := range g.Edges() {
-		if e.Source != graph.SourceInline || e.Prov == nil {
+		if e.Source != graph.SourceInline || e.Prov == nil || e.Prov.Proposed {
 			continue
 		}
 		on := g.Node(e.O)
@@ -144,14 +145,21 @@ var Bands = []float64{0, 0.5, 0.6, 0.7, 0.8, 0.9}
 
 // Report is the calibration table of one scored batch.
 type Report struct {
-	Name      string
-	Threshold float64 // soft-conf-threshold: proposals at or above it are auto-accepted
-	Rows      []BandRow
-	All       BandRow
-	Auto      BandRow // conf >= Threshold
-	Labels    int     // labels in the truth set
-	Recalled  int     // labels some correct proposal states
-	ByBasis   map[string]*BandRow
+	Name string
+	// Rule is the auto-accept rule in force (glossmark.yaml, else the
+	// default target on the shipped calibration); Auto counts this batch's
+	// proposals at or above its threshold.
+	Rule calib.AutoAccept
+	// Own is the rule this batch alone derives for the same target: what
+	// gloss suggest --calibrate --write would put in force.
+	Own      calib.AutoAccept
+	Rows     []BandRow
+	All      BandRow
+	Kept     BandRow // conf >= Rule.MinConf: what gloss suggest outputs
+	Auto     BandRow // conf >= Rule.Threshold
+	Labels   int     // labels in the truth set
+	Recalled int     // labels some correct proposal states
+	ByBasis  map[string]*BandRow
 }
 
 // BandRow counts verdicts in one band.
@@ -191,9 +199,20 @@ func (r *BandRow) add(s Scored) {
 	}
 }
 
-// Evaluate builds the calibration report of a scored batch.
-func Evaluate(name string, scored []Scored, labels []Label, threshold float64) Report {
-	rep := Report{Name: name, Threshold: threshold, Labels: len(labels), ByBasis: map[string]*BandRow{}}
+// Evaluate builds the calibration report of a scored batch under the
+// auto-accept rule in force.
+func Evaluate(name string, scored []Scored, labels []Label, rule calib.AutoAccept) Report {
+	rep := Report{Name: name, Rule: rule, Labels: len(labels), ByBasis: map[string]*BandRow{}}
+	target := rule.Target
+	if rule.Fixed || target <= 0 {
+		target = calib.DefaultPrecision
+	}
+	carried := map[string]float64{}
+	for _, s := range scored {
+		carried[s.Basis] = s.Conf
+	}
+	rep.Own = calib.Derive(func(b string) float64 { return carried[b] }, Fit(scored), target, rule.MinConf)
+	rep.Own.Source = "this eval"
 	for i, lo := range Bands {
 		hi := 1.01
 		if i+1 < len(Bands) {
@@ -208,7 +227,10 @@ func Evaluate(name string, scored []Scored, labels []Label, threshold float64) R
 				rep.Rows[i].add(s)
 			}
 		}
-		if s.Conf >= threshold {
+		if s.Conf >= rule.MinConf-1e-9 {
+			rep.Kept.add(s)
+		}
+		if s.Conf >= rule.Threshold-1e-9 {
 			rep.Auto.add(s)
 		}
 		b := rep.ByBasis[s.Basis]
@@ -233,10 +255,21 @@ func Evaluate(name string, scored []Scored, labels []Label, threshold float64) R
 	return rep
 }
 
-// GateMet reports the Phase 2 gate: at least 80 % of proposals
-// auto-accepted, at least 90 % of those correct.
+// Target is the precision the report's gate checks: the configured
+// auto-accept precision, or the default when the threshold is fixed by
+// policy.soft-conf-threshold.
+func (r Report) Target() float64 {
+	if r.Rule.Fixed || r.Rule.Target <= 0 {
+		return calib.DefaultPrecision
+	}
+	return r.Rule.Target
+}
+
+// GateMet reports the Phase 2 gate, per repository (ADR 0024): the
+// proposals the rule in force auto-accepts are at least Target() correct
+// on this batch. Auto-accepting nothing does not meet it.
 func (r Report) GateMet() bool {
-	return r.All.N > 0 && float64(r.Auto.N) >= 0.8*float64(r.All.N) && r.Auto.Precision() >= 0.9
+	return r.Auto.N > 0 && r.Auto.Precision() >= r.Target()-1e-9
 }
 
 func pct(a, b int) string {
@@ -250,6 +283,26 @@ func pct(a, b int) string {
 func (r Report) String() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%s: %d proposals, %d labels\n", r.Name, r.All.N, r.Labels)
+	sb.WriteString(r.BandTable())
+	fmt.Fprintf(&sb, "  recall: %d of %d labels (%s)\n", r.Recalled, r.Labels, pct(r.Recalled, r.Labels))
+	fmt.Fprintf(&sb, "  in force: %s\n", r.Rule)
+	if r.Rule.Threshold > 1 {
+		fmt.Fprintf(&sb, "  auto-accept on this eval: nothing (no threshold in force)\n")
+	} else {
+		fmt.Fprintf(&sb, "  auto-accept on this eval (conf >= %.2f): %d of %d at conf >= %.2f (%s), precision %s\n", r.Rule.Threshold, r.Auto.N, r.Kept.N, r.Rule.MinConf, pct(r.Auto.N, r.Kept.N), pct(r.Auto.Correct, r.Auto.N))
+	}
+	fmt.Fprintf(&sb, "  this eval alone: %s\n", r.Own)
+	met := "NOT MET"
+	if r.GateMet() {
+		met = "MET"
+	}
+	fmt.Fprintf(&sb, "  Phase 2 gate (auto-accepted proposals at least %.0f%% correct on this eval): %s\n", 100*r.Target(), met)
+	return sb.String()
+}
+
+// BandTable renders the precision per confidence band.
+func (r Report) BandTable() string {
+	var sb strings.Builder
 	fmt.Fprintf(&sb, "  %-9s %5s %7s %5s %5s %9s %9s\n", "band", "n", "correct", "near", "wrong", "precision", "mean conf")
 	row := func(name string, b BandRow) {
 		p := "-"
@@ -273,13 +326,6 @@ func (r Report) String() string {
 		row(name, b)
 	}
 	row("all", r.All)
-	fmt.Fprintf(&sb, "  recall: %d of %d labels (%s)\n", r.Recalled, r.Labels, pct(r.Recalled, r.Labels))
-	fmt.Fprintf(&sb, "  auto-accept (conf >= %.2f): %d of %d (%s), precision %s\n", r.Threshold, r.Auto.N, r.All.N, pct(r.Auto.N, r.All.N), pct(r.Auto.Correct, r.Auto.N))
-	met := "NOT MET"
-	if r.GateMet() {
-		met = "MET"
-	}
-	fmt.Fprintf(&sb, "  Phase 2 gate (>= 80%% auto-accept at >= 90%% precision): %s\n", met)
 	return sb.String()
 }
 

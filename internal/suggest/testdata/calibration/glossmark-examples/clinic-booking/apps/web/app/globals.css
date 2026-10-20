@@ -1,0 +1,6 @@
+:root { --accent: #6b4fbb; --muted: #6b7280; }
+body { margin: 0; font-family: system-ui, sans-serif; color: #111827; }
+.container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+.footer { color: var(--muted); text-align: center; padding: 32px 16px; font-size: 14px; }
+.card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.button { background: var(--accent); color: white; border: 0; border-radius: 6px; padding: 8px 14px; }

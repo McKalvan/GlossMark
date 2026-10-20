@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mckalvan/glossmark/internal/calib"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -46,6 +47,10 @@ type Proposal struct {
 	// target, such as the tables the declaration touches.
 	Context string `json:"context,omitempty"`
 	Marker  string `json:"marker"` // the full comment line, indented
+	// AutoAccept: conf reaches the auto-accept threshold in force, so the
+	// gate classes the proposal SOFT unless another rule raises it (set by
+	// gloss suggest, ADR 0024).
+	AutoAccept bool `json:"auto_accept"`
 }
 
 // Options tunes the matcher.
@@ -61,7 +66,7 @@ type Options struct {
 
 // DefaultMinConf drops the evidence that is wrong more often than right
 // on the calibration set.
-const DefaultMinConf = 0.3
+const DefaultMinConf = calib.DefaultMinConf
 
 // codeExts are the source files suggest proposes markers in; YAML
 // (Kubernetes workloads) and Markdown (headings) are read too, for the

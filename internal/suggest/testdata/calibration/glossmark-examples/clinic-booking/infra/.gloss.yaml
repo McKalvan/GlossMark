@@ -1,0 +1,8 @@
+# infra/.gloss.yaml
+boundary: clinicb:infra
+level: container
+label: AWS infrastructure
+part-of: clinicb:clinic-booking
+realizes: [lark:BookingDatabase, lark:ReminderQueue, lark:BookingCluster]
+default-namespace: lark
+owner: platform

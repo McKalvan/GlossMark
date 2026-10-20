@@ -1,0 +1,11 @@
+{
+  "version": 3,
+  "updated": "2024-07-01",
+  "formats": {
+    "BOOK": { "loanDays": 21, "renewable": true },
+    "LARGE_PRINT": { "loanDays": 28, "renewable": true },
+    "DVD": { "loanDays": 7, "renewable": true },
+    "AUDIOBOOK": { "loanDays": 21, "renewable": true },
+    "MAGAZINE": { "loanDays": 7, "renewable": false }
+  }
+}

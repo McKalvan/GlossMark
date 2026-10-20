@@ -70,7 +70,27 @@ func Run(ws *load.Workspace, g *graph.Graph, diags []marker.Diagnostic, env Env)
 	d.pins()
 	d.docs()
 	d.waivers()
+	d.autoAccept()
 	return d.out
+}
+
+// autoAccept reports the auto-accept rule in force: the conf threshold,
+// the precision and share it measured, and where it came from (ADR 0024).
+// It warns when no conf meets the target, when soft-conf-threshold is
+// overridden, and when the repository's calibration file is missing.
+func (d *doctor) autoAccept() {
+	cfg := d.ws.Config
+	a := cfg.AutoAccept()
+	notes := cfg.AutoAcceptNotes()
+	msg := strings.TrimPrefix(a.String(), "auto-accept: ")
+	switch {
+	case !a.Met:
+		d.add("auto-accept", Warn, msg, "lower suggest.auto-accept-precision in "+load.ConfigName+", or measure this repository with gloss suggest --calibrate")
+	case len(notes) > 0:
+		d.add("auto-accept", Warn, msg+"; "+strings.Join(notes, "; "), "")
+	default:
+		d.add("auto-accept", OK, msg, "")
+	}
 }
 
 // waivers lists waivers that have expired or expire within 30 days, so a

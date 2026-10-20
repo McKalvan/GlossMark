@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "ClaimRef",
+  "namespace": "com.tidewater.claims.common",
+  "doc": "Identifies a claim and the policy it was filed under. Embedded in every claim event.",
+  "fields": [
+    {"name": "claimId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "policyNumber", "type": "string"},
+    {"name": "policyholderId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "lineOfBusiness", "type": {"type": "enum", "name": "LineOfBusiness", "symbols": ["MOTOR", "HOME"]}}
+  ]
+}

@@ -1,0 +1,7 @@
+# Sidecar for loan-rules.json (JSON has no comments). scope=range names a JSON Pointer in note=.
+@gloss configures circ:LoanPeriodRule scope=range note="/formats" conf=0.9
+@gloss configures lib:Book scope=range note="/formats/BOOK" conf=0.8
+@gloss configures lib:LargePrint scope=range note="/formats/LARGE_PRINT" conf=0.8
+@gloss configures lib:Dvd scope=range note="/formats/DVD" conf=0.8
+@gloss configures lib:Audiobook scope=range note="/formats/AUDIOBOOK" conf=0.8
+@gloss configures lib:Magazine scope=range note="/formats/MAGAZINE" conf=0.8

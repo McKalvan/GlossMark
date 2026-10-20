@@ -1,0 +1,8 @@
+# glossmark.yaml: the namespaces this repository owns (docs/FILE-FORMATS.md).
+grammar: 1
+repo-iri: https://onto.tidewater.example/                 # boundary prefixes such as claimb: expand under it; no prefixes: needed
+owns:
+  claim: { iri: https://onto.tidewater.example/core/, tier: core,           version: 0.1.0 }   # what the business recognises
+  tide: { iri: https://onto.tidewater.example/impl/, tier: implementation, version: 0.1.0 }   # the mechanisms that realize it
+policy:
+  soft-conf-threshold: 0.7

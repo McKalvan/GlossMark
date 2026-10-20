@@ -1,0 +1,2 @@
+# Sidecar for kiosk.json. The whole file configures the gateway (scope=file).
+@gloss configures circ:KioskGateway scope=file conf=0.85

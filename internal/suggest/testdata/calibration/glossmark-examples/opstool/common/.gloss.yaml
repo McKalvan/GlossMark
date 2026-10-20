@@ -1,0 +1,7 @@
+# common/.gloss.yaml: the label jar (com.acme.ops:common), shared with the packing station.
+boundary: whb:label-jar
+level: container
+label: Carton label library (Java)
+part-of: whb:opstool
+default-namespace: ops
+realizes: [ops:LabelRenderer]

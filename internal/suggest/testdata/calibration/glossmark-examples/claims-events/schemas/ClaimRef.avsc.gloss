@@ -1,0 +1,2 @@
+# Sidecar for ClaimRef.avsc: the reference to a claim every claim event embeds.
+@gloss represents claim:Claim scope=range note="/fields" conf=0.8

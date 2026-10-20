@@ -84,14 +84,16 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 	copyStripped(t, filepath.Join("..", "..", "examples", "library", "circulation"), root)
 	os.WriteFile(filepath.Join(root, "services/circulation/cataloging/api.py"), []byte("import app\n\n\n@app.route(\n    \"/marc\",\n)\ndef marc_parser_endpoint():\n    pass\n\n\ndef _private_helper():\n    pass\n"), 0o644)
 	ws, g := build(t, root)
-	ps, _, err := Run(ws, g, nil, Options{})
+	// A floor under the default: the decorated endpoint's evidence
+	// (name-partial/func) measures below it on the calibration set.
+	ps, _, err := Run(ws, g, nil, Options{MinConf: 0.1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := map[string]Proposal{}
 	for _, p := range ps {
 		got[p.Path+"#"+p.Symbol] = p
-		if !strings.Contains(p.Marker, "@gloss? ") || p.Conf <= 0 || p.Conf > 0.95 {
+		if !strings.Contains(p.Marker, "@gloss? ") || p.Conf <= 0 || p.Conf >= 1 {
 			t.Errorf("not a reviewable proposal: %+v", p)
 		}
 	}

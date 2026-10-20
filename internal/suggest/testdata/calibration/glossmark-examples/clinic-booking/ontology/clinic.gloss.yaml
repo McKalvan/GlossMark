@@ -1,0 +1,63 @@
+# ontology/clinic.gloss.yaml: the core tier.
+# Litmus test: if a domain expert would nod at the term, it is core; if only an
+# engineer would, it belongs in lark:. Core concepts never mention lark:.
+# Write docs quoted: doc: "One account at an institution (checking, savings)."
+namespace: clinic
+version: 0.1.0
+concepts:
+  Clinic:
+    kind: entity
+    doc: "A Larkspur site where practitioners see patients."
+  Practitioner:
+    kind: entity
+    doc: "A clinician who sees patients at one or more clinics."
+    aliases: [clinician, doctor]
+  Patient:
+    kind: entity
+    criticality: high          # PII: name, date of birth, contact details
+    doc: "A person who books appointments."
+  Slot:
+    kind: entity
+    doc: "A bookable period in a practitioner's schedule."
+  Appointment:
+    kind: entity
+    criticality: high          # a lost or double-booked appointment is a missed visit
+    doc: "A patient's reservation of one slot."
+  Booking:
+    kind: process
+    consumes: [Slot]
+    produces: [Appointment]
+    criticality: high
+    doc: "A patient reserves an open slot; one slot holds one appointment, and a patient never holds two that overlap."
+  Cancellation:
+    kind: process
+    consumes: [Appointment]
+    reverses: Booking
+    doc: "A patient gives up an appointment and the slot is released."
+  Availability:
+    kind: capability
+    doc: "Finding a practitioner's open slots within the search horizon."
+  AppointmentReminding:
+    kind: process
+    consumes: [Appointment]
+    aliases: [reminders]
+    doc: "Telling a patient about an upcoming appointment by SMS or email."
+  Waitlist:
+    kind: process
+    doc: "Offering a freed slot to patients who asked for an earlier time. Designed, not built."
+  NoShowRate:
+    kind: measure
+    doc: "No-shows plus late cancellations over every appointment that should have happened, per clinic, over four weeks."
+  CancellationWindow:
+    kind: constraint
+    constrains: [Cancellation]
+    doc: "How long before the start a patient may cancel without it counting as late."
+    criticality: high          # gloss criticality suggest: a rule the business relies on; late cancels feed the no-show rate
+  ReminderLeadTime:
+    kind: constraint
+    constrains: [AppointmentReminding]
+    doc: "How long before an appointment the first reminder goes out."
+    criticality: medium        # suggested high; lowered: a wrong lead time degrades reminders, it does not lose data
+relations:
+  produces: { lift: range-lcs }
+  consumes: { lift: range-lcs }

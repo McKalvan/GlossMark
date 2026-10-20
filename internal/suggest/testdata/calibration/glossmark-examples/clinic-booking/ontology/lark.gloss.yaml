@@ -1,0 +1,100 @@
+# ontology/lark.gloss.yaml: the implementation tier.
+# Every concept here carries realizes: <a clinic: concept>, presents:/hosts: for a
+# page or a shell, or internal: true for an engineering-private mechanism.
+namespace: lark
+version: 0.1.0
+concepts:
+  # Deployable systems
+  BookingApiService:
+    kind: system-type
+    realizes: [clinic:Booking, clinic:Cancellation, clinic:Availability]
+    doc: "The Go booking API: slots, appointments and the cancellation rule."
+  ReminderService:
+    kind: system-type
+    realizes: [clinic:AppointmentReminding, clinic:NoShowRate]
+    doc: "The Python reminder worker and the weekly no-show report."
+  PatientSite:
+    kind: system-type
+    hosts: [BookingPage, AppointmentPage, PractitionerDirectory, NoShowDashboard, WaitlistPage]
+    doc: "The Next.js patient site: the shell every page renders in."
+
+  # Booking API mechanisms
+  BookingHandler:
+    kind: process
+    realizes: clinic:Booking
+    doc: "Service.Book: checks the slot and overlaps, writes the appointment and the outbox event."
+  CancellationHandler:
+    kind: process
+    realizes: clinic:Cancellation
+    doc: "Service.Cancel: releases the slot and flags late cancellations."
+  SlotSearch:
+    kind: capability
+    realizes: clinic:Availability
+    doc: "FindOpenSlots: open slots for a practitioner, bounded by the search horizon."
+  CancellationPolicy:
+    kind: constraint
+    realizes: clinic:CancellationWindow
+    published: { as: clinic:CancellationWindow }
+    value: "24h"
+    value-from: { path: services/booking-api/internal/booking/cancellation.go, symbol: CancellationWindow }
+    doc: "The cancellation window as the booking API enforces it."
+  OutboxRelay:
+    kind: process
+    internal: true
+    doc: "Ships committed outbox rows to the reminder queue."
+
+  # Reminder worker mechanisms
+  ReminderPlanner:
+    kind: process
+    realizes: clinic:AppointmentReminding
+    doc: "plan_reminders: one reminder at the lead time and a nudge on the day."
+  ReminderDispatch:
+    kind: process
+    part-of: ReminderPlanner
+    doc: "Sends due reminders through SNS or SES."
+  LeadTimeSetting:
+    kind: constraint
+    realizes: clinic:ReminderLeadTime
+    published: { as: clinic:ReminderLeadTime }
+    value: "48h"
+    doc: "REMINDER_LEAD_HOURS in the reminder worker's settings."
+  NoShowReport:
+    kind: measure
+    realizes: clinic:NoShowRate
+    doc: "compute_noshow_report: the weekly per-clinic rate."
+
+  # Infrastructure
+  BookingDatabase:
+    kind: resource
+    internal: true
+    doc: "The RDS Postgres instance, encrypted with its own KMS key."
+  ReminderQueue:
+    kind: resource
+    internal: true
+    doc: "The SQS FIFO queue between the outbox relay and the reminder worker."
+  BookingCluster:
+    kind: resource
+    internal: true
+    doc: "The EKS cluster the three services run on."
+
+  # Pages: they show a concept, they are not its mechanism (presents, never realizes)
+  BookingPage:
+    kind: process
+    presents: [clinic:Booking, clinic:Availability]
+    doc: "/book: pick a practitioner and an open slot."
+  AppointmentPage:
+    kind: process
+    presents: [clinic:Appointment, clinic:Cancellation]
+    doc: "/appointments and /appointments/[id]: the patient's appointments and the cancel button."
+  PractitionerDirectory:
+    kind: process
+    presents: clinic:Practitioner
+    doc: "/practitioners: who sees patients, and who is accepting new ones."
+  NoShowDashboard:
+    kind: process
+    presents: clinic:NoShowRate
+    doc: "/admin/no-shows: the four-week no-show rate per clinic for operations."
+  WaitlistPage:
+    kind: process
+    presents: clinic:Waitlist
+    doc: "/waitlist: collects interest in a waitlist the backend does not offer yet."

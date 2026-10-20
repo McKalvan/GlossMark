@@ -1,0 +1,16 @@
+# .gloss.yaml: the dispatch planner, one deployable, part of the freight platform
+# declared in shipment-core.
+boundary: dispatch:planner
+level: container
+label: Dispatch planner
+part-of: fleet:freight-platform
+default-namespace: dsp
+owner: dispatch-eng
+generated: ["prisma/migrations/**"]   # prisma migrate writes these from schema.prisma; the schema carries the markers
+realizes: [dsp:BookedIntake, dsp:PickupPlanner, dsp:PickupConfirmation, dsp:ExpressPickup]
+holds: [frt:Driver, frt:Route]
+consumes: [frt:Shipment]
+produces: [frt:Route]
+subscribes: [frt:ShipmentBooked]
+publishes: [frt:ShipmentPickedUp]
+allowed: [derived, shc:ShipmentBookedEmitter]   # the consumer-driven contract test verifies the upstream emitter

@@ -1,0 +1,8 @@
+# .gloss.yaml: the root boundary. The system realizes what its containers
+# declare. Each container names it with part-of.
+boundary: libb:circ
+level: system
+label: Riverbend circulation (CIRC)
+realizes: inherit
+default-namespace: circ
+owner: library-it

@@ -1,0 +1,15 @@
+# ontology/views.yaml: declared projections over tier × zoom (docs/FILE-FORMATS.md).
+views:
+  business:
+    doc: The core tier only; implementation folds into what it realizes.
+    include: [frt:*]
+    collapse: { "shc:*": via realizes }
+    show-published: true
+    relations: [produces, consumes, constrains, publishes, subscribes, reverses, is-a, realizes]
+    lift: range-lcs
+    zoom: system
+  engineering:
+    doc: Both tiers, two levels of parts, container zoom.
+    include: [frt:*, shc:*]
+    expand: { part-of: 2 }
+    zoom: container

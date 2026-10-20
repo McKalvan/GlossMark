@@ -1,0 +1,9 @@
+# db/.gloss.yaml: schema files and stored procedures.
+boundary: libb:db
+level: container
+label: CIRC database
+part-of: libb:circ
+realizes: [circ:NightlyFineJob, circ:RenewalHandler, circ:HoldExpiryJob, circ:GracePeriodRule, circ:FineCapRule]
+holds: [lib:Branch, lib:Title, lib:Patron, lib:Item, lib:Loan, lib:Hold, lib:Fine, lib:Borrower]
+default-namespace: circ
+owner: library-it

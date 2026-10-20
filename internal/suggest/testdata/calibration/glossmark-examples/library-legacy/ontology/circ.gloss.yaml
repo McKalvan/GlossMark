@@ -1,0 +1,96 @@
+# ontology/circ.gloss.yaml: the implementation tier, written by hand after the
+# core tier was imported from docs/glossary.md and config/enums.yaml.
+# Every concept here carries realizes: <a lib: concept> or internal: true.
+namespace: circ
+version: 0.1.0
+concepts:
+  # Deployables
+  CircWebApp:
+    kind: system-type
+    realizes: [lib:Checkout, lib:Checkin, lib:Renewal, lib:HoldTrapping]
+    doc: "The Tomcat desk web app: servlets, services and DAOs in one WAR."
+  KioskGateway:
+    kind: system-type
+    realizes: lib:SelfCheckout
+    doc: "The gRPC gateway the self-checkout kiosks call (2022)."
+  NightlyBatch:
+    kind: system-type
+    realizes: [lib:FineAssessment, lib:OverdueNotification, lib:HoldExpiry]
+    has-part: [NightlyFineJob, OverdueNoticeJob, HoldExpiryJob]
+    doc: "run_nightly.sh and the three jobs it runs, as the circ-nightly ECS scheduled task."
+
+  # Desk web app
+  CheckoutHandler:
+    kind: process
+    realizes: lib:Checkout
+    doc: "CirculationService.checkout: every refusal rule, then the loan row, in one transaction."
+  CheckinHandler:
+    kind: process
+    realizes: lib:Checkin
+    doc: "CirculationService.checkin: closes the loan, assesses the fine, traps a hold."
+  RenewalHandler:
+    kind: process
+    realizes: lib:Renewal
+    doc: "RenewalService.renew and sp_renew_loan, which re-checks the racy rules."
+  HoldQueue:
+    kind: process
+    realizes: lib:HoldTrapping
+    doc: "HoldQueue.trapIfWanted: the oldest waiting hold traps the returned copy."
+  PatronBlockCheck:
+    kind: constraint
+    realizes: lib:PatronBlock
+    doc: "CirculationService.assertNotBlocked: expired card or balance at the block threshold."
+  BorrowingLimitCheck:
+    kind: constraint
+    realizes: lib:BorrowingLimit
+    doc: "CirculationService.assertUnderLimit against maxItems in patron-types.json."
+  LoanPeriodRule:
+    kind: constraint
+    realizes: lib:LoanPeriod
+    doc: "LoanPeriodCalculator: loanDays per format from loan-rules.json, pushed off closed days."
+  DeskFineCalculator:
+    kind: process
+    realizes: lib:FineAssessment
+    doc: "FineCalculator.overdueFine: the fine assessed at check-in."
+  FineCapRule:
+    kind: constraint
+    realizes: lib:FineCap
+    doc: "The lower of replacement cost and the flat cap, in FineCalculator and in sp_assess_fines."
+  GracePeriodRule:
+    kind: constraint
+    realizes: lib:GracePeriod
+    doc: "The grace days subtracted before a fine accrues, in FineCalculator and in sp_assess_fines."
+
+  # Nightly batch
+  NightlyFineJob:
+    kind: process
+    realizes: lib:FineAssessment
+    doc: "assess_fines.rb calling sp_assess_fines for loans still out."
+  OverdueNoticeJob:
+    kind: process
+    realizes: lib:OverdueNotification
+    doc: "overdue_notices.pl: notices at 7, 14 and 28 days; lost at 60."
+  HoldExpiryJob:
+    kind: process
+    realizes: lib:HoldExpiry
+    doc: "expire_holds.sh calling sp_expire_holds, which re-traps the copy."
+
+  # Kiosk
+  SelfCheckApi:
+    kind: process
+    realizes: lib:SelfCheckout
+    doc: "The SelfCheckService gRPC contract and the gateway that serves it."
+
+  # Infrastructure (2024 cloud move)
+  CircDatabase:
+    kind: resource
+    internal: true
+    doc: "The RDS PostgreSQL instance."
+  CircCluster:
+    kind: resource
+    internal: true
+    doc: "The ECS Fargate cluster for the web app, the kiosk gateway and the nightly task."
+  NoticeArchive:
+    kind: resource
+    internal: true
+    doc: "The S3 bucket that keeps printed notices for seven years (records schedule LIB-12)."

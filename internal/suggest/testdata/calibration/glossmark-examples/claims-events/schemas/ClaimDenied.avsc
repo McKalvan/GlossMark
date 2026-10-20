@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "ClaimDenied",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "Assessment denied the claim.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "assessmentId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "denialCode", "type": {"type": "enum", "name": "DenialCode", "symbols": ["NOT_COVERED", "EXCLUDED_PERIL", "LATE_FILING", "POLICY_LAPSED", "FRAUD_CONFIRMED"]}},
+    {"name": "explanation", "type": "string"},
+    {"name": "decidedBy", "type": "string", "doc": "rules-engine or an adjuster id."}
+  ]
+}

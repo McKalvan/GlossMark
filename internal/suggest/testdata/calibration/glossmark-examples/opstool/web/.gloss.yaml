@@ -1,0 +1,8 @@
+# web/.gloss.yaml: the PHP pages the handhelds open.
+boundary: whb:handheld-web
+level: container
+label: Handheld PHP pages
+part-of: whb:opstool
+default-namespace: ops
+realizes: [ops:ScanConfirm, ops:PickListPage, wh:StockAdjustment]
+presents: [wh:PickList]

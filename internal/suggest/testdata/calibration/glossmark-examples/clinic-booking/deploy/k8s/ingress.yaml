@@ -1,0 +1,18 @@
+# @gloss configures .PatientSite scope=file conf=0.8
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: clinic-booking
+  namespace: clinic-booking
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: nginx
+  tls: [{ hosts: [book.larkspur.example], secretName: book-tls }]
+  rules:
+    - host: book.larkspur.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: web, port: { number: 3000 } } }

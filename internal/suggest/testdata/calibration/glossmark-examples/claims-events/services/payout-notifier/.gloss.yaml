@@ -1,0 +1,11 @@
+# services/payout-notifier/.gloss.yaml
+boundary: claimb:payout-notifier
+level: container
+label: Payout notifier
+part-of: claimb:claims-events
+realizes: [claim:PayoutNotification, tide:PayoutNotifierService]
+# PayoutFailed is declared for PAY-412 (tell the policyholder a payment bounced).
+subscribes: [claim:PayoutAuthorized, claim:PayoutFailed]
+consumes: [claim:Payout]
+default-namespace: tide
+owner: customer-comms

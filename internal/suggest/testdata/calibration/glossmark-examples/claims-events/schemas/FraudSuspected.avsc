@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "FraudSuspected",
+  "namespace": "com.tidewater.claims.events",
+  "doc": "Fraud screening scored a newly filed claim at or above the referral threshold.",
+  "fields": [
+    {"name": "eventId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "claim", "type": "com.tidewater.claims.common.ClaimRef"},
+    {"name": "score", "type": "double"},
+    {"name": "signals", "type": {"type": "array", "items": "string"}, "doc": "Rule ids that contributed to the score."}
+  ]
+}

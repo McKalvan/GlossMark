@@ -1,0 +1,8 @@
+# infra/.gloss.yaml: Terraform from the 2024 cloud move.
+boundary: libb:infra
+level: container
+label: AWS infrastructure
+part-of: libb:circ
+realizes: [circ:CircDatabase, circ:CircCluster, circ:NoticeArchive, circ:CircWebApp, circ:KioskGateway, circ:NightlyBatch]
+default-namespace: circ
+owner: city-cloud-team

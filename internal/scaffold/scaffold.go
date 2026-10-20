@@ -82,6 +82,19 @@ type Plan struct {
 	Vocabulary []string
 }
 
+// SuggestBlock is the commented suggest: block gloss init writes into
+// glossmark.yaml: the repository defaults of gloss suggest and the
+// precision auto-accept must meet, at their defaults (ADR 0024).
+const SuggestBlock = `# suggest:                          # gloss suggest's defaults for this repository; flags override them
+#   auto-accept-precision: 0.9      # auto-accept (SOFT) only proposals whose evidence measured at least this precision;
+#                                   # the conf threshold is derived from it (gloss doctor prints it)
+#   min-conf: 0.3                   # lowest conf that becomes a proposal
+#   stopwords: []                   # more programming words that never match a concept on their own
+#   labels: labels.tsv              # what gloss suggest --calibrate scores against (default: this repository's own links)
+#   calibration: glossmark.calibration.tsv  # this repository's measurement (gloss suggest --calibrate --write);
+#                                   # the threshold is derived from it instead of the shipped calibration
+`
+
 // skipDirs are never scaffolded as boundaries.
 var skipDirs = map[string]bool{"node_modules": true, "vendor": true, "dist": true, "build": true, "target": true, "out": true,
 	"docs": true, "doc": true, "test": true, "tests": true, "__pycache__": true, "venv": true, "env": true, "coverage": true,
@@ -471,7 +484,7 @@ owns:
 			fmt.Fprintf(&cfg, "  %s: { iri: %s,%s source: %s }\n", im.prefix, im.iri, ver, im.source)
 		}
 	}
-	cfg.WriteString("policy:\n  soft-conf-threshold: 0.7\n")
+	cfg.WriteString(SuggestBlock)
 	add(File{Path: "glossmark.yaml", Action: Create, Content: cfg.String()})
 	if !coreImported {
 		add(File{Path: "ontology/" + core + ".gloss.yaml", Action: Create, Content: fmt.Sprintf(`# ontology/%s.gloss.yaml: the core tier.

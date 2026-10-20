@@ -1,0 +1,40 @@
+# The claims Kafka cluster: three brokers in KRaft mode, mTLS for clients.
+# @gloss provisions .ClaimsKafkaCluster scope=file conf=0.9
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: brokers
+  namespace: claims
+  labels: { strimzi.io/cluster: claims-kafka }
+spec:
+  replicas: 3
+  roles: [controller, broker]
+  storage:
+    type: persistent-claim
+    size: 200Gi
+    class: gp3-encrypted
+    deleteClaim: false
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: claims-kafka
+  namespace: claims
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    version: 3.8.0
+    listeners:
+      - { name: tls, port: 9093, type: internal, tls: true, authentication: { type: tls } }
+    authorization: { type: simple }
+    config:
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      auto.create.topics.enable: false
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}

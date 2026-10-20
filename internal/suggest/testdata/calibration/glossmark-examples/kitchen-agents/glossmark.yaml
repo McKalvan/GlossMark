@@ -1,0 +1,13 @@
+# glossmark.yaml: the namespaces this repository owns (docs/FILE-FORMATS.md).
+grammar: 1
+repo-iri: https://onto.pepperrow.example/                 # boundary prefixes such as dineb: expand under it; no prefixes: needed
+owns:
+  dine: { iri: https://onto.pepperrow.example/core/, tier: core,           version: 0.1.0 }   # what a head chef recognises
+  pepper: { iri: https://onto.pepperrow.example/impl/, tier: implementation, version: 0.1.0 }   # the mechanisms that realize it
+# The adopt-glossmark skill installed by `gloss hook install --skill` carries GlossMark's own
+# marker (instructs gm:Onboarding), which does not resolve here. It is vendored, so it is excluded.
+exclude: [".claude/skills/adopt-glossmark/**"]
+policy:
+  # Agent proposals at or above 0.7 are SOFT (auto-accept eligible); below it a human decides.
+  # Set explicitly: the init default is the same number, but the README's examples depend on it.
+  soft-conf-threshold: 0.7

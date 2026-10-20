@@ -1,0 +1,34 @@
+# @gloss deploys .IntakeService conf=0.9
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claim-intake
+  namespace: claims
+  labels: { app.kubernetes.io/name: claim-intake, app.kubernetes.io/part-of: claims-platform }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app.kubernetes.io/name: claim-intake }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: claim-intake, app.kubernetes.io/part-of: claims-platform }
+    spec:
+      serviceAccountName: claim-intake
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: claim-intake
+          image: registry.tidewater.example/claims/claim-intake:1.8.0
+          ports: [{ name: http, containerPort: 8080 }]
+          envFrom: [{ configMapRef: { name: claims-common } }]
+          env:
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: claims-db, key: url } } }
+            - { name: POLICY_ADMIN_URL, value: "http://policy-admin.policy.svc:8080" }
+          volumeMounts:
+            - { name: kafka-tls, mountPath: /etc/kafka/tls, readOnly: true }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+      volumes:
+        - name: kafka-tls
+          secret: { secretName: claim-intake }   # written by the Strimzi user operator for KafkaUser claim-intake

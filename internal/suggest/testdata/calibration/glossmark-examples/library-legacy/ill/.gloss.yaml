@@ -1,0 +1,9 @@
+# ill/.gloss.yaml: interlibrary loan, being retired. The code went in 2025
+# (CIRC-2210); the service catalogue lists ILL under CIRC until 30 June 2027.
+boundary: libb:ill
+level: container
+label: Interlibrary loan (retiring)
+part-of: libb:circ
+realizes: [lib:InterlibraryLoan]
+default-namespace: circ
+owner: library-it

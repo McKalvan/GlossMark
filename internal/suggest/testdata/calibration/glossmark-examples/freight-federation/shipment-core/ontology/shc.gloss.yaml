@@ -1,0 +1,45 @@
+# ontology/shc.gloss.yaml: shipment-core's implementation tier.
+# Four concepts are published (published: as): they are the only shc: concepts
+# dispatch and tracking may reference. tier: tells importers so (GM230).
+namespace: shc
+version: 1.1.0
+tier: implementation
+concepts:
+  BookingHandler: { kind: process, realizes: frt:Booking, produces: [frt:Shipment], doc: "POST /shipments: validates, persists, promises a window, writes the outbox row in one transaction." }
+  CarrierSelector: { kind: process, realizes: frt:CarrierAssignment, doc: "Picks a carrier by postcode coverage, weight limit and service level." }
+  LabelRenderer: { kind: process, realizes: frt:Labelling, produces: [frt:ShippingLabel], doc: "Renders one ZPL label per parcel." }
+  StatusProjector:
+    kind: process
+    realizes: frt:ShipmentVisibility
+    subscribes: [frt:ShipmentPickedUp, frt:ShipmentDelivered]
+    doc: "Keeps a shipment's status in step with pickup and delivery events, and records each delivery outcome."
+  Outbox: { kind: resource, internal: true, doc: "The transactional outbox table the relay drains." }
+
+  # Published: the seam into the business view and into the other two repositories.
+  ShipmentBookedEmitter:
+    kind: process
+    realizes: frt:ShipmentBooked
+    publishes: [frt:ShipmentBooked]
+    published: { as: frt:ShipmentBooked }
+    doc: "The outbox relay that publishes ShipmentBooked on shipment.booked.v1; its payload is the contract dispatch consumes."
+  LabelSpec:
+    kind: constraint
+    realizes: frt:LabelFormat
+    published: { as: frt:LabelFormat }
+    value: "ZPL II, 4x6 in, 203 dpi"
+    value-from: { path: service/src/main/java/com/kestrelfreight/shipment/label/LabelSpec.java, symbol: FORMAT }
+    doc: "The label format: ZPL II on 4x6 inch stock at 203 dpi, Code 128 tracking-number barcode."
+  DeliveryWindowPolicy:
+    kind: constraint
+    realizes: frt:DeliveryWindow
+    published: { as: frt:DeliveryWindow }
+    value: "2h"
+    value-from: { path: service/src/main/java/com/kestrelfreight/shipment/booking/DeliveryWindowPolicy.java, symbol: WINDOW_LENGTH }
+    doc: "The length of the delivery window promised at booking."
+  OnTimeRateCalculator:
+    kind: measure
+    realizes: frt:OnTimeDeliveryRate
+    published: { as: frt:OnTimeDeliveryRate }
+    value: "95%"
+    value-from: { path: service/src/main/java/com/kestrelfreight/shipment/metrics/OnTimeRateCalculator.java, symbol: TARGET }
+    doc: "The seven-day rolling on-time rate and its target, exported as a gauge."

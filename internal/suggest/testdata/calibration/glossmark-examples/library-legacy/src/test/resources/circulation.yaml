@@ -1,0 +1,16 @@
+# Test copy of config/circulation.yaml with a fixed calendar.
+loans:
+  max_renewals: 2
+fines:
+  grace_days: 3
+  cap_flat: 20.00
+  daily_rate:
+    DEFAULT: 0.25
+    DVD: 1.00
+    MAGAZINE: 0.10
+patrons:
+  block_threshold: 10.00
+holds:
+  pickup_days: 7
+calendar:
+  closed: []

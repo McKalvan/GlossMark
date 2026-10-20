@@ -1,0 +1,19 @@
+# Lifecycle changes after filing: withdrawals. 30 days.
+# @gloss provisions .LifecycleTopic conf=0.9
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: claims.lifecycle.v1
+  namespace: claims
+  labels:
+    strimzi.io/cluster: claims-kafka
+spec:
+  topicName: claims.lifecycle.v1
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: "2592000000"
+    min.insync.replicas: "2"
+    cleanup.policy: delete
+    message.timestamp.type: CreateTime
+    confluent.value.schema.validation: "true"

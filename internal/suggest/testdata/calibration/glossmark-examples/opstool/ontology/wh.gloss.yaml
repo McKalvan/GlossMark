@@ -1,0 +1,55 @@
+# ontology/wh.gloss.yaml: the core tier (variant "aliases", see ../../variants/).
+# Nothing in the code names these concepts; the docs come from the docstrings, the SQL
+# and the warehouse supervisor. Aliases are the abbreviations the code uses instead.
+namespace: wh
+version: 0.1.0
+concepts:
+  InventoryManagement:
+    kind: capability
+    doc: "Knowing what stock is in which bin and keeping that record right."
+  Item: { kind: entity, doc: "A stocked product, identified by its item number (SKU).", aliases: ["sku", "item master"] }
+  Bin: { kind: entity, doc: "A storage location: a pick face (zone P) or a reserve rack (zone R).", aliases: ["loc", "location", "pick face"] }
+  StockOnHand: { kind: entity, doc: "The quantity of one item in one bin, as the system records it.", aliases: ["qty", "stock"] }
+  CustomerOrder: { kind: entity, doc: "A customer's order lines, each due on a truck cutoff.", aliases: ["ord", "order"] }
+  CycleCount:
+    kind: process
+    doc: "Counting bins on a rolling schedule and reconciling the counted quantity with stock on hand."
+    aliases: ["cnt", "count", "recount"]
+  CountVariance: { kind: measure, doc: "Counted minus system quantity, relative to the system quantity.", aliases: ["diff", "variance"] }
+  CountTolerance:
+    kind: constraint
+    doc: "A count whose variance exceeds this goes back on the recount list."
+    value: "2%"
+  StockAdjustment:
+    kind: process
+    doc: "A manual correction of stock on hand, logged with who made it."
+    aliases: ["adj", "adjust"]
+  AdjustmentApproval:
+    kind: constraint
+    doc: "An adjustment above the limit needs a supervisor's PIN."
+    value: "50 units"
+  Replenishment:
+    kind: process
+    doc: "Topping up pick faces from reserve racks when they fall below their minimum."
+    aliases: ["repl", "top up"]
+  WavePlanning:
+    kind: process
+    doc: "Grouping the order lines due on one truck cutoff into pick carts."
+    aliases: ["batch", "wave", "cart"]
+  HazmatHandling:
+    kind: constraint
+    doc: "Dangerous-goods classes that react with each other never share a pick cart."
+    aliases: ["cls", "dangerous goods"]
+  Picking:
+    kind: process
+    doc: "Walking a cart's lines and confirming each pick by scanning the bin and then the item."
+    aliases: ["pick", "conf"]
+  PickList: { kind: entity, doc: "The printed list of a cart's lines in walking order.", aliases: ["pick list"] }
+  ReturnsProcessing:
+    kind: process
+    doc: "Receiving goods a customer sends back against an RMA and grading each line: restock, vendor return or scrap."
+    aliases: ["rma", "returns"]
+  ReturnAuthorization: { kind: entity, doc: "An RMA: the permission for a customer to send goods back.", aliases: ["rma"] }
+  CartonLabel: { kind: entity, doc: "The shipping label on an outbound carton, with ship-to, PO and carton number.", aliases: ["zpl", "label"] }
+  CartonNumber: { kind: entity, doc: "The 18-digit serial shipping container code (SSCC) with its check digit.", aliases: ["sscc"] }
+

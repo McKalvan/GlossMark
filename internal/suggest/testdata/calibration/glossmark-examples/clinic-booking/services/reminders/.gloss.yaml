@@ -1,0 +1,11 @@
+# services/reminders/.gloss.yaml
+boundary: clinicb:reminders
+level: container
+label: Reminder worker
+part-of: clinicb:clinic-booking
+# lark:LeadTimeSetting is bound with publishes-value, which does not lift to realizes, so it is not declared here.
+realizes: [clinic:AppointmentReminding, clinic:NoShowRate]
+default-namespace: lark
+# The worker reads booking events; it consumes appointments without realizing anything about them.
+allowed: [derived, clinic:Appointment]
+owner: patient-comms
