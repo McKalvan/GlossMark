@@ -16,7 +16,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `verifies` (`tests`) | ✓ | | | test artifact checks a concept; `tests` is an accepted alias (GM240 asks for `verifies`) |
 | `documents` | ✓ | | | Markdown explains a concept or boundary |
 | `instructs` | ✓ | | | an agent file's instructions concern a concept or boundary |
-| `publishes-value` | ✓ | | | the line below holds a measure's or constraint's published value (`scope=line`); same as `value-from:` in the ontology |
+| `publishes-value` | ✓ | | | the line below holds a measure's or constraint's published value (`scope=line`); same as `value-from:` in the ontology, and lifts as `implements` (the line is the code that holds the setting) |
 | `may-modify` | ✓ | | | an agent's change remit; targets may be globs (`pa:*`); links outside it by that agent are HARD |
 | `provisions` | ✓ | | | IaC artifact provisions a resource or boundary; on a resource or system-type it lifts to `realizes` |
 | `configures` | ✓ | | ✓ | a config file, or a page that edits a concept's value at runtime; lifts to the boundary as itself on any kind (and to `realizes` on a resource or system-type), carries the concept's criticality, never places it ([ADR 0012](adr/0012-surfaces.md)) |

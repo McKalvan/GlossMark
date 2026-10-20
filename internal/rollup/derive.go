@@ -74,7 +74,9 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 			g.AddEdge(&graph.Edge{S: b.ID, P: p, O: o, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: via, Path: path, Line: line, Proposed: proposed}})
 		}
 		for _, a := range arts {
-			for _, e := range g.Out(a.ID, "implements") {
+			// publishes-value lifts as implements: the line holding a
+			// published setting is the code that implements it (ADR 0017).
+			for _, e := range append(g.Out(a.ID, "implements"), g.Out(a.ID, "publishes-value")...) {
 				if !IsConcrete(e.O) {
 					continue
 				}

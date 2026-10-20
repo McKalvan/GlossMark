@@ -53,7 +53,7 @@ A declared concept covers a derived one when they are equal, when the declared o
 
 ## Querying
 
-`gloss export --sqlite graph.db` writes tables `nodes`, `edges`, `prefixes` and views `is_a_closure`, `part_of_closure`, `realizes_closure`, `concept_artifacts` (recursive CTEs), so any SQL client can ask "which artifacts implement anything under zoo:Horse?":
+`gloss export --sqlite graph.db` writes tables `nodes`, `edges`, `prefixes` and views `is_a_closure`, `part_of_closure`, `realizes_closure`, `concept_artifacts` (recursive CTEs). Besides the graph's nodes, `nodes` holds a `node='file'` row (id `urn:gloss:file:<path>`) for every in-scope file with no marker beneath a `criticality-floor` boundary, carrying the floor's `criticality` and the floor boundary in `criticality_from`; `graph.jsonl` has no such records. Any SQL client can ask "which artifacts implement anything under zoo:Horse?":
 
 ```sql
 SELECT a.path, a.symbol FROM concept_artifacts a
