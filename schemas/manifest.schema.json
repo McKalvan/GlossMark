@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://glossmark.dev/schemas/manifest.json",
   "title": "GlossMark boundary manifest",
-  "description": "A per-directory .gloss.yaml boundary manifest: the architectural boundary the directory belongs to, its level, declared intent relations and the concepts its markers may reference. Mirrors model.Manifest in internal/model/files.go, which decodes with KnownFields(true), so unknown keys are errors.",
+  "description": "A per-directory .gloss.yaml boundary manifest: the architectural boundary the directory belongs to, its level, declared intent relations and the concepts its markers may reference. Mirrors model.Manifest in internal/model/files.go, An unknown key is an error (GM110) at its own line, but the other keys still apply, so the boundary still exists.",
   "type": "object",
   "additionalProperties": false,
   "required": ["boundary"],
@@ -92,6 +92,21 @@
     "criticality-floor": {
       "description": "Make the boundary's criticality a floor for every artifact beneath it, nested boundaries included. Without it an artifact takes only the level of the concepts it links to.",
       "type": "boolean"
+    },
+    "deprecated": {
+      "description": "The boundary is being retired (docs/adr/0007-retiring-boundaries.md). Links into it get GM222 and a HARD gate, as for a deprecated concept.",
+      "type": "boolean"
+    },
+    "replaced-by": {
+      "description": "The boundary (CURIE, possibly in another repository) that takes over from a deprecated one.",
+      "type": "string",
+      "pattern": "^[A-Za-z][\\w-]*:[\\w.-]+$"
+    },
+    "retire-by": {
+      "description": "The date (YYYY-MM-DD) a deprecated boundary is due to be retired.",
+      "type": "string",
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     }
   },
   "$defs": {

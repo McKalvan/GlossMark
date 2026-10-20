@@ -77,7 +77,7 @@
       }
     },
     "node": {
-      "description": "One graph node (graph.Node). Which attributes appear depends on the node type: concept nodes carry tier, kind, published-as, internal, deprecated, replaced-by, value and imported; boundary nodes carry kind (= level), owner and dir; artifact nodes carry path, anchor and boundary; namespace nodes carry tier, version and owner; actor nodes carry kind (human, agent, ...).",
+      "description": "One graph node (graph.Node). Which attributes appear depends on the node type: concept nodes carry tier, kind, published-as, internal, deprecated, replaced-by, value and imported; boundary nodes carry kind (= level), owner and dir, and deprecated, replaced-by and retire-by when retiring; artifact nodes carry path, anchor and boundary; namespace nodes carry tier, version and owner; actor nodes carry kind (human, agent, ...).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -123,6 +123,10 @@
           "description": "Concept kind (entity, process, capability, event, measure, constraint, resource, system-type); boundary level (domain, system, container, component); declaration kind of an artifact (file, function, class, resource, table, sql, heading, ...); actor kind (human, agent).",
           "type": "string"
         },
+        "kind-from": {
+          "description": "Concept: CURIE of the nearest is-a ancestor its kind was inherited from; absent when the kind is declared.",
+          "type": "string"
+        },
         "label": {
           "type": "string"
         },
@@ -137,10 +141,17 @@
           "type": "boolean"
         },
         "deprecated": {
+          "description": "Concept or boundary: being retired; see replaced-by.",
           "type": "boolean"
         },
         "replaced-by": {
+          "description": "Concept or boundary: the CURIE that supersedes it.",
           "type": "string"
+        },
+        "retire-by": {
+          "description": "Boundary: the date (YYYY-MM-DD) a deprecated boundary is due to be retired.",
+          "type": "string",
+          "format": "date"
         },
         "value": {
           "description": "Concept: the documented attribute value from the ontology (any JSON value)."
@@ -278,7 +289,7 @@
           "type": "string"
         },
         "kind": {
-          "description": "Declaration kind: function, method, class, interface, type, variable, resource, block, key, item, sql, alter, gherkin, heading, document, definition, instruction, proto, unresolved-symbol, ...",
+          "description": "Declaration kind: function, method, class, interface, type, variable, resource, block, key, item, sql, alter, gherkin, heading, document, definition, instruction, proto, unresolved-symbol, json-pointer (a sidecar range; symbol holds the pointer), ...",
           "type": "string"
         },
         "start": {
@@ -411,6 +422,10 @@
         },
         "raw": {
           "description": "The original target text as written (.Local, impl:NEW:X, pa:*).",
+          "type": "string"
+        },
+        "alias": {
+          "description": "The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).",
           "type": "string"
         }
       }

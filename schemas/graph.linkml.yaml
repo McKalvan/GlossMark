@@ -235,13 +235,17 @@ slots:
     description: Private to the repository; never shown in the business view.
     range: boolean
   deprecated:
-    description: True when the concept is deprecated; see replaced_by.
+    description: True when the concept or boundary is deprecated; see replaced_by.
     range: boolean
     slot_uri: owl:deprecated
   replaced_by:
-    description: Concept that supersedes a deprecated one (JSON key "replaced-by").
+    description: Concept or boundary (CURIE) that supersedes a deprecated one (JSON key "replaced-by").
     aliases: ["replaced-by"]
     slot_uri: dcterms:isReplacedBy
+  retire_by:
+    description: Date (YYYY-MM-DD) a deprecated boundary is due to be retired (JSON key "retire-by").
+    aliases: ["retire-by"]
+    range: date
   value:
     description: A documented attribute value from the ontology; any JSON value.
     range: Any
@@ -355,6 +359,8 @@ slots:
     multivalued: true
   raw:
     description: The original target text as written (.Local, impl:NEW:X, pa:*).
+  alias:
+    description: The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).
 
 # ---------------------------------------------------------------------------
 # Classes
@@ -418,6 +424,9 @@ classes:
       - dir
       - criticality
       - criticality_from
+      - deprecated
+      - replaced_by
+      - retire_by
     slot_usage:
       node:
         equals_string: boundary
@@ -510,3 +519,4 @@ classes:
       - rule
       - via
       - raw
+      - alias

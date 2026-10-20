@@ -237,7 +237,7 @@ func (c *comparer) boundaries() {
 						break
 					}
 				}
-				if covered {
+				if covered || c.wholeOfCovered(d, derivedEdges, declared) {
 					continue
 				}
 				consistent = false
@@ -293,6 +293,48 @@ func (c *comparer) boundaries() {
 			}
 		}
 	}
+}
+
+// wholeOfCovered reports whether derived concept d is only there because a
+// covered part lifted it: every derived edge to d came through a derived
+// concept o that d is a whole of (or what such a whole realizes), and o is
+// covered. Code implementing a declared part makes the boundary realize the
+// whole too; that lift is the part's, not a claim on the whole. Code that
+// names the whole itself is not excused (ADR 0009).
+func (c *comparer) wholeOfCovered(d string, derived map[string][]*graph.Edge, declared []string) bool {
+	es := derived[d]
+	if len(es) == 0 {
+		return false
+	}
+	for _, e := range es {
+		if e.Prov == nil || len(e.Prov.Via) < 2 {
+			return false
+		}
+		o, _ := c.g.Expand(e.Prov.Via[1])
+		if o == d || derived[o] == nil || !has(RealizesStar(c.g, o), d) || has(realizedBy(c.g, o), d) {
+			return false
+		}
+		ok := false
+		for _, s := range declared {
+			if Covers(c.g, s, o) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func has(xs []string, x string) bool {
+	for _, y := range xs {
+		if y == x {
+			return true
+		}
+	}
+	return false
 }
 
 // lifted summarizes a derived set with the least common subsumer when the relation lifts.

@@ -147,3 +147,11 @@ A change to a declared level is an ontology or manifest edit and is HARD, like
 every other governance decision (`concept-changed` with `criticality low →
 critical`, or `boundary-changed`). It also changes every view the concept
 appears in, so the business sees it.
+
+"Views changed" in `gloss diff` lists the views whose projection changed: a
+node added or removed, an edge added or removed, or a concept's declared
+`value`, label, kind, publication or criticality edited. A published value
+that drifts (the code bound by `value-from` or `publishes-value` changes and
+`value:` does not) changes none of those, so a curated view that names the
+concept does not count as changed by it. The drift is still HARD on its own (`published-value-drifted`),
+and once `value:` is updated to match, every view naming the concept changes.

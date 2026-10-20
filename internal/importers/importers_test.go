@@ -11,6 +11,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/ontoedit"
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
@@ -160,5 +161,44 @@ func TestImportRoundTrip(t *testing.T) {
 	}
 	if st["arena:Leaderboard"] != "proposed" || st["arena:Grading"] != "orphan" {
 		t.Errorf("status = %v", st)
+	}
+}
+
+// TestEnumValueDoesNotOverwriteGlossaryConcept: an enum value whose bare name
+// is already a concept that is not is-a the enum lands as <Enum><Value>, and
+// re-running either importer afterwards is a no-op.
+func TestEnumValueDoesNotOverwriteGlossaryConcept(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "lib.gloss.yaml")
+	os.WriteFile(path, []byte("namespace: lib\nconcepts: {}\n"), 0o644)
+	gl := "## Lost Item\n\n**Def.** An item a patron cannot return.\n**Status:** implemented\n"
+	en := "FineType:\n  LOST_ITEM: Replacement cost charged when an item is declared lost.\n  LATE: Charged per day overdue.\n"
+	if r, err := Apply(path, ParseGlossary(gl), "human:test", false); err != nil || len(r.Added) != 1 {
+		t.Fatalf("glossary import: %+v %v", r, err)
+	}
+	ev, err := ParseEnums([]byte(en), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := Apply(path, ev, "human:test", false)
+	if err != nil || len(r.Updated) != 0 || strings.Join(r.Added, ",") != "FineType,FineTypeLostItem,Late" {
+		t.Fatalf("enums import: %+v %v", r, err)
+	}
+	if doc, _, _ := ontoedit.Get(path, "LostItem", "doc"); doc != "An item a patron cannot return." {
+		t.Errorf("glossary doc overwritten: %q", doc)
+	}
+	if isa, ok, _ := ontoedit.Get(path, "FineTypeLostItem", "is-a"); !ok || isa != "FineType" {
+		t.Errorf("FineTypeLostItem is-a = %q (exists %v)", isa, ok)
+	}
+	before, _ := os.ReadFile(path)
+	for i := 0; i < 2; i++ {
+		if r, _ := Apply(path, ParseGlossary(gl), "human:test", false); len(r.Added)+len(r.Updated) != 0 {
+			t.Errorf("glossary re-run changed %+v", r)
+		}
+		if r, _ := Apply(path, ev, "human:test", false); len(r.Added)+len(r.Updated) != 0 {
+			t.Errorf("enums re-run changed %+v", r)
+		}
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Errorf("re-runs rewrote the file:\n%s", after)
 	}
 }

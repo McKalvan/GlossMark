@@ -10,7 +10,9 @@ malformed file must raise.
 Any implementation of the grammar in another language should pass this corpus:
 parse every file, produce the same `(line, proposed, relation, targets, keys)`
 tuples and no others. Anchors (`scope`, `symbol`) are the expected output of
-the pass-1 declaration detector; a tree-sitter or SCIP-backed implementation
+the pass-1 declaration detector, after same-named declarations in one file
+are qualified by their class (`handlers.py`, `handlers.ts`, `Overloads.java`;
+see `docs/adr/0008-same-named-declarations.md`); a tree-sitter or SCIP-backed implementation
 may produce richer symbols but must agree on scope.
 
 Run `go test ./internal/marker/` to execute it.
