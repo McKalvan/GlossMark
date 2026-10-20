@@ -170,6 +170,9 @@ type comparer struct {
 	r   *Report
 	// realizers maps a core concept to the concepts that realize it (lazy).
 	realizers map[string]map[string]bool
+	// undeclared marks the boundaries already reported for realizing
+	// concepts without declaring realizes under an inheriting parent.
+	undeclared map[string]bool
 }
 
 func (c *comparer) add(f Finding) {
@@ -221,6 +224,11 @@ func (c *comparer) boundaries() {
 			derived := sortedKeys(derivedEdges)
 			declared = uniq(declared)
 			consistent := true
+			var violations []Finding
+			// Under realizes: inherit, a concept realized only by nested
+			// boundaries that declare no realizes is theirs to report: one
+			// finding per such boundary, not one per concept at the parent.
+			fromUndeclared := map[string][]string{}
 			// Violations: derived not covered by any declared.
 			for _, d := range derived {
 				dn := c.g.Node(d)
@@ -242,6 +250,12 @@ func (c *comparer) boundaries() {
 				}
 				consistent = false
 				es := derivedEdges[d]
+				if len(inherited) > 0 {
+					if owner := c.undeclaredOwner(b.ID, es); owner != "" {
+						fromUndeclared[owner] = append(fromUndeclared[owner], d)
+						continue
+					}
+				}
 				proposed := true
 				var via []string
 				path, line := "", 0
@@ -265,7 +279,32 @@ func (c *comparer) boundaries() {
 				if proposed {
 					msg += " [proposed link]"
 				}
-				c.add(Finding{Kind: KindViolation, Severity: "error", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(d), Declared: c.curies(declared), Derived: c.curies(derived), Via: via, Proposed: proposed, Path: path, Line: line, Msg: msg})
+				violations = append(violations, Finding{Kind: KindViolation, Severity: "error", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(d), Declared: c.curies(declared), Derived: c.curies(derived), Via: via, Proposed: proposed, Path: path, Line: line, Msg: msg})
+			}
+			// The sets are printed once per boundary and relation: on the
+			// first violation in report order; the others name the concept.
+			sort.SliceStable(violations, func(i, j int) bool { return violations[i].Concept < violations[j].Concept })
+			for i, f := range violations {
+				if i > 0 {
+					f.Msg = fmt.Sprintf("%s %s %s, which its declared %s does not cover (sets on %s %s)", f.Boundary, rel, f.Concept, rel, f.Boundary, violations[0].Concept)
+					if f.Proposed {
+						f.Msg += " [proposed link]"
+					}
+				}
+				c.add(f)
+			}
+			for _, owner := range sortedKeys(fromUndeclared) {
+				if c.undeclared == nil {
+					c.undeclared = map[string]bool{}
+				}
+				if c.undeclared[owner] {
+					continue
+				}
+				c.undeclared[owner] = true
+				on := c.g.Node(owner)
+				concepts := c.curies(fromUndeclared[owner])
+				c.add(Finding{Kind: KindViolation, Severity: "error", Boundary: on.CURIE, Relation: rel, Derived: concepts, Path: on.File, Line: on.Line,
+					Msg: fmt.Sprintf("%s realizes %s but declares no realizes; %s inherits from it: declare them under realizes in %s: {%s}", on.CURIE, countNoun(len(concepts), "concept"), b.CURIE, on.File, strings.Join(concepts, ", "))})
 			}
 			// Gaps: declared not reached by any derived.
 			for _, s := range declared {
@@ -293,6 +332,37 @@ func (c *comparer) boundaries() {
 			}
 		}
 	}
+}
+
+// undeclaredOwner returns the boundary that alone accounts for derived
+// edges es at the inheriting boundary b: every edge comes from an artifact
+// whose own boundary is nested under b, declares no realizes and does not
+// inherit. It returns "" when any edge comes from b itself, from a boundary
+// that declares realizes, or from more than one boundary.
+func (c *comparer) undeclaredOwner(b string, es []*graph.Edge) string {
+	owner := ""
+	for _, e := range es {
+		if e.Prov == nil || len(e.Prov.Via) == 0 {
+			return ""
+		}
+		a := c.g.Node(graph.ArtifactPrefix + e.Prov.Via[0])
+		if a == nil || a.NodeType != model.NodeArtifact || a.Boundary == "" || a.Boundary == b {
+			return ""
+		}
+		ob := c.g.Node(a.Boundary)
+		if ob == nil {
+			return ""
+		}
+		m := c.manifestOf(ob.CURIE)
+		if m == nil || m.InheritsRealizes() || len(m.DeclaredSets()["realizes"]) > 0 {
+			return ""
+		}
+		if owner != "" && owner != a.Boundary {
+			return ""
+		}
+		owner = a.Boundary
+	}
+	return owner
 }
 
 // wholeOfCovered reports whether derived concept d is only there because a
@@ -991,4 +1061,11 @@ func filterEmpty(xs []string) []string {
 		}
 	}
 	return out
+}
+
+func countNoun(n int, s string) string {
+	if n == 1 {
+		return "1 " + s
+	}
+	return fmt.Sprintf("%d %ss", n, s)
 }

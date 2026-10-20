@@ -1673,6 +1673,48 @@ func TestRealizesInheritance(t *testing.T) {
 	}
 }
 
+// TestInheritUndeclaredChild (issue #40): when the parent inherits and a
+// child realizes concepts but declares no realizes, one finding names the
+// child's manifest instead of one violation per concept at the parent.
+func TestInheritUndeclaredChild(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  c: { iri: https://x/c/, tier: core }\n  l: { iri: https://x/l/, tier: implementation }\n")
+	write("ontology/c.gloss.yaml", "concepts:\n  Booking: { kind: process }\n  Reminder: { kind: process }\n  Cancellation: { kind: process }\n")
+	write("ontology/l.gloss.yaml", "concepts:\n  BookingPage: { kind: process, realizes: c:Booking }\n  CancelPage: { kind: process, realizes: c:Cancellation }\n  ReminderJob: { kind: process, realizes: c:Reminder }\n")
+	write(".gloss.yaml", "boundary: o:clinic\nlevel: system\nrealizes: inherit\n")
+	write("services/reminders/.gloss.yaml", "boundary: o:reminders\nlevel: container\npart-of: o:clinic\ndefault-namespace: l\nrealizes: [l:ReminderJob]\n")
+	write("services/reminders/job.py", "# @gloss implements .ReminderJob\ndef run(): pass\n")
+	write("apps/web/.gloss.yaml", "boundary: o:web\nlevel: container\npart-of: o:clinic\ndefault-namespace: l\n")
+	write("apps/web/book.ts", "// @gloss implements .BookingPage\nexport function book() {}\n")
+	write("apps/web/cancel.ts", "// @gloss implements .CancelPage\nexport function cancel() {}\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	v := findings(rep, rollup.KindViolation)
+	if len(v) != 1 || v[0].Boundary != "o:web" || v[0].Path != "apps/web/.gloss.yaml" || !strings.Contains(v[0].Msg, "o:web realizes 4 concepts but declares no realizes; o:clinic inherits") {
+		t.Fatalf("violations = %+v", v)
+	}
+	// A code path in the parent itself is still the parent's, and its
+	// sets are printed once.
+	write("extra.py", "# @gloss implements l:BookingPage\ndef x(): pass\n")
+	write("extra2.py", "# @gloss implements l:CancelPage\ndef y(): pass\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	var withSets int
+	for _, f := range findings(rep, rollup.KindViolation) {
+		if f.Boundary == "o:clinic" && strings.Contains(f.Msg, "but declares realizes {") {
+			withSets++
+		}
+	}
+	if withSets != 1 {
+		t.Errorf("parent violations printing the sets = %d, want 1: %+v", withSets, findings(rep, rollup.KindViolation))
+	}
+}
+
 // TestPresentsAndHosts: a page presents a concept and a shell hosts one;
 // neither lifts to realizes or carries criticality. untested tells the
 // tested engine from the untested page, and a surface with no mechanism
