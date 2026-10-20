@@ -148,6 +148,10 @@ func Load(root string) (*Workspace, error) {
 		}
 		if o.Tier == "" {
 			o.Tier = model.TierCore
+			if looksImplementation(o) {
+				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: ConfigName, Line: 1, Severity: "warning", Code: "GM113",
+					Msg: fmt.Sprintf("imports.%s: neither the import nor the imported ontology states a tier, so %s: is read as core and only-published-concepts (GM230) is not enforced although it has published or realizing concepts; add tier: implementation to imports.%s, or import from gloss publish output", p, p, p)})
+			}
 		}
 		ws.Ontologies[p] = o
 	}
@@ -187,6 +191,17 @@ func Load(root string) (*Workspace, error) {
 		return nil, err
 	}
 	return ws, nil
+}
+
+// looksImplementation reports whether an ontology has concepts only an
+// implementation namespace carries: published: or realizes:.
+func looksImplementation(o *model.Ontology) bool {
+	for _, c := range o.Concepts {
+		if c.Published != nil || len(c.Realizes) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveImport loads an imported ontology from a local source.

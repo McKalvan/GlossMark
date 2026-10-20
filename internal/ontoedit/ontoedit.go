@@ -373,6 +373,45 @@ func RemoveConcept(path, name string) error {
 	return f.save()
 }
 
+// PublishCopy writes src to dst without the concepts that keep returns false
+// for, and with a top-level tier: so an importer reads the tier from the file
+// instead of defaulting to core. Everything else stays as the owner wrote it.
+func PublishCopy(src, dst string, keep func(name string) bool, tier string) error {
+	f, err := open(src)
+	if err != nil {
+		return err
+	}
+	// A tier: line is rewritten in place first, while the parsed line numbers
+	// are valid; entries are removed bottom up for the same reason.
+	tk, tv := mapGet(f.root, "tier")
+	if tier != "" && tk != nil && (tv == nil || tv.Value != tier) {
+		f.lines[tk.Line-1] = "tier: " + tier
+	}
+	ck, cm := f.concepts()
+	if cm != nil {
+		for i := len(cm.Content) - 2; i >= 0; i -= 2 {
+			if k, v := cm.Content[i], cm.Content[i+1]; !keep(k.Value) {
+				start, end := f.extent(k, v)
+				// Comment lines directly above the entry describe it and go too.
+				for start > 0 && start-1 > ck.Line-1 && strings.HasPrefix(strings.TrimSpace(f.lines[start-1]), "#") && indent(f.lines[start-1]) == k.Column-1 {
+					start--
+				}
+				f.lines = append(f.lines[:start], f.lines[end+1:]...)
+			}
+		}
+	}
+	if tier != "" && tk == nil {
+		// Just above concepts: (below the header comment and keys), else at the end.
+		at := len(f.lines)
+		if ck != nil {
+			at = ck.Line - 1
+		}
+		f.lines = append(f.lines[:at], append([]string{"tier: " + tier}, f.lines[at:]...)...)
+	}
+	f.path = dst
+	return f.save()
+}
+
 // IsProposed reports whether the entry carries proposed: true.
 func IsProposed(path, name string) (bool, error) {
 	f, err := open(path)

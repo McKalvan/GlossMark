@@ -137,7 +137,7 @@ gloss view                       # .glossmark/viewer.html + views.js, static, no
 gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
-gloss publish                    # dist/glossmark/<ns>/ontology.jsonld (+ graph.jsonl for impl namespaces)
+gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
 gloss mcp                        # MCP server on stdio for agents
 gloss doctor                     # one line per setup check with its fix: gloss on PATH, GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact

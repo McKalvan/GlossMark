@@ -7,15 +7,16 @@ import (
 	"testing"
 )
 
-// capture runs a subcommand and returns what it printed on stdout and its exit code.
+// capture runs a subcommand and returns what it printed on stdout and
+// stderr, interleaved, and its exit code.
 func capture(t *testing.T, args ...string) (string, int) {
 	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := os.Stdout
-	os.Stdout = w
+	old, olderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = w, w
 	done := make(chan string)
 	go func() {
 		b, _ := io.ReadAll(r)
@@ -23,7 +24,7 @@ func capture(t *testing.T, args ...string) (string, int) {
 	}()
 	code := run(args)
 	w.Close()
-	os.Stdout = old
+	os.Stdout, os.Stderr = old, olderr
 	return <-done, code
 }
 

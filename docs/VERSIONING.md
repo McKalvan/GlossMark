@@ -72,3 +72,4 @@ Ranges accept `1.2.3`, `^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0` and `*`. A resolved
 | GM107 | lockfile disagrees with the resolved imports |
 | GM108 | imports exist but no lockfile; run `gloss lock` |
 | GM109 | lockfile unreadable or written by a newer tool |
+| GM113 | imported namespace states no tier but has `published:` or `realizes:` concepts; it is read as core and the published seam is not enforced |
