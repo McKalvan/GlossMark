@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -23,10 +24,12 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c := &checker{ws: ws, g: g}
 	c.ontologyFiles()
 	c.concepts()
+	c.cycles()
 	c.edges()
 	c.markers()
 	c.manifests()
 	c.governance()
+	c.waivers()
 	sort.SliceStable(c.out, func(i, j int) bool {
 		a, b := c.out[i], c.out[j]
 		if a.Path != b.Path {
@@ -41,13 +44,25 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 }
 
 type checker struct {
-	ws  *load.Workspace
-	g   *graph.Graph
-	out []marker.Diagnostic
+	ws   *load.Workspace
+	g    *graph.Graph
+	out  []marker.Diagnostic
+	seen map[marker.Diagnostic]bool
 }
 
+// add records a diagnostic once. Edge checks run per target, so a marker or
+// ontology key with several targets would otherwise repeat one finding about
+// its relation once per target.
 func (c *checker) add(path string, line int, sev, code, msg string) {
-	c.out = append(c.out, marker.Diagnostic{Path: path, Line: line, Severity: sev, Code: code, Msg: msg})
+	d := marker.Diagnostic{Path: path, Line: line, Severity: sev, Code: code, Msg: msg}
+	if c.seen == nil {
+		c.seen = map[marker.Diagnostic]bool{}
+	}
+	if c.seen[d] {
+		return
+	}
+	c.seen[d] = true
+	c.out = append(c.out, d)
 }
 
 func (c *checker) prefixOf(curie string) string {
@@ -114,10 +129,24 @@ func (c *checker) concepts() {
 			continue
 		}
 		if n.Kind == "" {
-			if len(c.g.Out(n.ID, "is-a")) > 0 {
-				// kind is inherited from the parent; fine.
-			} else {
-				c.add(n.File, n.Line, "error", "GM300", fmt.Sprintf("%s: kind is required (one of %s) unless the concept has is-a", n.CURIE, strings.Join(model.ConceptKinds, ", ")))
+			// kind is inherited through is-a when an ancestor declares one;
+			// with no such ancestor the concept has none.
+			c.add(n.File, n.Line, "error", "GM300", fmt.Sprintf("%s: kind is required (one of %s) unless an is-a ancestor declares one", n.CURIE, strings.Join(model.ConceptKinds, ", ")))
+		} else if n.KindFrom != "" {
+			// Inherited: the ancestor's own entry is checked. Parents that
+			// disagree leave the kind ambiguous.
+			kinds := map[string][]string{}
+			for _, p := range c.g.Objects(n.ID, "is-a") {
+				if pn := c.g.Node(p); pn != nil && pn.NodeType == model.NodeConcept && pn.Kind != "" {
+					kinds[pn.Kind] = append(kinds[pn.Kind], pn.CURIE)
+				}
+			}
+			if len(kinds) > 1 {
+				var parts []string
+				for _, k := range sortedKeys(kinds) {
+					parts = append(parts, fmt.Sprintf("%s from %s", k, strings.Join(kinds[k], ", ")))
+				}
+				c.add(n.File, n.Line, "error", "GM306", fmt.Sprintf("%s: is-a parents give different kinds (%s); declare kind: on the concept", n.CURIE, strings.Join(parts, "; ")))
 			}
 		} else if !contains(model.ConceptKinds, n.Kind) {
 			c.add(n.File, n.Line, "error", "GM301", fmt.Sprintf("%s: unknown kind %q; allowed: %s", n.CURIE, n.Kind, strings.Join(model.ConceptKinds, ", ")))
@@ -144,10 +173,11 @@ func (c *checker) concepts() {
 			}
 		case model.TierImpl:
 			realizes := c.g.Objects(n.ID, "realizes")
-			// realizes is inherited through is-a and part-of (RealizesStar), so
-			// only a concept that stands for nothing at all is incomplete.
-			surface := len(c.g.Out(n.ID, "presents"))+len(c.g.Out(n.ID, "hosts")) > 0
-			if len(realizes) == 0 && !surface && !n.Internal && !n.Deprecated && len(c.g.Out(n.ID, "is-a")) == 0 && len(rollup.RealizesStar(c.g, n.ID)) == 0 {
+			// realizes is inherited through is-a and part-of, so only a concept
+			// whose is-a and part-of ancestors stand for nothing either is
+			// incomplete. Two concepts that are part of each other and
+			// realize nothing are not excused by the edge between them.
+			if !n.Internal && !n.Deprecated && !c.standsFor(n.ID) {
 				sev := "error"
 				if n.Proposed {
 					sev = "warning" // a proposal may be incomplete; acceptance requires the full entry
@@ -188,6 +218,116 @@ func (c *checker) concepts() {
 	}
 }
 
+// standsFor reports whether an implementation concept, or a concept it is-a
+// or is part of (transitively), realizes, is published as, presents or hosts
+// something, is internal, or is a core concept. That is what GM320 asks of
+// every implementation concept.
+func (c *checker) standsFor(id string) bool {
+	seen := map[string]bool{id: true}
+	queue := []string{id}
+	for len(queue) > 0 {
+		x := queue[0]
+		queue = queue[1:]
+		n := c.g.Node(x)
+		if n == nil || n.NodeType != model.NodeConcept {
+			continue
+		}
+		if x != id && (n.Tier == model.TierCore || n.Internal) {
+			return true
+		}
+		for _, p := range []string{"realizes", "published-as", "presents", "hosts"} {
+			for _, e := range c.g.Out(x, p) {
+				if e.Source != graph.SourceDerived {
+					return true
+				}
+			}
+		}
+		for _, p := range []string{"is-a", "part-of"} {
+			for _, e := range c.g.Out(x, p) {
+				if e.Source != graph.SourceDerived && !seen[e.O] {
+					seen[e.O] = true
+					queue = append(queue, e.O)
+				}
+			}
+		}
+	}
+	return false
+}
+
+// cycles reports the cycles in the hierarchies: an is-a cycle (GM370, a
+// self-loop included) makes every concept on it subsume every other and so
+// widens every declaration that names one; a part-of or has-part cycle among
+// concepts (GM371) makes each a part of itself; a part-of cycle among
+// boundaries (GM510) makes each roll up the other's code. Each error names
+// the members in order with the file and line of every edge.
+func (c *checker) cycles() {
+	var concepts, boundaries []string
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		concepts = append(concepts, n.ID)
+	}
+	for _, n := range c.g.NodesOf(model.NodeBoundary) {
+		boundaries = append(boundaries, n.ID)
+	}
+	forward := func(p string) func(string) []graph.Step {
+		return func(id string) []graph.Step {
+			var out []graph.Step
+			for _, e := range c.g.Out(id, p) {
+				if e.Source == graph.SourceDeclared {
+					out = append(out, graph.Step{From: id, To: e.O, Edge: e})
+				}
+			}
+			return out
+		}
+	}
+	// W has-part P states P part-of W.
+	partOf := func(id string) []graph.Step {
+		out := forward("part-of")(id)
+		for _, e := range c.g.In(id, "has-part") {
+			if e.Source == graph.SourceDeclared {
+				out = append(out, graph.Step{From: id, To: e.S, Edge: e})
+			}
+		}
+		return out
+	}
+	report := func(code, what string, cycle []graph.Step) {
+		var parts []string
+		for _, s := range cycle {
+			parts = append(parts, fmt.Sprintf("%s %s %s (%s:%d)", c.g.Curie(s.Edge.S), s.Edge.P, c.g.Curie(s.Edge.O), provPath(s.Edge), provLine(s.Edge)))
+		}
+		first := cycle[0].Edge
+		c.add(provPath(first), provLine(first), "error", code, fmt.Sprintf("%s cycle: %s; %s", what, strings.Join(parts, " → "), cycleAdvice[code]))
+	}
+	for _, cy := range c.g.Cycles(concepts, forward("is-a")) {
+		report("GM370", "is-a", cy)
+	}
+	for _, cy := range c.g.Cycles(concepts, partOf) {
+		report("GM371", "part-of", cy)
+	}
+	for _, cy := range c.g.Cycles(boundaries, forward("part-of")) {
+		report("GM510", "boundary part-of", cy)
+	}
+}
+
+var cycleAdvice = map[string]string{
+	"GM370": "every concept on it subsumes every other, which widens every declaration that names one; remove one edge",
+	"GM371": "every concept on it is a part of itself; remove one edge",
+	"GM510": "every boundary on it rolls up the others' code; remove one part-of",
+}
+
+func provPath(e *graph.Edge) string {
+	if e.Prov == nil {
+		return ""
+	}
+	return e.Prov.Path
+}
+
+func provLine(e *graph.Edge) int {
+	if e.Prov == nil {
+		return 0
+	}
+	return e.Prov.Line
+}
+
 // markers lints redundancy between inline markers. A symbol-level marker
 // that repeats a file-level marker's relation and target states the same
 // fact twice and makes two edges (GM130); the same marker on consecutive
@@ -196,10 +336,11 @@ func (c *checker) concepts() {
 // Both passed silently and inflated file coverage in the first adoptions.
 func (c *checker) markers() {
 	type fact struct{ path, rel, obj string }
-	type mk struct {
-		id, scope, rel string
-		line           int
-		objs           []string
+	// decl is one anchor that markers bind to, in file order; facts maps
+	// "relation\x00object" to the line of the marker that states it.
+	type decl struct {
+		symbol bool
+		facts  map[string]int
 	}
 	fileLevel := map[fact]int{}
 	byPath := map[string][]*graph.Edge{}
@@ -215,56 +356,84 @@ func (c *checker) markers() {
 	for _, path := range sortedKeys(byPath) {
 		edges := byPath[path]
 		sort.SliceStable(edges, func(i, j int) bool { return edges[i].Prov.Line < edges[j].Prov.Line })
-		var ms []*mk
-		index := map[string]*mk{}
+		var ds []*decl
+		index := map[string]*decl{}
 		for _, e := range edges {
-			if e.Prov.Scope != "file" {
-				if fl, ok := fileLevel[fact{path, e.P, e.O}]; ok && fl != e.Prov.Line {
-					c.add(path, e.Prov.Line, "warning", "GM130", fmt.Sprintf("%s %s repeats the file-level marker at line %d; keep the file marker or the symbol markers, not both", e.P, c.g.Curie(e.O), fl))
-				}
+			if e.Prov.Scope == "file" {
+				continue
 			}
-			m, ok := index[e.Prov.ID]
+			if fl, ok := fileLevel[fact{path, e.P, e.O}]; ok && fl != e.Prov.Line {
+				c.add(path, e.Prov.Line, "warning", "GM130", fmt.Sprintf("%s %s repeats the file-level marker at line %d; keep the file marker or the symbol markers, not both", e.P, c.g.Curie(e.O), fl))
+			}
+			d, ok := index[e.S]
 			if !ok {
-				m = &mk{id: e.Prov.ID, scope: e.Prov.Scope, rel: e.P, line: e.Prov.Line}
-				index[e.Prov.ID] = m
-				ms = append(ms, m)
+				d = &decl{symbol: e.Prov.Scope == "symbol", facts: map[string]int{}}
+				index[e.S] = d
+				ds = append(ds, d)
 			}
-			m.objs = append(m.objs, e.O)
+			k := e.P + "\x00" + e.O
+			if l, ok := d.facts[k]; !ok || e.Prov.Line < l {
+				d.facts[k] = e.Prov.Line
+			}
 		}
-		// A run is the same symbol-level marker on consecutive declarations.
-		// Two in a row is often honest (two handlers for one concept); three
-		// or more is the helper-by-helper noise the first adoptions produced.
-		for i := 0; i < len(ms); {
-			j := i + 1
-			for j < len(ms) && ms[i].scope == "symbol" && ms[j].scope == "symbol" && ms[j].rel == ms[i].rel && sameSet(ms[j].objs, ms[i].objs) {
-				j++
+		// A run is one relation and target on consecutive declarations,
+		// whatever else is stacked on them. Two in a row is often honest (two
+		// handlers for one concept); three or more is the helper-by-helper
+		// noise the first adoptions produced. Targets that repeat over the
+		// same run are reported together.
+		type run struct {
+			rel        string
+			start, end int
+		}
+		type finding struct {
+			line, last int
+			objs       []string
+		}
+		runs := map[run]*finding{}
+		var order []run
+		has := func(i int, k string) bool {
+			if i < 0 || i >= len(ds) || !ds[i].symbol {
+				return false
 			}
-			if n := j - i; n >= minRun {
-				a := ms[i]
-				c.add(path, a.line, "warning", "GM131", fmt.Sprintf("%s %s is repeated on %d consecutive declarations (lines %d-%d); one marker with scope=block above the run, or one on the public entry point, says the same with one edge", a.rel, c.g.Curie(a.objs[0]), n, a.line, ms[j-1].line))
+			_, ok := ds[i].facts[k]
+			return ok
+		}
+		for i, d := range ds {
+			if !d.symbol {
+				continue
 			}
-			i = j
+			for _, k := range sortedKeys(d.facts) {
+				if has(i-1, k) {
+					continue // not the start of its run
+				}
+				j := i + 1
+				for has(j, k) {
+					j++
+				}
+				if j-i < minRun {
+					continue
+				}
+				rel, obj, _ := strings.Cut(k, "\x00")
+				r := run{rel, i, j - 1}
+				f, ok := runs[r]
+				if !ok {
+					f = &finding{line: d.facts[k], last: ds[j-1].facts[k]}
+					runs[r] = f
+					order = append(order, r)
+				}
+				f.line, f.last = min(f.line, d.facts[k]), max(f.last, ds[j-1].facts[k])
+				f.objs = append(f.objs, c.g.Curie(obj))
+			}
+		}
+		for _, r := range order {
+			f := runs[r]
+			c.add(path, f.line, "warning", "GM131", fmt.Sprintf("%s %s is repeated on %d consecutive declarations (lines %d-%d); one marker with scope=block above the run, or one on the public entry point, says the same with one edge", r.rel, strings.Join(f.objs, ", "), r.end-r.start+1, f.line, f.last))
 		}
 	}
 }
 
 // minRun is the shortest run of identical markers GM131 reports.
 const minRun = 3
-
-func sameSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	x, y := append([]string{}, a...), append([]string{}, b...)
-	sort.Strings(x)
-	sort.Strings(y)
-	for i := range x {
-		if x[i] != y[i] {
-			return false
-		}
-	}
-	return true
-}
 
 func (c *checker) edges() {
 	for _, e := range c.g.Edges() {
@@ -287,7 +456,7 @@ func (c *checker) edges() {
 			if !rel.Inline {
 				c.add(path, line, "error", "GM201", fmt.Sprintf("relation %q cannot be used in an inline marker (ontology or manifest only)", e.P))
 			}
-			if e.P == "tests" {
+			if e.Prov != nil && e.Prov.Alias == "tests" {
 				c.add(path, line, "warning", "GM240", "prefer verifies: it is the one test relation; tests is an accepted alias that means the same")
 			}
 		case graph.SourceDeclared:
@@ -389,6 +558,24 @@ func (c *checker) edges() {
 				c.add(relFile(c.ws, o.Path), con.Line, "error", "GM401", fmt.Sprintf("%s: concept defined in namespace %s: belongs to %s:, which this repo does not own (own-subject rule)", name, p, c.prefixOf(name)))
 			}
 		}
+	}
+}
+
+// waivers: a waiver needs an ISO expires: date, or it would waive forever
+// (GM610); one that names no finding waives nothing, usually a typo (GM611).
+func (c *checker) waivers() {
+	pol := c.ws.Config.EffectivePolicy()
+	if len(pol.Waivers) == 0 {
+		return
+	}
+	for _, w := range pol.Waivers {
+		if _, err := time.Parse(rollup.WaiverDate, w.Expires); err != nil {
+			c.add(load.ConfigName, 1, "error", "GM610", fmt.Sprintf("waiver for %s by %s: expires %q is not a YYYY-MM-DD date; a waiver must expire", w.Finding, w.Owner, w.Expires))
+		}
+	}
+	rep := rollup.Compare(c.g, c.ws, rollup.Options{Policy: pol})
+	for _, w := range rollup.UnmatchedWaivers(rep, pol) {
+		c.add(load.ConfigName, 1, "warning", "GM611", fmt.Sprintf("waiver for %s by %s matches no finding (by id or concept); gloss drift --format json lists the ids", w.Finding, w.Owner))
 	}
 }
 

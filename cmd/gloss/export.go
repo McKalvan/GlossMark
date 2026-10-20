@@ -29,7 +29,7 @@ func cmdExport(args []string) int {
 	fs, root := newFlags("export")
 	sqlitePath := fs.String("sqlite", "", "write a SQLite database with closure views")
 	provPath := fs.String("prov", "", "write the ledger as PROV-O JSON-LD")
-	status := fs.Bool("status", false, "write implemented / untested / orphan / proposed per owned concept as JSON (for an external checker)")
+	status := fs.Bool("status", false, "write implemented / untested / unimplemented / orphan / proposed per owned concept as JSON (for an external checker)")
 	out := fs.String("o", "", "with --status: write to this file instead of stdout")
 	if err := fs.Parse(args); err != nil {
 		return 2

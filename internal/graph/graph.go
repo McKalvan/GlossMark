@@ -39,8 +39,11 @@ type Node struct {
 	NS       string         `json:"ns,omitempty"`
 	Tier     string         `json:"tier,omitempty"`
 	Kind     string         `json:"kind,omitempty"`
-	Label    string         `json:"label,omitempty"`
-	Doc      string         `json:"doc,omitempty"`
+	// KindFrom is the CURIE of the is-a ancestor a concept's kind was
+	// inherited from; empty when the kind is declared.
+	KindFrom string `json:"kind-from,omitempty"`
+	Label    string `json:"label,omitempty"`
+	Doc      string `json:"doc,omitempty"`
 	// Concept attributes.
 	Published  string `json:"published-as,omitempty"`
 	Internal   bool   `json:"internal,omitempty"`
@@ -71,8 +74,10 @@ type Node struct {
 	Anchor *marker.Anchor `json:"anchor,omitempty"`
 	// Boundary (IRI) that contains an artifact, from the nearest manifest.
 	Boundary string `json:"boundary,omitempty"`
-	// Boundary: directory of its manifest.
-	Dir string `json:"dir,omitempty"`
+	// Boundary: directory of its manifest, and the date a deprecated
+	// boundary is due to be retired (deprecated and replaced-by above).
+	Dir      string `json:"dir,omitempty"`
+	RetireBy string `json:"retire-by,omitempty"`
 	// Source location of the declaration, for diagnostics.
 	File string `json:"file,omitempty"`
 	Line int    `json:"line,omitempty"`
@@ -98,6 +103,9 @@ type Prov struct {
 	Via []string `json:"via,omitempty"`
 	// Raw is the original target text (e.g. ".Local", "impl:NEW:X", "pa:*").
 	Raw string `json:"raw,omitempty"`
+	// Alias is the relation as written when the marker used an alias that
+	// was stored as its canonical relation ("tests", stored as verifies).
+	Alias string `json:"alias,omitempty"`
 }
 
 // Edge is one triple with provenance.
@@ -200,7 +208,7 @@ func (g *Graph) AddNode(n *Node) *Node {
 	if ex, ok := g.nodes[n.ID]; ok {
 		// Merge: keep the first declaration's fields, fill blanks.
 		if ex.Kind == "" {
-			ex.Kind = n.Kind
+			ex.Kind, ex.KindFrom = n.Kind, n.KindFrom
 		}
 		if ex.Label == "" {
 			ex.Label = n.Label
@@ -481,6 +489,123 @@ func (g *Graph) LCS(ids []string) []string {
 		}
 	}
 	sort.Strings(out)
+	return out
+}
+
+// Step is one edge of a cycle, followed from From to To. Edge is the edge
+// as written: for an inverse relation (has-part read as part-of) its
+// subject is To.
+type Step struct {
+	From, To string
+	Edge     *Edge
+}
+
+// Cycles returns the cycles that next forms among nodes: one per strongly
+// connected component of two or more nodes, and one per self-loop. Each
+// cycle starts at the component's smallest IRI and lists its steps in
+// order, along a shortest way back. Cycles are sorted by their first node.
+func (g *Graph) Cycles(nodes []string, next func(id string) []Step) [][]Step {
+	in := map[string]bool{}
+	for _, n := range nodes {
+		in[n] = true
+	}
+	steps := func(id string) []Step {
+		var out []Step
+		for _, s := range next(id) {
+			if in[s.To] {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	// Tarjan's strongly connected components.
+	index, low := map[string]int{}, map[string]int{}
+	onStack := map[string]bool{}
+	var stack []string
+	var comps [][]string
+	var strong func(v string)
+	strong = func(v string) {
+		index[v], low[v] = len(index), len(index)
+		stack = append(stack, v)
+		onStack[v] = true
+		for _, s := range steps(v) {
+			if _, seen := index[s.To]; !seen {
+				strong(s.To)
+				low[v] = min(low[v], low[s.To])
+			} else if onStack[s.To] {
+				low[v] = min(low[v], index[s.To])
+			}
+		}
+		if low[v] == index[v] {
+			var comp []string
+			for {
+				w := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				onStack[w] = false
+				comp = append(comp, w)
+				if w == v {
+					break
+				}
+			}
+			comps = append(comps, comp)
+		}
+	}
+	for _, n := range uniqueSorted(nodes) {
+		if _, seen := index[n]; !seen {
+			strong(n)
+		}
+	}
+	var out [][]Step
+	for _, comp := range comps {
+		sort.Strings(comp)
+		start := comp[0]
+		member := map[string]bool{}
+		for _, c := range comp {
+			member[c] = true
+		}
+		if len(comp) == 1 {
+			for _, s := range steps(start) {
+				if s.To == start {
+					out = append(out, []Step{s})
+					break
+				}
+			}
+			continue
+		}
+		// Shortest way from start back to start inside the component.
+		prev := map[string]Step{}
+		queue := []string{start}
+		visited := map[string]bool{}
+		var last *Step
+		for len(queue) > 0 && last == nil {
+			cur := queue[0]
+			queue = queue[1:]
+			for _, s := range steps(cur) {
+				if !member[s.To] {
+					continue
+				}
+				if s.To == start {
+					s := s
+					last = &s
+					break
+				}
+				if !visited[s.To] {
+					visited[s.To] = true
+					prev[s.To] = s
+					queue = append(queue, s.To)
+				}
+			}
+		}
+		if last == nil {
+			continue
+		}
+		cycle := []Step{*last}
+		for at := last.From; at != start; at = prev[at].From {
+			cycle = append([]Step{prev[at]}, cycle...)
+		}
+		out = append(out, cycle)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i][0].From < out[j][0].From })
 	return out
 }
 

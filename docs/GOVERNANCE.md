@@ -114,9 +114,18 @@ policy:
 Bookkeeping changes (an accepted proposal, a stale fingerprint) are reported
 with their level but never raised by it.
 
+One classifier gates a link everywhere: `gloss diff`, `gloss impact`,
+`gloss context --changed`, `gloss status`, `gloss accept --policy` and the MCP
+`propose_link` and `impact_of` tools apply the same rules, `criticality-gates`
+included, so `accept --policy` never auto-accepts a link the PR gate would
+stop. A link through `presents` or `hosts` takes no level from its target,
+in the gate as in the graph.
+
 **`gloss impact`** and the MCP `impact_of` tool report a level per changed
 file (`criticality`, `criticality_from`) and per concept, with a hint when a
-file touches a `high` or `critical` area so an agent knows to flag it.
+file touches a `high` or `critical` area so an agent knows to flag it. A
+file's level is the one the graph stamps on its artifacts; a page that
+presents a critical concept says so in a hint without being rated by it.
 
 **`gloss context`** names the boundary's level in the session-start briefing,
 and tags `high`/`critical` concepts in the vocabulary list.
@@ -138,3 +147,11 @@ A change to a declared level is an ontology or manifest edit and is HARD, like
 every other governance decision (`concept-changed` with `criticality low →
 critical`, or `boundary-changed`). It also changes every view the concept
 appears in, so the business sees it.
+
+"Views changed" in `gloss diff` lists the views whose projection changed: a
+node added or removed, an edge added or removed, or a concept's declared
+`value`, label, kind, publication or criticality edited. A published value
+that drifts (the code bound by `value-from` or `publishes-value` changes and
+`value:` does not) changes none of those, so a curated view that names the
+concept does not count as changed by it. The drift is still HARD on its own (`published-value-drifted`),
+and once `value:` is updated to match, every view naming the concept changes.

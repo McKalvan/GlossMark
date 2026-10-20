@@ -11,10 +11,11 @@ import (
 
 // Status values for ConceptStatus, in precedence order.
 const (
-	StatusProposed    = "proposed"    // proposed: true, awaiting a human
-	StatusOrphan      = "orphan"      // no artifact links to it
-	StatusUntested    = "untested"    // implemented, nothing verifies it
-	StatusImplemented = "implemented" // linked, and verified where it applies
+	StatusProposed      = "proposed"      // proposed: true, awaiting a human
+	StatusOrphan        = "orphan"        // no artifact links to it
+	StatusUnimplemented = "unimplemented" // linked (config, a page, a consumer), but no artifact implements it
+	StatusUntested      = "untested"      // implemented, nothing verifies it
+	StatusImplemented   = "implemented"   // implemented, and verified where it applies
 )
 
 // ConceptStatusRow is one concept in gloss export --status.
@@ -23,15 +24,16 @@ type ConceptStatusRow struct {
 	Tier      string   `json:"tier"`
 	Kind      string   `json:"kind,omitempty"`
 	Status    string   `json:"status"`
-	Artifacts int      `json:"artifacts"`
+	Artifacts int      `json:"artifacts"` // implementing artifacts (see implementing)
 	Verifiers int      `json:"verifiers"`
 	Findings  []string `json:"findings,omitempty"` // every finding kind on it (presented-only, stale, ...)
 	Doc       string   `json:"doc,omitempty"`
 }
 
 // ConceptStatus summarizes every owned concept for an external checker (a
-// glossary's Status column, an ontology linter): proposed, orphan, untested
-// or implemented, plus counts and the finding kinds that apply.
+// glossary's Status column, an ontology linter): proposed, orphan,
+// unimplemented, untested or implemented, plus counts and the finding kinds
+// that apply.
 func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 	kinds := map[string][]string{}
 	for _, f := range rep.Findings {
@@ -52,6 +54,7 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 				ids = append(ids, s)
 			}
 		}
+		others := 0 // links that do not implement it: config, surfaces, uses
 		for _, id := range ids {
 			for _, e := range g.In(id, "") {
 				if e.Source != graph.SourceInline && e.Source != graph.SourceInferred {
@@ -60,13 +63,15 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 				if a := g.Node(e.S); a == nil || a.NodeType != model.NodeArtifact {
 					continue
 				}
-				if e.P == "documents" || e.P == "instructs" || e.P == "may-modify" {
-					continue // prose and agent files are not the concept's code
-				}
-				if e.P == "verifies" || e.P == "tests" {
+				switch {
+				case e.P == "documents" || e.P == "instructs" || e.P == "may-modify":
+					// prose and agent files are not the concept's code
+				case e.P == "verifies" || e.P == "tests":
 					r.Verifiers++
-				} else {
+				case implementing(g, e):
 					r.Artifacts++
+				default:
+					others++
 				}
 			}
 		}
@@ -83,6 +88,8 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 			r.Status = StatusProposed
 		case has(KindOrphan):
 			r.Status = StatusOrphan
+		case r.Artifacts == 0 && others > 0 && n.ValueFrom == "":
+			r.Status = StatusUnimplemented
 		case has(KindUntested):
 			r.Status = StatusUntested
 		default:
@@ -92,4 +99,23 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Concept < out[j].Concept })
 	return out
+}
+
+// implementing reports whether an artifact edge is the concept's code:
+// implements, represents, a published value, production of it, or
+// infrastructure that lifts to realizes (on a resource or system-type).
+// documents, configures (of anything else), presents, consumes and the like
+// link to a concept without implementing it.
+func implementing(g *graph.Graph, e *graph.Edge) bool {
+	switch e.P {
+	case "implements", "represents", "publishes-value", "produces", "publishes":
+		return true
+	}
+	for _, rel := range InfraRelations {
+		if e.P == rel {
+			on := g.Node(e.O)
+			return on != nil && (on.Kind == "resource" || on.Kind == "system-type")
+		}
+	}
+	return false
 }

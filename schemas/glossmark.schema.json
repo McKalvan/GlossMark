@@ -212,10 +212,11 @@
           }
         },
         "coverage-fail-under": {
-          "description": "Default for gloss coverage --fail-under, in percent.",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100,
+          "description": "Default for gloss coverage --fail-under: a percentage, or current to fail only when coverage falls below the base's (a ratchet).",
+          "oneOf": [
+            { "type": "number", "minimum": 0, "maximum": 100 },
+            { "const": "current" }
+          ],
           "default": 0
         },
         "criticality-gates": {

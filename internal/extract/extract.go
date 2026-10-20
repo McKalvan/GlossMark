@@ -9,6 +9,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,6 +52,7 @@ func Build(ws *load.Workspace) (*Result, error) {
 	ex := &extractor{ws: ws, g: g, res: res}
 	ex.namespaces()
 	ex.ontologies()
+	ex.inheritKinds()
 	ex.manifests()
 	if err := ex.files(); err != nil {
 		return nil, err
@@ -155,6 +157,40 @@ func (ex *extractor) ontologies() {
 	}
 }
 
+// inheritKinds gives a concept with no kind of its own the kind of its
+// nearest is-a ancestor that declares one, and records that ancestor in
+// KindFrom, so every kind-dependent rule (the holds and infrastructure lifts,
+// domain and range, impact output) sees a subtype as what it is. Among
+// ancestors at the same distance the first by IRI wins; gloss check reports
+// parents that disagree (GM306). The walk visits each ancestor once, so an
+// is-a cycle ends it.
+func (ex *extractor) inheritKinds() {
+	for _, n := range ex.g.NodesOf(model.NodeConcept) {
+		if n.Kind != "" {
+			continue
+		}
+		seen := map[string]bool{n.ID: true}
+		level := []string{n.ID}
+		for len(level) > 0 && n.Kind == "" {
+			var next []string
+			for _, x := range level {
+				for _, p := range ex.g.Objects(x, "is-a") {
+					pn := ex.g.Node(p)
+					if seen[p] || pn == nil || pn.NodeType != model.NodeConcept {
+						continue
+					}
+					seen[p] = true
+					if n.Kind == "" && pn.Kind != "" && pn.KindFrom == "" {
+						n.Kind, n.KindFrom = pn.Kind, pn.CURIE
+					}
+					next = append(next, p)
+				}
+			}
+			level = next
+		}
+	}
+}
+
 // boundaryIRI expands a boundary CURIE, registering an urn prefix for unknown prefixes.
 func (ex *extractor) boundaryIRI(curie, path string, line int) string {
 	i := strings.Index(curie, ":")
@@ -179,22 +215,32 @@ func (ex *extractor) boundaryIRI(curie, path string, line int) string {
 }
 
 func (ex *extractor) manifests() {
-	for _, m := range ex.ws.Manifests {
+	// Every manifest's own node first: a part-of reference to a boundary
+	// declared in a sibling directory must never create that node from the
+	// child's manifest, which would give it the child's file and no dir.
+	iris := make([]string, len(ex.ws.Manifests))
+	for i, m := range ex.ws.Manifests {
 		iri := ex.boundaryIRI(m.Boundary, m.Path, 1)
+		iris[i] = iri
 		n := &graph.Node{NodeType: model.NodeBoundary, ID: iri, CURIE: m.Boundary, Kind: m.Level, Label: m.Label, Doc: m.Doc, Dir: m.Dir, File: m.Path, Line: 1, Owner: m.Owner}
 		if m.Criticality != "" {
 			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
 		}
 		n.CriticalityFloor = m.CriticalityFloor
+		n.Deprecated, n.ReplacedBy, n.RetireBy = m.Deprecated, m.ReplacedBy, m.RetireBy
 		if i := strings.Index(m.Boundary, ":"); i > 0 {
 			n.NS = m.Boundary[:i]
 		}
 		ex.g.AddNode(n)
+	}
+	for i, m := range ex.ws.Manifests {
+		iri := iris[i]
 		for _, p := range m.PartOf {
 			piri := ex.boundaryIRI(p, m.Path, 1)
 			if ex.g.Node(piri) == nil {
-				// Implicit parent boundary: declared only by reference.
-				pn := &graph.Node{NodeType: model.NodeBoundary, ID: piri, CURIE: p, Kind: parentLevel(m.Level), File: m.Path, Line: 1}
+				// Implicit parent boundary: declared only by reference. It has
+				// no level of its own; views place it above its children.
+				pn := &graph.Node{NodeType: model.NodeBoundary, ID: piri, CURIE: p, File: m.Path, Line: 1}
 				if i := strings.Index(p, ":"); i > 0 {
 					pn.NS = p[:i]
 				}
@@ -220,15 +266,6 @@ func (ex *extractor) manifests() {
 	}
 }
 
-func parentLevel(level string) string {
-	for i, l := range model.BoundaryLevels {
-		if l == level && i > 0 {
-			return model.BoundaryLevels[i-1]
-		}
-	}
-	return "domain"
-}
-
 func (ex *extractor) files() error {
 	for _, rel := range ex.ws.Files {
 		style, _ := marker.StyleFor(rel, ex.ws.Config.CommentStyles)
@@ -247,31 +284,66 @@ func (ex *extractor) files() error {
 			continue
 		}
 		target := rel
+		var tsrc []byte // the annotated file, for a sidecar
 		if marker.IsSidecar(rel) {
 			target = marker.SidecarTarget(rel)
-			if _, err := os.Stat(ex.ws.Abs(target)); err != nil {
+			b, err := os.ReadFile(ex.ws.Abs(target))
+			if err != nil {
 				ex.diag(rel, 1, "warning", "GM121", fmt.Sprintf("sidecar annotates %s, which does not exist", target))
 			}
+			tsrc = b
 		}
 		m := ex.ws.ManifestFor(rel)
 		var boundary string
 		if m != nil {
 			boundary = ex.boundaryIRI(m.Boundary, m.Path, 1)
 		}
-		for _, fd := range found {
-			ex.marker(rel, target, fd, lines, style, m, boundary)
+		anchors := make([]marker.Anchor, len(found))
+		for i, fd := range found {
+			anchors[i] = marker.Resolve(rel, fd, lines, style)
+			if marker.IsSidecar(rel) {
+				anchors[i] = ex.sidecarAnchor(rel, target, tsrc, fd.Marker, anchors[i])
+			}
+		}
+		// Same-named declarations in one file must not share an artifact.
+		marker.Disambiguate(rel, lines, anchors)
+		for i, fd := range found {
+			ex.marker(rel, target, fd, anchors[i], lines, m, boundary)
 		}
 	}
 	return nil
 }
 
-func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string, style marker.CommentStyle, m *model.Manifest, boundary string) {
-	mk := fd.Marker
-	anchor := marker.Resolve(rel, fd, lines, style)
-	if marker.IsSidecar(rel) && anchor.Scope == "symbol" {
-		anchor.Scope = "file"
-		anchor.Symbol = ""
+// sidecarAnchor anchors a sidecar marker to the file it annotates, not to
+// the sidecar: scope=file fingerprints the target, and scope=range in a JSON
+// sidecar resolves the JSON Pointer in note= to the value's lines. Editing
+// the sidecar then never makes a link stale; editing the value does.
+func (ex *extractor) sidecarAnchor(rel, target string, tsrc []byte, mk *marker.Marker, a marker.Anchor) marker.Anchor {
+	if tsrc == nil {
+		return a
 	}
+	switch a.Scope {
+	case "symbol", "file":
+		return marker.FileAnchor(strings.Split(strings.TrimSuffix(string(tsrc), "\n"), "\n"))
+	case "range":
+		if !json.Valid(tsrc) {
+			return a
+		}
+		ptr := mk.Keys["note"]
+		if pa, ok := marker.PointerAnchor(tsrc, ptr, a.Scope); ok {
+			return pa
+		}
+		if !strings.HasPrefix(ptr, "/") {
+			ex.diag(rel, mk.Line, "warning", "GM123", fmt.Sprintf("scope=range in a JSON sidecar needs a JSON Pointer in note= (such as note=\"/fields/1\"), got %q; anchored to the sidecar", ptr))
+		} else {
+			ex.diag(rel, mk.Line, "warning", "GM123", fmt.Sprintf("JSON Pointer %s does not resolve in %s; anchored to the sidecar", ptr, target))
+		}
+	}
+	return a
+}
+
+func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.Anchor, lines []string, m *model.Manifest, boundary string) {
+	mk := fd.Marker
 	if mk.Scope() == "symbol" && anchor.Kind == "unresolved-symbol" {
 		ex.diag(rel, mk.Line, "warning", "GM122", "scope=symbol requested but no declaration was detected after the marker; anchored to the next block")
 	}
@@ -283,6 +355,10 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		aid += "#" + anchor.Symbol
 		label = target + ":" + anchor.Symbol
 		kind = anchor.Kind
+	} else if anchor.Scope == "range" && anchor.Kind == "json-pointer" {
+		aid += "#" + anchor.Symbol
+		label = target + ":" + anchor.Symbol
+		kind = anchor.Scope
 	} else if anchor.Scope == "block" || anchor.Scope == "line" || anchor.Scope == "range" {
 		aid += fmt.Sprintf("#L%d", anchor.StartLine)
 		label = fmt.Sprintf("%s:%d", target, anchor.StartLine)
@@ -298,15 +374,21 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		id = MarkerID(target, mk.Relation, mk.Targets, anchor.Symbol, anchor.Scope)
 	}
 	fm := FoundMarker{Path: rel, Marker: mk, Anchor: anchor, ID: id}
+	// An alias is stored as its canonical relation, so a query for verifies
+	// finds every test link; the written form stays in prov.alias.
+	pred, alias := mk.Relation, ""
+	if pred == "tests" {
+		pred, alias = "verifies", "tests"
+	}
 	for _, t := range mk.Targets {
 		oiri, raw := ex.resolveTarget(t, m, rel, mk.Line)
 		prov := &graph.Prov{Path: rel, Line: mk.Line, Col: mk.Col, Scope: anchor.Scope, Symbol: anchor.Symbol, Fingerprint: anchor.Fingerprint,
-			Proposed: mk.Proposed, ID: id, Note: mk.Keys["note"], Sugar: mk.Sugar, Raw: raw}
+			Proposed: mk.Proposed, ID: id, Note: mk.Keys["note"], Sugar: mk.Sugar, Raw: raw, Alias: alias}
 		if c := mk.Conf(); c >= 0 {
 			cc := c
 			prov.Conf = &cc
 		}
-		e := &graph.Edge{S: aid, P: mk.Relation, O: oiri, Source: graph.SourceInline, Prov: prov}
+		e := &graph.Edge{S: aid, P: pred, O: oiri, Source: graph.SourceInline, Prov: prov}
 		ex.g.AddEdge(e)
 		if mk.Relation == "publishes-value" {
 			if cn := ex.g.Node(oiri); cn != nil && cn.NodeType == model.NodeConcept && anchor.StartLine > 0 && anchor.StartLine <= len(lines) {
