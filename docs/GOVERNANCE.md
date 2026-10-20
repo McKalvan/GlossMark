@@ -51,8 +51,14 @@ declared level always wins.
   it is `part-of`; then of its `is-a` ancestors. So `pa:AuthorizeHandler
   realizes pay:Authorization` is critical without anyone saying so twice.
 - **Boundary.** Without its own level, a boundary takes the highest level of
-  the concepts its code realizes or represents (declared in the manifest or
-  derived from the markers beneath it), else its parent boundary's.
+  the concepts its code realizes, represents or configures (declared in the
+  manifest or derived from the markers beneath it), else its parent
+  boundary's. A surface is the exception: a boundary that presents or hosts
+  concepts and realizes, represents or configures none stays unclassified
+  instead of taking its parent's level, so a BFF that only shows order
+  placement is not rated above one that implements it
+  ([ADR 0012](adr/0012-surfaces.md)). Give it its own `criticality:`, or set
+  `criticality-floor: true` on the parent, when it should be rated.
 - **Artifact.** The highest level of the concepts it links to, except concepts
   it `presents` or `hosts`. Its boundary's level is a **floor** only when the
   boundary's manifest says so with `criticality-floor: true`; then every

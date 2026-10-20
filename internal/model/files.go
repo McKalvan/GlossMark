@@ -108,7 +108,8 @@ type Policy struct {
 	// Waivers are time-boxed exceptions for known gaps.
 	Waivers []Waiver `yaml:"waivers,omitempty" json:"waivers,omitempty"`
 	// CoverageFailUnder is the default for gloss coverage --fail-under
-	// (percent of implementation concepts with an artifact and a verifier),
+	// (percent of in-scope concepts with an artifact and a verifier; an empty
+	// scope is n/a and never fails),
 	// or "current" for the base's coverage (a ratchet).
 	CoverageFailUnder FailUnder `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
 	// CriticalityGates raises the gate of any change that touches a concept or
@@ -442,15 +443,20 @@ type Manifest struct {
 	Holds StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
 	// Presents and Hosts name the concepts this boundary is a UI surface or a
 	// shell for; they are compared like realizes but never imply it.
-	Presents         StringList `yaml:"presents,omitempty" json:"presents,omitempty"`
-	Hosts            StringList `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	Presents StringList `yaml:"presents,omitempty" json:"presents,omitempty"`
+	Hosts    StringList `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	// Configures names the concepts whose value this boundary edits at
+	// runtime (an admin page for a limit); compared like presents, never
+	// implies realizes (ADR 0012).
+	Configures       StringList `yaml:"configures,omitempty" json:"configures,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`
 	Owner            string     `yaml:"owner,omitempty" json:"owner,omitempty"`
 	// Criticality of the boundary (low | medium | high | critical). When unset
 	// it is the highest criticality of the concepts the boundary realizes,
-	// else its parent's. See docs/GOVERNANCE.md.
+	// represents or configures, else its parent's unless the boundary only
+	// presents or hosts. See docs/GOVERNANCE.md.
 	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
 	// CriticalityFloor makes the boundary's level a floor for every artifact
 	// beneath it, including nested boundaries. Without it an artifact takes
@@ -466,6 +472,16 @@ type Manifest struct {
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
 	Dir  string `yaml:"-" json:"-"`
+	// Empty records the declared relations written as an explicit empty
+	// list (realizes: []): "this boundary does none of it", which gloss
+	// drift compares, unlike a relation that is not written (ADR 0012).
+	Empty map[string]bool `yaml:"-" json:"-"`
+}
+
+// DeclaresNone reports whether the manifest wrote rel as an explicit empty
+// list, such as realizes: [] on a boundary that is only a surface.
+func (m *Manifest) DeclaresNone(rel string) bool {
+	return m != nil && m.Empty[rel] && len(m.DeclaredSets()[rel]) == 0 && !(rel == "realizes" && m.InheritsRealizes())
 }
 
 // InheritMarker in a manifest's realizes: list means "what my nested
@@ -514,6 +530,7 @@ func (m *Manifest) DeclaredSets() map[string]StringList {
 		"holds":      m.Holds,
 		"presents":   m.Presents,
 		"hosts":      m.Hosts,
+		"configures": m.Configures,
 	}
 }
 
@@ -554,6 +571,19 @@ func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
 	if len(doc.Content) > 0 {
 		if err := doc.Decode(&m); err != nil {
 			return nil, unknown, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+	if len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
+		declared := m.DeclaredSets()
+		mn := doc.Content[0]
+		for i := 0; i+1 < len(mn.Content); i += 2 {
+			k, v := mn.Content[i].Value, mn.Content[i+1]
+			if _, ok := declared[k]; ok && v.Kind == yaml.SequenceNode && len(v.Content) == 0 {
+				if m.Empty == nil {
+					m.Empty = map[string]bool{}
+				}
+				m.Empty[k] = true
+			}
 		}
 	}
 	m.Path = path

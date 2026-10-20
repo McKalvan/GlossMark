@@ -433,6 +433,14 @@ func (p *projector) house() {
 	// one that only reaches it by lifting through another concept. Only the
 	// strongest candidates go to resolveBoundary, so a concept many boundaries
 	// touch indirectly still lands in the box that computes it.
+	//
+	// One realizes hop through a concept the boundary's own code implements
+	// is as direct as naming the core concept in the marker, so the CURIE
+	// style of a marker never decides the box. A boundary whose manifest
+	// also declares the concept (realizes or holds it, or an implementation
+	// concept that realizes it) beats one whose code only derives it, so a
+	// gateway schema that represents an entity does not take it from the
+	// service that declares holds: for it (ADR 0012, ADR 0013).
 	cand := map[string]map[string]int{} // concept CURIE → boundary CURIE → strength
 	for _, b := range p.g.NodesOf(model.NodeBoundary) {
 		bt := p.fold[b.ID]
@@ -440,12 +448,16 @@ func (p *projector) house() {
 			continue
 		}
 		bc := p.g.Curie(bt[0])
+		declares := p.declaredHousing(b.ID)
 		for _, rel := range rollup.HousingRelations {
 			for _, e := range p.g.Out(b.ID, rel) {
 				strength := 0
 				switch {
-				case e.Source == graph.SourceDerived && e.Prov != nil && len(e.Prov.Via) == 1:
+				case e.Source == graph.SourceDerived && p.ownCode(e):
 					strength = 2
+					if declares[e.O] {
+						strength = 3
+					}
 				case e.Source == graph.SourceDeclared:
 					strength = 1
 				}
@@ -532,6 +544,51 @@ func (p *projector) house() {
 	p.place(strongest)
 }
 
+// ownCode reports whether a derived housing edge is the boundary's own code
+// linking to the concept: directly from a marker, or through one realizes
+// (or published-as) hop from the concept a marker names.
+func (p *projector) ownCode(e *graph.Edge) bool {
+	if e.Prov == nil {
+		return false
+	}
+	switch len(e.Prov.Via) {
+	case 1:
+		return true
+	case 2:
+		via, _ := p.g.Expand(e.Prov.Via[1])
+		for _, rel := range []string{"realizes", "published-as"} {
+			for _, d := range p.g.Out(via, rel) {
+				if d.Source != graph.SourceDerived && d.O == e.O {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// declaredHousing returns the concepts boundary b's manifest declares it
+// realizes or holds, and the concepts those realize or are published as.
+func (p *projector) declaredHousing(b string) map[string]bool {
+	out := map[string]bool{}
+	for _, rel := range []string{"realizes", "holds"} {
+		for _, e := range p.g.Out(b, rel) {
+			if e.Source != graph.SourceDeclared {
+				continue
+			}
+			out[e.O] = true
+			for _, r := range []string{"realizes", "published-as"} {
+				for _, d := range p.g.Out(e.O, r) {
+					if d.Source != graph.SourceDerived {
+						out[d.O] = true
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
 // Placement values, in precedence order: the first that applies wins.
 const (
 	PlacementHoused   = "housed"
@@ -545,7 +602,7 @@ const (
 // flowRels and surfaceRels are the boundary → concept relations that explain
 // an unplaced concept, with the wording its reason uses.
 var flowRels = [][2]string{{"produces", "produced by"}, {"consumes", "consumed by"}, {"publishes", "published by"}, {"subscribes", "subscribed to by"}}
-var surfaceRels = [][2]string{{"presents", "presented by"}, {"hosts", "hosted by"}}
+var surfaceRels = [][2]string{{"presents", "presented by"}, {"hosts", "hosted by"}, {"configures", "configured by"}}
 
 // place gives every concept node its placement and the reason for it.
 // strongest holds each concept's strongest housing candidates; a concept left
@@ -628,7 +685,7 @@ func (p *projector) place(strongest map[string]map[string]bool) {
 				}
 			}
 			sort.Strings(other)
-			n.Placement, n.PlacementReason = PlacementUnlinked, "no boundary realizes, represents, produces, consumes, publishes, subscribes, presents or hosts it"
+			n.Placement, n.PlacementReason = PlacementUnlinked, "no boundary realizes, represents, produces, consumes, publishes, subscribes, presents, hosts or configures it"
 			if len(other) > 0 {
 				n.PlacementReason += "; linked only by " + strings.Join(other, "; ")
 			}

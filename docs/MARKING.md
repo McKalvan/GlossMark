@@ -21,7 +21,7 @@ Add `scope=file` when the whole file is about one concept and nothing inside it 
 
 Mark the thing a reader would look for: the handler, the pipeline entry point, the model, the table, the test file. Do not mark every helper. Five consecutive helpers that each say `implements .AmountObfuscation` add five edges and no knowledge; `gloss check` reports any run of three or more (GM131) and suggests one marker with `scope=block` above it, or one on the public function that calls them.
 
-Coverage counts concepts, not markers: an implementation concept is covered when at least one artifact links to it and at least one test verifies it (`gloss coverage`). Adding markers to raise the file percentage is the wrong lever; adding a test that `verifies` the concept is the right one.
+Coverage counts concepts, not markers: an implementation concept, or a core concept that code implements directly, is covered when at least one artifact links to it and at least one test verifies it (`gloss coverage`). With no such concept in scope coverage is `n/a`, and `--fail-under` does not fail ([ADR 0013](adr/0013-data-shapes-and-coverage.md)). Adding markers to raise the file percentage is the wrong lever; adding a test that `verifies` the concept is the right one.
 
 ## A file marker or symbol markers, not both
 
@@ -47,6 +47,24 @@ Target the implementation concept when the artifact is a mechanism (`implements 
 ## Pages and shells
 
 A page, screen or report that *shows* a concept is not its mechanism. Model the page as `presents` (`pfi:FirePage: { kind: process, presents: pf:FirePlanning }`, or `// @gloss presents pf:FirePlanning` on the component) and the app frame as `hosts`. Neither makes the boundary realize the concept or inherit its criticality, so the engine's tests and the page's tests are counted apart ([ADR 0001](adr/0001-presents-and-hosts.md)).
+
+Which form to use:
+
+| The page | Write | Why |
+| --- | --- | --- |
+| has tests or logic of its own (form handling, validation, formatting rules) | a page concept, `pfi:QuotePage: { kind: process, presents: hp:Pricing }`, the component `implements .QuotePage`, its test `verifies .QuotePage` | the page is a concept, so it counts in coverage and `gloss drift` reports it `untested` when it has no test |
+| is a thin component with no tests or logic of its own | inline `// @gloss presents hp:Pricing` on the component | nothing to test; the concept is `presented-only` until an engine implements it |
+| edits the concept's value at runtime | `configures`, below | |
+
+With the inline form the surface is not a concept, so it is never untested and never counts in coverage. Do not give its test `verifies hp:Pricing` to have something to link to: that credits the core concept with a test of a form, and inflates its verifiers (a page's test of a critical rule it does not enforce is the worst case). If the page has a test, it has earned a page concept.
+
+## API and wire schemas
+
+A GraphQL type, an OpenAPI schema or a protobuf message in a gateway looks like a data shape, but when the entity is stored elsewhere the gateway does not hold it. Mark it `presents hp:Order` (or leave it unmarked), not `represents`: `represents` makes the boundary `hold` the entity. Keep `represents` for the table, model or file where the data lives. `gloss check` says so when a `represents` falls outside the allowed set and another boundary declares `holds` for the concept (GM503).
+
+## Value editors
+
+An admin page or a settings screen that edits a concept's value at runtime (a credit limit stored in a row, a feature threshold) is neither the mechanism that enforces it nor only a view of it. Mark it `@gloss configures hp:CreditLimit` and declare `configures: [hp:CreditLimit]` in its boundary's manifest. The constraint stays drawn in the engine's box, the page takes the constraint's criticality (a mistake on it changes the rule), its test may `verify` the concept without GM503, and `gloss drift` compares the declaration with the code ([ADR 0012](adr/0012-surfaces.md)). A value bound to a line of code is `value-from` or `publishes-value` instead.
 
 ## Proposals
 

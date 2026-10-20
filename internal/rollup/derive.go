@@ -30,6 +30,11 @@ var SurfaceRelations = []string{"presents", "hosts"}
 // InfraRelations lift to realizes when their target is a resource or a system-type.
 var InfraRelations = []string{"provisions", "configures", "deploys"}
 
+// ConfigRelations lift to boundaries as themselves on a concept of any kind:
+// a page that edits a constraint's value configures it without computing it
+// (ADR 0012).
+var ConfigRelations = []string{"configures"}
+
 // IsConcrete reports whether an object IRI names a real node (not NEW/glob/unresolved).
 func IsConcrete(iri string) bool {
 	return !strings.HasPrefix(iri, "urn:gloss:new:") && !strings.HasPrefix(iri, "urn:gloss:glob:") && !strings.HasPrefix(iri, "urn:gloss:unresolved:")
@@ -108,18 +113,20 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 					continue
 				}
 				add("represents", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
-				// A table, file or package that represents an entity means the
-				// boundary holds that entity's data; a manifest declares holds:.
-				if on := g.Node(e.O); on != nil && on.Kind == "entity" {
+				// A table, file or package that represents a concept means the
+				// boundary holds its data: an entity's records, a measure's
+				// stored values, an event log, a constraint's configured value.
+				// A manifest declares holds: (ADR 0013).
+				if on := g.Node(e.O); on != nil && on.NodeType == model.NodeConcept {
 					add("holds", e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
 					for _, core := range RealizesStar(g, e.O) {
 						add("holds", core, []string{g.Curie(a.ID), g.Curie(e.O)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
 					}
 				}
 			}
-			for _, rel := range SurfaceRelations {
+			for _, rel := range append(append([]string{}, SurfaceRelations...), ConfigRelations...) {
 				for _, e := range g.Out(a.ID, rel) {
-					if IsConcrete(e.O) {
+					if on := g.Node(e.O); IsConcrete(e.O) && on != nil && on.NodeType == model.NodeConcept {
 						add(rel, e.O, []string{g.Curie(a.ID)}, e.Prov.Path, e.Prov.Line, e.Prov.Proposed)
 					}
 				}

@@ -134,7 +134,7 @@ gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR 
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings
-gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
+gloss coverage --fail-under 80   # headline: concepts with an artifact and a verifier (implementation concepts, and core concepts code implements directly; n/a when none); files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
