@@ -193,6 +193,10 @@
           "description": "Where the level comes from: \"declared\", or the CURIE of the node it was inherited from.",
           "type": "string"
         },
+        "criticality-source": {
+          "description": "For an inherited level, the CURIE of the node that declares it: the end of the criticality-from chain.",
+          "type": "string"
+        },
         "path": {
           "description": "Artifact: repo-relative file path.",
           "type": "string"
@@ -419,7 +423,14 @@
           "type": "string"
         },
         "via": {
-          "description": "CURIEs (or artifact ids) the derivation passed through.",
+          "description": "CURIEs (or artifact ids) the derivation passed through: for a lifted boundary edge, the artifact, the concept it links and every concept on the way to the object.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "steps": {
+          "description": "A lifted edge's path from the linked concept to the object, one \"relation CURIE\" per hop (\"is-a spk:Importer\", \"realizes cyc:CatalogueIngestion\").",
           "type": "array",
           "items": {
             "type": "string"

@@ -735,19 +735,108 @@ func (c *checker) manifests() {
 	}
 }
 
-// ExplainAllowed renders the effective allowed set of every manifest, one
-// line each, for gloss check --explain.
-func ExplainAllowed(ws *load.Workspace, g *graph.Graph) string {
-	var sb strings.Builder
+// ExplainRecord is one manifest's effective allowed set, for
+// gloss check --explain --format json.
+type ExplainRecord struct {
+	Boundary string `json:"boundary"`
+	Manifest string `json:"manifest"`
+	// Set is "everything" (no restriction), "derived" or "declared" (a
+	// written allowed: list).
+	Set     string                `json:"set"`
+	Entries []rollup.AllowedEntry `json:"entries"`
+}
+
+// ExplainAllowedRecords returns the effective allowed set of every manifest
+// with the reason for each entry.
+func ExplainAllowedRecords(ws *load.Workspace, g *graph.Graph) []ExplainRecord {
+	out := []ExplainRecord{}
 	for _, m := range ws.Manifests {
 		a := rollup.AllowedFor(g, ws, m)
+		r := ExplainRecord{Boundary: m.Boundary, Manifest: m.Path, Entries: []rollup.AllowedEntry{}}
 		switch {
 		case len(a.Patterns) == 0:
-			fmt.Fprintf(&sb, "%s (%s): allowed = everything; the manifest declares nothing and has no default-namespace\n", m.Boundary, m.Path)
+			r.Set = "everything"
 		case a.Derived:
-			fmt.Fprintf(&sb, "%s (%s): allowed = %s  [derived: default-namespace, declared concepts, their descendants, realized cores, nested boundaries]\n", m.Boundary, m.Path, strings.Join(a.Patterns, ", "))
+			r.Set, r.Entries = "derived", a.Entries
 		default:
-			fmt.Fprintf(&sb, "%s (%s): allowed = %s  [declared]\n", m.Boundary, m.Path, strings.Join(a.Patterns, ", "))
+			r.Set = "declared"
+			for _, p := range a.Patterns {
+				r.Entries = append(r.Entries, rollup.AllowedEntry{Pattern: p, Reason: "allowed"})
+			}
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// explainOrder is the order of the source lines of a derived set.
+var explainOrder = []struct{ reason, label string }{
+	{rollup.AllowedNamespace, "namespace"},
+	{rollup.AllowedDeclared, "declared"},
+	{rollup.AllowedRealized, "realized"},
+	{rollup.AllowedListed, "listed"},
+	{rollup.AllowedNested, "nested"},
+}
+
+// ExplainAllowed renders the effective allowed set of every manifest for
+// gloss check --explain. A derived set is a header and one line per source;
+// a declared concept is shown with the number of concepts it covers (its
+// descendants and what realizes them), a nested boundary with the number of
+// entries it adds, so the set reads by cause instead of alphabetically.
+func ExplainAllowed(ws *load.Workspace, g *graph.Graph) string {
+	var sb strings.Builder
+	for _, r := range ExplainAllowedRecords(ws, g) {
+		switch r.Set {
+		case "everything":
+			fmt.Fprintf(&sb, "%s (%s): allowed = everything; the manifest declares nothing and has no default-namespace\n", r.Boundary, r.Manifest)
+			continue
+		case "declared":
+			var ps []string
+			for _, e := range r.Entries {
+				ps = append(ps, e.Pattern)
+			}
+			fmt.Fprintf(&sb, "%s (%s): allowed = %s  [declared]\n", r.Boundary, r.Manifest, strings.Join(ps, ", "))
+			continue
+		}
+		fmt.Fprintf(&sb, "%s (%s): derived, %d entries\n", r.Boundary, r.Manifest, len(r.Entries))
+		covered := map[string]int{} // declared concept → concepts it covers
+		nested := map[string]int{}  // child boundary → entries it adds
+		by := map[string][]string{} // reason → patterns
+		realizedBy := map[string]string{}
+		for _, e := range r.Entries {
+			switch e.Reason {
+			case rollup.AllowedCovered:
+				covered[e.From]++
+			case rollup.AllowedNested:
+				if nested[e.From] == 0 {
+					by[e.Reason] = append(by[e.Reason], e.From)
+				}
+				nested[e.From]++
+			default:
+				by[e.Reason] = append(by[e.Reason], e.Pattern)
+				if e.Reason == rollup.AllowedRealized {
+					realizedBy[e.Pattern] = e.From
+				}
+			}
+		}
+		for _, o := range explainOrder {
+			var items []string
+			for _, p := range by[o.reason] {
+				switch o.reason {
+				case rollup.AllowedDeclared:
+					if n := covered[p]; n > 0 {
+						p += fmt.Sprintf(" (+%d below)", n)
+					}
+				case rollup.AllowedRealized:
+					p += " (by " + realizedBy[p] + ")"
+				case rollup.AllowedNested:
+					p += fmt.Sprintf(" (+%d)", nested[p])
+				}
+				items = append(items, p)
+			}
+			if len(items) > 0 {
+				fmt.Fprintf(&sb, "  %-10s %s\n", o.label, strings.Join(items, ", "))
+			}
 		}
 	}
 	return sb.String()

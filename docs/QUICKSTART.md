@@ -87,7 +87,7 @@ boundary: acme:payments-api
 level: container
 realizes: [pay:Authorization, pay:Capture]
 default-namespace: pa
-# allowed: is optional. Without it, links may target pa:*, what the manifest declares, their parts and the cores they realize;
+# allowed: is optional. Without it, links may target pa:*, what the manifest declares, their parts and subtypes, what realizes them and the cores they realize;
 # gloss check --explain prints the set. Write it only to narrow or to add a concept the boundary uses without declaring.
 ```
 

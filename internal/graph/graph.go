@@ -64,6 +64,9 @@ type Node struct {
 	// it came from: "declared", or the CURIE it was inherited from.
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticality-from,omitempty"`
+	// CriticalitySource is the node that declares an inherited level: the
+	// end of the criticality-from chain. Empty when the level is declared.
+	CriticalitySource string `json:"criticality-source,omitempty"`
 	// CriticalityFloor: the boundary's level is a floor for its artifacts.
 	CriticalityFloor bool `json:"criticality-floor,omitempty"`
 	// Namespace attributes.
@@ -99,8 +102,14 @@ type Prov struct {
 	Sugar       bool     `json:"sugar,omitempty"`
 	// Rule names the rollup rule or inferrer that produced a derived edge.
 	Rule string `json:"rule,omitempty"`
-	// Via lists the CURIEs the derivation passed through.
+	// Via lists the CURIEs the derivation passed through: for a lifted
+	// boundary edge the artifact, the concept it links and every concept on
+	// the way to the object.
 	Via []string `json:"via,omitempty"`
+	// Steps spells out a lifted edge's path from the linked concept to the
+	// object, one "relation CURIE" per hop ("is-a spk:Importer",
+	// "realizes cyc:CatalogueIngestion").
+	Steps []string `json:"steps,omitempty"`
 	// Raw is the original target text (e.g. ".Local", "impl:NEW:X", "pa:*").
 	Raw string `json:"raw,omitempty"`
 	// Alias is the relation as written when the marker used an alias that
@@ -229,7 +238,7 @@ func (g *Graph) AddNode(n *Node) *Node {
 			ex.Owner = n.Owner
 		}
 		if ex.Criticality == "" {
-			ex.Criticality, ex.CriticalityFrom = n.Criticality, n.CriticalityFrom
+			ex.Criticality, ex.CriticalityFrom, ex.CriticalitySource = n.Criticality, n.CriticalityFrom, n.CriticalitySource
 		}
 		return ex
 	}
@@ -455,6 +464,30 @@ func (g *Graph) LCS(ids []string) []string {
 	if len(ids) == 1 {
 		return ids
 	}
+	if out := g.CommonSubsumers(ids); len(out) > 0 {
+		return out
+	}
+	return ids
+}
+
+// Subsumer returns the unique least common subsumer of a set of two or more
+// concepts. When the set has several incomparable minimal common subsumers
+// (two concepts sharing two parents' lines) it returns "" and those
+// candidates; when it has no common ancestor at all, "" and nil.
+func (g *Graph) Subsumer(ids []string) (string, []string) {
+	out := g.CommonSubsumers(uniqueSorted(ids))
+	if len(out) == 1 {
+		return out[0], nil
+	}
+	return "", out
+}
+
+// CommonSubsumers returns the most specific concepts that is-a* every input,
+// sorted; nil when they share no ancestor.
+func (g *Graph) CommonSubsumers(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
 	var common map[string]bool
 	for _, id := range ids {
 		anc := map[string]bool{id: true}
@@ -472,7 +505,7 @@ func (g *Graph) LCS(ids []string) []string {
 		}
 	}
 	if len(common) == 0 {
-		return ids
+		return nil
 	}
 	// Keep the most specific: drop any that is a strict ancestor of another common one.
 	var out []string

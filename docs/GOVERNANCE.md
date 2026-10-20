@@ -43,13 +43,20 @@ viewer and reports show it as such.
 Declare the level where the business sees it (the core concept) and let it
 flow to the code that implements it. `gloss build` stamps every concept,
 boundary and artifact in the graph with an effective level and where it came
-from (`criticality-from`: `declared`, or the CURIE it was inherited from). A
-declared level always wins.
+from (`criticality-from`: `declared`, or the CURIE it was inherited from). An
+inherited level also names the concept that declared it (`criticality-source`),
+so `cyc:HydraulicDiscBrake critical from cyc:DiscBrake` carries
+`criticality-source: cyc:BrakingComponent` and nobody walks the chain by hand.
+A declared level always wins.
 
-- **Concept.** Without its own level, an implementation concept takes the
-  highest level of what it `realizes` or is `published` as; then of the concept
-  it is `part-of`; then of its `is-a` ancestors. So `pa:AuthorizeHandler
-  realizes pay:Authorization` is critical without anyone saying so twice.
+- **Concept.** Without its own level, a concept takes the highest level of
+  what it `realizes` or is `published` as; then of the concept it is
+  `part-of`; then of its `is-a` ancestors. So `pa:AuthorizeHandler realizes
+  pay:Authorization` is critical without anyone saying so twice. The rule is
+  the same in both tiers: a core concept with no level of its own inherits
+  through `part-of` and `is-a` too, so declaring `cyc:BrakingComponent`
+  critical makes `cyc:HydraulicDiscBrake`, four `is-a` levels down, critical,
+  and a step `cyc:ScanConfirm` that is `part-of` a high `cyc:BinPick` is high.
 - **Boundary.** Without its own level, a boundary takes the highest level of
   the concepts its code realizes, represents or configures (declared in the
   manifest or derived from the markers beneath it), else its parent

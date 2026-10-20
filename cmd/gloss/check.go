@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -18,7 +19,8 @@ func init() {
 func cmdCheck(args []string) int {
 	fs, root := newFlags("check")
 	warnErr := fs.Bool("strict", false, "treat warnings as errors")
-	explain := fs.Bool("explain", false, "print the effective allowed set of every manifest (declared, or derived from what it declares)")
+	explain := fs.Bool("explain", false, "print the effective allowed set of every manifest (declared, or derived from what it declares) and why each entry is in it")
+	format := fs.String("format", "text", "--explain output: text | json")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
@@ -26,8 +28,16 @@ func cmdCheck(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	if *format != "text" && *format != "json" {
+		return fail(fmt.Errorf("--format: unknown format %q; valid formats: text, json", *format))
+	}
 	if *explain {
-		fmt.Print(check.ExplainAllowed(p.WS, p.Graph))
+		if *format == "json" {
+			b, _ := json.MarshalIndent(check.ExplainAllowedRecords(p.WS, p.Graph), "", "  ")
+			fmt.Println(string(b))
+		} else {
+			fmt.Print(check.ExplainAllowed(p.WS, p.Graph))
+		}
 	}
 	diags := append([]marker.Diagnostic{}, p.Diags...)
 	diags = append(diags, check.Run(p.WS, p.Graph)...)

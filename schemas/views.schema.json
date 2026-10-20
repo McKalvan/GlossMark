@@ -85,7 +85,7 @@
           ]
         },
         "lift": {
-          "description": "Lift strategy for relations projected onto boundaries.",
+          "description": "range-lcs replaces a boundary's edges to two or more concepts of one relation by one lifted edge to their unique least common subsumer (none when the members share several incomparable ones: the edges stay and carry noUniqueSubsumer). A curated view never lifts the concepts it names.",
           "type": "string",
           "enum": ["range-lcs"]
         },
