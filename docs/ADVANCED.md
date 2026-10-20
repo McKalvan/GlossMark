@@ -78,6 +78,20 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 `entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type`. `implements` expects a process, capability, system-type, event, constraint or measure; `represents` an entity, event, measure, resource or constraint; `publishes` and `subscribes` an event (GM221 warns otherwise).
 
+## Feature slices (`gloss slice`)
+
+`gloss slice pay:Withdrawal` prints everything relevant to one feature: the seed, its kinds (`is-a`) and parts (`part-of`), the implementation concepts that realize it or are published as it, the code, tests, docs, pages and infrastructure linked to any of those, the boundaries around them, and a faded ring of context (what they produce, consume, publish or subscribe to with the party on the other side, the constraints on them, what they stand for and their `is-a` ancestors). Each node carries its role and the path of edges that brought it in, its criticality and its drift findings; the summary lists what in the slice is untested, so "what is untested in withdrawals" is one command.
+
+| Flag | Effect |
+| --- | --- |
+| *seeds* | concept or boundary CURIEs, artifacts (`path#symbol`), or paths (the concepts their markers link) |
+| `--context 0` | drop the context ring |
+| `--follow produces,consumes` | follow those flows end to end as members (what members produce or publish; who consumes or subscribes to them) |
+| `--format text\|json\|md` | output; `json` is what MCP `slice_of` returns |
+| `--repo <root>` (repeatable) | slice the landscape of several repositories, so a subscriber in another repo appears |
+
+Every relation is followed in one direction for one reason, never as a blind N-hop neighbourhood, so a hub concept does not pull in the graph; [ADR 0023](adr/0023-feature-slices.md) has the rules. The same slice is MCP `slice_of`, `gloss context --concept <curie>` (a briefing on a feature rather than a directory), a saved slice in `views.yaml` (`slice: [pay:Withdrawal]`, see [FILE-FORMATS.md](FILE-FORMATS.md#viewsyaml)) and the viewer's "Slice on this" (or Alt+click a node; `#slice=pay:Withdrawal` in the URL shares it; Esc or the chip's × clears it).
+
 ## Files and version numbers
 
 Three kinds of file: `glossmark.yaml` (namespaces, policy), `*.gloss.yaml` (one per namespace, the concepts) and `.gloss.yaml` (one per boundary directory). Four numbers: the tool release, the grammar (`grammar: 1`), the file formats (`"format"` headers) and each namespace's semver. [FILE-FORMATS.md](FILE-FORMATS.md) and [VERSIONING.md](VERSIONING.md) have the details.
