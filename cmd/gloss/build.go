@@ -70,6 +70,9 @@ func buildGraph(root string, writeLedger bool) (*pipeline, error) {
 	previous := ledger.PreviousActors(readGraph(ws.StatePath("graph.jsonl")))
 	lg.Actors = &ledger.Actors{Previous: previous, Session: session, Root: ws.Root, Fallback: actor}
 	lg.Sync(g, res.Markers, actor, time.Now().UTC())
+	if lg.DropRejected(g) > 0 {
+		rollup.Derive(g, ws.Vocab)
+	}
 	if writeLedger {
 		if err := lg.Save(); err != nil {
 			return nil, err

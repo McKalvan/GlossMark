@@ -467,6 +467,10 @@ var ws = regexp.MustCompile(`\s+`)
 // norm collapses whitespace so a reformat does not change a fingerprint.
 func norm(s string) string { return strings.TrimSpace(ws.ReplaceAllString(s, " ")) }
 
+// LineFingerprint is the fingerprint a symbol or block anchor records for
+// its signature line.
+func LineFingerprint(line string) string { return fp(norm(line)) }
+
 func fp(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return "sha256:" + hex.EncodeToString(h[:])[:16]

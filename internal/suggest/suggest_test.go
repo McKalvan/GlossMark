@@ -71,7 +71,7 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 	copyStripped(t, filepath.Join("..", "..", "examples", "horse-factory"), root)
 	os.WriteFile(filepath.Join(root, "services/horse-factory/breeding/api.py"), []byte("import app\n\n\n@app.route(\n    \"/hooves\",\n)\ndef hoof_assembler_endpoint():\n    pass\n\n\ndef _private_helper():\n    pass\n"), 0o644)
 	ws, g := build(t, root)
-	ps, err := Run(ws, g, nil, Options{})
+	ps, _, err := Run(ws, g, nil, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 			t.Errorf("after write: %s", d)
 		}
 	}
-	if again, _ := Run(ws, g, nil, Options{}); len(again) != 0 {
+	if again, _, _ := Run(ws, g, nil, Options{}); len(again) != 0 {
 		t.Errorf("a second run should propose nothing, got %+v", again)
 	}
 }

@@ -757,10 +757,14 @@ func (c *comparer) metrics() {
 					}
 				}
 			}
-		case model.StatusRejected:
-			m.Rejected++
 		case model.StatusStale:
 			m.Stale++
+		}
+	}
+	// Rejected links have no edges (ledger.DropRejected); count the decisions.
+	for id, le := range c.opt.Ledger {
+		if le.Status == model.StatusRejected && !strings.HasPrefix(id, "concept:") && !strings.HasPrefix(id, "value:") {
+			m.Rejected++
 		}
 	}
 	// Concept coverage: owned implementation concepts (not internal,

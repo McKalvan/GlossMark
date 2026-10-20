@@ -240,6 +240,41 @@ func TestDuplicateProposals(t *testing.T) {
 	}
 }
 
+// Issue #62: a rejected proposal adds no edge, stays rejected when its line
+// is deleted, and is not suggested again.
+func TestRejectedProposalSticks(t *testing.T) {
+	files := map[string]string{"doer.py": "def doer(): pass\n"}
+	root := tiny(t, files)
+	_, out := gloss(t, "suggest", "--format", "text", "--root", root)
+	if !strings.Contains(out, "implements .Doer") {
+		t.Fatalf("suggest does not propose the link to begin with: %q", out)
+	}
+	gloss(t, "suggest", "--write", "--root", root)
+	gloss(t, "build", "-q", "--root", root)
+	if code, _ := gloss(t, "reject", "doer.py:1", "--reason", "not the mechanism", "--root", root); code != 0 {
+		t.Fatalf("reject: exit %d", code)
+	}
+	p, err := buildGraph(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range p.Graph.Edges() {
+		if e.Prov != nil && e.Prov.Path == "doer.py" && e.P == "implements" {
+			t.Errorf("rejected link still in the graph: %+v", e)
+		}
+	}
+	if code, _ := gloss(t, "reject", "doer.py:1", "--reason", "not the mechanism", "--remove", "--root", root); code != 0 {
+		t.Fatalf("reject --remove: exit %d", code)
+	}
+	gloss(t, "build", "-q", "--root", root)
+	if st := ledgerStatus(t, root, "implements"); len(st) != 1 || st[0] != "rejected" {
+		t.Errorf("after reject --remove and build: %v, want [rejected]", st)
+	}
+	if _, out := gloss(t, "suggest", "--format", "text", "--root", root); strings.Contains(out, "implements .Doer") {
+		t.Errorf("suggest proposes the rejected link again: %q", out)
+	}
+}
+
 // addConcept inserts ontology lines right after the "concepts:" key.
 func addConcept(t *testing.T, root, file, lines string) {
 	t.Helper()

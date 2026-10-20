@@ -146,6 +146,9 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 	// Attribute actors from the base ledger when committed.
 	if lg, err := ledger.Open(bws.StatePath(ledger.FileName)); err == nil {
 		lg.Sync(res.Graph, res.Markers, "human:unknown", time.Now())
+		if lg.DropRejected(res.Graph) > 0 {
+			rollup.Derive(res.Graph, bws.Vocab)
+		}
 	}
 	return res.Graph, nil
 }

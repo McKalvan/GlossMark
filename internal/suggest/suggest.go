@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
@@ -38,6 +39,10 @@ type Options struct {
 	// MinScore is the lowest search score that becomes a proposal (default 60:
 	// at least two words of the name, or the whole of a one-word name).
 	MinScore int
+	// Ledger, when set, holds review decisions: a link it records as
+	// rejected (same marker id, or same anchor fingerprint, relation and
+	// target) is not proposed again.
+	Ledger map[string]*model.LedgerEntry
 }
 
 // codeExts are the files suggest proposes markers in.
@@ -45,10 +50,19 @@ var codeExts = map[string]bool{".py": true, ".ts": true, ".tsx": true, ".js": tr
 	".java": true, ".kt": true, ".rb": true, ".cs": true, ".php": true, ".swift": true, ".scala": true, ".tf": true, ".sql": true,
 	".proto": true, ".feature": true}
 
-// Run proposes markers for the files under paths (all workspace files when empty).
-func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) ([]Proposal, error) {
+// Run proposes markers for the files under paths (all workspace files when
+// empty). skipped counts the proposals left out because the ledger records
+// them as rejected.
+func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out []Proposal, skipped int, err error) {
 	if opt.MinScore <= 0 {
 		opt.MinScore = 60
+	}
+	type link struct{ fp, rel, target string }
+	rejected := map[link]bool{}
+	for _, e := range opt.Ledger {
+		if e.Status == model.StatusRejected && len(e.Targets) == 1 && e.AnchorFingerprint != "" {
+			rejected[link{e.AnchorFingerprint, e.Relation, e.Targets[0]}] = true
+		}
 	}
 	marked := map[string]bool{} // path#line of anchored declarations
 	for _, a := range g.NodesOf(model.NodeArtifact) {
@@ -60,7 +74,6 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) ([]Pro
 		}
 		marked[fmt.Sprintf("%s#%d", a.Path, a.Anchor.StartLine)] = true
 	}
-	var out []Proposal
 	for _, rel := range ws.Files {
 		if !under(rel, paths) || !codeExts[strings.ToLower(filepath.Ext(rel))] || marked[rel+"#file"] {
 			continue
@@ -71,7 +84,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) ([]Pro
 		}
 		lines, err := readLines(ws.Abs(rel))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		m := ws.ManifestFor(rel)
 		test := ws.IsTestPath(rel)
@@ -102,6 +115,11 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) ([]Pro
 			if m != nil && m.DefaultNamespace != "" && strings.HasPrefix(target, m.DefaultNamespace+":") {
 				target = "." + strings.TrimPrefix(target, m.DefaultNamespace+":")
 			}
+			if le := opt.Ledger[extract.MarkerID(rel, relName, []string{target}, d.Symbol, "symbol")]; (le != nil && le.Status == model.StatusRejected) ||
+				rejected[link{marker.LineFingerprint(lines[d.Line-1]), relName, target}] {
+				skipped++
+				continue
+			}
 			conf := math.Min(0.95, math.Round(float64(score)/110*100)/100)
 			tok := commentLine(style)
 			line := fmt.Sprintf("%s%s @gloss? %s %s conf=%.2f", d.Indent, tok[0], relName, target, conf)
@@ -111,7 +129,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) ([]Pro
 			out = append(out, Proposal{Path: rel, Line: d.Insert, Symbol: d.Symbol, Relation: relName, Target: target, Conf: conf, Matched: how, Marker: line})
 		}
 	}
-	return out, nil
+	return out, skipped, nil
 }
 
 // pick returns the best hit a boundary may use: allowed by the manifest's
