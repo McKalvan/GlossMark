@@ -91,7 +91,7 @@
     {"line": 3, "relation": "implements", "targets": ["impl:Foaling"], "scope": "symbol", "symbol": "foal"}
   ],
   "testdata/config.json.gloss": [
-    {"line": 2, "relation": "configures", "targets": ["impl:FoalEventBus"], "keys": {"scope": "range", "note": "/bus"}, "scope": "range"},
+    {"line": 2, "relation": "configures", "targets": ["impl:FoalEventBus"], "keys": {"scope": "range", "note": "/bus"}, "scope": "range", "symbol": "/bus"},
     {"line": 3, "relation": "configures", "targets": ["impl:FoalRegistry"], "scope": "file"}
   ],
   "testdata/example.proto": [

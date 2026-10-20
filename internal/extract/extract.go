@@ -9,6 +9,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -251,11 +252,14 @@ func (ex *extractor) files() error {
 			continue
 		}
 		target := rel
+		var tsrc []byte // the annotated file, for a sidecar
 		if marker.IsSidecar(rel) {
 			target = marker.SidecarTarget(rel)
-			if _, err := os.Stat(ex.ws.Abs(target)); err != nil {
+			b, err := os.ReadFile(ex.ws.Abs(target))
+			if err != nil {
 				ex.diag(rel, 1, "warning", "GM121", fmt.Sprintf("sidecar annotates %s, which does not exist", target))
 			}
+			tsrc = b
 		}
 		m := ex.ws.ManifestFor(rel)
 		var boundary string
@@ -265,9 +269,8 @@ func (ex *extractor) files() error {
 		anchors := make([]marker.Anchor, len(found))
 		for i, fd := range found {
 			anchors[i] = marker.Resolve(rel, fd, lines, style)
-			if marker.IsSidecar(rel) && anchors[i].Scope == "symbol" {
-				anchors[i].Scope = "file"
-				anchors[i].Symbol = ""
+			if marker.IsSidecar(rel) {
+				anchors[i] = ex.sidecarAnchor(rel, target, tsrc, fd.Marker, anchors[i])
 			}
 		}
 		// Same-named declarations in one file must not share an artifact.
@@ -277,6 +280,34 @@ func (ex *extractor) files() error {
 		}
 	}
 	return nil
+}
+
+// sidecarAnchor anchors a sidecar marker to the file it annotates, not to
+// the sidecar: scope=file fingerprints the target, and scope=range in a JSON
+// sidecar resolves the JSON Pointer in note= to the value's lines. Editing
+// the sidecar then never makes a link stale; editing the value does.
+func (ex *extractor) sidecarAnchor(rel, target string, tsrc []byte, mk *marker.Marker, a marker.Anchor) marker.Anchor {
+	if tsrc == nil {
+		return a
+	}
+	switch a.Scope {
+	case "symbol", "file":
+		return marker.FileAnchor(strings.Split(strings.TrimSuffix(string(tsrc), "\n"), "\n"))
+	case "range":
+		if !json.Valid(tsrc) {
+			return a
+		}
+		ptr := mk.Keys["note"]
+		if pa, ok := marker.PointerAnchor(tsrc, ptr, a.Scope); ok {
+			return pa
+		}
+		if !strings.HasPrefix(ptr, "/") {
+			ex.diag(rel, mk.Line, "warning", "GM123", fmt.Sprintf("scope=range in a JSON sidecar needs a JSON Pointer in note= (such as note=\"/fields/1\"), got %q; anchored to the sidecar", ptr))
+		} else {
+			ex.diag(rel, mk.Line, "warning", "GM123", fmt.Sprintf("JSON Pointer %s does not resolve in %s; anchored to the sidecar", ptr, target))
+		}
+	}
+	return a
 }
 
 func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.Anchor, lines []string, m *model.Manifest, boundary string) {
@@ -292,6 +323,10 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.A
 		aid += "#" + anchor.Symbol
 		label = target + ":" + anchor.Symbol
 		kind = anchor.Kind
+	} else if anchor.Scope == "range" && anchor.Kind == "json-pointer" {
+		aid += "#" + anchor.Symbol
+		label = target + ":" + anchor.Symbol
+		kind = anchor.Scope
 	} else if anchor.Scope == "block" || anchor.Scope == "line" || anchor.Scope == "range" {
 		aid += fmt.Sprintf("#L%d", anchor.StartLine)
 		label = fmt.Sprintf("%s:%d", target, anchor.StartLine)

@@ -1097,6 +1097,71 @@ func TestVerifiesCanonical(t *testing.T) {
 	}
 }
 
+// TestSidecarPointers: scope=range markers in a JSON sidecar anchor to the
+// value their JSON Pointer names, so changing the value makes that one link
+// stale and rewording the sidecar makes none; a pointer that does not
+// resolve is GM123 (issue #116).
+func TestSidecarPointers(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Lending: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  BookLoan: { kind: process, realizes: z:Lending }\n  DvdLoan: { kind: process, realizes: z:Lending }\n  Rules: { kind: process, realizes: z:Lending }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	rules := "{\n  \"formats\": {\n    \"BOOK\": { \"days\": 21 },\n    \"DVD\": { \"days\": 7 }\n  }\n}\n"
+	write("config/rules.json", rules)
+	sidecar := "# Loan rules; pointers name the format.\n@gloss configures .BookLoan scope=range note=\"/formats/BOOK\"\n@gloss configures .DvdLoan scope=range note=\"/formats/DVD\"\n@gloss configures .Rules\n@gloss configures .Rules scope=range note=\"/formats/EBOOK\"\n"
+	write("config/rules.json.gloss", sidecar)
+	fps := func() (map[string]string, []string) {
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := extract.Build(ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, n := range res.Graph.NodesOf(model.NodeArtifact) {
+			out[strings.TrimPrefix(n.ID, graph.ArtifactPrefix)] = fmt.Sprintf("%d-%d %s", n.Anchor.StartLine, n.Anchor.EndLine, n.Anchor.Fingerprint)
+		}
+		var diags []string
+		for _, d := range res.Diags {
+			if d.Code == "GM123" {
+				diags = append(diags, fmt.Sprintf("%s:%d", d.Path, d.Line))
+			}
+		}
+		return out, diags
+	}
+	before, diags := fps()
+	if len(diags) != 1 || diags[0] != "config/rules.json.gloss:5" {
+		t.Errorf("GM123 = %v, want [config/rules.json.gloss:5]", diags)
+	}
+	book, dvd := before["config/rules.json#/formats/BOOK"], before["config/rules.json#/formats/DVD"]
+	if !strings.HasPrefix(book, "3-3 ") || !strings.HasPrefix(dvd, "4-4 ") {
+		t.Errorf("pointer anchors: %v", before)
+	}
+	// Rewording the sidecar's comment changes no fingerprint.
+	write("config/rules.json.gloss", strings.Replace(sidecar, "Loan rules;", "Lending rules;", 1))
+	if after, _ := fps(); after["config/rules.json#/formats/BOOK"] != book || after["config/rules.json#/formats/DVD"] != dvd {
+		t.Errorf("sidecar edit changed pointer fingerprints: %v -> %v", before, after)
+	}
+	// Changing the DVD loan period changes the DVD link only.
+	write("config/rules.json", strings.Replace(rules, "\"days\": 7", "\"days\": 14", 1))
+	after, _ := fps()
+	if after["config/rules.json#/formats/BOOK"] != book || after["config/rules.json#/formats/DVD"] == dvd {
+		t.Errorf("value edit: BOOK %s -> %s, DVD %s -> %s", book, after["config/rules.json#/formats/BOOK"], dvd, after["config/rules.json#/formats/DVD"])
+	}
+	// The file-scope marker fingerprints the JSON, not the sidecar.
+	if after["config/rules.json"] == before["config/rules.json"] {
+		t.Errorf("file-scope sidecar marker should follow the JSON file: %s", after["config/rules.json"])
+	}
+}
+
 // TestSameNamedMethods: methods with one name on two classes in one file are
 // two artifacts, qualified by their class, with different fingerprints; a
 // method whose name is unique in its file keeps its bare symbol (issue #61).

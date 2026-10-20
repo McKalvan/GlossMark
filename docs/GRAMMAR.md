@@ -38,7 +38,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 - Inside a comment, text between a pair of backticks is quoted prose, so a comment can talk about `` `@gloss` `` or quote a whole marker without being one. In Markdown the body of a fenced code block (```` ``` ```` or `~~~`) is quoted as well. This is a scanner rule; the reference regex is unchanged.
 - Malformed markers are build warnings at `file:line:col` (codes `GM001`–`GM007`), never silent drops. Positions are physical columns.
 - Multi-line YAML-in-comment blocks are not supported; one marker, one line.
-- JSON has no comments: use a sidecar `foo.json.gloss` holding one marker per line, with JSON Pointers in `note=` and `scope=range`.
+- JSON has no comments: use a sidecar `foo.json.gloss` holding one marker per line, with JSON Pointers in `note=` and `scope=range` (`@gloss configures .DvdLoan scope=range note="/formats/DVD"`). A sidecar marker anchors to the file it annotates, never to the sidecar: a range anchors to the lines of the value its pointer names and fingerprints that value, and any other marker fingerprints the whole annotated file. A pointer that names nothing is a warning (GM123).
 - SPDX-style headers are accepted as sugar and parsed into the same form with `scope=file`: `Gloss-Implements: impl:X`, `Gloss-May-Modify: pa:*`.
 - Generated and vendored paths are excluded by the manifest's `generated:` globs or `exclude:` in `glossmark.yaml`; tag the generator input instead.
 
@@ -101,7 +101,7 @@ Feature: Stallion production
 | GM005 | invalid scope |
 | GM006 | conf outside [0,1] |
 | GM007 | glob target on a relation other than may-modify |
-| GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected) |
+| GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
 | GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |

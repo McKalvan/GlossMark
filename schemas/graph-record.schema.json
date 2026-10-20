@@ -285,7 +285,7 @@
           "type": "string"
         },
         "kind": {
-          "description": "Declaration kind: function, method, class, interface, type, variable, resource, block, key, item, sql, alter, gherkin, heading, document, definition, instruction, proto, unresolved-symbol, ...",
+          "description": "Declaration kind: function, method, class, interface, type, variable, resource, block, key, item, sql, alter, gherkin, heading, document, definition, instruction, proto, unresolved-symbol, json-pointer (a sidecar range; symbol holds the pointer), ...",
           "type": "string"
         },
         "start": {

@@ -91,6 +91,16 @@ func TestCorpus(t *testing.T) {
 		anchors := make([]Anchor, len(found))
 		for i, fd := range found {
 			anchors[i] = Resolve(rel, fd, lines, style)
+			// A JSON sidecar's scope=range resolves its pointer in the target.
+			if IsSidecar(rel) && anchors[i].Scope == "range" {
+				src, err := os.ReadFile(filepath.Join(root, SidecarTarget(rel)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if a, ok := PointerAnchor(src, fd.Marker.Keys["note"], "range"); ok {
+					anchors[i] = a
+				}
+			}
 		}
 		Disambiguate(rel, lines, anchors)
 		for i, fd := range found {
