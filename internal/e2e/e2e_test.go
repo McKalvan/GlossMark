@@ -1007,6 +1007,39 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	}
 }
 
+// TestRepeatedMarkerStacked: GM131 groups markers by the declaration they
+// anchor to, so a repeated marker is found under whatever else is stacked
+// on each declaration, and every repeated target is named (issue #75).
+func TestRepeatedMarkerStacked(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Auth: { kind: process, realizes: z:Doing }\n  Log: { kind: process, realizes: z:Doing }\n  A: { kind: process, realizes: z:Doing }\n  B: { kind: process, realizes: z:Doing }\n  C: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	// Two identical markers stacked on each of three handlers, each also
+	// carrying its own domain concept.
+	var b strings.Builder
+	for _, h := range []string{"A", "B", "C"} {
+		fmt.Fprintf(&b, "# @gloss implements .%s\n# @gloss implements .Auth\n# @gloss implements .Log\ndef handle_%s(): pass\n\n", h, strings.ToLower(h))
+	}
+	write("handlers.py", b.String())
+	ws, g, _, _ := build(t, root)
+	var got []string
+	for _, d := range check.Run(ws, g) {
+		if d.Code == "GM131" {
+			got = append(got, fmt.Sprintf("%d %s", d.Line, d.Msg))
+		}
+	}
+	if len(got) != 1 || !strings.HasPrefix(got[0], "2 implements i:Auth, i:Log is repeated on 3 consecutive declarations (lines 2-13)") {
+		t.Errorf("GM131 = %v, want one finding at line 2 naming i:Auth and i:Log", got)
+	}
+}
+
 // TestVerifiesCanonical: the test-path inferrer emits verifies, and an inline
 // tests marker is accepted with a prefer-verifies warning (GM240) and stored
 // as verifies, with the written form in prov.alias.
