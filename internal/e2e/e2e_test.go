@@ -1216,6 +1216,39 @@ func TestInfraAndDataSatisfyDeclarations(t *testing.T) {
 	}
 }
 
+// TestStatusCountsOnlyImplementingLinks: export --status does not call a
+// concept implemented when only prose and configuration link to it, while
+// infrastructure on a resource still counts, as it lifts to realizes.
+func TestStatusCountsOnlyImplementingLinks(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Loan: { kind: process }\n  Host: { kind: resource }\n")
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\nrealizes: [z:Loan, z:Host]\n")
+	write("svc/README.md", "<!-- @gloss documents z:Loan scope=file -->\n# Loans\n")
+	write("svc/loans.yaml", "# @gloss configures z:Loan scope=file\nloan_days: 21\n")
+	write("svc/main.tf", "# @gloss provisions z:Host\nresource \"aws_instance\" \"host\" {}\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if gaps := concepts(findings(rep, rollup.KindGap)); len(gaps) != 1 || gaps[0] != "z:Loan" {
+		t.Errorf("gaps = %v, want [z:Loan]", gaps)
+	}
+	st := map[string]rollup.ConceptStatusRow{}
+	for _, r := range rollup.ConceptStatus(g, rep) {
+		st[r.Concept] = r
+	}
+	if r := st["z:Loan"]; r.Status != rollup.StatusUnimplemented || r.Artifacts != 0 {
+		t.Errorf("z:Loan = %+v, want unimplemented with 0 artifacts", r)
+	}
+	if r := st["z:Host"]; r.Status != rollup.StatusImplemented || r.Artifacts != 1 {
+		t.Errorf("z:Host = %+v, want implemented with 1 artifact", r)
+	}
+}
+
 func curies(g *graph.Graph, ids []string) []string {
 	var out []string
 	for _, id := range ids {
