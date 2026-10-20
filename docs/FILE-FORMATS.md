@@ -55,6 +55,8 @@ relations:
 
 Top-level keys: `namespace`, `version`, `tier` (optional; an owned file defaults to `owns.<prefix>.tier`, and an importer reads it before `imports.<prefix>.tier`), `doc`, `concepts`, `relations`.
 
+`relations:` tunes a builtin relation or declares a new concept → concept one (`lift`, `transitive`, `inverse`, `domain`, `range`). `lift` only sets how `gloss drift` prints a boundary's derived set for the relation: `range-lcs`, already the builtin for `produces`, `consumes`, `publishes` and `subscribes`, shows it by its least common subsumer; `none` shows the members. It never changes the comparison: a declared supertype covers a derived subtype for every compared relation ([ADR 0011](adr/0011-range-lcs-summary.md)).
+
 `gloss publish` writes `<out>/<ns>/` with `ontology.jsonld`, a copy of this file and, for an implementation namespace, `graph.jsonl`. The copy states `tier:` and, for an implementation namespace, holds only the published concepts, like `ontology.jsonld`; an importer can point `source:` at the directory.
 
 Concept keys:

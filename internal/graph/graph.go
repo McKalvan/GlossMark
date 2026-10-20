@@ -464,6 +464,30 @@ func (g *Graph) LCS(ids []string) []string {
 	if len(ids) == 1 {
 		return ids
 	}
+	if out := g.CommonSubsumers(ids); len(out) > 0 {
+		return out
+	}
+	return ids
+}
+
+// Subsumer returns the unique least common subsumer of a set of two or more
+// concepts. When the set has several incomparable minimal common subsumers
+// (two concepts sharing two parents' lines) it returns "" and those
+// candidates; when it has no common ancestor at all, "" and nil.
+func (g *Graph) Subsumer(ids []string) (string, []string) {
+	out := g.CommonSubsumers(uniqueSorted(ids))
+	if len(out) == 1 {
+		return out[0], nil
+	}
+	return "", out
+}
+
+// CommonSubsumers returns the most specific concepts that is-a* every input,
+// sorted; nil when they share no ancestor.
+func (g *Graph) CommonSubsumers(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
 	var common map[string]bool
 	for _, id := range ids {
 		anc := map[string]bool{id: true}
@@ -481,7 +505,7 @@ func (g *Graph) LCS(ids []string) []string {
 		}
 	}
 	if len(common) == 0 {
-		return ids
+		return nil
 	}
 	// Keep the most specific: drop any that is a strict ancestor of another common one.
 	var out []string

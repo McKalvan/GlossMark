@@ -49,6 +49,28 @@ func TestLCS(t *testing.T) {
 	}
 }
 
+// TestSubsumer: a unique least common subsumer, several incomparable ones
+// (two concepts sharing two parents' lines), or none.
+func TestSubsumer(t *testing.T) {
+	g := testGraph()
+	id := func(c string) string { s, _ := g.Expand("zoo:" + c); return s }
+	for _, c := range []string{"Pet", "Pony", "Mule", "Rock"} {
+		g.AddNode(&Node{NodeType: model.NodeConcept, ID: id(c), CURIE: "zoo:" + c, NS: "zoo"})
+	}
+	for _, e := range [][2]string{{"Pet", "Animal"}, {"Pony", "Horse"}, {"Pony", "Pet"}, {"Mule", "Horse"}, {"Mule", "Pet"}} {
+		g.AddEdge(&Edge{S: id(e[0]), P: "is-a", O: id(e[1]), Source: SourceDeclared})
+	}
+	if l, cand := g.Subsumer([]string{id("Mare"), id("Stallion")}); g.Curie(l) != "zoo:Horse" || cand != nil {
+		t.Errorf("Subsumer(Mare, Stallion) = %q %v", l, cand)
+	}
+	if l, cand := g.Subsumer([]string{id("Pony"), id("Mule")}); l != "" || len(cand) != 2 || g.Curie(cand[0]) != "zoo:Horse" || g.Curie(cand[1]) != "zoo:Pet" {
+		t.Errorf("Subsumer(Pony, Mule) = %q %v, want no unique subsumer: Horse, Pet", l, cand)
+	}
+	if l, cand := g.Subsumer([]string{id("Mare"), id("Rock")}); l != "" || cand != nil {
+		t.Errorf("Subsumer(Mare, Rock) = %q %v, want none", l, cand)
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	g := testGraph()
 	var buf bytes.Buffer

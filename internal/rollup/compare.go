@@ -297,10 +297,8 @@ func (c *comparer) boundaries() {
 				msg := fmt.Sprintf("%s %s %s%s but declares %s {%s}", b.CURIE, rel, c.g.Curie(d), liftsTo(lifted), rel, strings.Join(c.curies(declared), ", "))
 				if len(declared) == 0 {
 					msg = fmt.Sprintf("%s %s %s%s, declared %s []: the manifest says this boundary %s nothing", b.CURIE, rel, c.g.Curie(d), liftsTo(lifted), rel, verb(rel))
-				} else if c.ws.Vocab.Get(rel) != nil && c.ws.Vocab.Get(rel).Lift == model.LiftRangeLCS {
-					if summary := c.lifted(rel, derived); len(summary) > 0 {
-						msg += fmt.Sprintf("; rollup: %s {%s} ⊄ declared", rel, strings.Join(summary, ", "))
-					}
+				} else if c.summarizes(rel) {
+					msg += fmt.Sprintf("; rollup: %s %s ⊄ declared", rel, c.summary(rel, derived, true))
 				}
 				if proposed {
 					msg += " [proposed link]"
@@ -342,9 +340,8 @@ func (c *comparer) boundaries() {
 				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line, Msg: msg})
 			}
 			if consistent {
-				lifted := c.lifted(rel, derived)
 				c.add(Finding{Kind: KindConsistent, Severity: "info", Boundary: b.CURIE, Relation: rel, Declared: c.curies(declared), Derived: c.curies(derived),
-					Msg: fmt.Sprintf("%s %s {%s} ⊑ declared {%s}", b.CURIE, rel, strings.Join(lifted, ", "), strings.Join(c.curies(declared), ", "))})
+					Msg: fmt.Sprintf("%s %s %s ⊑ declared {%s}", b.CURIE, rel, c.summary(rel, derived, false), strings.Join(c.curies(declared), ", "))})
 			}
 		}
 	}
@@ -625,21 +622,43 @@ func (c *comparer) inheritedRealizes(m *model.Manifest, seen map[*model.Manifest
 	return sortedKeys(set)
 }
 
-func (c *comparer) lifted(rel string, derived []string) []string {
+// summarizes reports whether a relation's derived sets are summarized by
+// their least common subsumer in drift output (lift: range-lcs, the default
+// for produces, consumes, publishes and subscribes; lift: none turns it
+// off). Coverage does not depend on it: a declared supertype always covers
+// a derived subtype (ADR 0011).
+func (c *comparer) summarizes(rel string) bool {
 	r := c.ws.Vocab.Get(rel)
+	return r != nil && r.Lift == model.LiftRangeLCS
+}
+
+// summary renders a derived set for a drift line: "{members}", or, when the
+// relation summarizes, "{LCS}" for a unique least common subsumer (with
+// "(from members)" when from is set, so a violation names what was really
+// derived) and "{members} (no unique subsumer: a, b)" when the members share
+// several incomparable minimal subsumers, so a lift that was tried and
+// declined is visible.
+func (c *comparer) summary(rel string, derived []string, from bool) string {
 	var concepts []string
 	for _, d := range derived {
 		if n := c.g.Node(d); n != nil && n.NodeType == model.NodeConcept && !n.Internal {
 			concepts = append(concepts, d)
 		}
 	}
-	if r != nil && r.Lift == model.LiftRangeLCS && len(concepts) > 1 {
-		lcs := c.g.LCS(concepts)
-		if len(lcs) < len(concepts) {
-			return c.curies(lcs)
-		}
+	members := "{" + strings.Join(c.curies(concepts), ", ") + "}"
+	if !c.summarizes(rel) || len(concepts) < 2 {
+		return members
 	}
-	return c.curies(concepts)
+	lcs, candidates := c.g.Subsumer(concepts)
+	switch {
+	case lcs != "" && from:
+		return "{" + c.g.Curie(lcs) + "} (from " + strings.Join(c.curies(concepts), ", ") + ")"
+	case lcs != "":
+		return "{" + c.g.Curie(lcs) + "}"
+	case len(candidates) > 1:
+		return members + " (no unique subsumer: " + strings.Join(c.curies(candidates), ", ") + ")"
+	}
+	return members
 }
 
 func verb(rel string) string {

@@ -3,6 +3,8 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -304,6 +306,76 @@ func TestViolationsByCause(t *testing.T) {
 	v = violations()
 	if len(v) != 1 || v[0].Boundary != "spw:feeds" || v[0].Concept != "spk:FulfilmentEngine" {
 		t.Errorf("explicit child: violations = %+v, want one at spw:feeds", v)
+	}
+}
+
+// TestRangeLCSSummary (#91, #133): range-lcs summarizes and never changes
+// coverage; it needs a unique subsumer and says when there is none; a
+// violation names the members it summarizes; a curated view keeps the edges
+// to the concepts it names; lift: none prints members.
+func TestRangeLCSSummary(t *testing.T) {
+	root, write := catalogue(t)
+	feedsProduces := func(targets string) (*rollup.Report, []rollup.Finding) {
+		t.Helper()
+		write("services/catalogue/ingest/feeds/csv_feed.py", "# @gloss implements spk:CsvRowParser\ndef parse_row(): pass\n")
+		write("services/catalogue/ingest/feeds/shimano_xml.py", "# @gloss implements spk:ShimanoXmlImporter\n# @gloss produces "+targets+"\ndef parse_feed(): pass\n")
+		ws, g, _, lg := build(t, root)
+		rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries})
+		var out []rollup.Finding
+		for _, f := range rep.Findings {
+			if f.Boundary == "spw:feeds" && f.Relation == "produces" {
+				out = append(out, f)
+			}
+		}
+		return rep, out
+	}
+	_, fs := feedsProduces("cyc:ElectronicRearDerailleur, cyc:ElectronicFrontDerailleur")
+	if len(fs) != 1 || fs[0].Kind != rollup.KindConsistent || !strings.Contains(fs[0].Msg, "{cyc:ElectronicFrontDerailleur, cyc:ElectronicRearDerailleur} (no unique subsumer: cyc:Derailleur, cyc:PoweredDevice) ⊑") {
+		t.Errorf("ambiguous: %+v", fs)
+	}
+	_, fs = feedsProduces("cyc:ElectronicRearDerailleur, cyc:Cassette")
+	if len(fs) != 1 || !strings.Contains(fs[0].Msg, "produces {cyc:DrivetrainComponent} ⊑") {
+		t.Errorf("unique: %+v", fs)
+	}
+	_, fs = feedsProduces("cyc:ElectronicRearDerailleur, cyc:FrontLight")
+	if len(fs) != 1 || fs[0].Kind != rollup.KindViolation || !strings.Contains(fs[0].Msg, "rollup: produces {cyc:PoweredDevice} (from cyc:ElectronicRearDerailleur, cyc:FrontLight) ⊄ declared") {
+		t.Errorf("violation: %+v", fs)
+	}
+	// The curated drivetrain view keeps spw:feeds produces edges to its three named concepts.
+	feedsProduces("cyc:ElectronicRearDerailleur, cyc:ElectronicFrontDerailleur, cyc:Cassette")
+	ws, g, _, _ := build(t, root)
+	dt, _ := view(t, views.ProjectAll(g, ws.Views), "drivetrain")
+	var got []string
+	for _, e := range dt.Edges {
+		if e.S == "spw:feeds" && e.P == "produces" {
+			got = append(got, e.O)
+		}
+	}
+	if strings.Join(got, ",") != "cyc:Cassette,cyc:ElectronicFrontDerailleur,cyc:ElectronicRearDerailleur" {
+		t.Errorf("drivetrain: spw:feeds produces %v, want its three named concepts", got)
+	}
+	// An uncurated view with lift: range-lcs marks the edges it could not lift.
+	write("ontology/views.yaml", "views:\n  flow:\n    include: [cyc:*]\n    relations: [produces]\n    lift: range-lcs\n    zoom: component\n")
+	write("services/catalogue/ingest/feeds/.gloss.yaml", "boundary: spw:feeds\nlevel: component\npart-of: spw:ingest\nrealizes: [cyc:CatalogueIngestion]\n")
+	feedsProduces("cyc:ElectronicRearDerailleur, cyc:ElectronicFrontDerailleur")
+	ws, g, _, _ = build(t, root)
+	flow, _ := view(t, views.ProjectAll(g, ws.Views), "flow")
+	marked := 0
+	for _, e := range flow.Edges {
+		if e.S == "spw:feeds" && strings.Join(e.NoUniqueSubsumer, ",") == "cyc:Derailleur,cyc:PoweredDevice" {
+			marked++
+		}
+	}
+	if marked != 2 {
+		t.Errorf("flow: %d spw:feeds edges carry noUniqueSubsumer, want 2: %+v", marked, flow.Edges)
+	}
+	// lift: none prints members; coverage still subsumes.
+	write("services/catalogue/ingest/feeds/.gloss.yaml", "boundary: spw:feeds\nlevel: component\npart-of: spw:ingest\nrealizes: [cyc:CatalogueIngestion]\nproduces: [cyc:Component]\n")
+	ontology, _ := os.ReadFile(filepath.Join(root, "ontology/cyc.gloss.yaml"))
+	write("ontology/cyc.gloss.yaml", strings.Replace(string(ontology), "produces: { lift: range-lcs }", "produces: { lift: none }", 1))
+	_, fs = feedsProduces("cyc:ElectronicRearDerailleur, cyc:Cassette")
+	if len(fs) != 1 || fs[0].Kind != rollup.KindConsistent || !strings.Contains(fs[0].Msg, "produces {cyc:Cassette, cyc:ElectronicRearDerailleur} ⊑ declared {cyc:Component}") {
+		t.Errorf("lift: none: %+v", fs)
 	}
 }
 

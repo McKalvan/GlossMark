@@ -15,7 +15,7 @@ export interface Mare { id: string; foalingDate?: Date }
 ```
 $ gloss drift
 ✗ Violations (boundary exceeds its declared capability)
-  acme:horse-factory-svc produces zoo:Donkey but declares produces {zoo:Horse}; rollup: produces {zoo:Animal} ⊄ declared [proposed link]
+  acme:horse-factory-svc produces zoo:Donkey but declares produces {zoo:Horse}; rollup: produces {zoo:Animal} (from zoo:Donkey, zoo:Foal, zoo:Horse, zoo:Stallion) ⊄ declared [proposed link]
 ? Rogue concepts (decision requests)
   services/horse-factory/breeding/engine.py:22 implements impl:NEW:Gelding: rogue concept; becomes a decision request
 · Orphan concepts (no artifacts)

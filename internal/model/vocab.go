@@ -62,8 +62,14 @@ var Scopes = []string{"file", "symbol", "block", "line", "range"}
 // MarkerKeys allowed inline. Everything else lives in the ledger.
 var MarkerKeys = []string{"scope", "conf", "id", "note"}
 
-// Lift strategies.
-const LiftRangeLCS = "range-lcs"
+// Lift strategies: how gloss drift and views summarize a derived set.
+// range-lcs, the default for produces, consumes, publishes and subscribes,
+// shows a set by its least common subsumer; none shows the members. Neither
+// changes coverage, which always subsumes (ADR 0011).
+const (
+	LiftRangeLCS = "range-lcs"
+	LiftNone     = "none"
+)
 
 // Relation declares one relation type: who may be subject and object, and how
 // it behaves. Every edge in the graph is checked against its Relation.
