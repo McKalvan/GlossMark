@@ -65,8 +65,9 @@ type Decision struct {
 }
 
 // Metrics are the CI numbers from the design. The headline is concept
-// coverage: implementation concepts that have at least one artifact and one
-// verifier. File coverage (files carrying an accepted link) is secondary,
+// coverage: implementation concepts, and core concepts code implements
+// directly, that have at least one artifact and one verifier (n/a when there
+// are none). File coverage (files carrying an accepted link) is secondary,
 // because one marker per helper raises it without adding knowledge.
 type Metrics struct {
 	ConceptsInScope    int     `json:"concepts_in_scope"`
@@ -879,9 +880,15 @@ func (c *comparer) metrics() {
 		}
 	}
 	// Concept coverage: owned implementation concepts (not internal,
-	// deprecated or still proposed) with an artifact and a verifier.
+	// deprecated or still proposed) with an artifact and a verifier, and the
+	// owned core concepts code implements directly (a server-rendered page,
+	// a CLI, a BFF marked implements hp:X), which are mechanisms just the
+	// same (ADR 0013).
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Tier != model.TierImpl || n.Internal || n.Deprecated || n.Proposed {
+		if n.Imported || n.Internal || n.Deprecated || n.Proposed {
+			continue
+		}
+		if n.Tier != model.TierImpl && !c.implementedDirectly(n.ID) {
 			continue
 		}
 		m.ConceptsInScope++
@@ -909,6 +916,26 @@ func (c *comparer) metrics() {
 	if m.InScopeFiles > 0 {
 		m.CoveragePct = 100 * float64(m.CoveredFiles) / float64(m.InScopeFiles)
 	}
+}
+
+// implementedDirectly reports whether an artifact's marker implements the
+// concept itself (not a test-path inference).
+func (c *comparer) implementedDirectly(id string) bool {
+	for _, e := range c.g.In(id, "implements") {
+		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && e.Source == graph.SourceInline {
+			return true
+		}
+	}
+	return false
+}
+
+// ConceptCoverage formats concept coverage for a report: the percentage, or
+// n/a when no concept is in scope, so an empty scope never reads as 0%.
+func (m Metrics) ConceptCoverage(format string) string {
+	if m.ConceptsInScope == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf(format, m.ConceptCoveragePct)
 }
 
 // WaiverDate is the layout of a waiver's expires: date.

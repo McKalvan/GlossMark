@@ -21,7 +21,7 @@ Add `scope=file` when the whole file is about one concept and nothing inside it 
 
 Mark the thing a reader would look for: the handler, the pipeline entry point, the model, the table, the test file. Do not mark every helper. Five consecutive helpers that each say `implements .AmountObfuscation` add five edges and no knowledge; `gloss check` reports any run of three or more (GM131) and suggests one marker with `scope=block` above it, or one on the public function that calls them.
 
-Coverage counts concepts, not markers: an implementation concept is covered when at least one artifact links to it and at least one test verifies it (`gloss coverage`). Adding markers to raise the file percentage is the wrong lever; adding a test that `verifies` the concept is the right one.
+Coverage counts concepts, not markers: an implementation concept, or a core concept that code implements directly, is covered when at least one artifact links to it and at least one test verifies it (`gloss coverage`). With no such concept in scope coverage is `n/a`, and `--fail-under` does not fail ([ADR 0013](adr/0013-data-shapes-and-coverage.md)). Adding markers to raise the file percentage is the wrong lever; adding a test that `verifies` the concept is the right one.
 
 ## A file marker or symbol markers, not both
 

@@ -108,7 +108,8 @@ type Policy struct {
 	// Waivers are time-boxed exceptions for known gaps.
 	Waivers []Waiver `yaml:"waivers,omitempty" json:"waivers,omitempty"`
 	// CoverageFailUnder is the default for gloss coverage --fail-under
-	// (percent of implementation concepts with an artifact and a verifier),
+	// (percent of in-scope concepts with an artifact and a verifier; an empty
+	// scope is n/a and never fails),
 	// or "current" for the base's coverage (a ratchet).
 	CoverageFailUnder FailUnder `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
 	// CriticalityGates raises the gate of any change that touches a concept or
