@@ -616,6 +616,10 @@ const (
 	StatusRejected = "rejected"
 	StatusStale    = "stale"
 	StatusRemoved  = "removed" // marker no longer present in the tree
+	// StatusDrifted is a value:<curie> baseline whose bound code changed while
+	// the published value did not. It is not stale: clearing stale links must
+	// never clear a value drift.
+	StatusDrifted = "drifted"
 )
 
 // LedgerEntry records provenance and review state for one marker.

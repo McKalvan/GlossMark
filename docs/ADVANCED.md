@@ -71,7 +71,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 ## Review states (the ledger)
 
-`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature changes; any → `removed` when the marker disappears. The ledger belongs in git.
+`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature changes; any → `removed` when the marker disappears. A `value-from` baseline (`value:<curie>`) is `accepted` or `drifted` (the bound code changed, the published value did not) until `gloss accept --value`; it is never `stale`, so clearing stale links cannot hide a value drift. The ledger belongs in git.
 
 ## Concept kinds
 

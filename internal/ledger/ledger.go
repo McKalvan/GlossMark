@@ -298,8 +298,9 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 	}
 	// Published value bindings are tracked keyed value:<curie>: the first
 	// build records the bound line and the ontology value as the baseline; a
-	// later change to the line alone is drift (stale) until accepted, and a
-	// change to both together moves the baseline.
+	// later change to the line alone is drift (drifted) until accepted, and a
+	// change to both together moves the baseline. Older ledgers recorded the
+	// drift as stale; the default case below rewrites it to drifted.
 	for _, n := range g.NodesOf(model.NodeConcept) {
 		if n.ValueFP == "" || n.Imported {
 			continue
@@ -317,7 +318,7 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 				Created: ts, Status: model.StatusAccepted, AnchorFingerprint: n.ValueFP, Value: val, Live: n.LiveValue, LastSeen: ts}
 			l.dirty = true
 		case e.AnchorFingerprint == n.ValueFP:
-			if e.Status == model.StatusStale || e.Status == model.StatusRemoved {
+			if e.Status == model.StatusDrifted || e.Status == model.StatusStale || e.Status == model.StatusRemoved {
 				e.Status = model.StatusAccepted // the code went back to the published value
 				l.dirty = true
 			}
@@ -332,8 +333,8 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			e.ReviewedBy, e.ReviewedAt, e.LastSeen = actor, ts, ts
 			l.dirty = true
 		default:
-			if e.Status != model.StatusStale {
-				e.Status = model.StatusStale
+			if e.Status != model.StatusDrifted {
+				e.Status = model.StatusDrifted
 				l.dirty = true
 			}
 			e.LastSeen = ts

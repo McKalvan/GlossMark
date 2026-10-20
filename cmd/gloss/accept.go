@@ -281,7 +281,7 @@ func cmdStatus(args []string) int {
 		return fail(err)
 	}
 	pol := p.WS.Config.EffectivePolicy()
-	for _, st := range []string{model.StatusProposed, model.StatusStale, model.StatusRejected} {
+	for _, st := range []string{model.StatusProposed, model.StatusStale, model.StatusDrifted, model.StatusRejected} {
 		es := p.Ledger.ByStatus(st)
 		if len(es) == 0 {
 			continue
