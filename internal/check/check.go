@@ -226,8 +226,16 @@ func (c *checker) concepts() {
 		if n.Deprecated && n.ReplacedBy == "" {
 			c.add(n.File, n.Line, "warning", "GM340", fmt.Sprintf("%s: deprecated concepts should carry replaced-by:", n.CURIE))
 		}
-		if n.ReplacedBy != "" && c.g.NodeByCurie(n.ReplacedBy) == nil {
-			c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s does not exist", n.CURIE, n.ReplacedBy))
+		if n.ReplacedBy != "" && c.g.NodeByCurie(n.ReplacedBy) == nil && !n.Imported {
+			// The successor may live in a namespace this workspace does not
+			// import (a new service's): it is checked where it is loaded, and
+			// gloss landscape checks it across repositories (ADR 0020).
+			switch rp := c.prefixOf(n.ReplacedBy); {
+			case c.ws.Ontologies[rp] != nil:
+				c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s does not exist", n.CURIE, n.ReplacedBy))
+			case !strings.Contains(n.ReplacedBy, "://") && c.ws.Prefixes[rp] == "":
+				c.add(n.File, n.Line, "error", "GM341", fmt.Sprintf("%s: replaced-by %s cannot be resolved; declare %s: under prefixes: in %s (no import needed) or write the full IRI", n.CURIE, n.ReplacedBy, rp, load.ConfigName))
+			}
 		}
 	}
 }
@@ -507,7 +515,11 @@ func (c *checker) edges() {
 				c.add(path, line, "error", "GM203", fmt.Sprintf("relation %q cannot be declared in a manifest", e.P))
 			}
 		}
-		// Object resolution.
+		// Object resolution. A replaced-by successor need not be loaded:
+		// GM341 judges a concept's, and a boundary's may be in another repo.
+		if e.P == "replaced-by" && c.g.Node(e.O) == nil {
+			continue
+		}
 		switch {
 		case strings.HasPrefix(e.O, "urn:gloss:unresolved:"):
 			raw := strings.TrimPrefix(e.O, "urn:gloss:unresolved:")
@@ -550,6 +562,13 @@ func (c *checker) edges() {
 		if e.Source == graph.SourceInline && len(rel.RangeKinds) > 0 && on.NodeType == model.NodeConcept && on.Kind != "" && !contains(rel.RangeKinds, on.Kind) {
 			c.add(path, line, "warning", "GM221", fmt.Sprintf("%s usually targets a %s; %s is a %s", e.P, strings.Join(rel.RangeKinds, "/"), on.CURIE, on.Kind))
 		}
+		// A manifest relation that cannot lift for the concept's kind is
+		// a gap waiting to happen; say why (often an upstream retype).
+		if e.Source == graph.SourceDeclared && sn.NodeType == model.NodeBoundary {
+			if why := rollup.KindMismatch(c.g, e.P, e.O); why != "" {
+				c.add(path, line, "warning", "GM225", fmt.Sprintf("%s %s %s: %s", sn.CURIE, e.P, on.CURIE, why))
+			}
+		}
 		// Surfaces that hide a mechanism (ADR 0012): a shell hosts a whole
 		// system-type (or a page concept), and a page that edits a
 		// constraint's value configures it rather than presenting it.
@@ -565,7 +584,11 @@ func (c *checker) edges() {
 		if on.Deprecated {
 			msg := fmt.Sprintf("%s is deprecated", on.CURIE)
 			if on.ReplacedBy != "" {
-				msg += "; use " + on.ReplacedBy
+				if c.g.NodeByCurie(on.ReplacedBy) != nil {
+					msg += "; use " + on.ReplacedBy
+				} else {
+					msg += "; its replacement " + on.ReplacedBy + " is unresolved here (not in this workspace or its imports)"
+				}
 			}
 			c.add(path, line, "warning", "GM222", msg)
 		}
@@ -619,13 +642,25 @@ func (c *checker) waivers() {
 	if len(pol.Waivers) == 0 {
 		return
 	}
+	dead := map[string]bool{}
 	for _, w := range pol.Waivers {
-		if _, err := time.Parse(rollup.WaiverDate, w.Expires); err != nil {
+		exp, err := time.Parse(rollup.WaiverDate, w.Expires)
+		if err != nil {
 			c.add(load.ConfigName, 1, "error", "GM610", fmt.Sprintf("waiver for %s by %s: expires %q is not a YYYY-MM-DD date; a waiver must expire", w.Finding, w.Owner, w.Expires))
+			dead[w.Finding+"|"+w.Owner] = true
+			continue
+		}
+		// expires is inclusive: the waiver holds through that day.
+		if rollup.WaiverExpired(exp, time.Now()) {
+			c.add(load.ConfigName, 1, "warning", "GM612", fmt.Sprintf("waiver for %s by %s expired %s; it waives nothing: fix the finding, renew the date or remove the waiver", w.Finding, w.Owner, w.Expires))
+			dead[w.Finding+"|"+w.Owner] = true
 		}
 	}
 	rep := rollup.Compare(c.g, c.ws, rollup.Options{Policy: pol})
 	for _, w := range rollup.UnmatchedWaivers(rep, pol) {
+		if dead[w.Finding+"|"+w.Owner] {
+			continue // already reported as invalid or expired
+		}
 		c.add(load.ConfigName, 1, "warning", "GM611", fmt.Sprintf("waiver for %s by %s matches no finding (by id or concept); gloss drift --format json lists the ids", w.Finding, w.Owner))
 	}
 }
