@@ -53,4 +53,4 @@ grep -rn "@gloss implements .*\(Page\|Screen\|View\|WebApp\|App\)\b" --include=*
 - A component that shows a core concept directly: `// @gloss presents pf:X` instead of `implements pf:X`.
 - A manifest that declared `realizes: [pf:X]` only because its pages realized it: move the entry to `presents:`. `gloss drift` reports the old entry as a gap once the pages stop realizing it, which is the reminder.
 
-After migration `untested` lists the pages that have no test (usually acceptable, and visible instead of hidden behind the engine's tests), and `presented-only` lists pages for which no engine exists yet.
+After migration `untested` lists the page concepts that have no test (usually acceptable, and visible instead of hidden behind the engine's tests), and `presented-only` lists pages for which no engine exists yet. The inline form is not a concept, so it is never untested; [MARKING.md](../MARKING.md#pages-and-shells) says when to use which.

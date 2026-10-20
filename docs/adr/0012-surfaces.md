@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:DeclaredCapability scope=file -->
 # ADR 0012: Surfaces say what they do: configures, placement, empty declarations and levels
 
-Status: accepted, 2026-10-20. Builds on [ADR 0001](0001-presents-and-hosts.md). Closes issues #48 (F-SURF-2), #49 (F-SURF-3), #50 (F-SURF-4), #51 (F-SURF-5) and #56 (F-SURF-10).
+Status: accepted, 2026-10-20. Builds on [ADR 0001](0001-presents-and-hosts.md). Closes issues #48 (F-SURF-2), #49 (F-SURF-3), #50 (F-SURF-4), #51 (F-SURF-5), #55 (F-SURF-9) and #56 (F-SURF-10).
 
 ## Context
 
@@ -27,3 +27,12 @@ A boundary with no level of its own took the highest level of what its code real
 6. **`hosts` is for system-types.** An inline `hosts` on a concept that is not a system-type, nor a page concept that itself presents or hosts something, is a `gloss check` warning (GM223). Such a hosted concept with nothing implementing it is `presented-only` in `gloss drift`, like a presented one. An inline `presents` on a constraint warns too (GM224): a page that edits the limit configures it.
 7. **One realizes hop is the boundary's own code.** For placement, code that implements an implementation concept which realizes (or is published as) X links to X as directly as a marker naming X. Two mechanisms in unrelated boundaries therefore go to their nearest common box whichever CURIE style each used. Among boundaries whose code links to the concept, one whose manifest also declares it (in `realizes` or `holds`, or through an implementation concept that realizes it) wins.
 8. **A surface's level comes from what it does.** A boundary without its own `criticality:` is rated by what it realizes, represents or configures. One that presents or hosts and does none of these stays unclassified rather than taking its parent's level; set `criticality:` on it, or `criticality-floor: true` on the parent, to rate it.
+9. **A page with tests is a page concept.** The inline `presents` form is for components with no tests or logic of their own; a page that has them is modelled as an implementation concept that presents the core concept, so it can be untested and counts in coverage. MARKING.md "Pages and shells" gives the rule. No tool change: reporting inline surfaces as untested would key a finding by artifact, which no other finding does.
+
+## Consequences
+
+- New warnings on adoption branches: GM223 on `hosts` of a process, capability or other non-system-type (a CLI command, a router, a GraphQL server that does the work), and GM224 on `presents` of a constraint. Each says which relation to write instead.
+- `presented-only` can now name hosted concepts.
+- Concepts may move box in the viewer: a surface that named a core concept directly no longer outranks the engine, so the concept goes to their nearest common box, and a boundary that declares the concept beats one that does not.
+- A boundary that only presents or hosts, with no `criticality:` of its own, becomes unclassified where it used to take its parent's level.
+- `realizes: []` and the other empty lists, which used to be ignored, are now compared.

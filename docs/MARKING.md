@@ -48,6 +48,16 @@ Target the implementation concept when the artifact is a mechanism (`implements 
 
 A page, screen or report that *shows* a concept is not its mechanism. Model the page as `presents` (`pfi:FirePage: { kind: process, presents: pf:FirePlanning }`, or `// @gloss presents pf:FirePlanning` on the component) and the app frame as `hosts`. Neither makes the boundary realize the concept or inherit its criticality, so the engine's tests and the page's tests are counted apart ([ADR 0001](adr/0001-presents-and-hosts.md)).
 
+Which form to use:
+
+| The page | Write | Why |
+| --- | --- | --- |
+| has tests or logic of its own (form handling, validation, formatting rules) | a page concept, `pfi:QuotePage: { kind: process, presents: hp:Pricing }`, the component `implements .QuotePage`, its test `verifies .QuotePage` | the page is a concept, so it counts in coverage and `gloss drift` reports it `untested` when it has no test |
+| is a thin component with no tests or logic of its own | inline `// @gloss presents hp:Pricing` on the component | nothing to test; the concept is `presented-only` until an engine implements it |
+| edits the concept's value at runtime | `configures`, below | |
+
+With the inline form the surface is not a concept, so it is never untested and never counts in coverage. Do not give its test `verifies hp:Pricing` to have something to link to: that credits the core concept with a test of a form, and inflates its verifiers (a page's test of a critical rule it does not enforce is the worst case). If the page has a test, it has earned a page concept.
+
 ## API and wire schemas
 
 A GraphQL type, an OpenAPI schema or a protobuf message in a gateway looks like a data shape, but when the entity is stored elsewhere the gateway does not hold it. Mark it `presents hp:Order` (or leave it unmarked), not `represents`: `represents` makes the boundary `hold` the entity. Keep `represents` for the table, model or file where the data lives. `gloss check` says so when a `represents` falls outside the allowed set and another boundary declares `holds` for the concept (GM503).
