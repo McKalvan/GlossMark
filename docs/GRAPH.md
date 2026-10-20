@@ -47,7 +47,7 @@ For each boundary and each of `realizes`, `holds`, `presents`, `hosts`, `produce
 | `impl:X realizes zoo:Y` | X has no artifacts | **Orphan** impl concept |
 | none | artifact links `impl:NEW:Gelding` | **Rogue** concept; becomes a decision request |
 
-A declared concept covers a derived one when they are equal, when the declared one subsumes it (`is-a*`), or when the derived one realizes it (impl → core). Internal concepts and event emitters are exempt from the `realizes` comparison.
+A declared concept covers a derived one when they are equal, when the declared one subsumes it (`is-a*`), or when the derived one realizes it (impl → core, and a part realizes its whole). Both hierarchies point one way ([ADR 0009](adr/0009-hierarchy-direction.md)): a declared whole covers a derived part, as a declared supertype covers a derived subtype, but a declared part never covers a derived whole, so code implementing `OrderFulfilment` under a manifest that declares only its step `ScanConfirm` is a violation, and `ScanConfirm` stays a gap until code implements it or one of its parts. The wholes lifted from a declared part's own code are consistent. Internal concepts and event emitters are exempt from the `realizes` comparison.
 
 ## Querying
 

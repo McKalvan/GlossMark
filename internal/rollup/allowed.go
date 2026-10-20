@@ -115,7 +115,9 @@ func expandDeclared(g *graph.Graph, m *model.Manifest, set map[string]bool) {
 					}
 				}
 			}
-			for _, core := range RealizesStar(g, n.ID) {
+			// What it realizes, not the wholes it is part of: declaring a
+			// part does not admit links to the whole (ADR 0009).
+			for _, core := range realizedBy(g, n.ID) {
 				if cn := g.Node(core); cn != nil {
 					set[cn.CURIE] = true
 				}

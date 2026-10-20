@@ -241,7 +241,14 @@ func isAncestorBoundary(g *graph.Graph, anc, b string) bool {
 // ancestors realize (a CsvImporter is-a Importer realizes pf:Importing
 // without repeating the line). Neither is-a ancestors nor c itself are
 // included.
-func RealizesStar(g *graph.Graph, c string) []string {
+func RealizesStar(g *graph.Graph, c string) []string { return standsFor(g, c, true) }
+
+// realizedBy is RealizesStar without the wholes: what c realizes or is
+// published as, directly or through its is-a ancestors. It is the declared
+// side of coverage, where a part never answers for its whole.
+func realizedBy(g *graph.Graph, c string) []string { return standsFor(g, c, false) }
+
+func standsFor(g *graph.Graph, c string, wholes bool) []string {
 	seen := map[string]bool{c: true}
 	var out []string
 	var walk func(x string, depth int)
@@ -263,7 +270,7 @@ func RealizesStar(g *graph.Graph, c string) []string {
 		}
 		// A part of a mechanism realizes the mechanism and what it realizes.
 		for _, e := range g.Out(x, "part-of") {
-			if n := g.Node(e.O); n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived && !seen[e.O] {
+			if n := g.Node(e.O); wholes && n != nil && n.NodeType == model.NodeConcept && e.Source != graph.SourceDerived && !seen[e.O] {
 				seen[e.O] = true
 				out = append(out, e.O)
 				walk(e.O, depth+1)
@@ -282,8 +289,11 @@ func RealizesStar(g *graph.Graph, c string) []string {
 }
 
 // Covers reports whether declared concept s accounts for derived concept d:
-// identity, taxonomic lift (s is-a* d... i.e. s subsumes d), realization lift
-// (d realizes* s), or s subsumes something d realizes.
+// identity, taxonomic lift (s subsumes d through is-a*), realization lift
+// (d realizes* s, where a part realizes its whole), or s subsumes something
+// d realizes. Both hierarchies point one way: a declared whole covers a
+// derived part, as a declared supertype covers a derived subtype, and a
+// declared part never covers a derived whole (ADR 0009).
 func Covers(g *graph.Graph, s, d string) bool {
 	if s == d || g.Subsumes(s, d) {
 		return true
@@ -293,8 +303,9 @@ func Covers(g *graph.Graph, s, d string) bool {
 			return true
 		}
 	}
-	// A declared impl concept covers the core concept it realizes when derived names the core.
-	for _, core := range RealizesStar(g, s) {
+	// A declared impl concept covers the core concept it realizes when
+	// derived names the core; not the wholes it is part of.
+	for _, core := range realizedBy(g, s) {
 		if core == d {
 			return true
 		}
