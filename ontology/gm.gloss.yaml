@@ -53,5 +53,3 @@ concepts:
   Criticality:
     kind: measure
     doc: "How much review a concept or boundary deserves (low, medium, high or critical); a change that touches it inherits the gate its level demands."
-    proposed: true
-    proposed-by: agent:claude
