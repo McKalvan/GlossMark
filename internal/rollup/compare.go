@@ -844,6 +844,30 @@ func (c *comparer) waive() {
 	}
 }
 
+// FindingKinds are the kinds a finding can have, in the order --fail-on lists them.
+var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindStale, KindProposed, KindConsistent}
+
+// ParseFailOn splits a --fail-on list and rejects unknown kinds, so a typo
+// cannot silently disable part of a gate. "none" (or nothing) fails on nothing.
+func ParseFailOn(list string) ([]string, error) {
+	var kinds []string
+	for _, k := range strings.Split(list, ",") {
+		k = strings.TrimSpace(k)
+		if k == "" || k == "none" {
+			continue
+		}
+		known := false
+		for _, fk := range FindingKinds {
+			known = known || k == fk
+		}
+		if !known {
+			return nil, fmt.Errorf("--fail-on: unknown finding kind %q; valid kinds: %s, none", k, strings.Join(FindingKinds, ", "))
+		}
+		kinds = append(kinds, k)
+	}
+	return kinds, nil
+}
+
 // Failing reports the findings that fail the build for the given kinds.
 func (r *Report) Failing(kinds []string) []Finding {
 	var out []Finding

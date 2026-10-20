@@ -26,6 +26,11 @@ func cmdDrift(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	kinds, err := rollup.ParseFailOn(*failOn)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "gloss drift:", err)
+		return 2
+	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
@@ -41,7 +46,6 @@ func cmdDrift(args []string) int {
 	default:
 		fmt.Print(rollup.RenderText(rep, *all))
 	}
-	kinds := strings.Split(*failOn, ",")
 	if n := len(rep.Failing(kinds)); n > 0 {
 		fmt.Fprintf(os.Stderr, "gloss drift: %s (%s)\n", plural(n, "failing finding"), *failOn)
 		return 1
