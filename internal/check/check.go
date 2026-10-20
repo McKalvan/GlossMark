@@ -42,13 +42,25 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 }
 
 type checker struct {
-	ws  *load.Workspace
-	g   *graph.Graph
-	out []marker.Diagnostic
+	ws   *load.Workspace
+	g    *graph.Graph
+	out  []marker.Diagnostic
+	seen map[marker.Diagnostic]bool
 }
 
+// add records a diagnostic once. Edge checks run per target, so a marker or
+// ontology key with several targets would otherwise repeat one finding about
+// its relation once per target.
 func (c *checker) add(path string, line int, sev, code, msg string) {
-	c.out = append(c.out, marker.Diagnostic{Path: path, Line: line, Severity: sev, Code: code, Msg: msg})
+	d := marker.Diagnostic{Path: path, Line: line, Severity: sev, Code: code, Msg: msg}
+	if c.seen == nil {
+		c.seen = map[marker.Diagnostic]bool{}
+	}
+	if c.seen[d] {
+		return
+	}
+	c.seen[d] = true
+	c.out = append(c.out, d)
 }
 
 func (c *checker) prefixOf(curie string) string {
@@ -322,10 +334,11 @@ func provLine(e *graph.Edge) int {
 // Both passed silently and inflated file coverage in the first adoptions.
 func (c *checker) markers() {
 	type fact struct{ path, rel, obj string }
-	type mk struct {
-		id, scope, rel string
-		line           int
-		objs           []string
+	// decl is one anchor that markers bind to, in file order; facts maps
+	// "relation\x00object" to the line of the marker that states it.
+	type decl struct {
+		symbol bool
+		facts  map[string]int
 	}
 	fileLevel := map[fact]int{}
 	byPath := map[string][]*graph.Edge{}
@@ -341,56 +354,84 @@ func (c *checker) markers() {
 	for _, path := range sortedKeys(byPath) {
 		edges := byPath[path]
 		sort.SliceStable(edges, func(i, j int) bool { return edges[i].Prov.Line < edges[j].Prov.Line })
-		var ms []*mk
-		index := map[string]*mk{}
+		var ds []*decl
+		index := map[string]*decl{}
 		for _, e := range edges {
-			if e.Prov.Scope != "file" {
-				if fl, ok := fileLevel[fact{path, e.P, e.O}]; ok && fl != e.Prov.Line {
-					c.add(path, e.Prov.Line, "warning", "GM130", fmt.Sprintf("%s %s repeats the file-level marker at line %d; keep the file marker or the symbol markers, not both", e.P, c.g.Curie(e.O), fl))
-				}
+			if e.Prov.Scope == "file" {
+				continue
 			}
-			m, ok := index[e.Prov.ID]
+			if fl, ok := fileLevel[fact{path, e.P, e.O}]; ok && fl != e.Prov.Line {
+				c.add(path, e.Prov.Line, "warning", "GM130", fmt.Sprintf("%s %s repeats the file-level marker at line %d; keep the file marker or the symbol markers, not both", e.P, c.g.Curie(e.O), fl))
+			}
+			d, ok := index[e.S]
 			if !ok {
-				m = &mk{id: e.Prov.ID, scope: e.Prov.Scope, rel: e.P, line: e.Prov.Line}
-				index[e.Prov.ID] = m
-				ms = append(ms, m)
+				d = &decl{symbol: e.Prov.Scope == "symbol", facts: map[string]int{}}
+				index[e.S] = d
+				ds = append(ds, d)
 			}
-			m.objs = append(m.objs, e.O)
+			k := e.P + "\x00" + e.O
+			if l, ok := d.facts[k]; !ok || e.Prov.Line < l {
+				d.facts[k] = e.Prov.Line
+			}
 		}
-		// A run is the same symbol-level marker on consecutive declarations.
-		// Two in a row is often honest (two handlers for one concept); three
-		// or more is the helper-by-helper noise the first adoptions produced.
-		for i := 0; i < len(ms); {
-			j := i + 1
-			for j < len(ms) && ms[i].scope == "symbol" && ms[j].scope == "symbol" && ms[j].rel == ms[i].rel && sameSet(ms[j].objs, ms[i].objs) {
-				j++
+		// A run is one relation and target on consecutive declarations,
+		// whatever else is stacked on them. Two in a row is often honest (two
+		// handlers for one concept); three or more is the helper-by-helper
+		// noise the first adoptions produced. Targets that repeat over the
+		// same run are reported together.
+		type run struct {
+			rel        string
+			start, end int
+		}
+		type finding struct {
+			line, last int
+			objs       []string
+		}
+		runs := map[run]*finding{}
+		var order []run
+		has := func(i int, k string) bool {
+			if i < 0 || i >= len(ds) || !ds[i].symbol {
+				return false
 			}
-			if n := j - i; n >= minRun {
-				a := ms[i]
-				c.add(path, a.line, "warning", "GM131", fmt.Sprintf("%s %s is repeated on %d consecutive declarations (lines %d-%d); one marker with scope=block above the run, or one on the public entry point, says the same with one edge", a.rel, c.g.Curie(a.objs[0]), n, a.line, ms[j-1].line))
+			_, ok := ds[i].facts[k]
+			return ok
+		}
+		for i, d := range ds {
+			if !d.symbol {
+				continue
 			}
-			i = j
+			for _, k := range sortedKeys(d.facts) {
+				if has(i-1, k) {
+					continue // not the start of its run
+				}
+				j := i + 1
+				for has(j, k) {
+					j++
+				}
+				if j-i < minRun {
+					continue
+				}
+				rel, obj, _ := strings.Cut(k, "\x00")
+				r := run{rel, i, j - 1}
+				f, ok := runs[r]
+				if !ok {
+					f = &finding{line: d.facts[k], last: ds[j-1].facts[k]}
+					runs[r] = f
+					order = append(order, r)
+				}
+				f.line, f.last = min(f.line, d.facts[k]), max(f.last, ds[j-1].facts[k])
+				f.objs = append(f.objs, c.g.Curie(obj))
+			}
+		}
+		for _, r := range order {
+			f := runs[r]
+			c.add(path, f.line, "warning", "GM131", fmt.Sprintf("%s %s is repeated on %d consecutive declarations (lines %d-%d); one marker with scope=block above the run, or one on the public entry point, says the same with one edge", r.rel, strings.Join(f.objs, ", "), r.end-r.start+1, f.line, f.last))
 		}
 	}
 }
 
 // minRun is the shortest run of identical markers GM131 reports.
 const minRun = 3
-
-func sameSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	x, y := append([]string{}, a...), append([]string{}, b...)
-	sort.Strings(x)
-	sort.Strings(y)
-	for i := range x {
-		if x[i] != y[i] {
-			return false
-		}
-	}
-	return true
-}
 
 func (c *checker) edges() {
 	for _, e := range c.g.Edges() {
@@ -413,7 +454,7 @@ func (c *checker) edges() {
 			if !rel.Inline {
 				c.add(path, line, "error", "GM201", fmt.Sprintf("relation %q cannot be used in an inline marker (ontology or manifest only)", e.P))
 			}
-			if e.P == "tests" {
+			if e.Prov != nil && e.Prov.Alias == "tests" {
 				c.add(path, line, "warning", "GM240", "prefer verifies: it is the one test relation; tests is an accepted alias that means the same")
 			}
 		case graph.SourceDeclared:

@@ -1009,8 +1009,42 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 	}
 }
 
+// TestRepeatedMarkerStacked: GM131 groups markers by the declaration they
+// anchor to, so a repeated marker is found under whatever else is stacked
+// on each declaration, and every repeated target is named (issue #75).
+func TestRepeatedMarkerStacked(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Auth: { kind: process, realizes: z:Doing }\n  Log: { kind: process, realizes: z:Doing }\n  A: { kind: process, realizes: z:Doing }\n  B: { kind: process, realizes: z:Doing }\n  C: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	// Two identical markers stacked on each of three handlers, each also
+	// carrying its own domain concept.
+	var b strings.Builder
+	for _, h := range []string{"A", "B", "C"} {
+		fmt.Fprintf(&b, "# @gloss implements .%s\n# @gloss implements .Auth\n# @gloss implements .Log\ndef handle_%s(): pass\n\n", h, strings.ToLower(h))
+	}
+	write("handlers.py", b.String())
+	ws, g, _, _ := build(t, root)
+	var got []string
+	for _, d := range check.Run(ws, g) {
+		if d.Code == "GM131" {
+			got = append(got, fmt.Sprintf("%d %s", d.Line, d.Msg))
+		}
+	}
+	if len(got) != 1 || !strings.HasPrefix(got[0], "2 implements i:Auth, i:Log is repeated on 3 consecutive declarations (lines 2-13)") {
+		t.Errorf("GM131 = %v, want one finding at line 2 naming i:Auth and i:Log", got)
+	}
+}
+
 // TestVerifiesCanonical: the test-path inferrer emits verifies, and an inline
-// tests marker is accepted with a prefer-verifies warning (GM240).
+// tests marker is accepted with a prefer-verifies warning (GM240) and stored
+// as verifies, with the written form in prov.alias.
 func TestVerifiesCanonical(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, content string) {
@@ -1028,6 +1062,21 @@ func TestVerifiesCanonical(t *testing.T) {
 	doer := g.NodeByCurie("i:Doer")
 	if len(g.In(doer.ID, "verifies")) == 0 || len(g.In(doer.ID, "tests")) != 0 {
 		t.Errorf("inferrer should emit verifies, not tests: verifies=%d tests=%d", len(g.In(doer.ID, "verifies")), len(g.In(doer.ID, "tests")))
+	}
+	other := g.NodeByCurie("i:Other")
+	var vs []*graph.Edge
+	for _, e := range g.In(other.ID, "verifies") {
+		if e.Source == graph.SourceInline {
+			vs = append(vs, e)
+		}
+	}
+	if len(vs) != 1 || vs[0].Prov.Alias != "tests" {
+		t.Errorf("tests marker should be stored as one inline verifies with alias tests: %+v", vs)
+	}
+	for _, e := range g.Edges() {
+		if e.P == "tests" {
+			t.Errorf("no edge should carry the alias as predicate: %s %s %s (%s)", e.S, e.P, e.O, e.Source)
+		}
 	}
 	var gm240 []int
 	for _, d := range check.Run(ws, g) {
@@ -1047,6 +1096,206 @@ func TestVerifiesCanonical(t *testing.T) {
 		if f.Concept == "i:Other" || f.Concept == "i:Doer" {
 			t.Errorf("%s should count as tested: %s", f.Concept, f.Msg)
 		}
+	}
+}
+
+// TestSidecarPointers: scope=range markers in a JSON sidecar anchor to the
+// value their JSON Pointer names, so changing the value makes that one link
+// stale and rewording the sidecar makes none; a pointer that does not
+// resolve is GM123 (issue #116).
+func TestSidecarPointers(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Lending: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  BookLoan: { kind: process, realizes: z:Lending }\n  DvdLoan: { kind: process, realizes: z:Lending }\n  Rules: { kind: process, realizes: z:Lending }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	rules := "{\n  \"formats\": {\n    \"BOOK\": { \"days\": 21 },\n    \"DVD\": { \"days\": 7 }\n  }\n}\n"
+	write("config/rules.json", rules)
+	sidecar := "# Loan rules; pointers name the format.\n@gloss configures .BookLoan scope=range note=\"/formats/BOOK\"\n@gloss configures .DvdLoan scope=range note=\"/formats/DVD\"\n@gloss configures .Rules\n@gloss configures .Rules scope=range note=\"/formats/EBOOK\"\n"
+	write("config/rules.json.gloss", sidecar)
+	fps := func() (map[string]string, []string) {
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := extract.Build(ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, n := range res.Graph.NodesOf(model.NodeArtifact) {
+			out[strings.TrimPrefix(n.ID, graph.ArtifactPrefix)] = fmt.Sprintf("%d-%d %s", n.Anchor.StartLine, n.Anchor.EndLine, n.Anchor.Fingerprint)
+		}
+		var diags []string
+		for _, d := range res.Diags {
+			if d.Code == "GM123" {
+				diags = append(diags, fmt.Sprintf("%s:%d", d.Path, d.Line))
+			}
+		}
+		return out, diags
+	}
+	before, diags := fps()
+	if len(diags) != 1 || diags[0] != "config/rules.json.gloss:5" {
+		t.Errorf("GM123 = %v, want [config/rules.json.gloss:5]", diags)
+	}
+	book, dvd := before["config/rules.json#/formats/BOOK"], before["config/rules.json#/formats/DVD"]
+	if !strings.HasPrefix(book, "3-3 ") || !strings.HasPrefix(dvd, "4-4 ") {
+		t.Errorf("pointer anchors: %v", before)
+	}
+	// Rewording the sidecar's comment changes no fingerprint.
+	write("config/rules.json.gloss", strings.Replace(sidecar, "Loan rules;", "Lending rules;", 1))
+	if after, _ := fps(); after["config/rules.json#/formats/BOOK"] != book || after["config/rules.json#/formats/DVD"] != dvd {
+		t.Errorf("sidecar edit changed pointer fingerprints: %v -> %v", before, after)
+	}
+	// Changing the DVD loan period changes the DVD link only.
+	write("config/rules.json", strings.Replace(rules, "\"days\": 7", "\"days\": 14", 1))
+	after, _ := fps()
+	if after["config/rules.json#/formats/BOOK"] != book || after["config/rules.json#/formats/DVD"] == dvd {
+		t.Errorf("value edit: BOOK %s -> %s, DVD %s -> %s", book, after["config/rules.json#/formats/BOOK"], dvd, after["config/rules.json#/formats/DVD"])
+	}
+	// The file-scope marker fingerprints the JSON, not the sidecar.
+	if after["config/rules.json"] == before["config/rules.json"] {
+		t.Errorf("file-scope sidecar marker should follow the JSON file: %s", after["config/rules.json"])
+	}
+}
+
+// TestSameNamedMethods: methods with one name on two classes in one file are
+// two artifacts, qualified by their class, with different fingerprints; a
+// method whose name is unique in its file keeps its bare symbol (issue #61).
+func TestSameNamedMethods(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Replenishment: { kind: process, realizes: z:Doing }\n  WavePlanning: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("core/handlers.py", "class InboundHandler:\n    # @gloss implements .Replenishment\n    def process(self):\n        pass\n\n    # @gloss implements .Replenishment\n    def drain(self):\n        pass\n\n\nclass OutboundHandler:\n    # @gloss implements .WavePlanning\n    def process(self):\n        pass\n")
+	write("core/k.ts", "export class Inbound {\n  // @gloss implements .Replenishment\n  process(): void {}\n}\n\nexport class Outbound {\n  // @gloss implements .WavePlanning\n  process(): void {}\n}\n")
+	_, g, _, lg := build(t, root)
+	var ids []string
+	for _, n := range g.NodesOf(model.NodeArtifact) {
+		ids = append(ids, strings.TrimPrefix(n.ID, graph.ArtifactPrefix))
+	}
+	for _, want := range []string{"core/handlers.py#InboundHandler.process", "core/handlers.py#OutboundHandler.process", "core/handlers.py#drain", "core/k.ts#Inbound.process", "core/k.ts#Outbound.process"} {
+		if !has(ids, want) {
+			t.Errorf("artifact %s missing; have %v", want, ids)
+		}
+	}
+	if len(ids) != 5 {
+		t.Errorf("artifacts = %v, want 5", ids)
+	}
+	fps := map[string]bool{}
+	for _, e := range lg.Entries {
+		if e.Path == "core/handlers.py" {
+			fps[e.AnchorFingerprint] = true
+		}
+	}
+	if len(fps) != 3 {
+		t.Errorf("the three handlers.py markers should have three fingerprints, got %v", fps)
+	}
+}
+
+// TestRetiringBoundaryAndUnknownManifestKey: a manifest may mark its
+// boundary as retiring, and an unknown key is GM110 at its own line without
+// dropping the boundary, so its files do not fall to the parent (issue #99).
+func TestRetiringBoundaryAndUnknownManifestKey(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\nprefixes:\n  o: https://x/o/\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Billing: { kind: process }\n  Hiring: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Invoicer: { kind: process, realizes: z:Billing }\n  Hirer: { kind: process, realizes: z:Hiring }\n")
+	write(".gloss.yaml", "boundary: o:mono\nlevel: system\nrealizes: [z:Hiring, z:Billing]\ndefault-namespace: i\nallowed: [i:Hirer, z:Hiring]\n")
+	write("hire.py", "# @gloss implements .Hirer\ndef hire(): pass\n")
+	write("invoicing/.gloss.yaml", "boundary: o:invoicing\nlevel: container\npart-of: o:mono\nrealizes: [z:Billing]\ndefault-namespace: i\ndeprecated: true\nreplaced-by: o:billing-svc\nretire-by: 2027-03-31\n")
+	write("invoicing/inv.py", "# @gloss implements .Invoicer\ndef invoice(): pass\n")
+	write("payroll/.gloss.yaml", "boundary: o:payroll\nlevel: container\npart-of: o:mono\ndefault-namespace: i\nrealises: [z:Billing]\n")
+	write("payroll/pay.py", "# @gloss implements .Invoicer\ndef pay(): pass\n")
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := extract.Build(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollup.Derive(res.Graph, ws.Vocab)
+	g := res.Graph
+	var gm110 []string
+	for _, d := range append(res.Diags, check.Run(ws, g)...) {
+		switch d.Code {
+		case "GM110":
+			gm110 = append(gm110, fmt.Sprintf("%s:%d %s", d.Path, d.Line, d.Msg))
+		case "GM502", "GM503":
+			t.Errorf("no marker should fall to the parent boundary: %s", d)
+		}
+	}
+	if len(gm110) != 1 || !strings.HasPrefix(gm110[0], "payroll/.gloss.yaml:5 ") || !strings.Contains(gm110[0], `"realises"`) {
+		t.Errorf("GM110 = %v, want one at payroll/.gloss.yaml:5 naming realises", gm110)
+	}
+	inv := g.NodeByCurie("o:invoicing")
+	if inv == nil || !inv.Deprecated || inv.ReplacedBy != "o:billing-svc" || inv.RetireBy != "2027-03-31" {
+		t.Errorf("invoicing boundary should carry deprecated, replaced-by and retire-by: %+v", inv)
+	}
+	pay := g.NodeByCurie("o:payroll")
+	if pay == nil {
+		t.Fatal("payroll boundary was dropped")
+	}
+	if a := g.Node(graph.ArtifactPrefix + "payroll/pay.py#pay"); a == nil || a.Boundary != pay.ID {
+		t.Errorf("payroll/pay.py should stay in o:payroll: %+v", a)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+	for _, f := range findings(rep, rollup.KindViolation) {
+		t.Errorf("unexpected violation: %s", f.Msg)
+	}
+}
+
+// TestOneDiagnosticPerKey: an undeclared relation with several targets is
+// one GM200 per ontology key, and a tests marker with several targets is one
+// GM240 (issue #82).
+func TestOneDiagnosticPerKey(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    guards: [A, B, C]\n  Log:\n    kind: process\n    guards: [A, B]\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:A }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
+	write("app.py", "# @gloss implements .Doer\ndef go(): pass\n")
+	write("tests/test_app.py", "# @gloss tests z:A, z:B, z:C\ndef test_go(): pass\n")
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := extract.Build(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rollup.Derive(res.Graph, ws.Vocab)
+	codes := map[string][]int{}
+	for _, d := range check.Run(ws, res.Graph) {
+		codes[d.Code] = append(codes[d.Code], d.Line)
+	}
+	if got := codes["GM200"]; len(got) != 2 {
+		t.Errorf("GM200 lines = %v, want one per guards: key", got)
+	}
+	if got := codes["GM240"]; len(got) != 1 || got[0] != 1 {
+		t.Errorf("GM240 lines = %v, want [1]", got)
 	}
 }
 
@@ -1782,7 +2031,7 @@ func TestManifestRelationsDocumented(t *testing.T) {
 			gm110 = append(gm110, d.String())
 		}
 	}
-	if len(gm110) != 1 || !strings.HasPrefix(gm110[0], "svc/.gloss.yaml:1:") || strings.Contains(gm110[0], root) {
+	if len(gm110) != 1 || !strings.HasPrefix(gm110[0], "svc/.gloss.yaml:2:") || strings.Contains(gm110[0], root) {
 		t.Errorf("GM110 = %v, want one diagnostic with only the relative path", gm110)
 	}
 }

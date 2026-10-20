@@ -9,6 +9,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -229,6 +230,7 @@ func (ex *extractor) manifests() {
 			n.Criticality, n.CriticalityFrom = m.Criticality, "declared"
 		}
 		n.CriticalityFloor = m.CriticalityFloor
+		n.Deprecated, n.ReplacedBy, n.RetireBy = m.Deprecated, m.ReplacedBy, m.RetireBy
 		if i := strings.Index(m.Boundary, ":"); i > 0 {
 			n.NS = m.Boundary[:i]
 		}
@@ -285,31 +287,66 @@ func (ex *extractor) files() error {
 			continue
 		}
 		target := rel
+		var tsrc []byte // the annotated file, for a sidecar
 		if marker.IsSidecar(rel) {
 			target = marker.SidecarTarget(rel)
-			if _, err := os.Stat(ex.ws.Abs(target)); err != nil {
+			b, err := os.ReadFile(ex.ws.Abs(target))
+			if err != nil {
 				ex.diag(rel, 1, "warning", "GM121", fmt.Sprintf("sidecar annotates %s, which does not exist", target))
 			}
+			tsrc = b
 		}
 		m := ex.ws.ManifestFor(rel)
 		var boundary string
 		if m != nil {
 			boundary = ex.boundaryIRI(m.Boundary, m.Path, 1)
 		}
-		for _, fd := range found {
-			ex.marker(rel, target, fd, lines, style, m, boundary)
+		anchors := make([]marker.Anchor, len(found))
+		for i, fd := range found {
+			anchors[i] = marker.Resolve(rel, fd, lines, style)
+			if marker.IsSidecar(rel) {
+				anchors[i] = ex.sidecarAnchor(rel, target, tsrc, fd.Marker, anchors[i])
+			}
+		}
+		// Same-named declarations in one file must not share an artifact.
+		marker.Disambiguate(rel, lines, anchors)
+		for i, fd := range found {
+			ex.marker(rel, target, fd, anchors[i], lines, m, boundary)
 		}
 	}
 	return nil
 }
 
-func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string, style marker.CommentStyle, m *model.Manifest, boundary string) {
-	mk := fd.Marker
-	anchor := marker.Resolve(rel, fd, lines, style)
-	if marker.IsSidecar(rel) && anchor.Scope == "symbol" {
-		anchor.Scope = "file"
-		anchor.Symbol = ""
+// sidecarAnchor anchors a sidecar marker to the file it annotates, not to
+// the sidecar: scope=file fingerprints the target, and scope=range in a JSON
+// sidecar resolves the JSON Pointer in note= to the value's lines. Editing
+// the sidecar then never makes a link stale; editing the value does.
+func (ex *extractor) sidecarAnchor(rel, target string, tsrc []byte, mk *marker.Marker, a marker.Anchor) marker.Anchor {
+	if tsrc == nil {
+		return a
 	}
+	switch a.Scope {
+	case "symbol", "file":
+		return marker.FileAnchor(strings.Split(strings.TrimSuffix(string(tsrc), "\n"), "\n"))
+	case "range":
+		if !json.Valid(tsrc) {
+			return a
+		}
+		ptr := mk.Keys["note"]
+		if pa, ok := marker.PointerAnchor(tsrc, ptr, a.Scope); ok {
+			return pa
+		}
+		if !strings.HasPrefix(ptr, "/") {
+			ex.diag(rel, mk.Line, "warning", "GM123", fmt.Sprintf("scope=range in a JSON sidecar needs a JSON Pointer in note= (such as note=\"/fields/1\"), got %q; anchored to the sidecar", ptr))
+		} else {
+			ex.diag(rel, mk.Line, "warning", "GM123", fmt.Sprintf("JSON Pointer %s does not resolve in %s; anchored to the sidecar", ptr, target))
+		}
+	}
+	return a
+}
+
+func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.Anchor, lines []string, m *model.Manifest, boundary string) {
+	mk := fd.Marker
 	if mk.Scope() == "symbol" && anchor.Kind == "unresolved-symbol" {
 		ex.diag(rel, mk.Line, "warning", "GM122", "scope=symbol requested but no declaration was detected after the marker; anchored to the next block")
 	}
@@ -321,6 +358,10 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		aid += "#" + anchor.Symbol
 		label = target + ":" + anchor.Symbol
 		kind = anchor.Kind
+	} else if anchor.Scope == "range" && anchor.Kind == "json-pointer" {
+		aid += "#" + anchor.Symbol
+		label = target + ":" + anchor.Symbol
+		kind = anchor.Scope
 	} else if anchor.Scope == "block" || anchor.Scope == "line" || anchor.Scope == "range" {
 		aid += fmt.Sprintf("#L%d", anchor.StartLine)
 		label = fmt.Sprintf("%s:%d", target, anchor.StartLine)
@@ -336,15 +377,21 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		id = MarkerID(target, mk.Relation, mk.Targets, anchor.Symbol, anchor.Scope)
 	}
 	fm := FoundMarker{Path: rel, Marker: mk, Anchor: anchor, ID: id}
+	// An alias is stored as its canonical relation, so a query for verifies
+	// finds every test link; the written form stays in prov.alias.
+	pred, alias := mk.Relation, ""
+	if pred == "tests" {
+		pred, alias = "verifies", "tests"
+	}
 	for _, t := range mk.Targets {
 		oiri, raw := ex.resolveTarget(t, m, rel, mk.Line)
 		prov := &graph.Prov{Path: rel, Line: mk.Line, Col: mk.Col, Scope: anchor.Scope, Symbol: anchor.Symbol, Fingerprint: anchor.Fingerprint,
-			Proposed: mk.Proposed, ID: id, Note: mk.Keys["note"], Sugar: mk.Sugar, Raw: raw}
+			Proposed: mk.Proposed, ID: id, Note: mk.Keys["note"], Sugar: mk.Sugar, Raw: raw, Alias: alias}
 		if c := mk.Conf(); c >= 0 {
 			cc := c
 			prov.Conf = &cc
 		}
-		e := &graph.Edge{S: aid, P: mk.Relation, O: oiri, Source: graph.SourceInline, Prov: prov}
+		e := &graph.Edge{S: aid, P: pred, O: oiri, Source: graph.SourceInline, Prov: prov}
 		ex.g.AddEdge(e)
 		if mk.Relation == "publishes-value" {
 			if cn := ex.g.Node(oiri); cn != nil && cn.NodeType == model.NodeConcept && anchor.StartLine > 0 && anchor.StartLine <= len(lines) {
