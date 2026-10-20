@@ -13,8 +13,21 @@ import (
 	"strings"
 )
 
-// pseudo matches Go pseudo-versions (vX.Y.Z-0.yyyymmddhhmmss-abcdefabcdef) and dirty builds.
-var pseudo = regexp.MustCompile(`-\d{14}-[0-9a-f]{12}|\+dirty$`)
+// pseudo matches the three Go pseudo-version forms and dirty builds:
+//
+//	vX.0.0-yyyymmddhhmmss-abcdefabcdef        (no earlier tag)
+//	vX.Y.Z-pre.0.yyyymmddhhmmss-abcdefabcdef  (after a pre-release tag)
+//	vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdefabcdef  (after a release tag)
+//
+// each optionally followed by +incompatible and/or +dirty.
+var pseudo = regexp.MustCompile(`[-.]\d{14}-[0-9a-f]{12}(\+incompatible)?(\+dirty)?$|\+dirty$`)
+
+// isDevBuild reports whether a Go build-info module version describes a
+// development build (empty, "(devel)", a pseudo-version or a dirty tree)
+// rather than a tagged release.
+func isDevBuild(v string) bool {
+	return v == "" || v == "(devel)" || pseudo.MatchString(v)
+}
 
 // Version is the tool release. Builds from a tagged module get it from the Go
 // build info; release builds inject it with
@@ -44,7 +57,7 @@ func String() string {
 	if Version != "" {
 		return strings.TrimPrefix(Version, "v")
 	}
-	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" && !pseudo.MatchString(bi.Main.Version) {
+	if bi, ok := debug.ReadBuildInfo(); ok && !isDevBuild(bi.Main.Version) {
 		// A real module version (go install ...@vX.Y.Z); pseudo-versions from a
 		// plain checkout build are treated as development builds so generated
 		// files do not churn with every commit.

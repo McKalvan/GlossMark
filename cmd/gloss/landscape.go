@@ -40,34 +40,10 @@ func cmdLandscape(args []string) int {
 		fmt.Fprintln(os.Stderr, "gloss landscape:", err)
 		return 2
 	}
-	var wss []*load.Workspace
-	var graphs []*graph.Graph
-	for _, r := range repos {
-		p, err := buildGraph(r, false)
-		if err != nil {
-			return fail(fmt.Errorf("%s: %w", r, err))
-		}
-		// Prefix artifact paths with the repo name so they stay unique in the union.
-		name := filepath.Base(p.WS.Root)
-		for _, n := range p.Graph.NodesOf(model.NodeArtifact) {
-			n.Path = name + "/" + n.Path
-			n.Label = name + "/" + n.Label
-			n.File = name + "/" + n.File
-		}
-		for _, e := range p.Graph.Edges() {
-			if e.Prov != nil && e.Prov.Path != "" && e.Source != graph.SourceDeclared {
-				e.Prov.Path = name + "/" + e.Prov.Path
-			}
-		}
-		wss = append(wss, p.WS)
-		graphs = append(graphs, p.Graph)
-	}
-	ws, err := load.Merge(wss)
+	ws, g, err := assembleLandscape(repos)
 	if err != nil {
 		return fail(err)
 	}
-	g := union(graphs, ws)
-	rollup.Derive(g, ws.Vocab)
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy(), Now: time.Now()})
 	// Context-map edges: implied depends-on (consumer → producer) between
 	// boundaries, except between a boundary and one that contains it.
@@ -111,7 +87,7 @@ func cmdLandscape(args []string) int {
 		}
 	}
 	if fs.viewOut != "" {
-		data := viewer.Data{Generated: time.Now().UTC().Format(time.RFC3339), Repo: "landscape: " + strings.Join(baseNames(repos), ", "), Views: views.ProjectAll(g, ws.Views)}
+		data := viewer.Data{Generated: time.Now().UTC().Format(time.RFC3339), Repo: "landscape: " + strings.Join(baseNames(repos), ", "), Views: views.ProjectAll(g, ws.Views), Slices: viewer.Slices(g, viewer.SliceBudget)}
 		b, err := viewer.Render(data)
 		if err != nil {
 			return fail(err)
@@ -126,6 +102,41 @@ func cmdLandscape(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// assembleLandscape builds each repository, prefixes its artifact paths with
+// the repository name so they stay unique, unions the graphs by IRI and
+// re-derives the rollups on the union.
+func assembleLandscape(repos []string) (*load.Workspace, *graph.Graph, error) {
+	var wss []*load.Workspace
+	var graphs []*graph.Graph
+	for _, r := range repos {
+		p, err := buildGraph(r, false)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", r, err)
+		}
+		// Prefix artifact paths with the repo name so they stay unique in the union.
+		name := filepath.Base(p.WS.Root)
+		for _, n := range p.Graph.NodesOf(model.NodeArtifact) {
+			n.Path = name + "/" + n.Path
+			n.Label = name + "/" + n.Label
+			n.File = name + "/" + n.File
+		}
+		for _, e := range p.Graph.Edges() {
+			if e.Prov != nil && e.Prov.Path != "" && e.Source != graph.SourceDeclared {
+				e.Prov.Path = name + "/" + e.Prov.Path
+			}
+		}
+		wss = append(wss, p.WS)
+		graphs = append(graphs, p.Graph)
+	}
+	ws, err := load.Merge(wss)
+	if err != nil {
+		return nil, nil, err
+	}
+	g := union(graphs, ws)
+	rollup.Derive(g, ws.Vocab)
+	return ws, g, nil
 }
 
 type landscapeFlags struct {

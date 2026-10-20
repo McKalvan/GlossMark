@@ -13,6 +13,10 @@ views:
     include: [gm:*, gmi:*]
     expand: { part-of: 2 }
     zoom: container
+  drift:
+    doc: A saved slice (ADR 0023) of the drift measure, its producers and the boundaries around them, recomputed from the graph on every build.
+    slice: [gm:Drift]
+    zoom: code
   constraints:
     doc: The rules GlossMark enforces and the code that enforces them. Curated (it names its concepts), so it opens expanded.
     include: [gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:ValueBinding, gmi:Linter, gmi:DriftComparator, gmi:ValueBinder]

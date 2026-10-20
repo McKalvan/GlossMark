@@ -647,6 +647,9 @@ type View struct {
 	Zoom          string            `yaml:"zoom,omitempty" json:"zoom,omitempty"`
 	// Boundaries: when true (default) boundaries at or above zoom are shown.
 	Boundaries *bool `yaml:"boundaries,omitempty" json:"boundaries,omitempty"`
+	// Slice makes a saved slice: the view shows the feature slice of these
+	// seeds (docs/adr/0023-feature-slices.md) instead of an include list.
+	Slice StringList `yaml:"slice,omitempty" json:"slice,omitempty"`
 }
 
 // DefaultViews returns the two presets from the design, for prefixes grouped by tier.
@@ -696,6 +699,9 @@ func LoadViews(path string) (*Views, error) {
 	for name, view := range v.Views {
 		if view == nil {
 			return nil, fmt.Errorf("%s: view %s is empty", path, name)
+		}
+		if len(view.Slice) > 0 && len(view.Include) > 0 {
+			return nil, fmt.Errorf("%s: view %s: slice and include are two ways to choose nodes; use one", path, name)
 		}
 		if view.Zoom != "" {
 			ok := false

@@ -1,0 +1,40 @@
+Slice of pay:Capture (context on)
+  5 members: 3 concepts, 2 artifacts, 0 tests · 2 boundaries · 5 context · highest criticality critical
+
+seed (1)
+  pay:Capture  process · core · high
+      untested: pay:Capture is implemented but nothing tests or verifies it
+
+part (1)
+  pa:CaptureEmitter  process · implementation · low
+      via pa:CaptureHandler realizes pay:Capture · pa:CaptureEmitter part-of pa:CaptureHandler
+
+realization (1)
+  pa:CaptureHandler  process · implementation · high
+      via pa:CaptureHandler realizes pay:Capture
+
+artifact (2)
+  services/api/handlers/capture.py#capture  function · high  payments-api/services/api/handlers/capture.py:3
+      via pa:CaptureHandler realizes pay:Capture · services/api/handlers/capture.py#capture implements pa:CaptureHandler
+  services/api/handlers/capture.py#emit_capture_confirmed  function · low  payments-api/services/api/handlers/capture.py:7
+      via pa:CaptureHandler realizes pay:Capture · pa:CaptureEmitter part-of pa:CaptureHandler · services/api/handlers/capture.py#emit_capture_confirmed implements pa:CaptureEmitter
+
+boundary (2)
+  acme:payments-api  container · critical
+      via acme:payments-api realizes pay:Capture
+  acme:payments-platform  system · critical
+      via acme:payments-platform realizes pay:Capture
+
+context (5)
+  acme:settlement-worker  container · critical
+      via pa:CaptureHandler realizes pay:Capture · pa:CaptureEmitter part-of pa:CaptureHandler · pa:CaptureEmitter publishes pay:CaptureConfirmed · acme:settlement-worker subscribes pay:CaptureConfirmed
+  pay:Authorization  process · core · critical
+      via pay:Capture consumes pay:Payment · pay:Authorization produces pay:Payment
+  pay:CaptureConfirmed  event · core · low
+      via pa:CaptureHandler realizes pay:Capture · pa:CaptureEmitter part-of pa:CaptureHandler · pa:CaptureEmitter publishes pay:CaptureConfirmed
+  pay:Payment  entity · core · critical
+      via pay:Capture consumes pay:Payment
+  sw:BatchSettler  process · implementation · critical
+      via pa:CaptureHandler realizes pay:Capture · pa:CaptureEmitter part-of pa:CaptureHandler · pa:CaptureEmitter publishes pay:CaptureConfirmed · sw:BatchSettler subscribes pay:CaptureConfirmed
+
+Untested in this slice: pay:Capture
