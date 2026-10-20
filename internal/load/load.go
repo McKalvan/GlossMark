@@ -45,7 +45,8 @@ type Workspace struct {
 	// Resolved records how each import was resolved (version, source, hash).
 	Resolved map[string]*Resolved
 	// Lock is glossmark.lock when present.
-	Lock *Lock
+	Lock    *Lock
+	lockErr error
 }
 
 // FindRoot walks up from start until it finds glossmark.yaml.
@@ -133,18 +134,36 @@ func Load(root string) (*Workspace, error) {
 		iprefixes = append(iprefixes, p)
 	}
 	sort.Strings(iprefixes)
+	ws.Lock, ws.lockErr = ReadLock(root)
 	for _, p := range iprefixes {
 		im := cfg.Imports[p]
 		ws.Imported[p] = im
 		ws.Prefixes[p] = im.IRI
 		o, diag := resolveImport(root, p, im)
+		var up *Resolved
+		if o != nil {
+			up = &Resolved{Prefix: p, Version: o.Version, Range: im.Version, Source: im.Source, Hash: hashFile(o.Path), Path: o.Path}
+		}
+		// A locked import resolves from its vendored copy; the upstream is
+		// only compared, so a newer one is reported instead of taken.
+		if po := pinned(root, p, im, ws.Lock); po != nil {
+			r := &Resolved{Prefix: p, Version: po.Version, Range: im.Version, Source: im.Source, Hash: hashFile(po.Path), Path: po.Path, Pinned: true, Upstream: up}
+			if diag != nil {
+				diag.Severity = "warning"
+				diag.Msg += "; resolving the pinned copy " + ws.Rel(po.Path)
+			}
+			if up != nil && up.Hash != r.Hash {
+				ws.Diags = append(ws.Diags, upstreamAvailable(r, up))
+			}
+			o, ws.Resolved[p] = po, r
+		} else if o != nil {
+			ws.Resolved[p] = up
+		}
 		if diag != nil {
 			ws.Diags = append(ws.Diags, *diag)
 		}
 		if o == nil {
 			o = &model.Ontology{Concepts: map[string]*model.Concept{}}
-		} else {
-			ws.Resolved[p] = &Resolved{Prefix: p, Version: o.Version, Range: im.Version, Source: im.Source, Hash: hashFile(o.Path), Path: o.Path}
 		}
 		o.Namespace = p
 		if o.IRI == "" {
@@ -198,6 +217,20 @@ func Load(root string) (*Workspace, error) {
 		return nil, err
 	}
 	return ws, nil
+}
+
+// upstreamAvailable is the GM116 warning for a pinned import whose source
+// now resolves to something else.
+func upstreamAvailable(pin, up *Resolved) marker.Diagnostic {
+	msg := fmt.Sprintf("imports.%s: upstream content changed under the same version %s (it should bump); still resolving the pinned copy. Review it, then run gloss lock --update", pin.Prefix, orNone(pin.Version))
+	if up.Version != pin.Version {
+		where := "inside"
+		if code, _ := RangeProblem(up); code != "" {
+			where = "outside"
+		}
+		msg = fmt.Sprintf("imports.%s: %s available, %s %s; still resolving the pinned %s. Review it, then run gloss lock --update", pin.Prefix, orNone(up.Version), where, orNone(pin.Range), orNone(pin.Version))
+	}
+	return marker.Diagnostic{Path: LockName, Line: 1, Severity: "warning", Code: "GM116", Msg: msg}
 }
 
 // looksImplementation reports whether an ontology has concepts only an

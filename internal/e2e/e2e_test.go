@@ -782,17 +782,35 @@ func TestImportRangesAndLock(t *testing.T) {
 	if c := codes(); has(c, "GM108") || has(c, "GM107") {
 		t.Fatalf("after lock diags = %v", c)
 	}
-	// Upstream edits the ontology without bumping → GM107 (hash).
+	// The lock vendored the ontology; the import now resolves from the copy.
+	pin := load.PinPath(root, "pay", "1.2.1")
+	if ws, _ := load.Load(root); ws.Ontologies["pay"].Path != pin || !ws.Resolved["pay"].Pinned {
+		t.Fatalf("pay: should resolve from %s, got %s", pin, ws.Ontologies["pay"].Path)
+	}
+	// Upstream edits the ontology without bumping → GM116, still pinned.
 	up := filepath.Join(tmp, "payments-api", "ontology", "pay.gloss.yaml")
 	b, _ := os.ReadFile(up)
 	os.WriteFile(up, append(b, []byte("  Chargeback: { kind: entity }\n")...), 0o644)
-	if c := codes(); !has(c, "GM107") {
+	if c := codes(); !has(c, "GM116") || has(c, "GM107") {
 		t.Fatalf("content change not noticed: %v", c)
 	}
-	// Upstream bumps to 2.0.0 → outside ^1.2 → GM106 and GM107 (version).
+	// Upstream bumps to 2.0.0 → outside ^1.2: reported, and the pin holds (no GM106).
 	os.WriteFile(up, []byte(strings.Replace(string(b), "version: 1.2.1", "version: 2.0.0", 1)), 0o644)
+	ws, _ = load.Load(root)
+	var msgs []string
+	for _, d := range ws.Diags {
+		msgs = append(msgs, d.Code+" "+d.Msg)
+	}
+	if c := codes(); !has(c, "GM116") || has(c, "GM106") || has(c, "GM107") || !strings.Contains(strings.Join(msgs, "\n"), "2.0.0 available, outside ^1.2") {
+		t.Fatalf("major bump not reported: %v", msgs)
+	}
+	if v := ws.Ontologies["pay"].Version; v != "1.2.1" {
+		t.Fatalf("pay: resolved %s, want the pinned 1.2.1", v)
+	}
+	// Without the vendored copy the lock is a tripwire again: GM106 and GM107 (version).
+	os.Remove(pin)
 	if c := codes(); !has(c, "GM106") || !has(c, "GM107") {
-		t.Fatalf("major bump not caught: %v", c)
+		t.Fatalf("major bump not caught without the pin: %v", c)
 	}
 	// An unsupported grammar directive is refused outright.
 	cfg := filepath.Join(root, "glossmark.yaml")

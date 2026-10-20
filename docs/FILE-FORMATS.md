@@ -141,6 +141,7 @@ Boundaries and artifacts carry no `placement`. The viewer draws a part under its
 
 - `graph.jsonl` — the canonical graph, one JSON record per line, deterministically sorted so `git diff` is meaningful (see `docs/GRAPH.md`). Its first line carries `"format"`; a newer format is refused, not misread.
 - `glossmark.lock` (repo root, committed) — resolved version, range, source and content hash per import, written by `gloss lock`.
+- `imports/<prefix>@<version>.gloss.yaml` (committed) — the copy of each locked import that `gloss lock` vendors; commands resolve the import from it while its hash matches the lock ([ADR 0002](adr/0002-lock-pins-imports.md)).
 - `context.jsonld` — the JSON-LD context that makes `graph.jsonl` RDF-loadable.
 - `viewer.html`, `views.js`, `views.json` (not committed) — `gloss view` writes the page, the data script it loads (a plain `<script src>`, so opening the file from disk works) and the same data as JSON for tools; `--inline` embeds the data in one page instead.
 - `ledger.jsonl` (committed) — provenance and review state per marker: `{marker_id, path, relation, targets, actor, model, conf, created, status, reviewed_by, reviewed_at, anchor_fingerprint, rationale}`. It is the only store of accepted, rejected and stale decisions, so it belongs in git like the graph. `actor` is fixed at the marker's first appearance (see `docs/QUICKSTART.md`). Exportable as PROV-O with `gloss export --prov`.

@@ -127,7 +127,7 @@ gloss agents --dir services/api --write AGENTS.md
 
 ```sh
 gloss check                      # lint: syntax, dangling refs, domain/range, own-subject rule, tiers, import ranges, lockfile
-gloss lock                       # pin resolved import versions in glossmark.lock
+gloss lock                       # pin imports: glossmark.lock + vendored copies in .glossmark/imports/ (--update to move)
 gloss build                      # .glossmark/graph.jsonl + context.jsonld + ledger.jsonl
 gloss drift                      # violations, gaps, orphans, rogues, stale, untested, metrics
 gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
