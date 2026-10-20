@@ -21,6 +21,9 @@ type Decl struct {
 	// Decorators are the decorator or annotation lines above the
 	// declaration, trimmed.
 	Decorators []string
+	// Fingerprint is what a symbol anchor on this declaration records:
+	// its decorator stack and signature line (ADR 0014).
+	Fingerprint string
 }
 
 // Declarations lists the declarations of a file with the regex detector the
@@ -92,6 +95,7 @@ func declsAt(path string, lines []string, style CommentStyle, from, to, want int
 	}
 	var out []Decl
 	decoStart := -1
+	var decos []string
 	for j := from; j < to && j < len(lines); j++ {
 		ln := lines[j]
 		t := strings.TrimSpace(ln)
@@ -107,9 +111,11 @@ func declsAt(path string, lines []string, style CommentStyle, from, to, want int
 		}
 		if isDecorator(t, path) {
 			if decoStart < 0 {
-				decoStart = j
+				decoStart, decos = j, nil
 			}
-			j = decoratorEnd(lines, j)
+			k := decoratorEnd(lines, j)
+			decos = append(decos, norm(strings.Join(lines[j:k+1], " ")))
+			j = k
 			continue
 		}
 		for _, r := range rules {
@@ -127,10 +133,12 @@ func declsAt(path string, lines []string, style CommentStyle, from, to, want int
 				break
 			}
 			ins := j
+			var stack []string
 			if decoStart >= 0 {
-				ins = decoStart
+				ins, stack = decoStart, decos
 			}
-			d := Decl{Symbol: sym, Kind: r.kind, Line: j + 1, End: blockEnd(lines, j, path) + 1, Insert: ins + 1, Indent: lines[ins][:len(lines[ins])-len(strings.TrimLeft(lines[ins], " \t"))], Doc: docFor(lines, ins, j, style)}
+			fpr, _ := declFingerprint(stack, norm(ln))
+			d := Decl{Fingerprint: fpr, Symbol: sym, Kind: r.kind, Line: j + 1, End: blockEnd(lines, j, path) + 1, Insert: ins + 1, Indent: lines[ins][:len(lines[ins])-len(strings.TrimLeft(lines[ins], " \t"))], Doc: docFor(lines, ins, j, style)}
 			for k := ins; k < j; k++ {
 				if t := strings.TrimSpace(lines[k]); t != "" && !isCommentLine(lines[k], style) {
 					d.Decorators = append(d.Decorators, t)

@@ -49,29 +49,19 @@ concepts:
     kind: process
     realizes: gm:Criticality
     doc: "Stamps every concept, boundary and artifact with its effective criticality and reports boundaries that understate it."
-    proposed: true
-    proposed-by: agent:claude
   OntologyEditor:
     kind: process
     realizes: gm:Review
     doc: "Formatting-preserving edits to ontology files: add, accept or remove a proposed concept and rewrite NEW markers once it exists."
-    proposed: true
-    proposed-by: agent:claude
   ImportLock:
     kind: process
     realizes: gm:Publication
     doc: "Resolving import version ranges and pinning each import's version and content hash in glossmark.lock: the importer's side of the published seam."
-    proposed: true
-    proposed-by: agent:claude
   Doctor:
     kind: process
     internal: true
     doc: "One-line setup checks, each with its fix."
-    proposed: true
-    proposed-by: agent:claude
   FormatVersions:
     kind: resource
     internal: true
     doc: "The tool release, grammar and on-disk format versions."
-    proposed: true
-    proposed-by: agent:claude

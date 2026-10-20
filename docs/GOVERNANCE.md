@@ -51,8 +51,14 @@ declared level always wins.
   it is `part-of`; then of its `is-a` ancestors. So `pa:AuthorizeHandler
   realizes pay:Authorization` is critical without anyone saying so twice.
 - **Boundary.** Without its own level, a boundary takes the highest level of
-  the concepts its code realizes or represents (declared in the manifest or
-  derived from the markers beneath it), else its parent boundary's.
+  the concepts its code realizes, represents or configures (declared in the
+  manifest or derived from the markers beneath it), else its parent
+  boundary's. A surface is the exception: a boundary that presents or hosts
+  concepts and realizes, represents or configures none stays unclassified
+  instead of taking its parent's level, so a BFF that only shows order
+  placement is not rated above one that implements it
+  ([ADR 0012](adr/0012-surfaces.md)). Give it its own `criticality:`, or set
+  `criticality-floor: true` on the parent, when it should be rated.
 - **Artifact.** The highest level of the concepts it links to, except concepts
   it `presents` or `hosts`. Its boundary's level is a **floor** only when the
   boundary's manifest says so with `criticality-floor: true`; then every
@@ -76,14 +82,22 @@ Nothing is classified in a fresh adoption, and the viewer says so. `gloss
 criticality suggest` proposes a first pass from facts already in the graph,
 printed as a diff of the ontology files (`--write` applies it):
 
-- every `constraint` concept: a rule the business relies on;
+- every `constraint` concept that is not `internal: true`: a rule the business
+  relies on (an internal constraint, such as a rate limit or a flag, is an
+  engineering setting and is proposed only on the other rules);
 - every published concept: it crosses the seam into the business view;
 - every concept whose only verifiers are security tests (paths or names with
   auth, permission, csrf, crypto, pii, token and the like).
 
-Each is `high`. Concepts that already have a declared level, or inherit `high`
-or above, are left alone; everything else stays unclassified. Treat the diff
-as a draft: raise money movement to `critical`, lower what does not matter.
+Each is `high`. A declared level is the review: a concept that declares one,
+or inherits one from a concept that declares it, is left alone, so lowering a
+core concept to `medium` on purpose sticks, and its implementation concepts are
+not proposed again on the next run. An implementation concept that realizes an
+unclassified core concept is not proposed either; the suggestion goes to the
+core concept, from which it would inherit ("realized by lark:LeadTimeSetting
+(constraint: ...), which would inherit it"). Everything else stays
+unclassified. Treat the diff as a draft: raise money movement to `critical`,
+lower what does not matter.
 
 `gloss check` warns (GM600) when a boundary declares a level **below** a
 concept its code realizes: the manifest understates its risk, and reviews use
@@ -112,14 +126,19 @@ policy:
 ```
 
 Bookkeeping changes (an accepted proposal, a stale fingerprint) are reported
-with their level but never raised by it.
+with their level but never raised by it. A changed decorator stack on an
+unchanged signature (`decorators-changed`, ADR 0014) is not bookkeeping: a
+deleted `@requires_role` on a critical handler is HARD under the default.
 
 One classifier gates a link everywhere: `gloss diff`, `gloss impact`,
 `gloss context --changed`, `gloss status`, `gloss accept --policy` and the MCP
 `propose_link` and `impact_of` tools apply the same rules, `criticality-gates`
 included, so `accept --policy` never auto-accepts a link the PR gate would
 stop. A link through `presents` or `hosts` takes no level from its target,
-in the gate as in the graph.
+in the gate as in the graph. A link to a concept that a mechanism `guards`
+is reviewed at the guard's level when that is higher, without taking it as
+its own: the graph keeps the handler's level, the gate sees the guard's
+([ADR 0015](adr/0015-guards.md)).
 
 **`gloss impact`** and the MCP `impact_of` tool report a level per changed
 file (`criticality`, `criticality_from`) and per concept, with a hint when a
@@ -137,9 +156,13 @@ filter (including "unclassified") so a reviewer can look at only the parts of
 the system that matter.
 
 **`gloss export`** writes `criticality` and `criticality_from` columns to the
-SQLite `nodes` table, so `SELECT path FROM nodes WHERE node='artifact' AND
-criticality IN ('high','critical')` lists the files that deserve the most
-careful review.
+SQLite `nodes` table, so `SELECT path FROM nodes WHERE node IN
+('artifact','file') AND criticality IN ('high','critical')` lists the files
+that deserve the most careful review. A file with no marker is not an
+artifact; under a `criticality-floor` it is exported as a `node='file'` row
+carrying the floor's level (`criticality_from` names the floor boundary), so
+an unmarked migration that grants database roles is listed as `gloss impact`
+already reports it.
 
 ## Changing a level
 

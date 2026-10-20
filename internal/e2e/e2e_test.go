@@ -1364,7 +1364,7 @@ func TestOneDiagnosticPerKey(t *testing.T) {
 		os.WriteFile(p, []byte(content), 0o644)
 	}
 	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
-	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    guards: [A, B, C]\n  Log:\n    kind: process\n    guards: [A, B]\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    audits: [A, B, C]\n  Log:\n    kind: process\n    audits: [A, B]\n")
 	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:A }\n")
 	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
 	write("app.py", "# @gloss implements .Doer\ndef go(): pass\n")
@@ -1383,7 +1383,7 @@ func TestOneDiagnosticPerKey(t *testing.T) {
 		codes[d.Code] = append(codes[d.Code], d.Line)
 	}
 	if got := codes["GM200"]; len(got) != 2 {
-		t.Errorf("GM200 lines = %v, want one per guards: key", got)
+		t.Errorf("GM200 lines = %v, want one per audits: key", got)
 	}
 	if got := codes["GM240"]; len(got) != 1 || got[0] != 1 {
 		t.Errorf("GM240 lines = %v, want [1]", got)
@@ -1673,6 +1673,48 @@ func TestRealizesInheritance(t *testing.T) {
 	}
 }
 
+// TestInheritUndeclaredChild (issue #40): when the parent inherits and a
+// child realizes concepts but declares no realizes, one finding names the
+// child's manifest instead of one violation per concept at the parent.
+func TestInheritUndeclaredChild(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  c: { iri: https://x/c/, tier: core }\n  l: { iri: https://x/l/, tier: implementation }\n")
+	write("ontology/c.gloss.yaml", "concepts:\n  Booking: { kind: process }\n  Reminder: { kind: process }\n  Cancellation: { kind: process }\n")
+	write("ontology/l.gloss.yaml", "concepts:\n  BookingPage: { kind: process, realizes: c:Booking }\n  CancelPage: { kind: process, realizes: c:Cancellation }\n  ReminderJob: { kind: process, realizes: c:Reminder }\n")
+	write(".gloss.yaml", "boundary: o:clinic\nlevel: system\nrealizes: inherit\n")
+	write("services/reminders/.gloss.yaml", "boundary: o:reminders\nlevel: container\npart-of: o:clinic\ndefault-namespace: l\nrealizes: [l:ReminderJob]\n")
+	write("services/reminders/job.py", "# @gloss implements .ReminderJob\ndef run(): pass\n")
+	write("apps/web/.gloss.yaml", "boundary: o:web\nlevel: container\npart-of: o:clinic\ndefault-namespace: l\n")
+	write("apps/web/book.ts", "// @gloss implements .BookingPage\nexport function book() {}\n")
+	write("apps/web/cancel.ts", "// @gloss implements .CancelPage\nexport function cancel() {}\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	v := findings(rep, rollup.KindViolation)
+	if len(v) != 1 || v[0].Boundary != "o:web" || v[0].Path != "apps/web/.gloss.yaml" || !strings.Contains(v[0].Msg, "o:web realizes 4 concepts but declares no realizes; o:clinic inherits") {
+		t.Fatalf("violations = %+v", v)
+	}
+	// A code path in the parent itself is still the parent's, and its
+	// sets are printed once.
+	write("extra.py", "# @gloss implements l:BookingPage\ndef x(): pass\n")
+	write("extra2.py", "# @gloss implements l:CancelPage\ndef y(): pass\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	var withSets int
+	for _, f := range findings(rep, rollup.KindViolation) {
+		if f.Boundary == "o:clinic" && strings.Contains(f.Msg, "but declares realizes {") {
+			withSets++
+		}
+	}
+	if withSets != 1 {
+		t.Errorf("parent violations printing the sets = %d, want 1: %+v", withSets, findings(rep, rollup.KindViolation))
+	}
+}
+
 // TestPresentsAndHosts: a page presents a concept and a shell hosts one;
 // neither lifts to realizes or carries criticality. untested tells the
 // tested engine from the untested page, and a surface with no mechanism
@@ -1861,6 +1903,75 @@ func TestViewContainment(t *testing.T) {
 	}
 }
 
+// TestPublishedValueImplements (issue #41): a publishes-value marker lifts
+// as implements, so the boundary that owns the setting can declare it; and a
+// value-from list binds a duplicated value in two languages, either of which
+// changing is value drift.
+func TestPublishedValueImplements(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  c: { iri: https://x/c/, tier: core }\n  l: { iri: https://x/l/, tier: implementation }\n")
+	write("ontology/c.gloss.yaml", "concepts:\n  ReminderLeadTime: { kind: constraint }\n  Cancellation: { kind: constraint }\n")
+	write("ontology/l.gloss.yaml", "concepts:\n"+
+		"  LeadTimeSetting: { kind: measure, realizes: c:ReminderLeadTime, value: \"24h\" }\n"+
+		"  CancellationPolicy:\n    kind: constraint\n    realizes: c:Cancellation\n    value: \"24 hours\"\n"+
+		"    value-from:\n      - { path: services/api/policy.go, symbol: CancellationWindow }\n      - { path: apps/web/page.tsx, symbol: CANCELLATION_WINDOW_HOURS }\n")
+	write(".gloss.yaml", "boundary: o:clinic\nlevel: system\nrealizes: inherit\n")
+	write("services/reminders/.gloss.yaml", "boundary: o:reminders\nlevel: container\npart-of: o:clinic\ndefault-namespace: l\nrealizes: [l:LeadTimeSetting]\n")
+	write("services/reminders/lead.go", "package reminders\n\n// @gloss publishes-value .LeadTimeSetting scope=line\nconst LeadTime = 24 * time.Hour\n")
+	write("services/api/policy.go", "package api\n\nconst CancellationWindow = 24 * time.Hour\n")
+	write("apps/web/page.tsx", "export const CANCELLATION_WINDOW_HOURS = 24;\n")
+	lgPath := filepath.Join(root, ".glossmark", "ledger.jsonl")
+	run := func() *rollup.Report {
+		t.Helper()
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		for _, d := range res.Diags {
+			if d.Severity == "error" {
+				t.Errorf("extract: %s", d)
+			}
+		}
+		rollup.Derive(res.Graph, ws.Vocab)
+		lg, _ := ledger.Open(lgPath)
+		lg.Sync(res.Graph, res.Markers, "human:alice", time.Now())
+		lg.Save()
+		if n := res.Graph.NodeByCurie("l:CancellationPolicy"); n.ValueFrom != "apps/web/page.tsx:1, services/api/policy.go:3" {
+			t.Errorf("value-from = %q", n.ValueFrom)
+		}
+		return rollup.Compare(res.Graph, ws, rollup.Options{Ledger: lg.Entries})
+	}
+	rep := run()
+	if gp := findings(rep, rollup.KindGap); len(gp) != 0 {
+		t.Errorf("publishes-value should satisfy realizes: %+v", gp)
+	}
+	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
+		t.Errorf("violations: %+v", v)
+	}
+	if d := findings(rep, rollup.KindValueDrift); len(d) != 0 {
+		t.Errorf("baseline drift: %+v", d)
+	}
+	// Either location changing is drift.
+	for _, f := range []string{"apps/web/page.tsx", "services/api/policy.go"} {
+		p := filepath.Join(root, f)
+		orig, _ := os.ReadFile(p)
+		os.WriteFile(p, []byte(strings.Replace(string(orig), "24", "48", 1)), 0o644)
+		if d := concepts(findings(run(), rollup.KindValueDrift)); len(d) != 1 || d[0] != "l:CancellationPolicy" {
+			t.Errorf("%s changed: drift = %v", f, d)
+		}
+		os.WriteFile(p, orig, 0o644)
+		if d := findings(run(), rollup.KindValueDrift); len(d) != 0 {
+			t.Errorf("%s restored: drift = %+v", f, d)
+		}
+	}
+}
+
 // TestValueFrom: a published value bound to code with value-from (or a
 // publishes-value marker) is baselined on first build; changing the code
 // line alone is a value-drift finding and a HARD change in the diff;
@@ -1987,7 +2098,9 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	}
 	write("glossmark.yaml", "owns:\n  pay: { iri: https://x/pay/, tier: core }\n  pa: { iri: https://x/pa/, tier: implementation }\n")
 	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint }\n  Login: { kind: process }\n")
-	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n")
+	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n"+
+		"  RateLimit: { kind: constraint, internal: true }\n  TokenTtl: { kind: constraint, internal: true }\n")
+	write("platform/auth/tests/test_token_security.py", "# @gloss verifies pa:TokenTtl\ndef test_token_expiry(): pass\n")
 	write("platform/.gloss.yaml", "boundary: o:platform\nlevel: system\ncriticality: critical\n")
 	write("platform/metrics/.gloss.yaml", "boundary: o:metrics\nlevel: container\npart-of: o:platform\n")
 	write("platform/metrics/export.py", "# @gloss implements pa:Exporter\ndef export(): pass\n")
@@ -2014,9 +2127,24 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	for _, s := range rollup.SuggestCriticality(g) {
 		sugg[s.Concept] = s.Reason
 	}
-	for _, c := range []string{"pay:Cutoff", "pa:Clock", "pa:Session"} {
+	// pa:Clock and pa:Session would inherit from the core concepts they
+	// realize: the suggestion goes there (issue #43). An internal constraint
+	// is an engineering setting: proposed only on other evidence, here a
+	// security test (#78).
+	if r, ok := sugg["pa:RateLimit"]; ok {
+		t.Errorf("an internal constraint was proposed on the constraint rule alone: %s", r)
+	}
+	for _, c := range []string{"pay:Cutoff", "pay:Login", "pa:TokenTtl"} {
 		if sugg[c] == "" {
 			t.Errorf("expected a high suggestion for %s, got %v", c, sugg)
+		}
+	}
+	if !strings.Contains(sugg["pay:Login"], "realized by pa:Session (verified only by security tests") {
+		t.Errorf("pay:Login reason = %q", sugg["pay:Login"])
+	}
+	for _, c := range []string{"pa:Clock", "pa:Session"} {
+		if _, ok := sugg[c]; ok {
+			t.Errorf("%s realizes an unclassified core concept and is suggested itself: %v", c, sugg)
 		}
 	}
 	if _, ok := sugg["pay:Payment"]; ok {
@@ -2024,6 +2152,15 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	}
 	if _, ok := sugg["pay:Metrics"]; ok {
 		t.Error("a declared level is never overridden")
+	}
+	// A reviewer lowers the core constraint to medium: the implementation
+	// concept that inherits it is not suggested again (issue #43).
+	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint, criticality: medium }\n  Login: { kind: process, criticality: medium }\n")
+	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n"+
+		"  RateLimit: { kind: constraint, internal: true }\n  TokenTtl: { kind: constraint, internal: true, criticality: low }\n")
+	_, g, _, _ = build(t, root)
+	if s := rollup.SuggestCriticality(g); len(s) != 0 {
+		t.Errorf("after the review: %+v, want no suggestions", s)
 	}
 }
 

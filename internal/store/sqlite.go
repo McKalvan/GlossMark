@@ -62,8 +62,22 @@ FROM edges e JOIN nodes a ON a.id = e.s AND a.node = 'artifact' JOIN nodes n ON 
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 `
 
-// Export writes the graph into a new SQLite file at path (replacing any existing file).
-func Export(g *graph.Graph, path string) error {
+// File is an in-scope file with no artifact node (no marker) that sits under
+// a criticality floor: the export lists it as a node='file' row carrying
+// the floor's level, so the governance query sees what gloss impact sees.
+type File struct {
+	Path        string
+	Boundary    string // boundary IRI
+	Criticality string
+	From        string // the floor boundary's CURIE
+}
+
+// FileIRI is the id of an unmarked file's row.
+const FileIRI = "urn:gloss:file:"
+
+// Export writes the graph into a new SQLite file at path (replacing any
+// existing file), plus a node='file' row per unmarked file under a floor.
+func Export(g *graph.Graph, path string, files ...File) error {
 	os.Remove(path)
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -99,6 +113,12 @@ func Export(g *graph.Graph, path string) error {
 		}
 		if _, err := ins.Exec(n.ID, n.CURIE, string(n.NodeType), n.NS, n.Tier, n.Kind, n.Label, n.Doc, n.Published, b2i(n.Internal), b2i(n.Deprecated), n.ReplacedBy, val, b2i(n.Imported), n.Version, n.Owner, n.Path, sym, scope, fp, n.Boundary, n.File, n.Line, n.Criticality, n.CriticalityFrom, string(js)); err != nil {
 			return fmt.Errorf("node %s: %w", n.ID, err)
+		}
+	}
+	for _, f := range files {
+		js, _ := json.Marshal(map[string]any{"type": "node", "node": "file", "id": FileIRI + f.Path, "path": f.Path, "boundary": f.Boundary, "criticality": f.Criticality, "criticality-from": f.From})
+		if _, err := ins.Exec(FileIRI+f.Path, f.Path, "file", nil, nil, nil, f.Path, nil, nil, 0, 0, nil, nil, 0, nil, nil, f.Path, nil, "file", nil, f.Boundary, f.Path, 0, f.Criticality, f.From, string(js)); err != nil {
+			return fmt.Errorf("file %s: %w", f.Path, err)
 		}
 	}
 	ine, err := tx.Prepare(`INSERT INTO edges (s, p, o, source, path, line, scope, symbol, fingerprint, proposed, conf, marker_id, note, actor, rule, via, raw, json)

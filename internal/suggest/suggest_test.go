@@ -94,7 +94,9 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 			t.Errorf("not a reviewable proposal: %+v", p)
 		}
 	}
-	if len(ps) < 8 {
+	// At the default floor: the low-conf test-name matches (wrong or near on
+	// this example) are left out since conf became measured precision.
+	if len(ps) < 6 {
 		t.Errorf("only %d proposals: %+v", len(ps), ps)
 	}
 	if p, ok := got["services/horse-factory/models/mare.ts#Mare"]; !ok || p.Relation != "represents" || p.Target != "zoo:Mare" {

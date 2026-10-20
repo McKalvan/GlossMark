@@ -191,7 +191,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 				continue
 			}
 			if le := opt.Ledger[extract.MarkerID(f.rel, p.Relation, []string{p.Target}, d.Symbol, "symbol")]; (le != nil && le.Status == model.StatusRejected) ||
-				rejected[link{marker.LineFingerprint(f.lines[d.Line-1]), p.Relation, p.Target}] {
+				rejected[link{d.Fingerprint, p.Relation, p.Target}] {
 				skipped++
 				continue
 			}

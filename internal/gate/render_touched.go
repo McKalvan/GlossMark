@@ -52,6 +52,12 @@ func RenderTouched(ts []FileTouch) string {
 			if len(c.ConstrainedBy) > 0 {
 				bits = append(bits, "constrained by "+strings.Join(c.ConstrainedBy, ", "))
 			}
+			if len(c.Guards) > 0 {
+				bits = append(bits, "guards "+strings.Join(c.Guards, ", "))
+			}
+			if len(c.GuardedBy) > 0 {
+				bits = append(bits, "guarded by "+strings.Join(c.GuardedBy, ", "))
+			}
 			if c.Proposed {
 				bits = append(bits, "PROPOSED")
 			}
@@ -65,8 +71,17 @@ func RenderTouched(ts []FileTouch) string {
 			if len(c.Tests) > 0 {
 				fmt.Fprintf(&sb, "      tests: %s\n", strings.Join(c.Tests, ", "))
 			}
+			for _, v := range c.TestsVia {
+				fmt.Fprintf(&sb, "      tests (via %s): %s\n", v.Via, strings.Join(v.Tests, ", "))
+			}
 			if len(c.OtherArtifacts) > 0 {
 				fmt.Fprintf(&sb, "      also linked from: %s\n", strings.Join(c.OtherArtifacts, ", "))
+			}
+			if len(c.GuardedCode) > 0 {
+				fmt.Fprintf(&sb, "      guarded code: %s\n", strings.Join(c.GuardedCode, ", "))
+			}
+			if len(c.ConstrainedCode) > 0 {
+				fmt.Fprintf(&sb, "      constrained code: %s\n", strings.Join(c.ConstrainedCode, ", "))
 			}
 			for _, w := range c.Warnings {
 				fmt.Fprintf(&sb, "      ! %s\n", w)

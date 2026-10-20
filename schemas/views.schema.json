@@ -98,6 +98,10 @@
           "description": "When true (the default) boundaries at or above the zoom level are shown.",
           "type": "boolean",
           "default": true
+        },
+        "slice": {
+          "description": "A saved slice: seed CURIEs whose feature slice (docs/adr/0023-feature-slices.md) the view shows, with context, instead of an include list. Recomputed on every build, so it tracks the code. Not allowed together with include.",
+          "$ref": "#/$defs/curiePattern"
         }
       }
     }

@@ -15,12 +15,19 @@ Pin a release everywhere the tool runs (`@v0.1.0`, never `@latest` or `@main`): 
 ## 0. Scaffold
 
 ```sh
-gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per top-level source directory
-gloss init               # write it, install the agent hook, build the first graph
+gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per deployable directory, then hook and build
+gloss init               # write it, install the agent hook, build the first graph (.glossmark/graph.jsonl)
 gloss check              # passes on the empty scaffold
 ```
 
-`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one per top-level source directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server. It never overwrites a file; run it again and it skips what exists. `--core`, `--impl` and `--iri` override the guesses. The sections below explain what it wrote.
+`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one container manifest per deployable directory, `.gitignore` lines for the viewer only (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server, then builds the first graph. It never overwrites a file; run it again and it skips what exists. The sections below explain what it wrote.
+
+- **Deployable directories.** Each top-level directory holding source, schema (`.avsc`, `.proto`, `.graphql`), infrastructure (Terraform, Kubernetes or Helm YAML) or configuration files gets a manifest. A top-level directory with no project file of its own (`package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`, `Dockerfile`, ...) whose children have one is a grouping (`apps/`, `services/`): each child gets the manifest instead (`apps/web`, `services/booking-api`).
+- **Prefixes.** `--core`, `--impl` and `--boundary-prefix` override the guesses from the directory name (initials, which rarely read as a domain: pick a word).
+- **IRIs.** `--iri` is a base shared by sibling repositories: each namespace gets `<iri><prefix>/` and the repository `<iri><name>/`, so two siblings initialised with the company base never share a namespace IRI. `gloss landscape` refuses two prefixes bound to one IRI.
+- **Importers.** `--import ../shipment-core` (repeatable) imports the sibling's core namespace instead of owning one: `imports:` gets its IRI, `^<current version>` and a `source:` path, no core tier file is written, and `init` runs `gloss lock`.
+- **A workspace below the git root.** GitHub runs workflows only at the git root, so `init` writes no `.github/` there and prints the job with `root:` set to the workspace instead; `gloss doctor` looks for it in the git root's workflows.
+- **An existing vocabulary.** A `glossary.md` or an `enums.yaml` in the tree is listed with the `gloss import` command that reads it (section 2).
 
 ## 1. Declare the namespaces
 
@@ -51,12 +58,14 @@ Litmus test: if a domain expert would nod at the term, it is core; if only an en
 If the repository already keeps its vocabulary, import it instead of retyping it, and feed the result back to whatever checks it:
 
 ```sh
-gloss import --from markdown-glossary docs/glossary.md --namespace pay   # headings → concepts, Def. → doc, Aliases, Status (not implemented → proposed: true)
-gloss import --from enums enums.yaml --namespace pay [--values]          # each enum an entity; --values adds each value as is-a the enum
+gloss import --from markdown-glossary docs/glossary.md --namespace pay   # headings → concepts, Def. → doc, Aliases, Kind, Status (not implemented → proposed: true)
+gloss import --from enums enums.yaml --namespace pay [--values]          # each enum an entity; --values adds each value as is-a the enum (--value-names prefixed: LoanStatusActive)
 gloss export --status -o status.json                                     # implemented / untested / unimplemented / orphan / proposed per concept
 ```
 
-Imports are re-runnable: new terms are appended, a changed definition or alias list updates that one line, everything else in the file (kinds you fixed, comments, alignment) is left alone. Kinds are guessed when the source has none; review them.
+A glossary entry is a `##` to `####` heading followed by field lines: `**Def.**` (the doc; else the first paragraph), `**Aliases:**`, `**Kind:**` (`entity`, `process`, `event`, `constraint`, `measure`, ...), `**Is-a:**` and `**Status:**` (`planned` makes it `proposed: true`; `deprecated ... use Patron` or `replaced by Patron` sets `deprecated: true` and `replaced-by:`). A heading with no field line that is followed by a deeper heading is a section (`## Retired terms` above `### Borrower`) and is skipped. Without a `Kind:` line the kind is guessed from the definition (one that starts "Lending ..." or "The process of ..." is a process; one that says "never", "at most" or "how long" is a constraint), then from the name's ending; `gloss import` prints each added name with its kind and where the guess came from. Review them.
+
+Imports are re-runnable: new terms are appended, and everything else in the file (kinds you fixed, comments, alignment) is left alone. `.glossmark/import-record.jsonl` (commit it) records what each import read from the source, so a re-run updates a definition or alias list only when the source changed since the last import: a doc you improved by hand stays until the source changes, and a concept you deleted or renamed after an import is not added again.
 
 ## 3. Write the implementation that realizes it
 
@@ -134,7 +143,7 @@ gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR 
 gloss status                     # proposed / stale / rejected links
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings
-gloss coverage --fail-under 80   # headline: implementation concepts with an artifact and a verifier; files are secondary
+gloss coverage --fail-under 80   # headline: concepts with an artifact and a verifier (implementation concepts, internal ones only at high or critical, and core concepts code implements directly; n/a when none); files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
@@ -169,7 +178,7 @@ The briefing ranks concepts by relevance: those linked by code under the directo
 
 A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [chargeback]` on `pay:Refund`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "settlement cutoff" finds `sw:CutoffClock`.
 
-Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept` and `drift`.
+Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept`, `slice_of` and `drift`. `gloss slice <curie>` (MCP `slice_of`, `gloss context --concept`) shows everything relevant to one feature; see [ADVANCED.md](ADVANCED.md#feature-slices-gloss-slice).
 
 ## 7. Wire CI
 

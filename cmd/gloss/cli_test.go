@@ -210,6 +210,36 @@ func TestAcceptFileScopeAndReconfirm(t *testing.T) {
 	}
 }
 
+// The review loop end to end: status lists a proposal, reject records it with
+// its reason and status moves it to rejected, and accept on another proposal
+// leaves nothing proposed.
+// @gloss verifies gmi:ReviewCommands
+func TestStatusAcceptReject(t *testing.T) {
+	root := tiny(t, map[string]string{
+		"doer.py":  "# @gloss? implements .Doer conf=0.9\ndef doer(): pass\n",
+		"other.py": "# @gloss? implements .Doer conf=0.8\ndef other(): pass\n",
+	})
+	gloss(t, "build", "-q", "--root", root)
+	code, out := gloss(t, "status", "--root", root)
+	if code != 0 || !strings.Contains(out, "proposed (2)") || !strings.Contains(out, "doer.py") || !strings.Contains(out, "other.py") {
+		t.Fatalf("status before review: exit %d\n%s", code, out)
+	}
+	if code, _ := gloss(t, "reject", "other.py:1", "--reason", "not the mechanism", "--root", root); code != 0 {
+		t.Fatalf("reject: exit %d", code)
+	}
+	if code, _ := gloss(t, "accept", "doer.py:1", "--root", root); code != 0 {
+		t.Fatalf("accept: exit %d", code)
+	}
+	gloss(t, "build", "-q", "--root", root)
+	code, out = gloss(t, "status", "--root", root)
+	if code != 0 || strings.Contains(out, "proposed (") || !strings.Contains(out, "rejected (1)") || !strings.Contains(out, "other.py") || strings.Contains(out, "doer.py") {
+		t.Errorf("status after review: exit %d\n%s", code, out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "doer.py")); strings.Contains(string(b), "@gloss?") {
+		t.Errorf("accept left the proposal marker:\n%s", b)
+	}
+}
+
 // Issue #70: two identical proposals on one symbol share an id; check flags
 // the second, and one accept flips both lines.
 func TestDuplicateProposals(t *testing.T) {

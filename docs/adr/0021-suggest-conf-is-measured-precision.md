@@ -18,15 +18,15 @@ Status: accepted, 2026-10-20. Closes issues #65 (F-CAL-1) and #69 (F-CAL-5).
 
 ## Measured on the calibration set (2026-10-20)
 
-The in-sample numbers below come from the shipped table. The pooled set has 316 proposals at `--min-conf 0.01` and 237 labels, from 6 sets:
+The in-sample numbers below come from the shipped table. The pooled set has 358 proposals at `--min-conf 0.01` and 273 labels, from 6 sets (refitted after merging main at 3e3fd7a):
 
 | | proposals | precision | conf >= 0.7 (SOFT) | SOFT precision |
 | --- | ---: | ---: | ---: | ---: |
-| main before this change, default `--min-score 60` | 65 | 24.6 % | 17 (26.2 %) | 41.2 % |
-| this matcher, default `--min-conf 0.3` | 144 | 49.3 % | 9 (6.2 %) | 100 % |
-| this matcher, held out (each set scored by the table fitted on the others) | 316 | 28.8 % | 101 (32.0 %) | 21.8 % |
+| main before this change, default `--min-score 60` | 64 | 25.0 % | 18 (28.1 %) | 44.4 % |
+| this matcher, default `--min-conf 0.3` | 157 | 47.1 % | 9 (5.7 %) | 100 % |
+| this matcher, held out (each set scored by the table fitted on the others) | 358 | 26.8 % | 134 (37.4 %) | 19.4 % |
 
-The default output is twice as precise as before, and SOFT now means what the gate assumes on this set. But only 6 % of proposals reach SOFT, and the held-out estimate shows the table does not carry over between sets as different as these. The repository's own code is 80 % of the proposals and is unlike the fixtures. **The Phase 2 gate (at least 80 % auto-accept at at least 90 % precision) is not met.** The fixtures were written alongside the matcher, so their numbers flatter it. The repository and the examples were not. A larger labelled set from real adoptions, added as more calibration sets, is what moves these numbers. A matcher change that the set rewards is the only kind that counts.
+The default output is nearly twice as precise as before, and SOFT now means what the gate assumes on this set. But only 6 % of proposals reach SOFT, and the held-out estimate shows the table does not carry over between sets as different as these. The repository's own code is over 80 % of the proposals and is unlike the fixtures. **The Phase 2 gate (at least 80 % auto-accept at at least 90 % precision) is not met.** The fixtures were written alongside the matcher, so their numbers flatter it. The repository and the examples were not. A larger labelled set from real adoptions, added as more calibration sets, is what moves these numbers. A matcher change that the set rewards is the only kind that counts.
 
 ## Consequences
 

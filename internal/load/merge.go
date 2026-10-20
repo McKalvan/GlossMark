@@ -23,6 +23,32 @@ func Merge(wss []*Workspace) (*Workspace, error) {
 	out.Config.Policy = wss[0].Config.Policy
 	out.Config.Views = wss[0].Config.Views
 	out.Views = wss[0].Views
+	// Two prefixes bound to one namespace IRI would merge two namespaces
+	// into one by IRI, silently (siblings initialised with the same base).
+	byIRI := map[string]string{}
+	bind := func(repo, prefix, iri string) error {
+		if iri == "" {
+			return nil
+		}
+		if ex, ok := byIRI[iri]; ok && ex != prefix {
+			return fmt.Errorf("namespaces %s: and %s: both resolve to %s (in %s); give each namespace its own IRI", ex, prefix, iri, repo)
+		}
+		byIRI[iri] = prefix
+		return nil
+	}
+	for _, ws := range wss {
+		name := filepath.Base(ws.Root)
+		for _, p := range sortedKeys(ws.Config.Owns) {
+			if err := bind(name, p, ws.Config.Owns[p].IRI); err != nil {
+				return nil, err
+			}
+		}
+		for _, p := range sortedKeys(ws.Config.Imports) {
+			if err := bind(name, p, ws.Config.Imports[p].IRI); err != nil {
+				return nil, err
+			}
+		}
+	}
 	for _, ws := range wss {
 		name := filepath.Base(ws.Root)
 		for p, iri := range ws.Prefixes {
@@ -83,4 +109,13 @@ func Merge(wss []*Workspace) (*Workspace, error) {
 	}
 	sort.Strings(out.Files)
 	return out, nil
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

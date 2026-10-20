@@ -30,11 +30,11 @@
       "$ref": "#/$defs/stringOrList"
     },
     "realizes": {
-      "description": "Concepts this boundary realizes, as CURIEs. The entry inherit means the union of what the nested boundaries declare; other entries add to it.",
+      "description": "Concepts this boundary realizes, as CURIEs. The entry inherit means the union of what the nested boundaries declare; other entries add to it. An explicit empty list (realizes: []) declares that the boundary realizes nothing, so any derived realizes is a violation; the same holds for every declared relation (docs/adr/0012-surfaces.md).",
       "$ref": "#/$defs/stringOrList"
     },
     "holds": {
-      "description": "Entities whose data lives in this boundary (tables, files, packages); derived from represents on entity concepts and compared by gloss drift.",
+      "description": "Concepts whose data lives in this boundary (tables, files, packages): entities, stored measures, event logs; derived from represents on a concept of any kind and compared by gloss drift (docs/adr/0013-data-shapes-and-coverage.md).",
       "$ref": "#/$defs/stringOrList"
     },
     "presents": {
@@ -43,6 +43,10 @@
     },
     "hosts": {
       "description": "Concepts this boundary is a shell or container for; compared like realizes, never implies it.",
+      "$ref": "#/$defs/stringOrList"
+    },
+    "configures": {
+      "description": "Concepts whose value this boundary edits at runtime (an admin page for a limit); compared like presents, never implies realizes (docs/adr/0012-surfaces.md).",
       "$ref": "#/$defs/stringOrList"
     },
     "produces": {
@@ -85,7 +89,7 @@
       "type": "string"
     },
     "criticality": {
-      "description": "Governance level of the boundary (docs/GOVERNANCE.md). When unset it is the highest level of the concepts the boundary's code realizes, else its parent's.",
+      "description": "Governance level of the boundary (docs/GOVERNANCE.md). When unset it is the highest level of the concepts the boundary's code realizes, represents or configures, else its parent's; a boundary that only presents or hosts stays unclassified (docs/adr/0012-surfaces.md).",
       "type": "string",
       "enum": ["low", "medium", "high", "critical"]
     },

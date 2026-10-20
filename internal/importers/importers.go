@@ -28,7 +28,14 @@ type Entry struct {
 	IsA        []string `json:"is_a,omitempty"`
 	Proposed   bool     `json:"proposed,omitempty"`
 	Deprecated bool     `json:"deprecated,omitempty"`
-	Line       int      `json:"line"`
+	// ReplacedBy is read from a deprecated status line ("use Patron",
+	// "replaced by Patron").
+	ReplacedBy string `json:"replaced_by,omitempty"`
+	// KindFrom says where Kind came from: "source" (a Kind: line or an
+	// enum), "definition" (the doc reads like a process or a constraint) or
+	// "name" (the name's ending).
+	KindFrom string `json:"kind_from,omitempty"`
+	Line     int    `json:"line"`
 	// Enum is set on an enum value named by its bare value: when the
 	// ontology already holds a concept of that name that is not is-a the
 	// enum (a glossary term, say), the value is written as <Enum><Value>
@@ -45,20 +52,32 @@ var (
 // ParseGlossary reads a markdown glossary: each ##-#### heading is a concept;
 // "Def." (or "Definition") lines give the doc, "Aliases" the aliases,
 // "Status" whether it is implemented, "Kind" its kind. A heading's first
-// plain paragraph is the doc when no Def. line exists.
+// plain paragraph is the doc when no Def. line exists. A heading with no
+// field line that is followed by a deeper heading is a section ("## Retired
+// terms" above "### Borrower"), not a concept. Without a Kind line the kind
+// is guessed from the definition, then from the name.
 func ParseGlossary(text string) []Entry {
 	var out []Entry
 	var cur *Entry
 	var para []string
-	flush := func() {
+	level, fields := 0, 0
+	flush := func(next int) {
 		if cur == nil {
+			return
+		}
+		if fields == 0 && next > level {
+			cur, para = nil, nil // a section heading
 			return
 		}
 		if cur.Doc == "" && len(para) > 0 {
 			cur.Doc = firstSentence(strings.Join(para, " "))
 		}
 		if cur.Kind == "" {
-			cur.Kind = guessKind(cur.Name)
+			if k := kindFromDoc(cur.Doc); k != "" {
+				cur.Kind, cur.KindFrom = k, "definition"
+			} else {
+				cur.Kind, cur.KindFrom = guessKind(cur.Name), "name"
+			}
 		}
 		out = append(out, *cur)
 		cur, para = nil, nil
@@ -78,12 +97,13 @@ func ParseGlossary(text string) []Entry {
 			continue
 		}
 		if m := headingRe.FindStringSubmatch(line); m != nil {
-			flush()
+			flush(len(m[1]))
 			name := Pascal(stripMarkup(m[2]))
 			if name == "" {
 				continue
 			}
 			cur = &Entry{Name: name, Line: n}
+			level, fields = len(m[1]), 0
 			continue
 		}
 		if cur == nil {
@@ -91,6 +111,7 @@ func ParseGlossary(text string) []Entry {
 		}
 		if m := fieldRe.FindStringSubmatch(line); m != nil && strings.TrimSpace(m[2]) != "" {
 			val := strings.TrimSpace(stripMarkup(m[2]))
+			fields++
 			switch strings.ToLower(strings.TrimSuffix(m[1], ".")) {
 			case "def", "definition":
 				cur.Doc = val
@@ -104,6 +125,9 @@ func ParseGlossary(text string) []Entry {
 				switch s := strings.ToLower(val); {
 				case strings.Contains(s, "deprecat") || strings.Contains(s, "retired") || strings.Contains(s, "removed"):
 					cur.Deprecated = true
+					if m := replacedRe.FindStringSubmatch(val); m != nil {
+						cur.ReplacedBy = Pascal(m[1])
+					}
 				case strings.Contains(s, "implemented") && !strings.Contains(s, "not implemented") && !strings.Contains(s, "unimplemented"),
 					strings.Contains(s, "live"), strings.Contains(s, "shipped"), strings.Contains(s, "done"), strings.Contains(s, "stable"):
 				default:
@@ -111,7 +135,7 @@ func ParseGlossary(text string) []Entry {
 				}
 			case "kind", "type":
 				if k := strings.ToLower(strings.Trim(val, "`")); validKind(k) {
-					cur.Kind = k
+					cur.Kind, cur.KindFrom = k, "source"
 				}
 			case "is a", "is-a":
 				cur.IsA = append(cur.IsA, Pascal(val))
@@ -125,8 +149,41 @@ func ParseGlossary(text string) []Entry {
 			cur.Doc = firstSentence(strings.Join(para, " "))
 		}
 	}
-	flush()
+	flush(0)
 	return out
+}
+
+// replacedRe finds the successor in a deprecated status line: "use Patron",
+// "replaced by Patron", "superseded by Patron", "see Patron".
+var replacedRe = regexp.MustCompile(`(?i)\b(?:use|replaced by|superseded by|see|now)\s+(?:the\s+)?([A-Za-z][\w-]*(?:\s+[A-Z][\w-]*)*)`)
+
+// constraintWords in a definition mark a rule rather than a thing.
+var constraintWords = regexp.MustCompile(`(?i)\b(never|cannot|can't|must not|may not|at most|at least|no more than|no longer than|how long|how many|maximum|minimum|exceeds?)\b`)
+
+// kindFromDoc reads a kind from a definition: one that starts with a gerund
+// ("Lending an item ...", "The process of ...") is a process; one that
+// states a bound or a prohibition ("never", "at most", "how long") is a
+// constraint. It returns "" when the definition says neither.
+func kindFromDoc(doc string) string {
+	d := strings.TrimSpace(doc)
+	if d == "" {
+		return ""
+	}
+	low := strings.ToLower(d)
+	for _, p := range []string{"the process of ", "the act of ", "a process ", "the step ", "a step "} {
+		if strings.HasPrefix(low, p) {
+			return "process"
+		}
+	}
+	first := strings.Fields(low)[0]
+	first = strings.Trim(first, ",.;:")
+	if len(first) > 5 && strings.HasSuffix(first, "ing") && first != "nothing" && first != "something" && first != "anything" && first != "everything" && first != "string" {
+		return "process"
+	}
+	if constraintWords.MatchString(d) {
+		return "constraint"
+	}
+	return ""
 }
 
 // ParseEnums reads an enums file: a mapping (optionally under enums:) of
@@ -136,6 +193,13 @@ func ParseGlossary(text string) []Entry {
 // <Enum><Value> when the bare name would collide, here or with an unrelated
 // concept already in the ontology; see Entry.Enum).
 func ParseEnums(b []byte, withValues bool) ([]Entry, error) {
+	return ParseEnumsNamed(b, withValues, false)
+}
+
+// ParseEnumsNamed is ParseEnums with a choice of value names: prefixed
+// names every value <Enum><Value> (LoanStatusActive), so a bare value never
+// lands in the namespace without its enum.
+func ParseEnumsNamed(b []byte, withValues, prefixed bool) ([]Entry, error) {
 	var root yaml.Node
 	if err := yaml.Unmarshal(b, &root); err != nil {
 		return nil, err
@@ -156,7 +220,7 @@ func ParseEnums(b []byte, withValues bool) ([]Entry, error) {
 	vals := map[string][]val{}
 	for i := 0; i+1 < len(m.Content); i += 2 {
 		k, v := m.Content[i], m.Content[i+1]
-		e := Entry{Name: Pascal(k.Value), Kind: "entity", Line: k.Line}
+		e := Entry{Name: Pascal(k.Value), Kind: "entity", KindFrom: "source", Line: k.Line}
 		if e.Name == "" {
 			continue
 		}
@@ -229,8 +293,8 @@ func ParseEnums(b []byte, withValues bool) ([]Entry, error) {
 				if name == "" {
 					continue
 				}
-				e := Entry{Name: name, IsA: []string{en}, Doc: strings.TrimSpace(v.doc), Line: v.line, Enum: en}
-				if names[name] {
+				e := Entry{Name: name, IsA: []string{en}, Doc: strings.TrimSpace(v.doc), Line: v.line, Enum: en, KindFrom: "source"}
+				if names[name] || prefixed {
 					e.Name, e.Enum = en+name, ""
 				}
 				names[e.Name] = true
@@ -266,14 +330,32 @@ func firstOf(m *yaml.Node, keys ...string) *yaml.Node {
 type Result struct {
 	Added, Updated, Unchanged []string
 	Skipped                   []string // with the reason
+	// Kinds maps each added name to its kind and where it came from
+	// ("process, from the definition").
+	Kinds map[string]string
+	// Kept lists names whose doc or aliases were edited by hand since the
+	// last import while the source stayed the same: the edit is kept.
+	Kept []string
 }
 
-// Apply writes entries into an ontology file: new concepts are appended in
-// block style; for existing ones only doc and aliases are updated when the
-// source changed them, so a re-run is a no-op and hand edits elsewhere in the
-// entry survive. proposed: and deprecated: are set on new entries only.
+// Apply writes entries into an ontology file without an import record.
 func Apply(path string, entries []Entry, by string, dry bool) (*Result, error) {
-	r := &Result{}
+	return ApplyRecorded(path, "", entries, by, dry, nil)
+}
+
+// ApplyRecorded writes entries into the ontology file of namespace ns: new
+// concepts are appended in block style; for existing ones only doc and
+// aliases are updated, so a re-run is a no-op and hand edits elsewhere in
+// the entry survive. proposed:, deprecated: and replaced-by: are set on new
+// entries only.
+//
+// With a record (what earlier imports wrote), a doc or alias list is
+// updated only when the source changed since the last import, so a doc
+// improved by hand stays; and a name the record has but the ontology does
+// not (deleted or renamed by hand) is not added again. The record is
+// updated in memory; the caller saves it.
+func ApplyRecorded(path, ns string, entries []Entry, by string, dry bool, rec *Record) (*Result, error) {
+	r := &Result{Kinds: map[string]string{}}
 	for _, e := range entries {
 		if !validName(e.Name) {
 			r.Skipped = append(r.Skipped, fmt.Sprintf("%s (line %d): not a usable concept name", e.Name, e.Line))
@@ -296,8 +378,19 @@ func Apply(path string, entries []Entry, by string, dry bool) (*Result, error) {
 				}
 			}
 		}
+		last := rec.get(ns, e.Name)
 		if !ok {
+			if last != nil {
+				r.Skipped = append(r.Skipped, fmt.Sprintf("%s: removed from the ontology after an earlier import; not added again (drop it from %s to re-import it)", e.Name, RecordName))
+				continue
+			}
 			r.Added = append(r.Added, e.Name)
+			if e.KindFrom != "source" && len(e.IsA) == 0 {
+				r.Kinds[e.Name] = e.Kind + ", guessed from the " + e.KindFrom
+			} else if e.Kind != "" {
+				r.Kinds[e.Name] = e.Kind
+			}
+			rec.put(ns, e)
 			if dry {
 				continue
 			}
@@ -315,12 +408,22 @@ func Apply(path string, entries []Entry, by string, dry bool) (*Result, error) {
 				if err := ontoedit.SetField(path, e.Name, "deprecated", "true"); err != nil {
 					return r, err
 				}
+				if e.ReplacedBy != "" {
+					if err := ontoedit.SetField(path, e.Name, "replaced-by", e.ReplacedBy); err != nil {
+						return r, err
+					}
+				}
 			}
 			continue
 		}
-		changed := false
+		changed, kept := false, false
 		if e.Doc != "" {
-			if old, _, _ := ontoedit.Get(path, e.Name, "doc"); old != e.Doc {
+			old, _, _ := ontoedit.Get(path, e.Name, "doc")
+			switch {
+			case old == e.Doc:
+			case last != nil && last.Doc == e.Doc:
+				kept = true // edited by hand; the source has not changed since
+			default:
 				changed = true
 				if !dry {
 					if err := ontoedit.SetField(path, e.Name, "doc", ontoedit.Quote(e.Doc)); err != nil {
@@ -331,7 +434,12 @@ func Apply(path string, entries []Entry, by string, dry bool) (*Result, error) {
 			}
 		}
 		if len(e.Aliases) > 0 {
-			if old, _, _ := ontoedit.Get(path, e.Name, "aliases"); old != strings.Join(e.Aliases, ", ") {
+			old, _, _ := ontoedit.Get(path, e.Name, "aliases")
+			switch {
+			case old == strings.Join(e.Aliases, ", "):
+			case last != nil && strings.Join(last.Aliases, ", ") == strings.Join(e.Aliases, ", "):
+				kept = true
+			default:
 				changed = true
 				if !dry {
 					if err := ontoedit.SetField(path, e.Name, "aliases", ontoedit.List(e.Aliases)); err != nil {
@@ -341,9 +449,14 @@ func Apply(path string, entries []Entry, by string, dry bool) (*Result, error) {
 				}
 			}
 		}
-		if changed {
+		rec.put(ns, e)
+		switch {
+		case changed:
 			r.Updated = append(r.Updated, e.Name)
-		} else {
+		case kept:
+			r.Kept = append(r.Kept, e.Name)
+			r.Unchanged = append(r.Unchanged, e.Name)
+		default:
 			r.Unchanged = append(r.Unchanged, e.Name)
 		}
 	}

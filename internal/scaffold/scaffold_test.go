@@ -11,6 +11,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
@@ -20,6 +21,193 @@ func TestGuessPrefixes(t *testing.T) {
 		if c != want[0] || i != want[1] {
 			t.Errorf("%s: %s/%s, want %v", name, c, i, want)
 		}
+	}
+}
+
+func writeTree(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	for rel, content := range files {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+}
+
+func planned(p *Plan) map[string]File {
+	out := map[string]File{}
+	for _, f := range p.Files {
+		out[f.Path] = f
+	}
+	return out
+}
+
+// TestInitMonorepo (issue #35): a grouping directory is replaced by the
+// projects in it, a directory of Kubernetes YAML or Avro schemas gets a
+// manifest, and --boundary-prefix sets the boundary prefix.
+func TestInitMonorepo(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "clinic-booking")
+	writeTree(t, root, map[string]string{
+		"apps/web/package.json":                  "{}\n",
+		"apps/web/app/page.tsx":                  "export default 1\n",
+		"services/booking-api/go.mod":            "module x\n",
+		"services/booking-api/main.go":           "package main\n",
+		"services/reminders/pyproject.toml":      "[project]\n",
+		"services/reminders/app/main.py":         "x = 1\n",
+		"services/api/Dockerfile":                "FROM scratch\n",
+		"apps/api/package.json":                  "{}\n",
+		"deploy/booking-api.yaml":                "apiVersion: apps/v1\nkind: Deployment\n",
+		"schemas/claim.avsc":                     "{}\n",
+		"db/migrations/0001_init.sql":            "create table t();\n",
+		"docs/glossary.md":                       "## Appointment\n",
+		"config/enums.yaml":                      "Status: [OPEN]\n",
+		"README.md":                              "hi\n",
+		"services/reminders/node_modules/x.js":   "x\n",
+		"apps/web/node_modules/dep/package.json": "{}\n",
+	})
+	p, err := Make(root, Options{BoundaryPrefix: "lk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "apps/api,apps/web,config,db,deploy,schemas,services/api,services/booking-api,services/reminders"
+	if got := strings.Join(p.Dirs, ","); got != want {
+		t.Errorf("dirs = %s\nwant   %s", got, want)
+	}
+	files := planned(p)
+	if f := files["apps/web/.gloss.yaml"]; !strings.Contains(f.Content, "boundary: lk:web\n") || !strings.Contains(f.Content, "part-of: lk:clinic-booking") {
+		t.Errorf("apps/web manifest:\n%s", f.Content)
+	}
+	// Two projects named api: the second takes its path.
+	if a, s := files["apps/api/.gloss.yaml"].Content, files["services/api/.gloss.yaml"].Content; !strings.Contains(a, "lk:api\n") || !strings.Contains(s, "lk:services-api\n") {
+		t.Errorf("api manifests:\n%s\n%s", a, s)
+	}
+	if _, ok := files["apps/.gloss.yaml"]; ok {
+		t.Error("a grouping directory got a manifest")
+	}
+	if p.Boundary != "lk" || !strings.Contains(p.String(), "boundaries lk:") {
+		t.Errorf("boundary prefix %q", p.Boundary)
+	}
+	// The vocabulary files are offered to the importers (issue #135, L1).
+	if v := strings.Join(p.Vocabulary, "\n"); !strings.Contains(v, "--from markdown-glossary docs/glossary.md --namespace cb") || !strings.Contains(v, "--from enums config/enums.yaml --namespace cb") {
+		t.Errorf("vocabulary = %v", p.Vocabulary)
+	}
+	if err := p.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := extract.Build(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range append(res.Diags, check.Run(ws, res.Graph)...) {
+		if d.Severity == "error" {
+			t.Errorf("%s", d)
+		}
+	}
+}
+
+// TestInitBelowGitRoot (issue #36): in a subdirectory of a git repository
+// init writes no .github/ and prints the job with root: set.
+func TestInitBelowGitRoot(t *testing.T) {
+	top := t.TempDir()
+	root := filepath.Join(top, "showcase", "clinic-booking")
+	writeTree(t, top, map[string]string{".git/HEAD": "ref: refs/heads/main\n", "showcase/clinic-booking/src/a.go": "package a\n"})
+	p, err := Make(root, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := planned(p)[".github/workflows/gloss.yml"]; f.Action != Skip {
+		t.Errorf("workflow action = %s", f.Action)
+	}
+	if !strings.Contains(p.Workflow, "root: showcase/clinic-booking,") || !strings.Contains(p.String(), "uses: mckalvan/glossmark@") {
+		t.Errorf("workflow snippet:\n%s", p.String())
+	}
+	if err := p.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".github")); err == nil {
+		t.Error("init wrote .github/ below the git root")
+	}
+	// At the git root the job is written.
+	p2, _ := Make(top, Options{Name: "mono"})
+	if f := planned(p2)[".github/workflows/gloss.yml"]; f.Action != Create || p2.Workflow != "" {
+		t.Errorf("at the git root: %s %q", f.Action, p2.Workflow)
+	}
+}
+
+// TestInitIRIs (issue #135, FF3): an --iri base gives every namespace its
+// own IRI, so siblings initialised with the same base never share one.
+func TestInitIRIs(t *testing.T) {
+	cfg := func(name, core string) *model.Config {
+		root := filepath.Join(t.TempDir(), name)
+		os.MkdirAll(root, 0o755)
+		p, err := Make(root, Options{Core: core, IRIBase: "https://onto.kestrel.example/"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Apply(); err != nil {
+			t.Fatal(err)
+		}
+		c, err := model.LoadConfig(filepath.Join(root, "glossmark.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	a, b := cfg("alpha", "frt"), cfg("beta", "bc")
+	seen := map[string]string{}
+	for _, c := range []*model.Config{a, b} {
+		for prefix, ns := range c.Owns {
+			if other, ok := seen[ns.IRI]; ok {
+				t.Errorf("%s: and %s: share %s", prefix, other, ns.IRI)
+			}
+			seen[ns.IRI] = prefix
+		}
+	}
+	if a.Owns["frt"].IRI != "https://onto.kestrel.example/frt/" || a.RepoIRI != "https://onto.kestrel.example/alpha/" {
+		t.Errorf("alpha: %s %s", a.Owns["frt"].IRI, a.RepoIRI)
+	}
+}
+
+// TestInitImport (issue #135, FF2): --import makes the sibling's core
+// namespace an import, writes no core tier file and keeps its own prefixes.
+func TestInitImport(t *testing.T) {
+	top := t.TempDir()
+	writeTree(t, top, map[string]string{
+		"shipment-core/glossmark.yaml":          "owns:\n  frt: { iri: https://onto.k.example/frt/, tier: core, version: 1.2.0 }\n  sci: { iri: https://onto.k.example/sci/, tier: implementation }\n",
+		"shipment-core/ontology/frt.gloss.yaml": "namespace: frt\nversion: 1.2.0\nconcepts:\n  Shipment: { kind: entity, doc: \"A consignment.\" }\n",
+		"dispatch/src/a.ts":                     "export const a = 1\n",
+	})
+	root := filepath.Join(top, "dispatch")
+	p, err := Make(root, Options{Imports: []string{"../shipment-core"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Core != "frt" || p.Impl != "dii" || p.Boundary != "dib" || strings.Join(p.Imported, ",") != "frt" {
+		t.Errorf("prefixes %s %s %s %v", p.Core, p.Impl, p.Boundary, p.Imported)
+	}
+	files := planned(p)
+	if _, ok := files["ontology/frt.gloss.yaml"]; ok {
+		t.Error("an importer writes the core tier file")
+	}
+	cfg := files["glossmark.yaml"].Content
+	if strings.Contains(cfg, "tier: core") || !strings.Contains(cfg, `frt: { iri: https://onto.k.example/frt/, version: "^1.2.0", source: ../shipment-core/ontology/frt.gloss.yaml }`) {
+		t.Errorf("glossmark.yaml:\n%s", cfg)
+	}
+	if err := p.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws.Owned["frt"] || ws.Resolved["frt"] == nil {
+		t.Errorf("frt: owned=%v resolved=%v", ws.Owned["frt"], ws.Resolved["frt"])
+	}
+	if _, err := Make(root+"2", Options{Imports: []string{"../nowhere"}}); err == nil {
+		t.Error("a missing sibling is accepted")
 	}
 }
 
