@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1216,6 +1218,39 @@ func TestInfraAndDataSatisfyDeclarations(t *testing.T) {
 	}
 }
 
+// TestStatusCountsOnlyImplementingLinks: export --status does not call a
+// concept implemented when only prose and configuration link to it, while
+// infrastructure on a resource still counts, as it lifts to realizes.
+func TestStatusCountsOnlyImplementingLinks(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Loan: { kind: process }\n  Host: { kind: resource }\n")
+	write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\nrealizes: [z:Loan, z:Host]\n")
+	write("svc/README.md", "<!-- @gloss documents z:Loan scope=file -->\n# Loans\n")
+	write("svc/loans.yaml", "# @gloss configures z:Loan scope=file\nloan_days: 21\n")
+	write("svc/main.tf", "# @gloss provisions z:Host\nresource \"aws_instance\" \"host\" {}\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if gaps := concepts(findings(rep, rollup.KindGap)); len(gaps) != 1 || gaps[0] != "z:Loan" {
+		t.Errorf("gaps = %v, want [z:Loan]", gaps)
+	}
+	st := map[string]rollup.ConceptStatusRow{}
+	for _, r := range rollup.ConceptStatus(g, rep) {
+		st[r.Concept] = r
+	}
+	if r := st["z:Loan"]; r.Status != rollup.StatusUnimplemented || r.Artifacts != 0 {
+		t.Errorf("z:Loan = %+v, want unimplemented with 0 artifacts", r)
+	}
+	if r := st["z:Host"]; r.Status != rollup.StatusImplemented || r.Artifacts != 1 {
+		t.Errorf("z:Host = %+v, want implemented with 1 artifact", r)
+	}
+}
+
 func curies(g *graph.Graph, ids []string) []string {
 	var out []string
 	for _, id := range ids {
@@ -1698,4 +1733,56 @@ func TestPlacement(t *testing.T) {
 		{"all", "z:Cutoff", views.PlacementBound, "value bound to code at cfg.py:1"},
 		{"all", "z:Budgeting", views.PlacementSurface, "presented by o:web"},
 	})
+}
+
+// TestManifestRelationsDocumented: the Manifest column of ADVANCED.md's
+// relation table ticks exactly the relations a .gloss.yaml accepts, and a
+// manifest that writes one it does not is a GM110 with a relative path.
+func TestManifestRelationsDocumented(t *testing.T) {
+	accepted := map[string]bool{}
+	mt := reflect.TypeOf(model.Manifest{})
+	for i := 0; i < mt.NumField(); i++ {
+		accepted[strings.Split(mt.Field(i).Tag.Get("yaml"), ",")[0]] = true
+	}
+	b, err := os.ReadFile(filepath.Join("..", "..", "docs", "ADVANCED.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := 0
+	for _, line := range strings.Split(string(b), "\n") {
+		cells := strings.Split(line, "|")
+		if len(cells) < 6 || !strings.HasPrefix(strings.TrimSpace(cells[1]), "`") {
+			continue
+		}
+		manifest := strings.TrimSpace(cells[4]) == "✓"
+		for _, name := range regexp.MustCompile("`([a-z-]+)`").FindAllStringSubmatch(cells[1], -1) {
+			if model.NewVocabulary().Get(name[1]) == nil {
+				continue
+			}
+			rows++
+			if manifest != accepted[name[1]] {
+				t.Errorf("ADVANCED.md: %s has manifest tick %v, but manifests accept it: %v", name[1], manifest, accepted[name[1]])
+			}
+		}
+	}
+	if rows < 20 {
+		t.Fatalf("relation table not found (%d rows)", rows)
+	}
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "glossmark.yaml"), []byte("owns:\n  z: { iri: https://x/z/, tier: core }\n"), 0o644)
+	os.MkdirAll(filepath.Join(root, "svc"), 0o755)
+	os.WriteFile(filepath.Join(root, "svc", ".gloss.yaml"), []byte("boundary: o:svc\nhas-part: [o:web]\n"), 0o644)
+	ws, err := load.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gm110 []string
+	for _, d := range ws.Diags {
+		if d.Code == "GM110" {
+			gm110 = append(gm110, d.String())
+		}
+	}
+	if len(gm110) != 1 || !strings.HasPrefix(gm110[0], "svc/.gloss.yaml:1:") || strings.Contains(gm110[0], root) {
+		t.Errorf("GM110 = %v, want one diagnostic with only the relative path", gm110)
+	}
 }
