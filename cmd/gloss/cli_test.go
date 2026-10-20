@@ -103,6 +103,22 @@ func TestVersionFlags(t *testing.T) {
 	}
 }
 
+// Issue #120: propose --from-new honours the entry flags when one concept is
+// lifted (horse-factory carries one impl:NEW:Gelding marker).
+func TestProposeFromNewEntryFlags(t *testing.T) {
+	root := workspace(t, "horse-factory")
+	if code, _ := gloss(t, "propose", "--from-new", "--realizes", "zoo:Breeding", "--aliases", "gelding, castration", "--doc", "Castrating a colt.", "--root", root); code != 0 {
+		t.Fatalf("propose --from-new: exit %d", code)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "ontology", "impl.gloss.yaml"))
+	_, entry, _ := strings.Cut(string(b), "  Gelding:")
+	for _, want := range []string{"realizes: zoo:Breeding", "gelding", "castration", "kind: process", "proposed: true"} {
+		if !strings.Contains(entry, want) {
+			t.Errorf("Gelding entry %q lacks %q", entry, want)
+		}
+	}
+}
+
 // addConcept inserts ontology lines right after the "concepts:" key.
 func addConcept(t *testing.T, root, file, lines string) {
 	t.Helper()
