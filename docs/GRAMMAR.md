@@ -34,7 +34,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 
 ## Rules
 
-- Only text inside a comment is a marker. `"@gloss implements x"` in a string literal, a docstring or prose is ignored. Comment tokens come from a per-extension table (`#`, `//`, `/* */`, `--`, `<!-- -->`, `;`) that `comment-styles:` in `glossmark.yaml` can extend.
+- Only text inside a comment is a marker. `"@gloss implements x"` in a string literal, a docstring or prose is ignored. Comment tokens come from a per-extension table (`#`, `//`, `/* */`, `--`, `<!-- -->`, `;`) that `comment-styles:` in `glossmark.yaml` can extend. GraphQL SDL (`.graphql`, `.graphqls`, `.gql`) uses `#`. A file whose type has no comment style is not scanned; when it contains text that reads as a marker, `gloss check` says so (GM117) instead of skipping it silently.
 - Inside a comment, text between a pair of backticks is quoted prose, so a comment can talk about `` `@gloss` `` or quote a whole marker without being one. In Markdown the body of a fenced code block (```` ``` ```` or `~~~`) is quoted as well. This is a scanner rule; the reference regex is unchanged.
 - Malformed markers are build warnings at `file:line:col` (codes `GM001`–`GM007`), never silent drops. Positions are physical columns.
 - Multi-line YAML-in-comment blocks are not supported; one marker, one line.
@@ -102,6 +102,7 @@ Feature: Stallion production
 | GM006 | conf outside [0,1] |
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
+| GM117 | a file contains a marker but its type has no comment style, so it is not scanned: add it under `comment-styles:` (JSON takes a sidecar) |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
 | GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
 | GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |
