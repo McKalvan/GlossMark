@@ -143,9 +143,13 @@ filter (including "unclassified") so a reviewer can look at only the parts of
 the system that matter.
 
 **`gloss export`** writes `criticality` and `criticality_from` columns to the
-SQLite `nodes` table, so `SELECT path FROM nodes WHERE node='artifact' AND
-criticality IN ('high','critical')` lists the files that deserve the most
-careful review.
+SQLite `nodes` table, so `SELECT path FROM nodes WHERE node IN
+('artifact','file') AND criticality IN ('high','critical')` lists the files
+that deserve the most careful review. A file with no marker is not an
+artifact; under a `criticality-floor` it is exported as a `node='file'` row
+carrying the floor's level (`criticality_from` names the floor boundary), so
+an unmarked migration that grants database roles is listed as `gloss impact`
+already reports it.
 
 ## Changing a level
 

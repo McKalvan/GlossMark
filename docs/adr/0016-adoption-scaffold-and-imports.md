@@ -1,7 +1,7 @@
 <!-- @gloss documents gmi:Scaffolder scope=file -->
 # ADR 0016: What gloss init scaffolds, where namespace IRIs come from, and what an importer remembers
 
-Status: accepted, 2026-10-20. Closes issues #35 (F-ADOPT-1), #36 (F-ADOPT-2), #135 and #136.
+Status: accepted, 2026-10-20. Closes issues #35 (F-ADOPT-1), #36 (F-ADOPT-2), #44 (F-ADOPT-10), #135 and #136.
 
 ## Context
 
@@ -24,6 +24,12 @@ A brownfield adoption imported a fifteen-year-old staff glossary and an enums fi
 8. **`.glossmark/import-record.jsonl`** (committed, format 1) holds, per namespace and concept, the doc and aliases the last import read from the source. A re-run updates a doc or an alias list only when the source changed since that import; when only the ontology changed, the hand edit is kept and reported as `kept`. A recorded concept missing from the ontology was deleted or renamed by hand and is not added again; deleting its record line re-enables it. Without a record line the importer behaves as before (compare with the file), so existing workspaces need no migration.
 9. **Glossary parsing.** A heading with no field line followed by a deeper heading is a section, not a concept. Without a `Kind:` line the kind is read from the definition (a leading gerund or "the process of" → process; "never", "cannot", "at most", "how long", ... → constraint), then from the name. A deprecated status that says "use X" or "replaced by X" sets `replaced-by: X`. The command prints each added name with its kind and where it came from.
 10. **`--value-names prefixed`** names every enum value `<Enum><Value>`. The default stays `bare` (with `<Enum><Value>` on a collision) so re-runs of existing imports do not add a second copy of every value.
+
+### Unmarked files under a floor in the export (issue #44)
+
+`criticality-floor: true` raises every artifact beneath a boundary, and `gloss impact` reports the floor for an unmarked file, but the SQLite export listed only artifacts, so the governance query missed exactly the unmarked files a floor exists to catch (a migration granting roles on patient tables). Decision:
+
+11. `gloss export --sqlite` adds a `node='file'` row (id `urn:gloss:file:<path>`, `path`, `boundary`, `criticality`, `criticality_from` = the floor boundary) for every in-scope file with no artifact node beneath a floor. `graph.jsonl` is unchanged: a file without a marker is not a graph node. The governance query in GOVERNANCE.md reads `node IN ('artifact','file')`.
 
 An `import-ignore:` list was not added: with the record, deleting an unwanted concept is remembered, which is the same decision made where the concept is.
 

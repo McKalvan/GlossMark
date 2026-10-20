@@ -56,7 +56,7 @@ func cmdExport(args []string) int {
 		}
 	}
 	if *sqlitePath != "" {
-		if err := store.Export(p.Graph, *sqlitePath); err != nil {
+		if err := store.Export(p.Graph, *sqlitePath, floorFiles(p)...); err != nil {
 			return fail(err)
 		}
 		fmt.Printf("gloss export: sqlite → %s\n", *sqlitePath)
@@ -72,6 +72,34 @@ func cmdExport(args []string) int {
 		fmt.Printf("gloss export: PROV-O → %s\n", *provPath)
 	}
 	return 0
+}
+
+// floorFiles lists the in-scope files with no artifact node beneath a
+// criticality floor, at the floor's level: an unmarked migration under a
+// high floor is still high (issue #44).
+func floorFiles(p *pipeline) []store.File {
+	marked := map[string]bool{}
+	for _, a := range p.Graph.NodesOf(model.NodeArtifact) {
+		marked[a.Path] = true
+	}
+	var out []store.File
+	for _, f := range p.WS.Files {
+		if marked[f] {
+			continue
+		}
+		m := p.WS.ManifestFor(f)
+		if m == nil {
+			continue
+		}
+		b := p.Graph.NodeByCurie(m.Boundary)
+		if b == nil {
+			continue
+		}
+		if fl := rollup.FloorFor(p.Graph, b.ID); fl != nil {
+			out = append(out, store.File{Path: f, Boundary: b.ID, Criticality: fl.Criticality, From: fl.CURIE})
+		}
+	}
+	return out
 }
 
 func cmdPublish(args []string) int {
