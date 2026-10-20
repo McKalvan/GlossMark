@@ -3,7 +3,6 @@
 package suggest
 
 import (
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +15,9 @@ import (
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
-func copyStripped(t *testing.T, src, dst string) {
+// copyStripped copies a workspace without its code markers (ontology and
+// manifests kept) and without the top-level entries in skip.
+func copyStripped(t *testing.T, src, dst string, skip ...string) {
 	t.Helper()
 	err := filepath.Walk(src, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -24,6 +25,16 @@ func copyStripped(t *testing.T, src, dst string) {
 		}
 		rel, _ := filepath.Rel(src, p)
 		target := filepath.Join(dst, rel)
+		if rel != "." && !strings.Contains(rel, string(filepath.Separator)) {
+			for _, s := range skip {
+				if rel == s {
+					if info.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+			}
+		}
 		if info.IsDir() {
 			if info.Name() == ".glossmark" {
 				return filepath.SkipDir
@@ -34,7 +45,7 @@ func copyStripped(t *testing.T, src, dst string) {
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(rel, "ontology") && !strings.HasSuffix(rel, ".gloss.yaml") && !strings.HasSuffix(rel, ".md") && !strings.HasSuffix(rel, ".gloss") {
+		if !strings.Contains(rel, "ontology") && !strings.HasSuffix(rel, ".gloss.yaml") && !strings.HasSuffix(rel, ".gloss") {
 			var keep []string
 			for _, l := range strings.SplitAfter(string(b), "\n") {
 				if !strings.Contains(l, "@gloss") {
@@ -113,26 +124,25 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 	}
 }
 
-// TestMinScoreIsTheFloor: no proposal scores below MinScore, docstring
-// matches included, so --min-score 60 emits nothing under conf 0.55.
-func TestMinScoreIsTheFloor(t *testing.T) {
+// TestMinConfIsTheFloor: no proposal's conf is below MinConf, and a higher
+// floor never proposes more.
+func TestMinConfIsTheFloor(t *testing.T) {
 	root := t.TempDir()
 	copyStripped(t, filepath.Join("..", "..", "examples", "horse-factory"), root)
 	ws, g := build(t, root)
 	prev := -1
-	for _, min := range []int{20, 40, 60, 80, 100} {
-		ps, _, err := Run(ws, g, nil, Options{MinScore: min})
+	for _, min := range []float64{0.01, 0.2, 0.4, 0.6, 0.8, 0.95} {
+		ps, _, err := Run(ws, g, nil, Options{MinConf: min})
 		if err != nil {
 			t.Fatal(err)
 		}
-		floor := math.Round(float64(min)/110*100) / 100
 		for _, p := range ps {
-			if p.Conf < floor {
-				t.Errorf("min-score %d: %s %s conf=%.2f is below %.2f", min, p.Symbol, p.Target, p.Conf, floor)
+			if p.Conf < min {
+				t.Errorf("min-conf %.2f: %s %s conf=%.2f is below the floor", min, p.Symbol, p.Target, p.Conf)
 			}
 		}
 		if prev >= 0 && len(ps) > prev {
-			t.Errorf("min-score %d proposes more (%d) than a lower floor (%d)", min, len(ps), prev)
+			t.Errorf("min-conf %.2f proposes more (%d) than a lower floor (%d)", min, len(ps), prev)
 		}
 		prev = len(ps)
 	}

@@ -285,7 +285,8 @@ func tokens(s string) []string {
 	var cur []rune
 	flush := func() {
 		if len(cur) > 0 {
-			w := stem(strings.ToLower(string(cur)))
+			// Stem twice, so a plural of a gerund (bookings) meets its stem (booking, book).
+			w := stem(stem(strings.ToLower(string(cur))))
 			if syn, ok := synonyms[w]; ok {
 				w = syn
 			}
@@ -364,3 +365,8 @@ func lev(a, b string) int {
 	}
 	return prev[len(rb)]
 }
+
+// Tokens splits a name or prose into the lower-case stems search matches
+// on (CamelCase, snake_case and kebab-case split, suffixes stripped,
+// synonyms mapped, stop words dropped), so other matchers agree with it.
+func Tokens(s string) []string { return tokens(s) }

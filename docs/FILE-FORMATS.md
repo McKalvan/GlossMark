@@ -19,6 +19,7 @@ views: ontology/views.yaml                      # default
 exclude: ["vendor/**"]
 comment-styles: { ".pkl": ["//"] }              # extend the comment table
 test-paths: ["**/tests/**", "**/*_test.go"]     # inferrer: implements in a test path also verifies
+suggest: { stopwords: [widget] }                # gloss suggest: words that never match a concept on their own (added to handler, manager, ...)
 source-url: https://github.com/acme/horse-factory/blob/main/{path}#L{line}   # viewer links paths to the code host
 policy:
   soft-conf-threshold: 0.7                      # proposals at or above are SOFT

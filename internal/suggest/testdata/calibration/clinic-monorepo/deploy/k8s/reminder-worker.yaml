@@ -1,0 +1,7 @@
+# @gloss deploys lark:ReminderWorker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reminder-worker
+spec:
+  replicas: 1

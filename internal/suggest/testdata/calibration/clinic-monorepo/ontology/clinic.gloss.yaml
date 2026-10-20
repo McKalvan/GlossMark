@@ -1,0 +1,12 @@
+namespace: clinic
+version: 0.1.0
+concepts:
+  Patient:              { kind: entity, doc: A person who books appointments. }
+  Practitioner:         { kind: entity, doc: A clinician whose time is booked. }
+  Slot:                 { kind: entity, doc: A bookable period in a practitioner's calendar. }
+  Appointment:          { kind: entity, doc: A patient's booking of one slot. }
+  Booking:              { kind: process, consumes: [Slot], produces: [Appointment], publishes: [BookingConfirmed], doc: Reserving a slot for a patient. }
+  BookingConfirmed:     { kind: event, doc: An appointment was booked. }
+  AppointmentReminding: { kind: process, consumes: [Appointment], subscribes: [BookingConfirmed], doc: Reminding a patient before the appointment. }
+  CancellationWindow:   { kind: constraint, doc: How late an appointment may be cancelled without a fee. }
+  NoShowRate:           { kind: measure, doc: The share of appointments nobody turned up to. }

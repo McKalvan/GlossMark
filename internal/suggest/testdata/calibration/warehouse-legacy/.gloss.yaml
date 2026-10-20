@@ -1,0 +1,6 @@
+boundary: whb:opstool
+level: container
+label: Ops tool
+realizes: [wh:Replenishment, wh:CycleCount, wh:StockAdjustment, wh:WavePlanning, wh:ReturnsProcessing, wh:HazmatHandling, wh:CartonLabelling]
+holds: [wh:Location, wh:Order, wh:ReturnAuthorization]
+default-namespace: ops

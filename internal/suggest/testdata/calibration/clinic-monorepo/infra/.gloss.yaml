@@ -1,0 +1,5 @@
+boundary: cb:infra
+level: container
+part-of: cb:clinic
+realizes: [lark:BookingDatabase]
+default-namespace: lark

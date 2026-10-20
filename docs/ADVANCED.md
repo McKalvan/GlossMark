@@ -45,7 +45,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 ## Marker keys
 
-`conf=0.72` (an agent's confidence, drives SOFT vs HARD), `note="why"` (goes to the ledger as the rationale), `id=` (a stable id when the derived one would change), `scope=`. Nothing else goes inline; provenance lives in the ledger.
+`conf=0.72` (an agent's confidence, drives SOFT vs HARD; on a `gloss suggest` proposal it is the precision that kind of evidence measured on the calibration set, [ADR 0021](adr/0021-suggest-conf-is-measured-precision.md)), `note="why"` (goes to the ledger as the rationale), `id=` (a stable id when the derived one would change), `scope=`. Nothing else goes inline; provenance lives in the ledger.
 
 ## Finding kinds (`gloss drift`)
 

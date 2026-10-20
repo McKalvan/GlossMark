@@ -1,0 +1,17 @@
+namespace: wh
+version: 0.1.0
+concepts:
+  Location:            { kind: entity, doc: A pick face or a rack slot. }
+  Order:               { kind: entity, doc: A customer order to pick. }
+  ReturnAuthorization: { kind: entity, aliases: [rma], doc: Permission for a customer to send goods back. }
+  CartonNumber:        { kind: entity, aliases: [sscc], doc: The serial shipping container code printed on every carton. }
+  Replenishment:       { kind: process, aliases: [top up], consumes: [Location], doc: Moving stock from the reserve racks to the pick faces. }
+  CycleCount:          { kind: process, aliases: [recount], consumes: [Location], doc: Counting a location and queuing differences. }
+  StockAdjustment:     { kind: process, aliases: [move stock], doc: A manual stock move that a supervisor approves. }
+  AdjustmentApproval:  { kind: process, part-of: StockAdjustment, doc: The supervisor pin check. }
+  WavePlanning:        { kind: process, aliases: [wave], consumes: [Order], doc: Grouping open orders into pick waves. }
+  ReturnsProcessing:   { kind: process, consumes: [ReturnAuthorization], doc: "Receiving, grading and restocking returned goods." }
+  HazmatHandling:      { kind: constraint, doc: Dangerous goods may not share a location with food. }
+  InventoryManagement: { kind: capability, doc: Knowing what stock is where. }
+  RequestHandling:     { kind: process, doc: Serving requests from the handhelds. }
+  CartonLabelling:     { kind: process, produces: [CartonNumber], doc: Printing shipping labels on cartons. }

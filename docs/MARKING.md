@@ -50,7 +50,11 @@ A page, screen or report that *shows* a concept is not its mechanism. Model the 
 
 ## Proposals
 
-Write `@gloss?` when you are not sure, and `conf=0.8` with an agent's confidence. A human accepts it by deleting the `?` (`gloss accept <id>`). When the concept does not exist yet, write `ns:NEW:Name` and let `gloss propose --from-new` lift it into the ontology file as a proposed entry; never invent a concept name inline without `NEW:`.
+Write `@gloss?` when you are not sure, and `conf=0.8` with an agent's confidence. On a proposal `gloss suggest` wrote, `conf` is the share of proposals with the same kind of evidence that were right on the calibration set, and `basis` in `--format json` names that kind ([ADR 0021](adr/0021-suggest-conf-is-measured-precision.md)). A human accepts it by deleting the `?` (`gloss accept <id>`). When the concept does not exist yet, write `ns:NEW:Name` and let `gloss propose --from-new` lift it into the ontology file as a proposed entry; never invent a concept name inline without `NEW:`.
+
+## What `gloss suggest` drafts, and what it leaves to you
+
+`gloss suggest` proposes on public surfaces only: top-level declarations and the methods of classes, tables and views, Terraform resources, tests, Markdown headings, Kubernetes workloads, and page and layout components. It skips package clauses, `impl` blocks, indexes, module-level variables, private declarations, and fakes and fixtures in test files. Its evidence is the declaration's name, a concept doc that names it, its docstring or comment, the tables its body touches, and the code a test calls. Programming words such as handler, manager and process never match on their own (extend the list under `suggest: stopwords:`). It proposes implements, represents, verifies, provisions, documents, deploys, presents, hosts, subscribes, consumes and publishes, and collapses a run of identical proposals into one `scope=file` or `scope=block` marker. Write `configures`, `publishes-value`, `instructs`, `may-modify` and `produces` by hand, and the markers in sidecars, JSON, Dockerfiles and CI workflows ([ADR 0022](adr/0022-what-suggest-proposes.md)).
 
 ## What not to mark
 

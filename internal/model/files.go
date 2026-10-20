@@ -74,9 +74,18 @@ type Config struct {
 	// TestPaths are globs whose markers default to verifies when relation
 	// inference runs (pass "inferrers"). Default: common test layouts.
 	TestPaths []string `yaml:"test-paths,omitempty" json:"test-paths,omitempty"`
+	// Suggest tunes gloss suggest.
+	Suggest *SuggestConfig `yaml:"suggest,omitempty" json:"suggest,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
+}
+
+// SuggestConfig tunes gloss suggest.
+type SuggestConfig struct {
+	// Stopwords extend the built-in list of programming words (handler,
+	// manager, process, ...) that never match a concept on their own.
+	Stopwords []string `yaml:"stopwords,omitempty" json:"stopwords,omitempty"`
 }
 
 // NamespaceDecl describes an owned namespace.

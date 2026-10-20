@@ -9,6 +9,6 @@ prefixes:
 source-url: https://github.com/mckalvan/glossmark/blob/main/{path}#L{line}   # the viewer links paths here
 # The example repositories are workspaces of their own and the corpus files carry
 # markers that point at the example ontologies, so neither belongs to this graph.
-exclude: ["examples/**", "corpus/testdata/**", ".glossmark/**", "dist/**", "go.sum"]
+exclude: ["examples/**", "corpus/testdata/**", "internal/suggest/testdata/**", ".glossmark/**", "dist/**", "go.sum"]
 policy:
   soft-conf-threshold: 0.7

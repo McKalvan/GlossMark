@@ -1,0 +1,4 @@
+boundary: cb:clinic
+level: system
+label: Clinic booking
+default-namespace: lark

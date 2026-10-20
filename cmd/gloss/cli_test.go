@@ -275,6 +275,43 @@ func TestRejectedProposalSticks(t *testing.T) {
 	}
 }
 
+// Issues #64, #65: --labels prints a workspace's links, --eval scores
+// proposals against them per confidence band, and an empty tier prints a
+// hint and an empty JSON list instead of null.
+func TestSuggestEvalLabelsAndHints(t *testing.T) {
+	root := tiny(t, map[string]string{"doer.py": "# @gloss implements .Doer\ndef doer(): pass\n"})
+	_, labels := gloss(t, "suggest", "--labels", "--root", root)
+	if labels != "doer.py\tdoer\timplements\ti:Doer\n" {
+		t.Fatalf("labels: %q", labels)
+	}
+	os.WriteFile(filepath.Join(root, "labels.tsv"), []byte(labels), 0o644)
+	os.WriteFile(filepath.Join(root, "doer.py"), []byte("def doer(): pass\n"), 0o644)
+	_, out := gloss(t, "suggest", "--eval", filepath.Join(root, "labels.tsv"), "--root", root)
+	for _, s := range []string{"1 proposals, 1 labels", "recall: 1 of 1 labels", "Phase 2 gate (>= 80% auto-accept at >= 90% precision):"} {
+		if !strings.Contains(out, s) {
+			t.Errorf("eval report lacks %q:\n%s", s, out)
+		}
+	}
+	empty := t.TempDir()
+	os.MkdirAll(filepath.Join(empty, "ontology"), 0o755)
+	os.WriteFile(filepath.Join(empty, "glossmark.yaml"), []byte("owns:\n  z: { iri: https://x/z/, file: ontology/z.gloss.yaml, tier: core }\n"), 0o644)
+	os.WriteFile(filepath.Join(empty, "ontology", "z.gloss.yaml"), []byte("namespace: z\nconcepts: {}\n"), 0o644)
+	os.WriteFile(filepath.Join(empty, "a.py"), []byte("def a(): pass\n"), 0o644)
+	r, w, _ := os.Pipe()
+	old := os.Stderr
+	os.Stderr = w
+	_, js := gloss(t, "suggest", "--format", "json", "--root", empty)
+	w.Close()
+	os.Stderr = old
+	stderr, _ := io.ReadAll(r)
+	if strings.TrimSpace(js) != "[]" {
+		t.Errorf("json: %q, want []", js)
+	}
+	if !strings.Contains(string(stderr), "z: has 0 concepts; write the core tier first") {
+		t.Errorf("no hint: %q", stderr)
+	}
+}
+
 // Issue #118: the installed skill does not bring GlossMark's own gm: marker.
 func TestHookInstallSkillChecksClean(t *testing.T) {
 	root := tiny(t, nil)

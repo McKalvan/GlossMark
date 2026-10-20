@@ -63,6 +63,8 @@ gloss suggest > suggestions.patch   # @gloss? proposals for unmarked declaration
 git apply suggestions.patch          # or: gloss suggest --write
 ```
 
+Each proposal's `conf` is the precision its kind of evidence measured on GlossMark's calibration set, so review the low ones hardest; `--min-conf` raises the floor (default 0.3). If an owned namespace is nearly empty, suggest says so; `gloss suggest --concepts` drafts `ns:NEW:Name` candidates from declarations that share tables and docstring words. `gloss suggest -h` lists the relations and file types it covers.
+
 Then read every proposal. Delete the wrong ones, retarget the near misses, and add the markers `suggest` cannot see (tests that verify a concept by behaviour, docs, agent files). Aim for every implementation concept to have one artifact and one verifier, not for every file to have a marker.
 
 ## 7. Check, drift, review

@@ -1,0 +1,9 @@
+# A concept-poor legacy warehouse tool (the F-POOR findings, #58-#64):
+# names carry no domain words, the docstrings and tables do.
+owns:
+  wh:  { iri: https://onto.example.dev/wh/,  file: ontology/wh.gloss.yaml,  tier: core,           version: 0.1.0 }
+  ops: { iri: https://onto.example.dev/ops/, file: ontology/ops.gloss.yaml, tier: implementation, version: 0.1.0 }
+prefixes:
+  whb: https://arch.example.dev/boundaries/
+policy:
+  soft-conf-threshold: 0.7

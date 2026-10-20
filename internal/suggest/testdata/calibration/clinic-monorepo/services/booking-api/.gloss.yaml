@@ -1,0 +1,7 @@
+boundary: cb:booking-api
+level: container
+part-of: cb:clinic
+realizes: [lark:BookingApi, lark:BookingHandler, lark:CancellationPolicy]
+holds: [clinic:Appointment, clinic:Slot]
+default-namespace: lark
+allowed: [derived, clinic:Practitioner]

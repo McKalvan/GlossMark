@@ -1,0 +1,8 @@
+namespace: ops
+version: 0.1.0
+concepts:
+  ReplenishmentRun: { kind: process, realizes: wh:Replenishment, doc: "Manager.doIt: the nightly top-up of every zone." }
+  WaveBatch:        { kind: process, realizes: wh:WavePlanning, doc: "Manager.run_batch builds the pick waves from the open orders." }
+  HazmatRule:       { kind: constraint, realizes: wh:HazmatHandling, doc: "Manager._ok refuses a putaway that mixes hazmat and food." }
+  ReturnGrader:     { kind: process, realizes: wh:ReturnsProcessing, doc: "Processor.grade: grades a returned item A, B or scrap." }
+  SsccCheckDigit:   { kind: constraint, realizes: wh:CartonNumber, doc: "StringUtils.check: the GS1 mod-10 check digit of a carton number." }
