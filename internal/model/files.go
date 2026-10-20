@@ -470,6 +470,16 @@ type Manifest struct {
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
 	Dir  string `yaml:"-" json:"-"`
+	// Empty records the declared relations written as an explicit empty
+	// list (realizes: []): "this boundary does none of it", which gloss
+	// drift compares, unlike a relation that is not written (ADR 0012).
+	Empty map[string]bool `yaml:"-" json:"-"`
+}
+
+// DeclaresNone reports whether the manifest wrote rel as an explicit empty
+// list, such as realizes: [] on a boundary that is only a surface.
+func (m *Manifest) DeclaresNone(rel string) bool {
+	return m != nil && m.Empty[rel] && len(m.DeclaredSets()[rel]) == 0 && !(rel == "realizes" && m.InheritsRealizes())
 }
 
 // InheritMarker in a manifest's realizes: list means "what my nested
@@ -559,6 +569,19 @@ func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
 	if len(doc.Content) > 0 {
 		if err := doc.Decode(&m); err != nil {
 			return nil, unknown, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+	if len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
+		declared := m.DeclaredSets()
+		mn := doc.Content[0]
+		for i := 0; i+1 < len(mn.Content); i += 2 {
+			k, v := mn.Content[i].Value, mn.Content[i+1]
+			if _, ok := declared[k]; ok && v.Kind == yaml.SequenceNode && len(v.Content) == 0 {
+				if m.Empty == nil {
+					m.Empty = map[string]bool{}
+				}
+				m.Empty[k] = true
+			}
 		}
 	}
 	m.Path = path

@@ -39,7 +39,7 @@ Special object IRIs: `urn:gloss:new:impl:NEW:Gelding` (a proposed new concept), 
 
 ## Comparison
 
-For each boundary and each of `realizes`, `holds`, `presents`, `hosts`, `configures`, `produces`, `consumes`, `publishes`, `subscribes` that the manifest declares:
+For each boundary and each of `realizes`, `holds`, `presents`, `hosts`, `configures`, `produces`, `consumes`, `publishes`, `subscribes` that the manifest declares (an explicit empty list such as `realizes: []` included: it declares none, so everything derived is a violation):
 
 | Declared | Derived from code | Result |
 | --- | --- | --- |

@@ -127,6 +127,43 @@ func placementOf(t *testing.T, root, concept string) string {
 	return ""
 }
 
+// TestDeclaredEmptyList: realizes: [] says the boundary realizes nothing, so
+// code that implements a concept under it is a violation, while an unwritten
+// relation is still not compared; and a presents gap over code that
+// implements the concept says so (#49, ADR 0012).
+func TestDeclaredEmptyList(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  hp: { iri: https://x/hp/, tier: core }\n")
+	write("ontology/hp.gloss.yaml", "concepts:\n  Pricing: { kind: process }\n")
+	write("storefront/quotes/views.py", "# @gloss implements hp:Pricing\ndef quote_view(): pass\n")
+	run := func(manifest string) *rollup.Report {
+		t.Helper()
+		write("storefront/.gloss.yaml", "boundary: hpb:storefront\nlevel: container\n"+manifest)
+		ws, g, _, lg := build(t, root)
+		return rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	}
+	rep := run("presents: [hp:Pricing]\nrealizes: []\n")
+	if v := findings(rep, rollup.KindViolation); len(v) != 1 || v[0].Relation != "realizes" || !strings.HasPrefix(v[0].Msg, "hpb:storefront realizes hp:Pricing, declared realizes []") {
+		t.Errorf("violations = %+v, want hpb:storefront realizes hp:Pricing, declared realizes []", v)
+	}
+	if gp := findings(rep, rollup.KindGap); len(gp) != 1 || !strings.Contains(gp[0].Msg, "nothing under it presents it; its code implements it instead") {
+		t.Errorf("gaps = %+v, want a presents gap that names the implementation", gp)
+	}
+	// Without the empty list realizes is not compared.
+	rep = run("presents: [hp:Pricing]\n")
+	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
+		t.Errorf("violations without realizes: [] = %+v", v)
+	}
+	// An empty list with nothing derived is consistent.
+	write("storefront/quotes/views.py", "# @gloss presents hp:Pricing\ndef quote_view(): pass\n")
+	rep = run("presents: [hp:Pricing]\nrealizes: []\nholds: []\n")
+	for _, k := range []string{rollup.KindGap, rollup.KindViolation} {
+		if fs := findings(rep, k); len(fs) != 0 {
+			t.Errorf("%s: %+v", k, fs)
+		}
+	}
+}
+
 // TestConfiguresInManifests: a page that edits a constraint's value is
 // declared with configures:, which the derived allowed set admits (its test
 // too), lifts to the boundary as configures on any kind, is compared by

@@ -209,7 +209,10 @@ func (c *comparer) boundaries() {
 					}
 				}
 			}
-			if len(declared) == 0 {
+			// An explicit empty list (realizes: []) is a claim of none: every
+			// derived edge is a violation. A relation not written is no claim.
+			none := c.manifestOf(b.CURIE).DeclaresNone(rel)
+			if len(declared) == 0 && !none {
 				continue // no claim, nothing to compare
 			}
 			derivedEdges := map[string][]*graph.Edge{}
@@ -259,7 +262,10 @@ func (c *comparer) boundaries() {
 				via = uniq(via)
 				lifted := c.lifted(rel, derived)
 				msg := fmt.Sprintf("%s %s %s but declares %s {%s}", b.CURIE, rel, c.g.Curie(d), rel, strings.Join(c.curies(declared), ", "))
-				if len(lifted) > 0 {
+				if len(declared) == 0 {
+					msg = fmt.Sprintf("%s %s %s, declared %s []: the manifest says this boundary %s nothing", b.CURIE, rel, c.g.Curie(d), rel, verb(rel))
+				}
+				if len(lifted) > 0 && len(declared) > 0 {
 					msg += fmt.Sprintf("; rollup: %s {%s} ⊄ declared", rel, strings.Join(lifted, ", "))
 				}
 				if proposed {
@@ -283,8 +289,11 @@ func (c *comparer) boundaries() {
 					continue
 				}
 				consistent = false
-				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line,
-					Msg: fmt.Sprintf("%s declares %s %s but nothing under it %s it: intended capability not implemented, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), verb(rel))})
+				msg := fmt.Sprintf("%s declares %s %s but nothing under it %s it: intended capability not implemented, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), verb(rel))
+				if other := c.reachedOtherwise(b.ID, rel, s); other != "" {
+					msg = fmt.Sprintf("%s declares %s %s but nothing under it %s it; its code %s it instead: declare %s, or change the marker", b.CURIE, rel, c.g.Curie(s), verb(rel), verb(other), other)
+				}
+				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line, Msg: msg})
 			}
 			if consistent {
 				lifted := c.lifted(rel, derived)
@@ -293,6 +302,23 @@ func (c *comparer) boundaries() {
 			}
 		}
 	}
+}
+
+// reachedOtherwise returns the first other compared relation through which
+// boundary b's code reaches declared concept s, or "": a manifest declaring
+// presents hp:Pricing over code that implements it gets a gap that says so.
+func (c *comparer) reachedOtherwise(b, rel, s string) string {
+	for _, other := range ComparedRelations {
+		if other == rel {
+			continue
+		}
+		for _, e := range c.g.Out(b, other) {
+			if e.Source == graph.SourceDerived && (Covers(c.g, s, e.O) || c.g.Subsumes(s, e.O)) {
+				return other
+			}
+		}
+	}
+	return ""
 }
 
 // wholeOfCovered reports whether derived concept d is only there because a
