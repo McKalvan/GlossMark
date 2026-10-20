@@ -1364,7 +1364,7 @@ func TestOneDiagnosticPerKey(t *testing.T) {
 		os.WriteFile(p, []byte(content), 0o644)
 	}
 	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
-	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    guards: [A, B, C]\n  Log:\n    kind: process\n    guards: [A, B]\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    audits: [A, B, C]\n  Log:\n    kind: process\n    audits: [A, B]\n")
 	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:A }\n")
 	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
 	write("app.py", "# @gloss implements .Doer\ndef go(): pass\n")
@@ -1383,7 +1383,7 @@ func TestOneDiagnosticPerKey(t *testing.T) {
 		codes[d.Code] = append(codes[d.Code], d.Line)
 	}
 	if got := codes["GM200"]; len(got) != 2 {
-		t.Errorf("GM200 lines = %v, want one per guards: key", got)
+		t.Errorf("GM200 lines = %v, want one per audits: key", got)
 	}
 	if got := codes["GM240"]; len(got) != 1 || got[0] != 1 {
 		t.Errorf("GM240 lines = %v, want [1]", got)
@@ -2098,7 +2098,9 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	}
 	write("glossmark.yaml", "owns:\n  pay: { iri: https://x/pay/, tier: core }\n  pa: { iri: https://x/pa/, tier: implementation }\n")
 	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint }\n  Login: { kind: process }\n")
-	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n")
+	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n"+
+		"  RateLimit: { kind: constraint, internal: true }\n  TokenTtl: { kind: constraint, internal: true }\n")
+	write("platform/auth/tests/test_token_security.py", "# @gloss verifies pa:TokenTtl\ndef test_token_expiry(): pass\n")
 	write("platform/.gloss.yaml", "boundary: o:platform\nlevel: system\ncriticality: critical\n")
 	write("platform/metrics/.gloss.yaml", "boundary: o:metrics\nlevel: container\npart-of: o:platform\n")
 	write("platform/metrics/export.py", "# @gloss implements pa:Exporter\ndef export(): pass\n")
@@ -2126,8 +2128,13 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 		sugg[s.Concept] = s.Reason
 	}
 	// pa:Clock and pa:Session would inherit from the core concepts they
-	// realize: the suggestion goes there (issue #43).
-	for _, c := range []string{"pay:Cutoff", "pay:Login"} {
+	// realize: the suggestion goes there (issue #43). An internal constraint
+	// is an engineering setting: proposed only on other evidence, here a
+	// security test (#78).
+	if r, ok := sugg["pa:RateLimit"]; ok {
+		t.Errorf("an internal constraint was proposed on the constraint rule alone: %s", r)
+	}
+	for _, c := range []string{"pay:Cutoff", "pay:Login", "pa:TokenTtl"} {
 		if sugg[c] == "" {
 			t.Errorf("expected a high suggestion for %s, got %v", c, sugg)
 		}
@@ -2149,6 +2156,8 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	// A reviewer lowers the core constraint to medium: the implementation
 	// concept that inherits it is not suggested again (issue #43).
 	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint, criticality: medium }\n  Login: { kind: process, criticality: medium }\n")
+	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n"+
+		"  RateLimit: { kind: constraint, internal: true }\n  TokenTtl: { kind: constraint, internal: true, criticality: low }\n")
 	_, g, _, _ = build(t, root)
 	if s := rollup.SuggestCriticality(g); len(s) != 0 {
 		t.Errorf("after the review: %+v, want no suggestions", s)

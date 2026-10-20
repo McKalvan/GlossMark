@@ -15,16 +15,20 @@ import (
 // a declaration-detector name until then), and a content fingerprint of the
 // anchored signature.
 type Anchor struct {
-	Scope       string `json:"scope"`                 // file | symbol | block | line | range
-	Symbol      string `json:"symbol,omitempty"`      // declaration name, e.g. breed_stallion, resource.aws_sqs_queue.capture
-	Kind        string `json:"kind,omitempty"`        // function, class, resource, table, feature, document, heading, ...
-	StartLine   int    `json:"start"`                 // first line of the anchored region (1-based)
-	EndLine     int    `json:"end"`                   // last line (inclusive)
-	Signature   string `json:"signature,omitempty"`   // normalized signature line
-	Fingerprint string `json:"fingerprint,omitempty"` // sha256: prefix of signature (symbol/block) or of the whole file (file)
-	// Legacy is the file fingerprint as releases before ADR 0006 computed it
-	// (every line hashed), so a ledger written by one migrates instead of
-	// going stale.
+	Scope     string `json:"scope"`               // file | symbol | block | line | range
+	Symbol    string `json:"symbol,omitempty"`    // declaration name, e.g. breed_stallion, resource.aws_sqs_queue.capture
+	Kind      string `json:"kind,omitempty"`      // function, class, resource, table, feature, document, heading, ...
+	StartLine int    `json:"start"`               // first line of the anchored region (1-based)
+	EndLine   int    `json:"end"`                 // last line (inclusive)
+	Signature string `json:"signature,omitempty"` // normalized signature line
+	// Decorators is the normalized decorator or annotation stack between the
+	// marker and the declaration, one entry per decorator (ADR 0014). It is
+	// part of the fingerprint, so deleting a guard stales the link.
+	Decorators  []string `json:"decorators,omitempty"`
+	Fingerprint string   `json:"fingerprint,omitempty"` // sha256: prefix of decorators + signature (symbol/block) or of the whole file (file)
+	// Legacy is the fingerprint as an earlier release computed it, so a
+	// ledger written by one migrates instead of going stale: every line of
+	// the file before ADR 0006, the signature line alone before ADR 0014.
 	Legacy string `json:"-"`
 }
 
@@ -166,6 +170,7 @@ func Resolve(path string, f Found, lines []string, style CommentStyle) Anchor {
 	isYAML := strings.HasSuffix(strings.ToLower(path), ".yaml") || strings.HasSuffix(strings.ToLower(path), ".yml")
 	// Look ahead for a declaration within a window, skipping blanks, comments and decorators.
 	window := 12
+	var decos []string
 	for j := idx + 1; j < len(lines) && j <= idx+window; j++ {
 		ln := lines[j]
 		t := strings.TrimSpace(ln)
@@ -176,7 +181,9 @@ func Resolve(path string, f Found, lines []string, style CommentStyle) Anchor {
 			// A decorator or annotation stack sits between the marker and the
 			// declaration. Skip it whole, including arguments that span lines,
 			// without spending the look-ahead window on it.
-			if k := decoratorEnd(lines, j); k > j {
+			k := decoratorEnd(lines, j)
+			decos = append(decos, norm(strings.Join(lines[j:k+1], " ")))
+			if k > j {
 				window += k - j
 				j = k
 			}
@@ -204,8 +211,8 @@ func Resolve(path string, f Found, lines []string, style CommentStyle) Anchor {
 				sym = first(m)
 			}
 			end := blockEnd(lines, j, path)
-			a := Anchor{Scope: "symbol", Symbol: sym, Kind: r.kind, StartLine: j + 1, EndLine: end + 1, Signature: norm(ln)}
-			a.Fingerprint = fp(a.Signature)
+			a := Anchor{Scope: "symbol", Symbol: sym, Kind: r.kind, StartLine: j + 1, EndLine: end + 1, Signature: norm(ln), Decorators: decos}
+			a.Fingerprint, a.Legacy = declFingerprint(decos, a.Signature)
 			if scope == "block" || scope == "range" {
 				a.Scope = scope
 			}
@@ -215,13 +222,17 @@ func Resolve(path string, f Found, lines []string, style CommentStyle) Anchor {
 		if scope == "symbol" {
 			// Caller asked for a symbol but none is detectable; bind to the block and let check warn.
 			end := blockEnd(lines, j, path)
-			return Anchor{Scope: "block", Kind: "unresolved-symbol", StartLine: j + 1, EndLine: end + 1, Signature: norm(ln), Fingerprint: fp(norm(ln))}
+			a := Anchor{Scope: "block", Kind: "unresolved-symbol", StartLine: j + 1, EndLine: end + 1, Signature: norm(ln), Decorators: decos}
+			a.Fingerprint, a.Legacy = declFingerprint(decos, a.Signature)
+			return a
 		}
 		if scope == "" && f.Header {
 			return fileAnchor(lines)
 		}
 		end := blockEnd(lines, j, path)
-		return Anchor{Scope: "block", StartLine: j + 1, EndLine: end + 1, Signature: norm(ln), Fingerprint: fp(norm(ln))}
+		a := Anchor{Scope: "block", StartLine: j + 1, EndLine: end + 1, Signature: norm(ln), Decorators: decos}
+		a.Fingerprint, a.Legacy = declFingerprint(decos, a.Signature)
+		return a
 	}
 	// Nothing follows: header comment or trailing comment → file, keeping an
 	// explicit scope (sidecars carry range/block scopes with JSON Pointers).
@@ -230,6 +241,17 @@ func Resolve(path string, f Found, lines []string, style CommentStyle) Anchor {
 		a.Scope = scope
 	}
 	return a
+}
+
+// declFingerprint fingerprints a declaration: its decorator stack, in order,
+// then its signature line (ADR 0014). Without decorators it is the signature
+// fingerprint alone, as before; with them, legacy is that older fingerprint
+// so a ledger entry accepted before the stack counted migrates.
+func declFingerprint(decos []string, sig string) (fingerprint, legacy string) {
+	if len(decos) == 0 {
+		return fp(sig), ""
+	}
+	return fp(strings.Join(decos, "\n") + "\n" + sig), fp(sig)
 }
 
 // isDecorator reports a Python/TS/Java-style @decorator line or a Rust #[attribute].
@@ -473,10 +495,6 @@ var ws = regexp.MustCompile(`\s+`)
 
 // norm collapses whitespace so a reformat does not change a fingerprint.
 func norm(s string) string { return strings.TrimSpace(ws.ReplaceAllString(s, " ")) }
-
-// LineFingerprint is the fingerprint a symbol or block anchor records for
-// its signature line.
-func LineFingerprint(line string) string { return fp(norm(line)) }
 
 func fp(s string) string {
 	h := sha256.Sum256([]byte(s))

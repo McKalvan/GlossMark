@@ -82,7 +82,9 @@ Nothing is classified in a fresh adoption, and the viewer says so. `gloss
 criticality suggest` proposes a first pass from facts already in the graph,
 printed as a diff of the ontology files (`--write` applies it):
 
-- every `constraint` concept: a rule the business relies on;
+- every `constraint` concept that is not `internal: true`: a rule the business
+  relies on (an internal constraint, such as a rate limit or a flag, is an
+  engineering setting and is proposed only on the other rules);
 - every published concept: it crosses the seam into the business view;
 - every concept whose only verifiers are security tests (paths or names with
   auth, permission, csrf, crypto, pii, token and the like).
@@ -124,14 +126,19 @@ policy:
 ```
 
 Bookkeeping changes (an accepted proposal, a stale fingerprint) are reported
-with their level but never raised by it.
+with their level but never raised by it. A changed decorator stack on an
+unchanged signature (`decorators-changed`, ADR 0014) is not bookkeeping: a
+deleted `@requires_role` on a critical handler is HARD under the default.
 
 One classifier gates a link everywhere: `gloss diff`, `gloss impact`,
 `gloss context --changed`, `gloss status`, `gloss accept --policy` and the MCP
 `propose_link` and `impact_of` tools apply the same rules, `criticality-gates`
 included, so `accept --policy` never auto-accepts a link the PR gate would
 stop. A link through `presents` or `hosts` takes no level from its target,
-in the gate as in the graph.
+in the gate as in the graph. A link to a concept that a mechanism `guards`
+is reviewed at the guard's level when that is higher, without taking it as
+its own: the graph keeps the handler's level, the gate sees the guard's
+([ADR 0015](adr/0015-guards.md)).
 
 **`gloss impact`** and the MCP `impact_of` tool report a level per changed
 file (`criticality`, `criticality_from`) and per concept, with a hint when a

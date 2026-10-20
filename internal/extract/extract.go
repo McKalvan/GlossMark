@@ -143,9 +143,13 @@ func (ex *extractor) ontologies() {
 			}
 			ex.g.AddNode(n)
 			add := func(p string, targets []string) {
+				alias := ""
+				if p == "applies-to" {
+					p, alias = "guards", "applies-to"
+				}
 				for _, t := range targets {
 					oiri, raw := ex.resolveRef(t, ns)
-					ex.g.AddEdge(&graph.Edge{S: iri, P: p, O: oiri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: file, Line: c.Line, Raw: raw}})
+					ex.g.AddEdge(&graph.Edge{S: iri, P: p, O: oiri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: file, Line: c.Line, Raw: raw, Alias: alias}})
 				}
 			}
 			add("is-a", c.IsA)
@@ -464,6 +468,17 @@ func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, 
 			return
 		}
 		at = vf.Line
+	case vf.Symbol != "" && keyPathFile(rel):
+		var cands []string
+		at, cands = findKey(rel, lines, vf.Symbol)
+		switch {
+		case len(cands) > 1:
+			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from symbol %q matches %d keys in %s (%s); write the dotted key path", n.CURIE, vf.Symbol, len(cands), rel, strings.Join(cands, ", ")))
+			return
+		case at == 0:
+			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from symbol %q names no key in %s; write the dotted key path from the top (a.b.c), or use line:", n.CURIE, vf.Symbol, rel))
+			return
+		}
 	case vf.Symbol != "":
 		re := symbolLine(vf.Symbol)
 		for i, l := range lines {

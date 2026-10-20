@@ -71,7 +71,7 @@
       "required": ["path"],
       "properties": {
         "path": { "type": "string", "minLength": 1 },
-        "symbol": { "type": "string", "minLength": 1, "description": "The first line that assigns, annotates or defaults it." },
+        "symbol": { "type": "string", "minLength": 1, "description": "In code, the first line that assigns, annotates or defaults it. In YAML, TOML or JSON, a dotted key path (policies.claims-write.per_minute), or a key or tail of one that ends exactly one path." },
         "line": { "type": "integer", "minimum": 1 }
       }
     },
@@ -223,7 +223,7 @@
       },
       "patternProperties": {
         "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|aliases|criticality)$)[a-z][a-z0-9-]*$": {
-          "description": "A relation (produces, consumes, publishes, subscribes, constrains, reverses, attaches-to, or one declared under relations:) and its target(s).",
+          "description": "A relation (produces, consumes, publishes, subscribes, constrains, guards or its alias applies-to, reverses, attaches-to, or one declared under relations:) and its target(s).",
           "$ref": "#/$defs/stringOrList"
         }
       },

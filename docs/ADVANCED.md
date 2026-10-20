@@ -29,7 +29,9 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
 | `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |
 | `published-as` | | ✓ | | written as `published: { as: core:X }`: the only seam between tiers and across repositories |
-| `constrains`, `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
+| `guards` (`applies-to`) | | ✓ | | a cross-cutting mechanism (authentication, a rate limit, a flag) applies to concepts and the code implementing them; `impact` and `context` show it on both ends, `diff` reviews guarded code at the guard's level, no criticality flows ([ADR 0015](adr/0015-guards.md)) |
+| `constrains` | | ✓ | | a rule applies to a concept; `impact` lists the constrained code, `context` names it |
+| `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
 | `depends-on`, `calls`, `derived-from`, `same-as` | | | | derived or reserved (imports, SCIP, SSSOM) |
 
 ## Scopes
@@ -57,7 +59,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | dangling | a marker targets a concept that does not exist (write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |
-| untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts) | |
+| untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts). An `internal: true` concept is left out unless its effective criticality is `high` or `critical`; then it is reported, and counted in concept coverage, like any other | |
 | presented-only | a page presents the concept, or a shell hosts a concept that is not a system-type, but nothing implements it | |
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
@@ -66,13 +68,13 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 ## Gates (`gloss diff`)
 
-- **AUTO**: fingerprint-only changes, accepted proposals, derived edges.
+- **AUTO**: fingerprint-only changes, accepted proposals, derived edges. A changed decorator stack on an unchanged signature (`decorators changed: removed @requires_role("approver")`, [ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)) is AUTO too, but `criticality-gates` raises it.
 - **SOFT**: a link to an existing concept, valid, inside the allowed set, at or above `soft-conf-threshold`, changing only engineering views.
 - **HARD**: a new or proposed concept, a link outside an agent's remit or the allowed set, any ontology or manifest edit, anything touching a published concept, a criticality the policy gates, a MAJOR version bump, a cross-repo import.
 
 ## Review states (the ledger)
 
-`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature changes (`gloss accept <id>` re-confirms it); any → `removed` when the marker disappears, except `rejected`, which stays the decision. A rejected `@gloss?` line still in the source adds no edge: it does not lift, gate, drift or count toward coverage, and `gloss suggest` does not propose the link again. A `value-from` baseline (`value:<curie>`) is `accepted` or `drifted` (the bound code changed, the published value did not) until `gloss accept --value`; it is never `stale`, so clearing stale links cannot hide a value drift. The ledger belongs in git.
+`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature or decorator stack changes (`gloss accept <id>` re-confirms it); any → `removed` when the marker disappears, except `rejected`, which stays the decision. A rejected `@gloss?` line still in the source adds no edge: it does not lift, gate, drift or count toward coverage, and `gloss suggest` does not propose the link again. A `value-from` baseline (`value:<curie>`) is `accepted` or `drifted` (the bound code changed, the published value did not) until `gloss accept --value`; it is never `stale`, so clearing stale links cannot hide a value drift. The ledger belongs in git.
 
 ## Concept kinds
 

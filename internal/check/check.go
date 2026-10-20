@@ -6,6 +6,8 @@ package check
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -353,6 +355,7 @@ func (c *checker) markers() {
 	// "relation\x00object" to the line of the marker that states it.
 	type decl struct {
 		symbol bool
+		start  int // first line of the anchored declaration
 		facts  map[string]int
 	}
 	fileLevel := map[fact]int{}
@@ -381,6 +384,9 @@ func (c *checker) markers() {
 			d, ok := index[e.S]
 			if !ok {
 				d = &decl{symbol: e.Prov.Scope == "symbol", facts: map[string]int{}}
+				if a := c.g.Node(e.S); a != nil && a.Anchor != nil {
+					d.start = a.Anchor.StartLine
+				}
 				index[e.S] = d
 				ds = append(ds, d)
 			}
@@ -438,11 +444,32 @@ func (c *checker) markers() {
 				f.objs = append(f.objs, c.g.Curie(obj))
 			}
 		}
+		var lines []string
 		for _, r := range order {
 			f := runs[r]
-			c.add(path, f.line, "warning", "GM131", fmt.Sprintf("%s %s is repeated on %d consecutive declarations (lines %d-%d); one marker with scope=block above the run, or one on the public entry point, says the same with one edge", r.rel, strings.Join(f.objs, ", "), r.end-r.start+1, f.line, f.last))
+			if lines == nil {
+				b, _ := os.ReadFile(filepath.Join(c.ws.Root, filepath.FromSlash(path)))
+				lines = strings.Split(string(b), "\n")
+			}
+			nested := true
+			for _, d := range ds[r.start : r.end+1] {
+				if d.start < 1 || d.start > len(lines) || strings.TrimLeft(lines[d.start-1], " \t") == lines[d.start-1] {
+					nested = false
+				}
+			}
+			c.add(path, f.line, "warning", "GM131", fmt.Sprintf("%s %s is repeated on %d consecutive declarations (lines %d-%d); %s", r.rel, strings.Join(f.objs, ", "), r.end-r.start+1, f.line, f.last, runRemedy(nested)))
 		}
 	}
+}
+
+// runRemedy is GM131's advice. scope=block anchors the next declaration and
+// its body only, so it spans a run of methods when it sits above their
+// enclosing class or block, never a run of top-level functions (#76).
+func runRemedy(nested bool) string {
+	if nested {
+		return "one marker on the enclosing class or block (scope=block above it), or one on the public entry point, says the same with one edge"
+	}
+	return "one marker with scope=file at the top of the file, or one on the shared entry point, says the same with one edge (scope=block would cover only the next declaration); for a cross-cutting mechanism, declare guards: on its concept in the ontology instead (ADR 0015)"
 }
 
 // minRun is the shortest run of identical markers GM131 reports.

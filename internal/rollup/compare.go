@@ -738,9 +738,17 @@ func (c *comparer) represented(id string) bool {
 	return false
 }
 
+// InternalExempt reports whether an internal concept stays out of the
+// untested finding and the concept-coverage denominator: an internal
+// concept is an engineering detail unless its effective criticality is high
+// or critical, when losing its only test matters as much as any other's.
+func InternalExempt(n *graph.Node) bool {
+	return n.Internal && model.CriticalityRank(n.Criticality) < model.CriticalityRank("high")
+}
+
 func (c *comparer) untested() {
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Internal {
+		if n.Imported || InternalExempt(n) {
 			continue
 		}
 		if !c.implemented(n.ID, 0) || n.Kind == "event" {
@@ -790,6 +798,11 @@ func (c *comparer) implemented(id string, depth int) bool {
 	}
 	return false
 }
+
+// Tested reports whether gloss drift counts the concept as tested: verified
+// directly, through a concept that realizes it, through a core concept it
+// realizes (see tested), or through an is-a descendant.
+func Tested(g *graph.Graph, id string) bool { return (&comparer{g: g}).tested(id, 0) }
 
 func (c *comparer) tested(id string, depth int) bool {
 	if depth > 8 {
@@ -952,13 +965,13 @@ func (c *comparer) metrics() {
 			m.Rejected++
 		}
 	}
-	// Concept coverage: owned implementation concepts (not internal,
-	// deprecated or still proposed) with an artifact and a verifier, and the
-	// owned core concepts code implements directly (a server-rendered page,
-	// a CLI, a BFF marked implements hp:X), which are mechanisms just the
-	// same (ADR 0013).
+	// Concept coverage: owned implementation concepts (not deprecated, still
+	// proposed, or internal below high criticality) with an artifact and a
+	// verifier, and the owned core concepts code implements directly (a
+	// server-rendered page, a CLI, a BFF marked implements hp:X), which are
+	// mechanisms just the same (ADR 0013).
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Internal || n.Deprecated || n.Proposed {
+		if n.Imported || InternalExempt(n) || n.Deprecated || n.Proposed {
 			continue
 		}
 		if n.Tier != model.TierImpl && !c.implementedDirectly(n.ID) {
