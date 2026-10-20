@@ -1,0 +1,10 @@
+namespace: lark
+version: 0.1.0
+concepts:
+  BookingApi:         { kind: system-type, realizes: clinic:Booking, doc: The booking HTTP service. }
+  BookingHandler:     { kind: process, realizes: clinic:Booking, doc: "Service.Book: checks the slot and overlaps, then books it." }
+  CancellationPolicy: { kind: constraint, realizes: clinic:CancellationWindow, doc: "Service.Cancel applies the window and charges the fee." }
+  ReminderScheduler:  { kind: process, realizes: clinic:AppointmentReminding, doc: "plan_reminders: one reminder 24 hours before each appointment." }
+  NoShowReport:       { kind: measure, realizes: clinic:NoShowRate, doc: The weekly no-show report. }
+  BookingDatabase:    { kind: resource, internal: true, doc: The Postgres instance behind the booking API. }
+  ReminderWorker:     { kind: system-type, realizes: clinic:AppointmentReminding, doc: The queue worker that sends reminders. }

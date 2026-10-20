@@ -83,6 +83,21 @@
         "$ref": "#/$defs/glob"
       }
     },
+    "suggest": {
+      "description": "Tunes gloss suggest.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stopwords": {
+          "description": "Words that never match a concept on their own, added to the built-in list of programming words (handler, manager, process, ...). An alias is never filtered.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
     "grammar": {
       "type": "integer",
       "minimum": 1,

@@ -1,0 +1,11 @@
+# A clinic booking monorepo (the F-CAL findings, #65-#69): Go service with a
+# package per concept, a Python worker, a web app, Terraform, Kubernetes and
+# docs. The markers are what a reviewer kept; everything unmarked is a
+# surface suggest should leave alone.
+owns:
+  clinic: { iri: https://onto.example.dev/clinic/, file: ontology/clinic.gloss.yaml, tier: core,           version: 0.1.0 }
+  lark:   { iri: https://onto.example.dev/lark/,   file: ontology/lark.gloss.yaml,   tier: implementation, version: 0.1.0 }
+prefixes:
+  cb: https://arch.example.dev/boundaries/
+policy:
+  soft-conf-threshold: 0.7

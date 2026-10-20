@@ -1,0 +1,7 @@
+boundary: cb:reminder-worker
+level: container
+part-of: cb:clinic
+realizes: [lark:ReminderWorker, lark:ReminderScheduler, lark:NoShowReport]
+subscribes: [clinic:BookingConfirmed]
+default-namespace: lark
+allowed: [derived, clinic:Appointment]

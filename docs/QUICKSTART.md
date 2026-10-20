@@ -121,7 +121,7 @@ Agents write `@gloss?` for links they propose. The one proposal workflow, which 
 On an existing codebase, let the tool draft the first pass and review it rather than writing every marker by hand:
 
 ```sh
-gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public declarations, matched by name and docstring
+gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public surfaces, from names, docstrings, tables touched and test calls
 git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
 gloss hook install --skill           # installs the adopt-glossmark skill: the whole adoption as a step-by-step agent workflow
 ```
@@ -212,4 +212,4 @@ Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hoo
 - **SOFT**: a link to an existing concept, valid, inside `allowed`, above the confidence threshold, altering only the engineering view. Cleared by the engine; audit a sample later.
 - **HARD**: a new concept proposed, a link outside an agent's `may-modify` remit or outside `allowed`, any edit to `ontology/` or manifests, anything touching a published concept, MAJOR bumps, cross-repo imports. A human decides in the PR.
 
-Suggested policy (not framework behaviour): review per PR, never per marker; auto-accept SOFT; audit a random share weekly and calibrate `soft-conf-threshold` from agreement.
+Suggested policy (not framework behaviour): review per PR, never per marker; auto-accept SOFT; audit a random share weekly and calibrate `soft-conf-threshold` from agreement: `gloss suggest --labels > labels.tsv` on reviewed code, then `gloss suggest --eval labels.tsv` on a copy with the markers stripped prints precision and the auto-accept share per confidence band.
