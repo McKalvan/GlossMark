@@ -442,8 +442,12 @@ type Manifest struct {
 	Holds StringList `yaml:"holds,omitempty" json:"holds,omitempty"`
 	// Presents and Hosts name the concepts this boundary is a UI surface or a
 	// shell for; they are compared like realizes but never imply it.
-	Presents         StringList `yaml:"presents,omitempty" json:"presents,omitempty"`
-	Hosts            StringList `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	Presents StringList `yaml:"presents,omitempty" json:"presents,omitempty"`
+	Hosts    StringList `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	// Configures names the concepts whose value this boundary edits at
+	// runtime (an admin page for a limit); compared like presents, never
+	// implies realizes (ADR 0012).
+	Configures       StringList `yaml:"configures,omitempty" json:"configures,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`
@@ -514,6 +518,7 @@ func (m *Manifest) DeclaredSets() map[string]StringList {
 		"holds":      m.Holds,
 		"presents":   m.Presents,
 		"hosts":      m.Hosts,
+		"configures": m.Configures,
 	}
 }
 

@@ -31,7 +31,7 @@ const (
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
-var ComparedRelations = []string{"realizes", "holds", "presents", "hosts", "produces", "consumes", "publishes", "subscribes"}
+var ComparedRelations = []string{"realizes", "holds", "presents", "hosts", "configures", "produces", "consumes", "publishes", "subscribes"}
 
 // Finding is one drift result.
 type Finding struct {
@@ -405,6 +405,8 @@ func verb(rel string) string {
 		return "presents"
 	case "hosts":
 		return "hosts"
+	case "configures":
+		return "configures"
 	}
 	return rel
 }

@@ -7,8 +7,11 @@ import (
 	"testing"
 
 	"github.com/mckalvan/glossmark/internal/check"
+	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/views"
 )
 
 // TestGraphQLScannedAndUnscannedMarkers: GraphQL SDL is in the built-in
@@ -83,5 +86,93 @@ func TestRepresentsAnyKindHolds(t *testing.T) {
 	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
 	if v := findings(rep, rollup.KindViolation); len(v) != 1 || v[0].Concept != "wh:Recount" || v[0].Relation != "holds" {
 		t.Errorf("violations = %+v, want holds wh:Recount", v)
+	}
+}
+
+// harbor writes the shared core of the surfaces fixtures: an order service
+// whose engine enforces a critical credit limit, inside one system.
+func harbor(t *testing.T) (string, func(rel, content string)) {
+	t.Helper()
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  hp: { iri: https://x/hp/, tier: core }\n  hpx: { iri: https://x/hpx/, tier: implementation }\n")
+	write("ontology/hp.gloss.yaml", "concepts:\n"+
+		"  OrderPlacement: { kind: process, criticality: high }\n"+
+		"  CreditLimit: { kind: constraint, criticality: critical, constrains: OrderPlacement }\n"+
+		"  Order: { kind: entity, criticality: high }\n")
+	write("ontology/hpx.gloss.yaml", "concepts:\n"+
+		"  OrderIntake: { kind: process, realizes: hp:OrderPlacement }\n"+
+		"  CreditCheck: { kind: constraint, realizes: hp:CreditLimit }\n")
+	write(".gloss.yaml", "boundary: hpb:harbor\nlevel: system\nrealizes: inherit\n")
+	write("orders/.gloss.yaml", "boundary: hpb:orders\nlevel: container\npart-of: hpb:harbor\nrealizes: [hpx:OrderIntake, hpx:CreditCheck]\ndefault-namespace: hpx\n")
+	write("orders/placement.py", "# @gloss implements .CreditCheck\ndef check_credit(): pass\n\n# @gloss implements .OrderIntake\ndef place_order(): pass\n")
+	write("orders/tests/test_placement.py", "# @gloss verifies hp:OrderPlacement\ndef test_place(): pass\n\n# @gloss verifies hp:CreditLimit\ndef test_limit(): pass\n")
+	return root, write
+}
+
+// placementOf returns a concept's boundary in the engineering view.
+func placementOf(t *testing.T, root, concept string) string {
+	t.Helper()
+	ws, g, _, _ := build(t, root)
+	for _, p := range views.ProjectAll(g, ws.Views) {
+		if p.Name != "engineering" {
+			continue
+		}
+		for _, n := range p.Nodes {
+			if n.ID == concept {
+				return n.Boundary
+			}
+		}
+	}
+	t.Fatalf("%s not in the engineering view", concept)
+	return ""
+}
+
+// TestConfiguresInManifests: a page that edits a constraint's value is
+// declared with configures:, which the derived allowed set admits (its test
+// too), lifts to the boundary as configures on any kind, is compared by
+// drift, gives the page the constraint's level and leaves the constraint in
+// the engine's box (#51, ADR 0012).
+func TestConfiguresInManifests(t *testing.T) {
+	root, write := harbor(t)
+	write("admin/.gloss.yaml", "boundary: hpb:admin\nlevel: container\npart-of: hpb:harbor\ndefault-namespace: hpx\nconfigures: [hp:CreditLimit]\n")
+	write("admin/CreditLimitPage.tsx", "// @gloss configures hp:CreditLimit\nexport function CreditLimitPage() {}\n")
+	write("admin/tests/CreditLimitPage.test.tsx", "// @gloss verifies hp:CreditLimit\ntest('saves', () => {})\n")
+	ws, g, _, lg := build(t, root)
+	for _, d := range check.Run(ws, g) {
+		if d.Severity != "info" {
+			t.Errorf("check: %s", d)
+		}
+	}
+	admin := g.NodeByCurie("hpb:admin")
+	var derived bool
+	for _, e := range g.Out(admin.ID, "configures") {
+		derived = derived || e.Source == graph.SourceDerived && g.Curie(e.O) == "hp:CreditLimit"
+	}
+	if !derived {
+		t.Errorf("no derived hpb:admin configures hp:CreditLimit edge")
+	}
+	if r := curies(g, g.Objects(admin.ID, "realizes")); has(r, "hp:CreditLimit") {
+		t.Errorf("configures on a constraint must not lift to realizes: %v", r)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	for _, k := range []string{rollup.KindGap, rollup.KindViolation} {
+		if fs := findings(rep, k); len(fs) != 0 {
+			t.Errorf("%s: %+v", k, fs)
+		}
+	}
+	for _, a := range g.NodesOf(model.NodeArtifact) {
+		if a.Path == "admin/CreditLimitPage.tsx" && a.Criticality != "critical" {
+			t.Errorf("value editor criticality = %q, want critical", a.Criticality)
+		}
+	}
+	if b := placementOf(t, root, "hp:CreditLimit"); b != "hpb:orders" {
+		t.Errorf("hp:CreditLimit placed in %q, want hpb:orders", b)
+	}
+	// A declared configures the code does not do is a gap.
+	write("admin/CreditLimitPage.tsx", "export function CreditLimitPage() {}\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if gp := findings(rep, rollup.KindGap); len(gp) != 1 || gp[0].Relation != "configures" || !strings.Contains(gp[0].Msg, "nothing under it configures it") {
+		t.Errorf("gaps = %+v, want configures hp:CreditLimit", gp)
 	}
 }

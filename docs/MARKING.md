@@ -48,6 +48,10 @@ Target the implementation concept when the artifact is a mechanism (`implements 
 
 A page, screen or report that *shows* a concept is not its mechanism. Model the page as `presents` (`pfi:FirePage: { kind: process, presents: pf:FirePlanning }`, or `// @gloss presents pf:FirePlanning` on the component) and the app frame as `hosts`. Neither makes the boundary realize the concept or inherit its criticality, so the engine's tests and the page's tests are counted apart ([ADR 0001](adr/0001-presents-and-hosts.md)).
 
+## Value editors
+
+An admin page or a settings screen that edits a concept's value at runtime (a credit limit stored in a row, a feature threshold) is neither the mechanism that enforces it nor only a view of it. Mark it `@gloss configures hp:CreditLimit` and declare `configures: [hp:CreditLimit]` in its boundary's manifest. The constraint stays drawn in the engine's box, the page takes the constraint's criticality (a mistake on it changes the rule), its test may `verify` the concept without GM503, and `gloss drift` compares the declaration with the code ([ADR 0012](adr/0012-surfaces.md)). A value bound to a line of code is `value-from` or `publishes-value` instead.
+
 ## Proposals
 
 Write `@gloss?` when you are not sure, and `conf=0.8` with an agent's confidence. A human accepts it by deleting the `?` (`gloss accept <id>`). When the concept does not exist yet, write `ns:NEW:Name` and let `gloss propose --from-new` lift it into the ontology file as a proposed entry; never invent a concept name inline without `NEW:`.

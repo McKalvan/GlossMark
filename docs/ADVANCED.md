@@ -19,7 +19,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `publishes-value` | ✓ | | | the line below holds a measure's or constraint's published value (`scope=line`); same as `value-from:` in the ontology |
 | `may-modify` | ✓ | | | an agent's change remit; targets may be globs (`pa:*`); links outside it by that agent are HARD |
 | `provisions` | ✓ | | | IaC artifact provisions a resource or boundary; on a resource or system-type it lifts to `realizes` |
-| `configures` | ✓ | | | config artifact configures a concept or boundary; same lift |
+| `configures` | ✓ | | ✓ | a config file, or a page that edits a concept's value at runtime; lifts to the boundary as itself on any kind (and to `realizes` on a resource or system-type), carries the concept's criticality, never places it ([ADR 0012](adr/0012-surfaces.md)) |
 | `deploys` | ✓ | | | CI artifact deploys a system-type or boundary; same lift |
 | `produces`, `consumes` | ✓ | ✓ | ✓ | intended (concept, manifest) or actual (artifact) flow of a concept; lifted to boundaries with `range-lcs` |
 | `publishes`, `subscribes` | ✓ | ✓ | ✓ | same for events |

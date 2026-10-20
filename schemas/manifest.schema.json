@@ -45,6 +45,10 @@
       "description": "Concepts this boundary is a shell or container for; compared like realizes, never implies it.",
       "$ref": "#/$defs/stringOrList"
     },
+    "configures": {
+      "description": "Concepts whose value this boundary edits at runtime (an admin page for a limit); compared like presents, never implies realizes (docs/adr/0012-surfaces.md).",
+      "$ref": "#/$defs/stringOrList"
+    },
     "produces": {
       "description": "Concepts this boundary intends to produce.",
       "$ref": "#/$defs/stringOrList"

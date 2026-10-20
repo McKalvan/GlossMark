@@ -533,7 +533,7 @@ const (
 // flowRels and surfaceRels are the boundary → concept relations that explain
 // an unplaced concept, with the wording its reason uses.
 var flowRels = [][2]string{{"produces", "produced by"}, {"consumes", "consumed by"}, {"publishes", "published by"}, {"subscribes", "subscribed to by"}}
-var surfaceRels = [][2]string{{"presents", "presented by"}, {"hosts", "hosted by"}}
+var surfaceRels = [][2]string{{"presents", "presented by"}, {"hosts", "hosted by"}, {"configures", "configured by"}}
 
 // place gives every concept node its placement and the reason for it.
 // strongest holds each concept's strongest housing candidates; a concept left
@@ -616,7 +616,7 @@ func (p *projector) place(strongest map[string]map[string]bool) {
 				}
 			}
 			sort.Strings(other)
-			n.Placement, n.PlacementReason = PlacementUnlinked, "no boundary realizes, represents, produces, consumes, publishes, subscribes, presents or hosts it"
+			n.Placement, n.PlacementReason = PlacementUnlinked, "no boundary realizes, represents, produces, consumes, publishes, subscribes, presents, hosts or configures it"
 			if len(other) > 0 {
 				n.PlacementReason += "; linked only by " + strings.Join(other, "; ")
 			}
