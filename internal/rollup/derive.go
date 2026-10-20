@@ -250,12 +250,16 @@ func realizedBy(g *graph.Graph, c string) []string { return standsFor(g, c, fals
 
 func standsFor(g *graph.Graph, c string, wholes bool) []string {
 	seen := map[string]bool{c: true}
+	// walked: each concept is expanded once, so an is-a or part-of cycle
+	// ends the walk instead of re-entering it until the depth limit.
+	walked := map[string]bool{}
 	var out []string
 	var walk func(x string, depth int)
 	walk = func(x string, depth int) {
-		if depth > 16 {
+		if depth > 16 || walked[x] {
 			return
 		}
+		walked[x] = true
 		for _, p := range []string{"realizes", "published-as"} {
 			for _, e := range g.Out(x, p) {
 				if e.Source == graph.SourceDerived || !IsConcrete(e.O) {

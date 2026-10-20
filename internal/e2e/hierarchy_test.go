@@ -133,6 +133,62 @@ func TestKindInheritance(t *testing.T) {
 	}
 }
 
+// TestCycles: every cycle in a hierarchy is a gloss check error naming its
+// members and edges (is-a, self-loops included; part-of and has-part among
+// concepts in either tier; part-of among boundaries), GM320 is not excused
+// by a part-of cycle that realizes nothing, and the rollup still terminates.
+func TestCycles(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  c: { iri: https://x/c/, tier: core }\n  k: { iri: https://x/k/, tier: implementation }\n")
+	write("ontology/c.gloss.yaml", "concepts:\n"+
+		"  Product: { kind: entity, is-a: Lighting }\n"+
+		"  Accessory: { kind: entity, is-a: Product }\n"+
+		"  Lighting: { kind: entity, is-a: Accessory }\n"+
+		"  Cassette: { kind: entity }\n"+
+		"  Brake: { kind: entity, is-a: Brake }\n"+
+		"  Frame: { kind: entity, part-of: Fork, has-part: Fork }\n"+
+		"  Fork: { kind: entity }\n")
+	write("ontology/k.gloss.yaml", "concepts:\n"+
+		"  WaveBuilder: { kind: process, part-of: BinRouter }\n"+
+		"  BinRouter: { kind: process, part-of: WaveBuilder }\n"+
+		"  Lone: { kind: process }\n"+
+		"  Lister: { kind: process, realizes: c:Cassette }\n")
+	write("listing/.gloss.yaml", "boundary: o:listing\nlevel: container\npart-of: o:picking\nrealizes: [c:Lighting]\n")
+	write("listing/cassettes.py", "# @gloss implements k:Lister\ndef run(): pass\n")
+	write("picking/.gloss.yaml", "boundary: o:picking\nlevel: container\npart-of: o:listing\n")
+	write("picking/waves.py", "# @gloss implements k:WaveBuilder\ndef wave(): pass\n")
+	ws, g, _, lg := build(t, root)
+	codes := map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.Path+": "+d.Msg)
+	}
+	if len(codes["GM370"]) != 2 || len(codes["GM371"]) != 2 || len(codes["GM510"]) != 1 {
+		t.Errorf("want 2 is-a, 2 part-of and 1 boundary cycle: GM370 %v, GM371 %v, GM510 %v", codes["GM370"], codes["GM371"], codes["GM510"])
+	}
+	all := strings.Join(append(append(codes["GM370"], codes["GM371"]...), codes["GM510"]...), "\n")
+	for _, want := range []string{
+		"c:Accessory is-a c:Product (ontology/c.gloss.yaml:3) → c:Product is-a c:Lighting (ontology/c.gloss.yaml:2) → c:Lighting is-a c:Accessory (ontology/c.gloss.yaml:4)",
+		"c:Brake is-a c:Brake (ontology/c.gloss.yaml:6)",
+		"c:Frame has-part c:Fork (ontology/c.gloss.yaml:7) → c:Frame part-of c:Fork (ontology/c.gloss.yaml:7)",
+		"k:BinRouter part-of k:WaveBuilder",
+		"o:listing part-of o:picking (listing/.gloss.yaml:1) → o:picking part-of o:listing (picking/.gloss.yaml:1)",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("cycle errors should contain %q:\n%s", want, all)
+		}
+	}
+	gm320 := strings.Join(codes["GM320"], "\n")
+	for _, want := range []string{"k:WaveBuilder", "k:BinRouter", "k:Lone"} {
+		if !strings.Contains(gm320, want) {
+			t.Errorf("GM320 should name %s: %v", want, codes["GM320"])
+		}
+	}
+	if len(codes["GM320"]) != 3 {
+		t.Errorf("GM320 = %v, want WaveBuilder, BinRouter and Lone only", codes["GM320"])
+	}
+	rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+}
+
 // TestSiblingParentBoundary: a parent boundary whose manifest lives beside
 // its child (checkout/ part-of platform/) keeps its own file, dir and level
 // whatever order the manifests load in, and a parent named only by
