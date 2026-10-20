@@ -2,6 +2,8 @@ package version
 
 import "testing"
 
+// TestIsDevBuild: every Go pseudo-version form is a development build.
+// @gloss verifies gmi:FormatVersions
 func TestIsDevBuild(t *testing.T) {
 	for _, tc := range []struct {
 		v   string
