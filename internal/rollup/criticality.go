@@ -245,14 +245,30 @@ var securityTest = regexp.MustCompile(`(?i)(secur|auth|permission|access.?contro
 // view, and a concept whose only verifiers are security tests guards
 // something sensitive. Each is high. Everything else stays unclassified; the
 // suggestion is a starting point a human edits, not a policy.
+//
+// A declared level is the review: a concept that has one, or inherits one
+// from a concept that declares it, is never suggested, so lowering a core
+// concept to medium on purpose sticks. An implementation concept that
+// realizes an unclassified core concept of this repository is not suggested
+// either; the suggestion goes to the core concept it realizes, from which
+// it would inherit.
 func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
-	var out []CriticalitySuggestion
-	for _, n := range g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Deprecated || n.CriticalityFrom == "declared" {
-			continue
+	reasons := map[string]string{}
+	var order []string
+	suggest := func(n *graph.Node, reason string) {
+		if _, ok := reasons[n.CURIE]; !ok {
+			order = append(order, n.CURIE)
+			reasons[n.CURIE] = reason
 		}
-		if model.CriticalityRank(n.Criticality) >= model.CriticalityRank("high") {
-			continue // already inherits high or above
+	}
+	unclassified := func(n *graph.Node) bool {
+		return n != nil && n.NodeType == model.NodeConcept && !n.Imported && !n.Deprecated && n.Criticality == ""
+	}
+	var deferred []*graph.Node
+	var deferredReason []string
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if !unclassified(n) {
+			continue // declared, inherited from a declaration, imported or deprecated
 		}
 		reason := ""
 		switch {
@@ -279,10 +295,41 @@ func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
 				reason = fmt.Sprintf("verified only by security tests (%d)", total)
 			}
 		}
-		if reason != "" {
-			out = append(out, CriticalitySuggestion{Concept: n.CURIE, Level: "high", Reason: reason})
+		if reason == "" {
+			continue
+		}
+		if n.Tier == model.TierImpl && len(coresOf(g, n, unclassified)) > 0 {
+			deferred, deferredReason = append(deferred, n), append(deferredReason, reason)
+			continue
+		}
+		suggest(n, reason)
+	}
+	for i, n := range deferred {
+		for _, core := range coresOf(g, n, unclassified) {
+			suggest(core, fmt.Sprintf("realized by %s (%s), which would inherit it", n.CURIE, deferredReason[i]))
 		}
 	}
+	var out []CriticalitySuggestion
+	for _, c := range order {
+		out = append(out, CriticalitySuggestion{Concept: c, Level: "high", Reason: reasons[c]})
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Concept < out[j].Concept })
+	return out
+}
+
+// coresOf returns the core concepts n realizes that pass keep: its declared
+// realizes targets, or, when it declares none, the core concepts its
+// realizes closure reaches (through is-a).
+func coresOf(g *graph.Graph, n *graph.Node, keep func(*graph.Node) bool) []*graph.Node {
+	var out []*graph.Node
+	targets := g.Objects(n.ID, "realizes")
+	if len(targets) == 0 {
+		targets = RealizesStar(g, n.ID)
+	}
+	for _, id := range targets {
+		if c := g.Node(id); keep(c) && c.Tier == model.TierCore {
+			out = append(out, c)
+		}
+	}
 	return out
 }

@@ -2125,9 +2125,19 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	for _, s := range rollup.SuggestCriticality(g) {
 		sugg[s.Concept] = s.Reason
 	}
-	for _, c := range []string{"pay:Cutoff", "pa:Clock", "pa:Session"} {
+	// pa:Clock and pa:Session would inherit from the core concepts they
+	// realize: the suggestion goes there (issue #43).
+	for _, c := range []string{"pay:Cutoff", "pay:Login"} {
 		if sugg[c] == "" {
 			t.Errorf("expected a high suggestion for %s, got %v", c, sugg)
+		}
+	}
+	if !strings.Contains(sugg["pay:Login"], "realized by pa:Session (verified only by security tests") {
+		t.Errorf("pay:Login reason = %q", sugg["pay:Login"])
+	}
+	for _, c := range []string{"pa:Clock", "pa:Session"} {
+		if _, ok := sugg[c]; ok {
+			t.Errorf("%s realizes an unclassified core concept and is suggested itself: %v", c, sugg)
 		}
 	}
 	if _, ok := sugg["pay:Payment"]; ok {
@@ -2135,6 +2145,13 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	}
 	if _, ok := sugg["pay:Metrics"]; ok {
 		t.Error("a declared level is never overridden")
+	}
+	// A reviewer lowers the core constraint to medium: the implementation
+	// concept that inherits it is not suggested again (issue #43).
+	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint, criticality: medium }\n  Login: { kind: process, criticality: medium }\n")
+	_, g, _, _ = build(t, root)
+	if s := rollup.SuggestCriticality(g); len(s) != 0 {
+		t.Errorf("after the review: %+v, want no suggestions", s)
 	}
 }
 

@@ -81,9 +81,15 @@ printed as a diff of the ontology files (`--write` applies it):
 - every concept whose only verifiers are security tests (paths or names with
   auth, permission, csrf, crypto, pii, token and the like).
 
-Each is `high`. Concepts that already have a declared level, or inherit `high`
-or above, are left alone; everything else stays unclassified. Treat the diff
-as a draft: raise money movement to `critical`, lower what does not matter.
+Each is `high`. A declared level is the review: a concept that declares one,
+or inherits one from a concept that declares it, is left alone, so lowering a
+core concept to `medium` on purpose sticks, and its implementation concepts are
+not proposed again on the next run. An implementation concept that realizes an
+unclassified core concept is not proposed either; the suggestion goes to the
+core concept, from which it would inherit ("realized by lark:LeadTimeSetting
+(constraint: ...), which would inherit it"). Everything else stays
+unclassified. Treat the diff as a draft: raise money movement to `critical`,
+lower what does not matter.
 
 `gloss check` warns (GM600) when a boundary declares a level **below** a
 concept its code realizes: the manifest understates its risk, and reviews use
