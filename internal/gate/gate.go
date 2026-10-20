@@ -506,9 +506,28 @@ func (c *classifier) governance() {
 				consider(c.base.NodeByCurie(cu))
 			}
 		}
-		// A link is judged by what it links to; its boundary's level applies
-		// only as a floor (criticality-floor: true). An ontology, manifest or
-		// policy edit is judged by the thing it edits.
+		// A link is judged by what it links to and what guards that; its
+		// boundary's level applies only as a floor (criticality-floor: true).
+		// An ontology, manifest or policy edit is judged by the thing it edits.
+		var guards []*graph.Node
+		if ch.Object != "" && linkKinds[ch.Kind] {
+			gr := c.head
+			on := gr.NodeByCurie(ch.Object)
+			if on == nil {
+				gr, on = c.base, c.base.NodeByCurie(ch.Object)
+			}
+			if on != nil {
+				guards = guardsOf(gr, ch.Relation, on.ID)
+			}
+			for _, gn := range guards {
+				consider(gn)
+			}
+		}
+		// A changed decorator stack on guarded code may have dropped the guard.
+		if ch.Kind == "decorators-changed" && len(guards) > 0 && ch.Gate == AUTO {
+			ch.Gate = SOFT
+			ch.Reasons = append(ch.Reasons, "guarded by "+guards[0].CURIE+": the decorators may be the guard")
+		}
 		if ch.Path != "" && linkKinds[ch.Kind] {
 			if m := c.ws.ManifestFor(ch.Path); m != nil {
 				if b := c.head.NodeByCurie(m.Boundary); b != nil {
@@ -713,11 +732,15 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 
 // LinkCriticality is the governance level an inline link carries: the level
 // of the concept it links to, unless criticality does not flow through the
-// relation (rollup.CarriesCriticality), raised to the level of a floor
-// boundary above the link's file. from names the node that carries it.
+// relation (rollup.CarriesCriticality), raised to the level of a guard of
+// that concept (ADR 0015) and of a floor boundary above the link's file.
+// from names the node that carries it.
 func LinkCriticality(g *graph.Graph, ws *load.Workspace, e *graph.Edge) (lvl, from string) {
 	if on := g.Node(e.O); on != nil && on.NodeType == model.NodeConcept && rollup.CarriesCriticality(e.P) {
 		lvl, from = on.Criticality, on.CURIE
+	}
+	if gn := topGuard(g, e.P, e.O); gn != nil && model.CriticalityRank(gn.Criticality) > model.CriticalityRank(lvl) {
+		lvl, from = gn.Criticality, gn.CURIE
 	}
 	if e.Prov != nil {
 		if m := ws.ManifestFor(e.Prov.Path); m != nil {
@@ -729,6 +752,34 @@ func LinkCriticality(g *graph.Graph, ws *load.Workspace, e *graph.Edge) (lvl, fr
 		}
 	}
 	return lvl, from
+}
+
+// guardsOf returns the concepts that guard what a link through rel to obj
+// touches (ADR 0015): none for a test, document or agent-file link.
+func guardsOf(g *graph.Graph, rel, obj string) []*graph.Node {
+	if !rollup.GuardedLink(rel) {
+		return nil
+	}
+	var out []*graph.Node
+	for _, id := range rollup.AppliedBy(g, obj, "guards") {
+		if n := g.Node(id); n != nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// topGuard is the most critical guard of a link's target, or nil. A guard
+// raises the review level of a change to the code it guards; the code does
+// not inherit the guard's level in the graph.
+func topGuard(g *graph.Graph, rel, obj string) *graph.Node {
+	var best *graph.Node
+	for _, n := range guardsOf(g, rel, obj) {
+		if n.Criticality != "" && (best == nil || model.CriticalityRank(n.Criticality) > model.CriticalityRank(best.Criticality)) {
+			best = n
+		}
+	}
+	return best
 }
 
 // softReason is the reason a SOFT link carries; it is dropped when a later

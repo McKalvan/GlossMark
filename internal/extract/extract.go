@@ -139,9 +139,13 @@ func (ex *extractor) ontologies() {
 			}
 			ex.g.AddNode(n)
 			add := func(p string, targets []string) {
+				alias := ""
+				if p == "applies-to" {
+					p, alias = "guards", "applies-to"
+				}
 				for _, t := range targets {
 					oiri, raw := ex.resolveRef(t, ns)
-					ex.g.AddEdge(&graph.Edge{S: iri, P: p, O: oiri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: file, Line: c.Line, Raw: raw}})
+					ex.g.AddEdge(&graph.Edge{S: iri, P: p, O: oiri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: file, Line: c.Line, Raw: raw, Alias: alias}})
 				}
 			}
 			add("is-a", c.IsA)

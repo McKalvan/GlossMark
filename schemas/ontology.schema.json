@@ -217,7 +217,7 @@
       },
       "patternProperties": {
         "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|aliases|criticality)$)[a-z][a-z0-9-]*$": {
-          "description": "A relation (produces, consumes, publishes, subscribes, constrains, reverses, attaches-to, or one declared under relations:) and its target(s).",
+          "description": "A relation (produces, consumes, publishes, subscribes, constrains, guards or its alias applies-to, reverses, attaches-to, or one declared under relations:) and its target(s).",
           "$ref": "#/$defs/stringOrList"
         }
       },

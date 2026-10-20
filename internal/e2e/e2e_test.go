@@ -1364,7 +1364,7 @@ func TestOneDiagnosticPerKey(t *testing.T) {
 		os.WriteFile(p, []byte(content), 0o644)
 	}
 	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
-	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    guards: [A, B, C]\n  Log:\n    kind: process\n    guards: [A, B]\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: process }\n  C: { kind: process }\n  Auth:\n    kind: process\n    audits: [A, B, C]\n  Log:\n    kind: process\n    audits: [A, B]\n")
 	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:A }\n")
 	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\n")
 	write("app.py", "# @gloss implements .Doer\ndef go(): pass\n")
@@ -1383,7 +1383,7 @@ func TestOneDiagnosticPerKey(t *testing.T) {
 		codes[d.Code] = append(codes[d.Code], d.Line)
 	}
 	if got := codes["GM200"]; len(got) != 2 {
-		t.Errorf("GM200 lines = %v, want one per guards: key", got)
+		t.Errorf("GM200 lines = %v, want one per audits: key", got)
 	}
 	if got := codes["GM240"]; len(got) != 1 || got[0] != 1 {
 		t.Errorf("GM240 lines = %v, want [1]", got)

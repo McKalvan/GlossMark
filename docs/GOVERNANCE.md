@@ -121,7 +121,10 @@ One classifier gates a link everywhere: `gloss diff`, `gloss impact`,
 `propose_link` and `impact_of` tools apply the same rules, `criticality-gates`
 included, so `accept --policy` never auto-accepts a link the PR gate would
 stop. A link through `presents` or `hosts` takes no level from its target,
-in the gate as in the graph.
+in the gate as in the graph. A link to a concept that a mechanism `guards`
+is reviewed at the guard's level when that is higher, without taking it as
+its own: the graph keeps the handler's level, the gate sees the guard's
+([ADR 0015](adr/0015-guards.md)).
 
 **`gloss impact`** and the MCP `impact_of` tool report a level per changed
 file (`criticality`, `criticality_from`) and per concept, with a hint when a

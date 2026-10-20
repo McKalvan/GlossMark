@@ -72,7 +72,7 @@ Concept keys:
 | `proposed: true`, `proposed-by` | The entry is a proposal, the ontology's `@gloss?`. Links to it resolve; it is HARD-gated until `gloss accept --concept` drops the flag. `gloss propose` writes these entries. |
 | `aliases` | Other names people and agents use; `search_concepts` matches them. |
 | `criticality` | `low`, `medium`, `high` or `critical`: how much a mistake here matters. Implementation concepts inherit the highest level of what they realize when unset. See [GOVERNANCE.md](GOVERNANCE.md). |
-| any other key | A relation: `produces`, `consumes`, `publishes`, `subscribes`, `constrains`, `reverses`, `attaches-to`, or one declared under `relations:`. |
+| any other key | A relation: `produces`, `consumes`, `publishes`, `subscribes`, `constrains`, `guards` (alias `applies-to`, [ADR 0015](adr/0015-guards.md)), `reverses`, `attaches-to`, or one declared under `relations:`. |
 
 Write `doc` quoted (`doc: "One account (checking, savings)."`) or in block style. Inside a `{ }` flow mapping an unquoted doc ends at its first comma: the rest of the sentence becomes null-valued keys that add no edge, and nothing downstream notices. `gloss check` reports the cut doc (GM305) and any other null key (GM304); `gloss propose` writes quoted docs.
 
