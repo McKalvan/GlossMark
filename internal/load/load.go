@@ -256,7 +256,9 @@ func (ws *Workspace) walk() error {
 		if d.Name() == ManifestName {
 			m, err := model.LoadManifest(path)
 			if err != nil {
-				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: 1, Severity: "error", Code: "GM110", Msg: err.Error()})
+				// The diagnostic carries the workspace-relative path; drop the
+				// absolute one LoadManifest prefixes.
+				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: 1, Severity: "error", Code: "GM110", Msg: strings.TrimPrefix(err.Error(), path+": ")})
 				return nil
 			}
 			m.Path = rel

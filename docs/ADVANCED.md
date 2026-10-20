@@ -26,7 +26,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `realizes` | | ✓ | ✓ | implementation concept → core concept; a boundary → what its code stands for |
 | `holds` | | | ✓ | boundary holds an entity's data; derived from `represents` on entities |
 | `is-a` | | ✓ | | taxonomy; the closure is computed, a concept inherits `realizes` through it |
-| `part-of`, `has-part` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
+| `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
+| `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |
 | `published-as` | | ✓ | | written as `published: { as: core:X }`: the only seam between tiers and across repositories |
 | `constrains`, `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
 | `depends-on`, `calls`, `derived-from`, `same-as` | | | | derived or reserved (imports, SCIP, SSSOM) |
@@ -61,7 +62,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
 
-`--fail-on` chooses which kinds fail the command; `policy.waivers` in `glossmark.yaml` silences one finding until a date.
+`gloss drift --fail-on` and `gloss landscape --fail-on` take a comma-separated list of these kind names, spelled as in the first column (`value-drift`, `presented-only`); any of them fails the command when listed, `stale`, `rogue` and `proposed` included. The defaults are `violation,value-drift,gap,dangling` for `drift` (the ticks above) and `violation,dangling` for `landscape`. `gloss diff --fail-on` takes a gate class instead (`HARD`, `SOFT` or `none`). `policy.waivers` in `glossmark.yaml` silences one finding until a date.
 
 ## Gates (`gloss diff`)
 
