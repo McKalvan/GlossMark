@@ -54,7 +54,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | violation | a boundary's code realizes, holds, produces, consumes, publishes or subscribes something its manifest does not declare | ✓ |
 | gap | a manifest declares something nothing under it implements | ✓ |
 | value-drift | the code a published value is bound to (`value-from`, `publishes-value`) changed and the ontology `value` did not | ✓ |
-| dangling | a marker targets a concept that does not exist (write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
+| dangling | a marker, a manifest relation key or `allowed:` entry, or a relation in the workspace's own ontology files targets a concept that does not exist (in a marker, write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |
 | untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts) | |

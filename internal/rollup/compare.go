@@ -517,6 +517,50 @@ func (c *comparer) orphans() {
 	}
 }
 
+// danglingDeclared reports unresolved concept references that markers do
+// not carry: relation keys in manifests and in the workspace's own ontology
+// files, and allowed: entries, at the file and line gloss check reports.
+func (c *comparer) danglingDeclared() {
+	for _, e := range c.g.Edges() {
+		if e.Source != graph.SourceDeclared || e.Prov == nil || strings.HasPrefix(e.O, "urn:gloss:glob:") {
+			continue
+		}
+		sn := c.g.Node(e.S)
+		if sn == nil || (sn.NodeType == model.NodeConcept && sn.Imported) || (sn.NodeType != model.NodeConcept && sn.NodeType != model.NodeBoundary) {
+			continue
+		}
+		if c.g.Node(e.O) != nil || (sn.NodeType == model.NodeBoundary && e.P == "part-of") {
+			continue
+		}
+		cur := c.g.Curie(e.O)
+		if strings.HasPrefix(e.O, "urn:gloss:unresolved:") {
+			cur = strings.TrimPrefix(e.O, "urn:gloss:unresolved:")
+		}
+		where := "ontology"
+		if sn.NodeType == model.NodeBoundary {
+			where = "manifest"
+		}
+		c.add(Finding{ID: KindDangling + ":" + cur + ":" + e.Prov.Path + ":" + fmt.Sprint(e.Prov.Line), Kind: KindDangling, Severity: "error", Boundary: boundaryCurie(sn), Concept: cur, Relation: e.P, Path: e.Prov.Path, Line: e.Prov.Line,
+			Msg: fmt.Sprintf("%s:%d %s %s %s: concept does not exist (%s reference)", e.Prov.Path, e.Prov.Line, sn.CURIE, e.P, cur, where)})
+	}
+	for _, m := range c.ws.Manifests {
+		for _, pat := range m.Allowed {
+			if pat == model.DerivedMarker || strings.Contains(pat, "*") || c.g.NodeByCurie(pat) != nil {
+				continue
+			}
+			c.add(Finding{ID: KindDangling + ":" + pat + ":" + m.Path + ":1", Kind: KindDangling, Severity: "error", Boundary: m.Boundary, Concept: pat, Relation: "allowed", Path: m.Path, Line: 1,
+				Msg: fmt.Sprintf("%s:1 %s allowed %s: concept does not exist (manifest reference)", m.Path, m.Boundary, pat)})
+		}
+	}
+}
+
+func boundaryCurie(n *graph.Node) string {
+	if n.NodeType == model.NodeBoundary {
+		return n.CURIE
+	}
+	return ""
+}
+
 func (c *comparer) rogues() {
 	seen := map[string]bool{}
 	for _, e := range c.g.Edges() {
@@ -551,6 +595,7 @@ func (c *comparer) rogues() {
 			}
 		}
 	}
+	c.danglingDeclared()
 	// Proposed concepts: in the ontology with proposed: true, awaiting a human.
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
 		if !n.Proposed || n.Imported {
