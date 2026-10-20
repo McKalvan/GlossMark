@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func init() {
 
 func cmdLandscape(args []string) int {
 	fs := newLandscapeFlags()
-	if err := fs.fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs.fs, args); err != nil {
 		return 2
 	}
 	repos := append([]string{}, fs.repos...)
@@ -121,10 +122,7 @@ func cmdLandscape(args []string) int {
 }
 
 type landscapeFlags struct {
-	fs interface {
-		Parse([]string) error
-		Args() []string
-	}
+	fs       *flag.FlagSet
 	repos    []string
 	format   string
 	viewOut  string

@@ -30,7 +30,7 @@ func cmdExport(args []string) int {
 	provPath := fs.String("prov", "", "write the ledger as PROV-O JSON-LD")
 	status := fs.Bool("status", false, "write implemented / untested / orphan / proposed per owned concept as JSON (for an external checker)")
 	out := fs.String("o", "", "with --status: write to this file instead of stdout")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if *sqlitePath == "" && *provPath == "" && !*status {
@@ -76,7 +76,7 @@ func cmdExport(args []string) int {
 func cmdPublish(args []string) int {
 	fs, root := newFlags("publish")
 	out := fs.String("o", "dist/glossmark", "output directory (one subdirectory per owned namespace)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -210,7 +210,7 @@ func cmdAgents(args []string) int {
 	fs, root := newFlags("agents")
 	dir := fs.String("dir", "", "directory whose nearest manifest scopes the vocabulary (default: whole repo)")
 	write := fs.String("write", "", "write into this file between <!-- gloss:begin --> and <!-- gloss:end --> markers (e.g. AGENTS.md)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

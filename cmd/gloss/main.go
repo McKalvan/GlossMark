@@ -31,6 +31,9 @@ func run(args []string) int {
 		usage()
 		return 0
 	}
+	if args[0] == "--version" || args[0] == "-v" {
+		args = append([]string{"version"}, args[1:]...)
+	}
 	sort.Slice(commands, func(i, j int) bool { return commands[i].name < commands[j].name })
 	for _, c := range commands {
 		if c.name == args[0] {
@@ -63,6 +66,30 @@ func newFlags(name string) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet("gloss "+name, flag.ContinueOnError)
 	root := fs.String("root", "", "repository root (default: nearest glossmark.yaml above the working directory)")
 	return fs, root
+}
+
+// parseFlags parses flags wherever they appear among the positional
+// arguments ("gloss import <file> --namespace ns"); the flag package alone
+// stops at the first positional. A "--" ends flag parsing as usual. Afterwards
+// fs.Args() holds the positionals in their original order.
+func parseFlags(fs *flag.FlagSet, args []string) error {
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		rest := fs.Args()
+		if n := len(args) - len(rest); n > 0 && args[n-1] == "--" {
+			pos = append(pos, rest...)
+			break
+		}
+		if len(rest) == 0 {
+			break
+		}
+		pos = append(pos, rest[0])
+		args = rest[1:]
+	}
+	return fs.Parse(append([]string{"--"}, pos...))
 }
 
 func fail(err error) int {

@@ -14,7 +14,7 @@ func init() {
 
 func cmdLock(args []string) int {
 	fs, root := newFlags("lock")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

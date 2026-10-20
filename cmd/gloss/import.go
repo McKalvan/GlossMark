@@ -20,7 +20,7 @@ func cmdImport(args []string) int {
 	ns := fs.String("namespace", "", "owned namespace prefix to write into")
 	dry := fs.Bool("dry-run", false, "report what would change and write nothing")
 	values := fs.Bool("values", false, "enums: also add each value as a concept that is-a its enum")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || *from == "" || *ns == "" {

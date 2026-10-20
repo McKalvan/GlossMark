@@ -85,7 +85,7 @@ func cmdAccept(args []string) int {
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
 	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 && !*all && !*byPolicy {
@@ -201,7 +201,7 @@ func cmdReject(args []string) int {
 	reason := fs.String("reason", "", "why the link is wrong (recorded in the ledger)")
 	remove := fs.Bool("remove", false, "also delete the marker line from the source file (or the concept entry with --concept)")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 {
@@ -273,7 +273,7 @@ func removeMarkerLine(p *pipeline, fm extract.FoundMarker) error {
 
 func cmdStatus(args []string) int {
 	fs, root := newFlags("status")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

@@ -19,7 +19,7 @@ func cmdSuggest(args []string) int {
 	write := fs.Bool("write", false, "insert the proposals into the files instead of printing a patch")
 	format := fs.String("format", "patch", "patch | json | text")
 	minScore := fs.Int("min-score", 60, "lowest search score that becomes a proposal")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

@@ -22,7 +22,7 @@ func cmdInit(args []string) int {
 	iri := fs.String("iri", "", "base IRI for the namespaces (default https://onto.example.com/<name>/)")
 	noHook := fs.Bool("no-hook", false, "do not run gloss hook install")
 	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR for the installed hook and MCP server")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	dir := *root

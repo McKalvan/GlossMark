@@ -31,7 +31,7 @@ func cmdDiff(args []string) int {
 	failOn := fs.String("fail-on", "HARD", "gate class that fails the command: HARD | SOFT | none")
 	out := fs.String("o", "", "also write the output to this file")
 	baseline := fs.Bool("baseline", false, "report the whole tree as an adoption: counts per boundary and per view instead of per link (automatic when the base has no graph)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	head, err := buildGraph(*root, false)

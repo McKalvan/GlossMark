@@ -19,7 +19,7 @@ func cmdCheck(args []string) int {
 	fs, root := newFlags("check")
 	warnErr := fs.Bool("strict", false, "treat warnings as errors")
 	explain := fs.Bool("explain", false, "print the effective allowed set of every manifest (declared, or derived from what it declares)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

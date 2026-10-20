@@ -50,7 +50,7 @@ func cmdPropose(args []string) int {
 	aliases := fs.String("aliases", "", "other names people use (comma-separated)")
 	fromNew := fs.Bool("from-new", false, "create a proposed concept for every ns:NEW:Name marker target and rewrite the markers")
 	by := fs.String("by", "", "proposer (default GLOSS_ACTOR or git user)")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -100,20 +100,6 @@ func cmdPropose(args []string) int {
 		return fail(err)
 	}
 	return 0
-}
-
-// flagsLast moves leading positional arguments after the flags so that
-// "gloss propose concept ns:Name --kind x" parses (the flag package stops at
-// the first positional).
-func flagsLast(args []string) []string {
-	var pos, rest []string
-	i := 0
-	for i < len(args) && !strings.HasPrefix(args[i], "-") {
-		pos = append(pos, args[i])
-		i++
-	}
-	rest = append(rest, args[i:]...)
-	return append(rest, pos...)
 }
 
 func validateSpec(p *pipeline, ns string, spec ontoedit.ConceptSpec) string {

@@ -97,7 +97,7 @@ func cmdBuild(args []string) int {
 	out := fs.String("o", "", "output path (default .glossmark/graph.jsonl under the root)")
 	quiet := fs.Bool("q", false, "print only diagnostics")
 	noLedger := fs.Bool("no-ledger", false, "do not update .glossmark/ledger.jsonl")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, !*noLedger)

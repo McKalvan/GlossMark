@@ -20,7 +20,7 @@ func init() {
 func cmdCriticality(args []string) int {
 	fs, root := newFlags("criticality")
 	write := fs.Bool("write", false, "write the suggestions into the ontology files instead of printing a diff")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "suggest" {

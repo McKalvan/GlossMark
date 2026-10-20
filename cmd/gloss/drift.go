@@ -23,7 +23,7 @@ func cmdDrift(args []string) int {
 	format := fs.String("format", "text", "text | json | markdown")
 	failOn := fs.String("fail-on", "violation,value-drift,gap,dangling", "comma-separated finding kinds that fail the command")
 	all := fs.Bool("all", false, "also list consistent pairs")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -56,7 +56,7 @@ func cmdCoverage(args []string) int {
 	base := fs.String("base", "origin/main", "git ref the ratchet (--fail-under current) and --changed-only compare against")
 	changedOnly := fs.Bool("changed-only", false, "score file coverage over the files changed since --base only, so a repo can adopt gradually")
 	format := fs.String("format", "text", "text | json")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
