@@ -210,6 +210,36 @@ func TestAcceptFileScopeAndReconfirm(t *testing.T) {
 	}
 }
 
+// Issue #70: two identical proposals on one symbol share an id; check flags
+// the second, and one accept flips both lines.
+func TestDuplicateProposals(t *testing.T) {
+	dup := "# @gloss? implements .Doer conf=0.9\n"
+	root := tiny(t, map[string]string{"doer.py": dup + dup + "def do(): pass\n"})
+	p, err := buildGraph(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gm132 := false
+	for _, d := range p.Diags {
+		if d.Code == "GM132" && d.Line == 2 {
+			gm132 = true
+		}
+	}
+	if !gm132 {
+		t.Errorf("no GM132 on line 2: %v", p.Diags)
+	}
+	if code, _ := gloss(t, "accept", "doer.py:1", "--root", root); code != 0 {
+		t.Fatalf("accept: exit %d", code)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "doer.py"))
+	if strings.Contains(string(b), "@gloss?") {
+		t.Errorf("a proposal is left after accept:\n%s", b)
+	}
+	if st := ledgerStatus(t, root, "implements"); len(st) != 1 || st[0] != "accepted" {
+		t.Errorf("ledger = %v, want [accepted]", st)
+	}
+}
+
 // addConcept inserts ontology lines right after the "concepts:" key.
 func addConcept(t *testing.T, root, file, lines string) {
 	t.Helper()

@@ -62,6 +62,7 @@ type extractor struct {
 	ws  *load.Workspace
 	g   *graph.Graph
 	res *Result
+	ids map[string]string // marker id → path:line of its first marker
 }
 
 func (ex *extractor) diag(path string, line int, sev, code, msg string) {
@@ -301,6 +302,16 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		id = MarkerID(target, mk.Relation, mk.Targets, anchor.Symbol, anchor.Scope)
 	}
 	fm := FoundMarker{Path: rel, Marker: mk, Anchor: anchor, ID: id}
+	// Two markers with one id state one link twice; review commands act on
+	// the id, so both lines are kept in Markers and accepted together.
+	if at, dup := ex.ids[id]; dup {
+		ex.diag(rel, mk.Line, "warning", "GM132", fmt.Sprintf("duplicate marker: %s %s repeats %s (same relation, targets and anchor, marker id %s); delete one", mk.Relation, strings.Join(mk.Targets, ", "), at, id))
+	} else {
+		if ex.ids == nil {
+			ex.ids = map[string]string{}
+		}
+		ex.ids[id] = fmt.Sprintf("%s:%d", rel, mk.Line)
+	}
 	for _, t := range mk.Targets {
 		oiri, raw := ex.resolveTarget(t, m, rel, mk.Line)
 		prov := &graph.Prov{Path: rel, Line: mk.Line, Col: mk.Col, Scope: anchor.Scope, Symbol: anchor.Symbol, Fingerprint: anchor.Fingerprint,

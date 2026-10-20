@@ -102,6 +102,7 @@ Feature: Stallion production
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected) |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
 | GM131 | the same marker on three or more consecutive declarations: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
+| GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
 | GM360 | a `value-from` names a file, line or symbol that does not exist |
 | GM502 / GM503 | link outside the manifest's written `allowed` list (error) / outside the set derived from what it declares (warning); both are HARD in the gate |

@@ -162,7 +162,23 @@ func cmdAccept(args []string) int {
 	rev := reviewer(p.WS.Root)
 	now := time.Now().UTC()
 	n := 0
+	done := map[string]bool{}
 	for _, fm := range targets {
+		if done[fm.ID] {
+			continue
+		}
+		done[fm.ID] = true
+		// Every `@gloss?` line carrying the id is accepted, not just the first
+		// (two identical markers on one anchor share an id; GM132).
+		var lines []extract.FoundMarker
+		for _, o := range p.Res.Markers {
+			if o.ID == fm.ID && o.Marker.Proposed {
+				lines = append(lines, o)
+			}
+		}
+		if len(lines) > 0 {
+			fm = lines[0]
+		}
 		if !fm.Marker.Proposed {
 			// A stale link is re-confirmed: the current anchor becomes the baseline.
 			if e := p.Ledger.Entry(fm.ID); e != nil && e.Status == model.StatusStale {
@@ -187,8 +203,10 @@ func cmdAccept(args []string) int {
 		if *dry {
 			continue
 		}
-		if err := flipMarker(p, fm); err != nil {
-			return fail(err)
+		for _, l := range lines {
+			if err := flipMarker(p, l); err != nil {
+				return fail(err)
+			}
 		}
 		p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
 		if e := p.Ledger.Entry(fm.ID); e != nil {
