@@ -25,7 +25,7 @@ func cmdView(args []string) int {
 	asJSON := fs.Bool("json", false, "write only the data as JSON (views.json)")
 	inline := fs.Bool("inline", false, "embed the data in one self-contained viewer.html instead of viewer.html + views.js")
 	diffPath := fs.String("diff", "", "optional impact JSON from 'gloss diff --format json' to overlay")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

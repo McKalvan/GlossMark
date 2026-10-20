@@ -38,7 +38,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | --- | --- |
 | *(none)* | the next declaration after the marker; the file when the marker sits in the header comment; else the next block |
 | `symbol` | the next declaration, and a warning (GM122) when none is detected |
-| `file` | the whole file (fingerprint of its content) |
+| `file` | the whole file (fingerprint of its content, leaving out lines that carry `@gloss` and the `gloss:begin`…`gloss:end` block, ADR 0006) |
 | `block` | the next indented or braced block, whatever it is |
 | `line` | the next line |
 | `range` | a range named in `note=` (sidecars for JSON use JSON Pointers) |
@@ -72,7 +72,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 ## Review states (the ledger)
 
-`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature changes; any → `removed` when the marker disappears. The ledger belongs in git.
+`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature changes (`gloss accept <id>` re-confirms it); any → `removed` when the marker disappears, except `rejected`, which stays the decision. A rejected `@gloss?` line still in the source adds no edge: it does not lift, gate, drift or count toward coverage, and `gloss suggest` does not propose the link again. A `value-from` baseline (`value:<curie>`) is `accepted` or `drifted` (the bound code changed, the published value did not) until `gloss accept --value`; it is never `stale`, so clearing stale links cannot hide a value drift. The ledger belongs in git.
 
 ## Concept kinds
 

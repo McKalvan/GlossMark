@@ -32,7 +32,7 @@ func cmdDiff(args []string) int {
 	failOn := fs.String("fail-on", "HARD", "gate class that fails the command: HARD | SOFT | none")
 	out := fs.String("o", "", "also write the output to this file")
 	baseline := fs.Bool("baseline", false, "report the whole tree as an adoption: counts per boundary and per view instead of per link (automatic when the base has no graph)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	head, err := buildGraph(*root, false)
@@ -147,6 +147,9 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 	// Attribute actors from the base ledger when committed.
 	if lg, err := ledger.Open(bws.StatePath(ledger.FileName)); err == nil {
 		lg.Sync(res.Graph, res.Markers, "human:unknown", time.Now())
+		if lg.DropRejected(res.Graph) > 0 {
+			rollup.Derive(res.Graph, bws.Vocab)
+		}
 	}
 	return res.Graph, nil
 }

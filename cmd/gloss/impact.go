@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,7 +28,7 @@ func cmdImpact(args []string) int {
 	fs, root := newFlags("impact")
 	base := fs.String("base", "", "git ref; when set, the changed files come from git diff against it and the AUTO/SOFT/HARD classification is included")
 	format := fs.String("format", "text", "text | json")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -103,7 +104,7 @@ func cmdContext(args []string) int {
 	max := fs.Int("max", 0, "maximum concepts to list (0: as many as the budget allows)")
 	budget := fs.Int("budget", 2000, "approximate token budget for the whole briefing (0: unlimited)")
 	changed := fs.Bool("changed", false, "open the briefing with what the uncommitted changes touch (gloss impact of the working tree)")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -153,7 +154,7 @@ func cmdHook(args []string) int {
 	noHook := fs.Bool("no-hook", false, "do not register the SessionStart hook")
 	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it")
 	skill := fs.Bool("skill", false, "also install the adopt-glossmark Claude Code skill into .claude/skills/")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "install" {
@@ -178,7 +179,7 @@ func cmdHook(args []string) int {
 // installSkills copies the shipped skills into .claude/skills/.
 func installSkills(root string) error {
 	for _, name := range skills.Names {
-		b, err := skills.FS.ReadFile(name + "/SKILL.md")
+		b, err := skills.Installable(name)
 		if err != nil {
 			return err
 		}
@@ -194,9 +195,44 @@ func installSkills(root string) error {
 	return nil
 }
 
+// glossCommand is how the hook and the MCP server invoke gloss: by name when
+// PATH finds this binary, else by this binary's absolute path, so another
+// program named gloss earlier on PATH cannot silently stand in (issue #37).
+func glossCommand() string {
+	self, err := os.Executable()
+	if err != nil {
+		return "gloss"
+	}
+	return glossCommandFor(self, exec.LookPath)
+}
+
+func glossCommandFor(self string, lookPath func(string) (string, error)) string {
+	if r, err := filepath.EvalSymlinks(self); err == nil {
+		self = r
+	}
+	if strings.Contains(self, "go-build") {
+		return "gloss" // go run or go test: a temporary binary
+	}
+	if p, err := lookPath("gloss"); err == nil {
+		if r, err := filepath.EvalSymlinks(p); err == nil && r == self {
+			return "gloss"
+		}
+	}
+	return self
+}
+
+// shellWord quotes s for a shell command line when it needs it.
+func shellWord(s string) string {
+	if strings.ContainsAny(s, " '\"$\\") {
+		return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	}
+	return s
+}
+
 // installHooks registers the SessionStart hook and the MCP server for a
 // repository, both running with GLOSS_ACTOR=actor.
 func installHooks(root, actor string, hook, mcp bool) error {
+	bin := glossCommand()
 	if hook {
 		path := filepath.Join(root, ".claude", "settings.json")
 		settings := map[string]any{}
@@ -207,7 +243,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s gloss context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor)}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s %s context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor, shellWord(bin))}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
 		for i, it := range list {
@@ -239,7 +275,10 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		}
 		srv, _ := servers["glossmark"].(map[string]any)
 		if srv == nil {
-			srv = map[string]any{"command": "gloss", "args": []string{"mcp"}}
+			srv = map[string]any{"args": []string{"mcp"}}
+		}
+		if c, _ := srv["command"].(string); c == "" || c == "gloss" {
+			srv["command"] = bin
 		}
 		env, _ := srv["env"].(map[string]any)
 		if env == nil {

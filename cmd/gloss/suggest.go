@@ -19,7 +19,7 @@ func cmdSuggest(args []string) int {
 	write := fs.Bool("write", false, "insert the proposals into the files instead of printing a patch")
 	format := fs.String("format", "patch", "patch | json | text")
 	minScore := fs.Int("min-score", suggest.DefaultMinScore, "lowest score that becomes a proposal (conf is score/110; a docstring match scores 20 below its search score)")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if *minScore < 1 {
@@ -30,7 +30,7 @@ func cmdSuggest(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	ps, err := suggest.Run(p.WS, p.Graph, fs.Args(), suggest.Options{MinScore: *minScore})
+	ps, skipped, err := suggest.Run(p.WS, p.Graph, fs.Args(), suggest.Options{MinScore: *minScore, Ledger: p.Ledger.Entries})
 	if err != nil {
 		return fail(err)
 	}
@@ -39,7 +39,7 @@ func cmdSuggest(args []string) int {
 		if err := suggest.Write(p.WS.Root, ps); err != nil {
 			return fail(err)
 		}
-		fmt.Fprintf(os.Stderr, "gloss suggest: %s written as @gloss? proposals; review them, then gloss check && gloss build\n", plural(len(ps), "marker"))
+		fmt.Fprintf(os.Stderr, "gloss suggest: %s written as @gloss? proposals%s; review them, then gloss check && gloss build\n", plural(len(ps), "marker"), skippedNote(skipped))
 	case *format == "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -58,7 +58,14 @@ func cmdSuggest(args []string) int {
 		for _, s := range ps {
 			files[s.Path] = true
 		}
-		fmt.Fprintf(os.Stderr, "gloss suggest: %s in %s; apply with git apply, then review every one\n", plural(len(ps), "proposal"), plural(len(files), "file"))
+		fmt.Fprintf(os.Stderr, "gloss suggest: %s in %s%s; apply with git apply, then review every one\n", plural(len(ps), "proposal"), plural(len(files), "file"), skippedNote(skipped))
 	}
 	return 0
+}
+
+func skippedNote(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf(", %d skipped (rejected before)", n)
 }

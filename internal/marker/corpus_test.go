@@ -174,6 +174,32 @@ func TestIsNewTarget(t *testing.T) {
 	}
 }
 
+// TestFileFingerprintIgnoresMetadata: marker lines and the gloss:begin/end
+// block are not part of a scope=file fingerprint (ADR 0006), the rest is.
+func TestFileFingerprintIgnoresMetadata(t *testing.T) {
+	block := []string{"<!-- gloss:begin -->", "generated", "<!-- gloss:end -->"}
+	file := func(lines ...string) []string { return append(lines, block...) }
+	fp := fileAnchor(file("# @gloss? verifies .Thing scope=file", "def test(): pass")).Fingerprint
+	cases := []struct {
+		name  string
+		lines []string
+		same  bool
+	}{
+		{"accepted", file("# @gloss verifies .Thing scope=file", "def test(): pass"), true},
+		{"marker added", file("# @gloss? verifies .Thing scope=file", "# @gloss verifies .Other", "def test(): pass"), true},
+		{"regenerated block", []string{"# @gloss? verifies .Thing scope=file", "def test(): pass", "<!-- gloss:begin -->", "regenerated", "<!-- gloss:end -->"}, true},
+		{"code edited", file("# @gloss? verifies .Thing scope=file", "def test(): assert 1"), false},
+	}
+	for _, c := range cases {
+		if got := fileAnchor(c.lines).Fingerprint == fp; got != c.same {
+			t.Errorf("%s: same fingerprint = %v, want %v", c.name, got, c.same)
+		}
+	}
+	if a := fileAnchor(file("def test(): pass")); a.Legacy == a.Fingerprint || a.Legacy == "" {
+		t.Errorf("legacy fingerprint %q should hash every line", a.Legacy)
+	}
+}
+
 // TestDeclarationsKotlinConst: suggest's detector names a Kotlin constant,
 // not its "val" keyword (issue #131).
 func TestDeclarationsKotlinConst(t *testing.T) {

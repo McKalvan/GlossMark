@@ -52,7 +52,7 @@ A marker binds, in order of precedence, to an explicit `scope=`, else to the nex
 
 Go methods are always qualified by their receiver. In other languages a method keeps its bare name unless another marked declaration in the same file has the same name; then each is qualified by its enclosing classes (`InboundHandler.process`, `OutboundHandler.process`), and declarations that still share a name, such as overloads, take an ordinal in file order (`StringUtils.check`, `StringUtils.check#2`). A qualified symbol's fingerprint covers the qualified name, so identical signatures in two classes differ ([ADR 0008](adr/0008-same-named-declarations.md)).
 
-A fingerprint change marks the link **stale** in the ledger until it is re-accepted. In Phase 1 the declaration detector is regex-based per language; tree-sitter replaces it in Phase 2 without changing the graph.
+A fingerprint change marks the link **stale** in the ledger until it is re-confirmed with `gloss accept <id>`. A `scope=file` fingerprint covers the whole file except lines that carry `@gloss` and the `gloss:begin`…`gloss:end` block, so accepting a proposal or adding a marker does not stale it (ADR 0006). In Phase 1 the declaration detector is regex-based per language; tree-sitter replaces it in Phase 2 without changing the graph.
 
 ## Examples across file types
 
@@ -104,6 +104,7 @@ Feature: Stallion production
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
 | GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
+| GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
 | GM360 | a `value-from` names a file, line or symbol that does not exist |
 | GM502 / GM503 | link outside the manifest's written `allowed` list (error) / outside the set derived from what it declares (warning); both are HARD in the gate |

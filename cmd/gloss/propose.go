@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/ontoedit"
@@ -50,7 +51,7 @@ func cmdPropose(args []string) int {
 	aliases := fs.String("aliases", "", "other names people use (comma-separated)")
 	fromNew := fs.Bool("from-new", false, "create a proposed concept for every ns:NEW:Name marker target and rewrite the markers")
 	by := fs.String("by", "", "proposer (default GLOSS_ACTOR or git user)")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -61,8 +62,9 @@ func cmdPropose(args []string) int {
 	if actor == "" {
 		actor = reviewer(p.WS.Root)
 	}
+	spec := ontoedit.ConceptSpec{Kind: *kind, Doc: *doc, Internal: *internal, Proposed: true, ProposedBy: actor, Realizes: splitList(*realizes), IsA: splitList(*isA), Aliases: splitList(*aliases)}
 	if *fromNew {
-		return proposeFromNew(p, actor, *doc)
+		return proposeFromNew(p, actor, spec)
 	}
 	rest := fs.Args()
 	if len(rest) == 2 && rest[0] == "concept" {
@@ -76,7 +78,6 @@ func cmdPropose(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	spec := ontoedit.ConceptSpec{Kind: *kind, Doc: *doc, Internal: *internal, Proposed: true, ProposedBy: actor, Realizes: splitList(*realizes), IsA: splitList(*isA), Aliases: splitList(*aliases)}
 	if msg := validateSpec(p, ns, spec); msg != "" {
 		return fail(fmt.Errorf("%s", msg))
 	}
@@ -100,20 +101,6 @@ func cmdPropose(args []string) int {
 		return fail(err)
 	}
 	return 0
-}
-
-// flagsLast moves leading positional arguments after the flags so that
-// "gloss propose concept ns:Name --kind x" parses (the flag package stops at
-// the first positional).
-func flagsLast(args []string) []string {
-	var pos, rest []string
-	i := 0
-	for i < len(args) && !strings.HasPrefix(args[i], "-") {
-		pos = append(pos, args[i])
-		i++
-	}
-	rest = append(rest, args[i:]...)
-	return append(rest, pos...)
 }
 
 func validateSpec(p *pipeline, ns string, spec ontoedit.ConceptSpec) string {
@@ -176,8 +163,9 @@ func splitList(s string) []string {
 // proposeFromNew lifts every ns:NEW:Name marker into a proposed concept, using
 // the marker's relation to guess the kind. The marker's note= is why the link
 // was written, not what the concept is, so it goes to the ledger as the
-// rationale; the doc comes from --doc (one concept) or a later edit.
-func proposeFromNew(p *pipeline, actor, doc string) int {
+// rationale. The entry flags in tmpl (--doc, --kind, --realizes, --is-a,
+// --aliases, --internal) apply only when exactly one concept is lifted.
+func proposeFromNew(p *pipeline, actor string, tmpl ontoedit.ConceptSpec) int {
 	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
 	done := map[string]bool{}
 	notes := map[string]string{}
@@ -187,8 +175,9 @@ func proposeFromNew(p *pipeline, actor, doc string) int {
 			notes[d.Concept] = d.Note
 		}
 	}
-	if doc != "" && len(done) > 1 {
-		return fail(fmt.Errorf("--doc applies to one concept but %d ns:NEW:Name targets were found; propose them one at a time with gloss propose concept <ns:Name> --doc '...'", len(done)))
+	entry := tmpl.Doc != "" || tmpl.Kind != "" || tmpl.Internal || len(tmpl.Realizes)+len(tmpl.IsA)+len(tmpl.Aliases) > 0
+	if entry && len(done) > 1 {
+		return fail(fmt.Errorf("--doc, --kind, --realizes, --is-a, --aliases and --internal apply to one concept but %d ns:NEW:Name targets were found; propose them one at a time with gloss propose concept <ns:Name> ...", len(done)))
 	}
 	done = map[string]bool{}
 	n := 0
@@ -206,15 +195,22 @@ func proposeFromNew(p *pipeline, actor, doc string) int {
 			fmt.Fprintf(os.Stderr, "gloss propose: %s: %v\n", d.Concept, err)
 			continue
 		}
-		kind := kindForRelation(d.Relation)
-		spec := ontoedit.ConceptSpec{Kind: kind, Doc: doc, Proposed: true, ProposedBy: firstNonEmpty(d.Actor, actor)}
+		spec := tmpl
+		spec.ProposedBy = firstNonEmpty(d.Actor, actor)
+		if spec.Kind == "" && len(spec.IsA) == 0 {
+			spec.Kind = kindForRelation(d.Relation)
+		}
+		kind := firstNonEmpty(spec.Kind, "inherited")
+		if msg := validateSpec(p, ns, spec); msg != "" {
+			return fail(fmt.Errorf("%s: %s", d.Concept, msg))
+		}
 		if err := ontoedit.AddConcept(path, name, spec); err != nil {
 			fmt.Fprintf(os.Stderr, "gloss propose: %v\n", err)
 			continue
 		}
 		rw, _ := ontoedit.RewriteNewMarkers(absFiles(p), d.Concept)
 		fmt.Printf("gloss propose: %s (%s) proposed in %s; %d marker(s) rewritten\n", d.Concept, kind, relOrAbs(p.WS.Root, path), rw)
-		if doc == "" {
+		if spec.Doc == "" {
 			fmt.Printf("  no doc yet: add doc: \"...\" to the entry (one sentence: what it is, not why the link was written)\n")
 		}
 		n++
@@ -223,7 +219,11 @@ func proposeFromNew(p *pipeline, actor, doc string) int {
 		fmt.Println("gloss propose: no ns:NEW:Name markers found")
 		return 0
 	}
-	fmt.Printf("gloss propose: %s; implementation concepts still need realizes: or internal: true before acceptance\n", plural(n, "concept"))
+	if len(tmpl.Realizes)+len(tmpl.IsA) == 0 && !tmpl.Internal {
+		fmt.Printf("gloss propose: %s; implementation concepts still need realizes: or internal: true before acceptance\n", plural(n, "concept"))
+	} else {
+		fmt.Printf("gloss propose: %s\n", plural(n, "concept"))
+	}
 	p2, err := buildGraph(p.WS.Root, true)
 	if err != nil {
 		return fail(err)
@@ -285,8 +285,8 @@ func acceptConcepts(p *pipeline, curies []string, rev string, dry bool) (int, er
 			continue
 		}
 		// A proposed implementation concept must be complete before acceptance.
-		if node := p.Graph.NodeByCurie(c); node != nil && node.Tier == model.TierImpl && !node.Internal && len(p.Graph.Objects(node.ID, "realizes")) == 0 && len(p.Graph.Objects(node.ID, "is-a")) == 0 {
-			return n, fmt.Errorf("%s: add realizes: <core concept> or internal: true before accepting", c)
+		if node := p.Graph.NodeByCurie(c); node != nil && node.Tier == model.TierImpl && !check.ImplComplete(p.Graph, node) {
+			return n, fmt.Errorf("%s: add realizes: <core concept> (or presents:/hosts:), is-a or part-of a concept that does, or internal: true before accepting (GM320)", c)
 		}
 		fmt.Printf("%s concept %s\n", map[bool]string{true: "would accept", false: "accept"}[dry], c)
 		if dry {
@@ -312,7 +312,7 @@ func rejectConcept(p *pipeline, c, rev, reason string, remove bool) error {
 		return err
 	}
 	if !p.Ledger.Reject("concept:"+c, rev, reason, time.Now().UTC()) {
-		p.Ledger.Entries["concept:"+c] = &model.LedgerEntry{MarkerID: "concept:" + c, Path: relOrAbs(p.WS.Root, path), Relation: "concept", Targets: []string{c}, Created: time.Now().UTC().Format(time.RFC3339), Status: model.StatusRejected, ReviewedBy: rev, Rationale: reason}
+		p.Ledger.Entries["concept:"+c] = &model.LedgerEntry{MarkerID: "concept:" + c, Path: relOrAbs(p.WS.Root, path), Relation: "concept", Targets: []string{c}, Created: time.Now().UTC().Format(time.RFC3339), Status: model.StatusRejected, ReviewedBy: rev, ReviewReason: reason}
 		p.Ledger.Touch()
 	}
 	if remove {

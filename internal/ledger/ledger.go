@@ -228,7 +228,7 @@ func (l *Ledger) Save() error {
 //	? removed in source   → accepted, reviewed_by = actor
 //	? re-added            → proposed
 //	fingerprint changed   → stale (accepted links only)
-//	fingerprint restored  → stays stale until re-accepted
+//	fingerprint restored  → stays stale until re-accepted (gloss accept <id>)
 func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor string, now time.Time) {
 	ts := now.Format(time.RFC3339)
 	seen := map[string]bool{}
@@ -271,6 +271,9 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 				e.Status = model.StatusAccepted
 				e.ReviewedBy, e.ReviewedAt = actor, ts
 				e.AnchorFingerprint = fm.Anchor.Fingerprint
+			case !fm.Marker.Proposed && e.Status == model.StatusAccepted && e.AnchorFingerprint != "" && e.AnchorFingerprint == fm.Anchor.Legacy:
+				// Recorded before marker lines left the file fingerprint (ADR 0006).
+				e.AnchorFingerprint = fm.Anchor.Fingerprint
 			case !fm.Marker.Proposed && e.Status == model.StatusAccepted && e.AnchorFingerprint != "" && e.AnchorFingerprint != fm.Anchor.Fingerprint:
 				e.Status = model.StatusStale
 			case e.Status == model.StatusRejected && !fm.Marker.Proposed:
@@ -298,8 +301,9 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 	}
 	// Published value bindings are tracked keyed value:<curie>: the first
 	// build records the bound line and the ontology value as the baseline; a
-	// later change to the line alone is drift (stale) until accepted, and a
-	// change to both together moves the baseline.
+	// later change to the line alone is drift (drifted) until accepted, and a
+	// change to both together moves the baseline. Older ledgers recorded the
+	// drift as stale; the default case below rewrites it to drifted.
 	for _, n := range g.NodesOf(model.NodeConcept) {
 		if n.ValueFP == "" || n.Imported {
 			continue
@@ -317,7 +321,7 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 				Created: ts, Status: model.StatusAccepted, AnchorFingerprint: n.ValueFP, Value: val, Live: n.LiveValue, LastSeen: ts}
 			l.dirty = true
 		case e.AnchorFingerprint == n.ValueFP:
-			if e.Status == model.StatusStale || e.Status == model.StatusRemoved {
+			if e.Status == model.StatusDrifted || e.Status == model.StatusStale || e.Status == model.StatusRemoved {
 				e.Status = model.StatusAccepted // the code went back to the published value
 				l.dirty = true
 			}
@@ -332,8 +336,8 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			e.ReviewedBy, e.ReviewedAt, e.LastSeen = actor, ts, ts
 			l.dirty = true
 		default:
-			if e.Status != model.StatusStale {
-				e.Status = model.StatusStale
+			if e.Status != model.StatusDrifted {
+				e.Status = model.StatusDrifted
 				l.dirty = true
 			}
 			e.LastSeen = ts
@@ -373,11 +377,27 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 		}
 	}
 	for id, e := range l.Entries {
-		if !seen[id] && e.Status != model.StatusRemoved {
+		// Deleting a rejected proposal is the expected cleanup, not a new
+		// state: the rejection stays the decision (ADR 0005).
+		if !seen[id] && e.Status != model.StatusRemoved && e.Status != model.StatusRejected {
 			e.Status = model.StatusRemoved
 			l.dirty = true
 		}
 	}
+}
+
+// DropRejected removes the edges of rejected markers from the graph: a
+// rejected `@gloss?` line still in the source states nothing, like a comment,
+// so it neither lifts, nor gates, nor counts (ADR 0005). It returns the
+// number of edges removed; the caller re-derives when it is not zero.
+func (l *Ledger) DropRejected(g *graph.Graph) int {
+	return g.RemoveEdges(func(e *graph.Edge) bool {
+		if e.Prov == nil || e.Prov.ID == "" || (e.Source != graph.SourceInline && e.Source != graph.SourceInferred) {
+			return false
+		}
+		le, ok := l.Entries[e.Prov.ID]
+		return ok && le.Status == model.StatusRejected
+	})
 }
 
 func equalEntries(a, b *model.LedgerEntry) bool {
@@ -402,7 +422,8 @@ func (l *Ledger) Accept(id, reviewer, fingerprint string, now time.Time) bool {
 	return true
 }
 
-// Reject marks an entry rejected with a reason.
+// Reject marks an entry rejected with the reviewer's reason. The reason goes
+// to review_reason, so the marker's note= (the rationale) survives beside it.
 func (l *Ledger) Reject(id, reviewer, reason string, now time.Time) bool {
 	e, ok := l.Entries[id]
 	if !ok {
@@ -411,7 +432,7 @@ func (l *Ledger) Reject(id, reviewer, reason string, now time.Time) bool {
 	e.Status = model.StatusRejected
 	e.ReviewedBy, e.ReviewedAt = reviewer, now.Format(time.RFC3339)
 	if reason != "" {
-		e.Rationale = reason
+		e.ReviewReason = reason
 	}
 	l.dirty = true
 	return true
@@ -487,6 +508,7 @@ func (l *Ledger) ExportPROV() ([]byte, error) {
 		At        string `json:"prov:startedAtTime"`
 		Status    string `json:"gm:status"`
 		Reviewer  string `json:"gm:reviewedBy,omitempty"`
+		Reason    string `json:"gm:reviewReason,omitempty"`
 	}
 	var acts []activity
 	ids := make([]string, 0, len(l.Entries))
@@ -497,7 +519,7 @@ func (l *Ledger) ExportPROV() ([]byte, error) {
 	for _, id := range ids {
 		e := l.Entries[id]
 		acts = append(acts, activity{ID: "urn:gloss:activity:" + id, Type: "prov:Activity", Agent: "urn:gloss:actor:" + e.Actor,
-			Generated: "urn:gloss:marker:" + id, At: e.Created, Status: e.Status, Reviewer: e.ReviewedBy})
+			Generated: "urn:gloss:marker:" + id, At: e.Created, Status: e.Status, Reviewer: e.ReviewedBy, Reason: e.ReviewReason})
 	}
 	doc := map[string]any{
 		"@context": map[string]string{"prov": "http://www.w3.org/ns/prov#", "gm": graph.VocabIRI},

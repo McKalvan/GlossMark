@@ -64,6 +64,7 @@ type extractor struct {
 	ws  *load.Workspace
 	g   *graph.Graph
 	res *Result
+	ids map[string]string // marker id → path:line of its first marker
 }
 
 func (ex *extractor) diag(path string, line int, sev, code, msg string) {
@@ -374,6 +375,16 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.A
 		id = MarkerID(target, mk.Relation, mk.Targets, anchor.Symbol, anchor.Scope)
 	}
 	fm := FoundMarker{Path: rel, Marker: mk, Anchor: anchor, ID: id}
+	// Two markers with one id state one link twice; review commands act on
+	// the id, so both lines are kept in Markers and accepted together.
+	if at, dup := ex.ids[id]; dup {
+		ex.diag(rel, mk.Line, "warning", "GM132", fmt.Sprintf("duplicate marker: %s %s repeats %s (same relation, targets and anchor, marker id %s); delete one", mk.Relation, strings.Join(mk.Targets, ", "), at, id))
+	} else {
+		if ex.ids == nil {
+			ex.ids = map[string]string{}
+		}
+		ex.ids[id] = fmt.Sprintf("%s:%d", rel, mk.Line)
+	}
 	// An alias is stored as its canonical relation, so a query for verifies
 	// finds every test link; the written form stays in prov.alias.
 	pred, alias := mk.Relation, ""

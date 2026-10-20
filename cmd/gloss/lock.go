@@ -17,7 +17,7 @@ func cmdLock(args []string) int {
 	fs, root := newFlags("lock")
 	update := fs.Bool("update", false, "move every pinned import to what its source resolves to now")
 	allow := fs.Bool("allow-out-of-range", false, "lock a version that is absent or outside the import's range")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

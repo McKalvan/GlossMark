@@ -812,8 +812,8 @@ func (c *classifier) links() {
 
 func (c *classifier) stale() {
 	for id, le := range c.opt.HeadLedger {
-		if le.Status != model.StatusStale {
-			continue
+		if le.Status != model.StatusStale || strings.HasPrefix(id, "value:") {
+			continue // a drifted value is published-value-drifted, not a stale link
 		}
 		c.add(Change{Gate: AUTO, Kind: "stale", Glyph: "~", Relation: le.Relation, Object: strings.Join(le.Targets, ", "), Path: le.Path, MarkerID: id,
 			Reasons: []string{"signature changed; re-confirm"}, Msg: fmt.Sprintf("stale %s %s", le.Relation, strings.Join(le.Targets, ", "))})

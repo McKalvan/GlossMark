@@ -70,6 +70,9 @@ func buildGraph(root string, writeLedger bool) (*pipeline, error) {
 	previous := ledger.PreviousActors(readGraph(ws.StatePath("graph.jsonl")))
 	lg.Actors = &ledger.Actors{Previous: previous, Session: session, Root: ws.Root, Fallback: actor}
 	lg.Sync(g, res.Markers, actor, time.Now().UTC())
+	if lg.DropRejected(g) > 0 {
+		rollup.Derive(g, ws.Vocab)
+	}
 	if writeLedger {
 		if err := lg.Save(); err != nil {
 			return nil, err
@@ -97,7 +100,7 @@ func cmdBuild(args []string) int {
 	out := fs.String("o", "", "output path (default .glossmark/graph.jsonl under the root)")
 	quiet := fs.Bool("q", false, "print only diagnostics")
 	noLedger := fs.Bool("no-ledger", false, "do not update .glossmark/ledger.jsonl")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, !*noLedger)

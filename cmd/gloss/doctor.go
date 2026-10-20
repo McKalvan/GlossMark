@@ -19,7 +19,7 @@ func init() {
 func cmdDoctor(args []string) int {
 	fs, root := newFlags("doctor")
 	format := fs.String("format", "text", "text | json")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)

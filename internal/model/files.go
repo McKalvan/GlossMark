@@ -692,6 +692,10 @@ const (
 	StatusRejected = "rejected"
 	StatusStale    = "stale"
 	StatusRemoved  = "removed" // marker no longer present in the tree
+	// StatusDrifted is a value:<curie> baseline whose bound code changed while
+	// the published value did not. It is not stale: clearing stale links must
+	// never clear a value drift.
+	StatusDrifted = "drifted"
 )
 
 // LedgerEntry records provenance and review state for one marker.
@@ -709,6 +713,7 @@ type LedgerEntry struct {
 	ReviewedAt        string   `json:"reviewed_at,omitempty"`
 	AnchorFingerprint string   `json:"anchor_fingerprint,omitempty"`
 	Rationale         string   `json:"rationale,omitempty"`
+	ReviewReason      string   `json:"review_reason,omitempty"` // gloss reject --reason; Rationale is the author's note=
 	Gate              string   `json:"gate,omitempty"`
 	LastSeen          string   `json:"last_seen,omitempty"`
 	// Value and Live record, for a value binding (marker id value:<curie>),

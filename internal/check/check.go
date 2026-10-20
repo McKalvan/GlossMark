@@ -173,11 +173,7 @@ func (c *checker) concepts() {
 			}
 		case model.TierImpl:
 			realizes := c.g.Objects(n.ID, "realizes")
-			// realizes is inherited through is-a and part-of, so only a concept
-			// whose is-a and part-of ancestors stand for nothing either is
-			// incomplete. Two concepts that are part of each other and
-			// realize nothing are not excused by the edge between them.
-			if !n.Internal && !n.Deprecated && !c.standsFor(n.ID) {
+			if !ImplComplete(c.g, n) {
 				sev := "error"
 				if n.Proposed {
 					sev = "warning" // a proposal may be incomplete; acceptance requires the full entry
@@ -221,14 +217,15 @@ func (c *checker) concepts() {
 // standsFor reports whether an implementation concept, or a concept it is-a
 // or is part of (transitively), realizes, is published as, presents or hosts
 // something, is internal, or is a core concept. That is what GM320 asks of
-// every implementation concept.
-func (c *checker) standsFor(id string) bool {
+// every implementation concept. Two concepts that are part of each other and
+// realize nothing are not excused by the edge between them.
+func standsFor(g *graph.Graph, id string) bool {
 	seen := map[string]bool{id: true}
 	queue := []string{id}
 	for len(queue) > 0 {
 		x := queue[0]
 		queue = queue[1:]
-		n := c.g.Node(x)
+		n := g.Node(x)
 		if n == nil || n.NodeType != model.NodeConcept {
 			continue
 		}
@@ -236,14 +233,14 @@ func (c *checker) standsFor(id string) bool {
 			return true
 		}
 		for _, p := range []string{"realizes", "published-as", "presents", "hosts"} {
-			for _, e := range c.g.Out(x, p) {
+			for _, e := range g.Out(x, p) {
 				if e.Source != graph.SourceDerived {
 					return true
 				}
 			}
 		}
 		for _, p := range []string{"is-a", "part-of"} {
-			for _, e := range c.g.Out(x, p) {
+			for _, e := range g.Out(x, p) {
 				if e.Source != graph.SourceDerived && !seen[e.O] {
 					seen[e.O] = true
 					queue = append(queue, e.O)
@@ -691,4 +688,12 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// ImplComplete reports whether an implementation concept stands for
+// something, the GM320 rule that gloss accept --concept also applies.
+// realizes is inherited through is-a and part-of, so only a concept whose
+// is-a and part-of ancestors stand for nothing either is incomplete.
+func ImplComplete(g *graph.Graph, n *graph.Node) bool {
+	return n.Internal || n.Deprecated || standsFor(g, n.ID)
 }

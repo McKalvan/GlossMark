@@ -85,7 +85,7 @@ func cmdAccept(args []string) int {
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
 	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 && !*all && !*byPolicy {
@@ -162,8 +162,33 @@ func cmdAccept(args []string) int {
 	rev := reviewer(p.WS.Root)
 	now := time.Now().UTC()
 	n := 0
+	done := map[string]bool{}
 	for _, fm := range targets {
+		if done[fm.ID] {
+			continue
+		}
+		done[fm.ID] = true
+		// Every `@gloss?` line carrying the id is accepted, not just the first
+		// (two identical markers on one anchor share an id; GM132).
+		var lines []extract.FoundMarker
+		for _, o := range p.Res.Markers {
+			if o.ID == fm.ID && o.Marker.Proposed {
+				lines = append(lines, o)
+			}
+		}
+		if len(lines) > 0 {
+			fm = lines[0]
+		}
 		if !fm.Marker.Proposed {
+			// A stale link is re-confirmed: the current anchor becomes the baseline.
+			if e := p.Ledger.Entry(fm.ID); e != nil && e.Status == model.StatusStale {
+				fmt.Printf("%s %s:%d %s %s (stale)\n", map[bool]string{true: "would re-confirm", false: "re-confirm"}[*dry], fm.Path, fm.Marker.Line, fm.Marker.Relation, join(fm.Marker.Targets))
+				if !*dry {
+					p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
+					n++
+				}
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "%s:%d: %s is not proposed; nothing to accept\n", fm.Path, fm.Marker.Line, fm.ID)
 			continue
 		}
@@ -178,8 +203,10 @@ func cmdAccept(args []string) int {
 		if *dry {
 			continue
 		}
-		if err := flipMarker(p, fm); err != nil {
-			return fail(err)
+		for _, l := range lines {
+			if err := flipMarker(p, l); err != nil {
+				return fail(err)
+			}
 		}
 		p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
 		if e := p.Ledger.Entry(fm.ID); e != nil {
@@ -201,7 +228,7 @@ func cmdReject(args []string) int {
 	reason := fs.String("reason", "", "why the link is wrong (recorded in the ledger)")
 	remove := fs.Bool("remove", false, "also delete the marker line from the source file (or the concept entry with --concept)")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs")
-	if err := fs.Parse(flagsLast(args)); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 {
@@ -273,7 +300,7 @@ func removeMarkerLine(p *pipeline, fm extract.FoundMarker) error {
 
 func cmdStatus(args []string) int {
 	fs, root := newFlags("status")
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -281,7 +308,7 @@ func cmdStatus(args []string) int {
 		return fail(err)
 	}
 	pol := p.WS.Config.EffectivePolicy()
-	for _, st := range []string{model.StatusProposed, model.StatusStale, model.StatusRejected} {
+	for _, st := range []string{model.StatusProposed, model.StatusStale, model.StatusDrifted, model.StatusRejected} {
 		es := p.Ledger.ByStatus(st)
 		if len(es) == 0 {
 			continue

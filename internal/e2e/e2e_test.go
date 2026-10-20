@@ -1919,6 +1919,22 @@ func TestValueFrom(t *testing.T) {
 	if d := drift(ws, head, lg); len(d) != 1 || d[0] != "pfi:DefaultSafeWithdrawalRate" {
 		t.Errorf("drift = %v", d)
 	}
+	// The baseline is drifted, not stale: clearing stale links keeps it (#132).
+	if e := lg.Entry("value:pfi:DefaultSafeWithdrawalRate"); e.Status != model.StatusDrifted {
+		t.Errorf("value baseline status = %q, want drifted", e.Status)
+	}
+	b, _ := os.ReadFile(lgPath)
+	var kept []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if !strings.Contains(l, `"status":"stale"`) {
+			kept = append(kept, l)
+		}
+	}
+	os.WriteFile(lgPath, []byte(strings.Join(kept, "\n")), 0o644)
+	ws, head, lg = run()
+	if d := drift(ws, head, lg); len(d) != 1 {
+		t.Errorf("after dropping stale ledger lines drift = %v", d)
+	}
 	im := gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: ws.Config.EffectivePolicy()})
 	hard := false
 	for _, ch := range im.Changes {

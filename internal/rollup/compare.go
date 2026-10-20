@@ -752,10 +752,11 @@ func (c *comparer) implementedIn(id, b string) bool {
 
 func (c *comparer) stale() {
 	for id, e := range c.opt.Ledger {
-		if e.Status != model.StatusStale {
-			continue
-		}
 		if strings.HasPrefix(id, "value:") {
+			// stale is how older ledgers recorded a drifted value.
+			if e.Status != model.StatusDrifted && e.Status != model.StatusStale {
+				continue
+			}
 			cur := strings.TrimPrefix(id, "value:")
 			live := ""
 			if n := c.g.NodeByCurie(cur); n != nil {
@@ -763,6 +764,9 @@ func (c *comparer) stale() {
 			}
 			c.add(Finding{ID: KindValueDrift + ":" + cur, Kind: KindValueDrift, Severity: "error", Path: e.Path, Concept: cur,
 				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, e.Path, e.Live, live, cur)})
+			continue
+		}
+		if e.Status != model.StatusStale {
 			continue
 		}
 		c.add(Finding{ID: KindStale + ":" + id, Kind: KindStale, Severity: "warning", Path: e.Path, Relation: e.Relation, Concept: strings.Join(e.Targets, ", "),
@@ -827,10 +831,14 @@ func (c *comparer) metrics() {
 					}
 				}
 			}
-		case model.StatusRejected:
-			m.Rejected++
 		case model.StatusStale:
 			m.Stale++
+		}
+	}
+	// Rejected links have no edges (ledger.DropRejected); count the decisions.
+	for id, le := range c.opt.Ledger {
+		if le.Status == model.StatusRejected && !strings.HasPrefix(id, "concept:") && !strings.HasPrefix(id, "value:") {
+			m.Rejected++
 		}
 	}
 	// Concept coverage: owned implementation concepts (not internal,

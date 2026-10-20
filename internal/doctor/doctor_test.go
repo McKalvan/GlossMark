@@ -18,6 +18,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 func TestDoctor(t *testing.T) {
@@ -45,6 +46,7 @@ func TestDoctor(t *testing.T) {
 	git("add", ".")
 	git("commit", "-q", "-m", "init")
 
+	onPath := "gloss " + version.String() // what `gloss version` on PATH prints first
 	run := func(actor string, path bool) map[string]Check {
 		t.Helper()
 		ws, err := load.Load(root)
@@ -64,7 +66,7 @@ func TestDoctor(t *testing.T) {
 			lookPath = func(string) (string, error) { return "", errors.New("not found") }
 		}
 		out := map[string]Check{}
-		for _, c := range Run(ws, res.Graph, diags, Env{Actor: actor, LookPath: lookPath}) {
+		for _, c := range Run(ws, res.Graph, diags, Env{Actor: actor, LookPath: lookPath, Version: func(string) (string, error) { return onPath, nil }}) {
 			out[c.Name] = c
 		}
 		return out
@@ -107,6 +109,17 @@ func TestDoctor(t *testing.T) {
 			t.Errorf("%s = %+v, want ok", name, c)
 		}
 	}
+	// An unrelated program named gloss first on PATH is caught (issue #37);
+	// another GlossMark release is a warning.
+	onPath = "Frames per second: 60.0"
+	if c := run("agent:claude-code", true)["gloss on PATH"]; c.Status != Fail || !strings.Contains(c.Msg, "is not GlossMark") {
+		t.Errorf("unrelated gloss = %+v", c)
+	}
+	onPath = "gloss 9.9.9"
+	if c := run("agent:claude-code", true)["gloss on PATH"]; c.Status != Warn || !strings.Contains(c.Msg, "gloss 9.9.9") {
+		t.Errorf("other release = %+v", c)
+	}
+	onPath = "gloss " + version.String()
 	// A graph written by another release (different generator in the header) is still current.
 	gp := ws.StatePath("graph.jsonl")
 	gb, _ := os.ReadFile(gp)
