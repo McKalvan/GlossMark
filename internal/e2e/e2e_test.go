@@ -1987,7 +1987,9 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	}
 	write("glossmark.yaml", "owns:\n  pay: { iri: https://x/pay/, tier: core }\n  pa: { iri: https://x/pa/, tier: implementation }\n")
 	write("ontology/pay.gloss.yaml", "concepts:\n  Payment: { kind: entity }\n  Metrics: { kind: measure, criticality: low }\n  Cutoff: { kind: constraint }\n  Login: { kind: process }\n")
-	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n")
+	write("ontology/pa.gloss.yaml", "concepts:\n  Exporter: { kind: process, realizes: pay:Metrics }\n  Clock: { kind: measure, realizes: pay:Cutoff, published: { as: pay:Cutoff } }\n  Session: { kind: process, realizes: pay:Login }\n"+
+		"  RateLimit: { kind: constraint, internal: true }\n  TokenTtl: { kind: constraint, internal: true }\n")
+	write("platform/auth/tests/test_token_security.py", "# @gloss verifies pa:TokenTtl\ndef test_token_expiry(): pass\n")
 	write("platform/.gloss.yaml", "boundary: o:platform\nlevel: system\ncriticality: critical\n")
 	write("platform/metrics/.gloss.yaml", "boundary: o:metrics\nlevel: container\npart-of: o:platform\n")
 	write("platform/metrics/export.py", "# @gloss implements pa:Exporter\ndef export(): pass\n")
@@ -2014,7 +2016,12 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 	for _, s := range rollup.SuggestCriticality(g) {
 		sugg[s.Concept] = s.Reason
 	}
-	for _, c := range []string{"pay:Cutoff", "pa:Clock", "pa:Session"} {
+	// An internal constraint is an engineering setting: proposed only on
+	// other evidence, here a security test (#78).
+	if r, ok := sugg["pa:RateLimit"]; ok {
+		t.Errorf("an internal constraint was proposed on the constraint rule alone: %s", r)
+	}
+	for _, c := range []string{"pay:Cutoff", "pa:Clock", "pa:Session", "pa:TokenTtl"} {
 		if sugg[c] == "" {
 			t.Errorf("expected a high suggestion for %s, got %v", c, sugg)
 		}

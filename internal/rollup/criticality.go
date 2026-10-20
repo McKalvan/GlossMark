@@ -241,9 +241,10 @@ var securityTest = regexp.MustCompile(`(?i)(secur|auth|permission|access.?contro
 
 // SuggestCriticality proposes a first classification for owned concepts that
 // have none, from facts already in the graph: a constraint is a rule the
-// business relies on, a published concept crosses the seam into the business
-// view, and a concept whose only verifiers are security tests guards
-// something sensitive. Each is high. Everything else stays unclassified; the
+// business relies on (unless it is internal: an engineering setting such as
+// a rate limit or a flag, which the business does not see), a published
+// concept crosses the seam into the business view, and a concept whose only
+// verifiers are security tests guards something sensitive. Each is high. Everything else stays unclassified; the
 // suggestion is a starting point a human edits, not a policy.
 func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
 	var out []CriticalitySuggestion
@@ -256,7 +257,7 @@ func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
 		}
 		reason := ""
 		switch {
-		case n.Kind == "constraint":
+		case n.Kind == "constraint" && !n.Internal:
 			reason = "constraint: a rule the business relies on"
 		case n.Published != "" || len(g.In(n.ID, "published-as")) > 0:
 			reason = "published: crosses the seam into the business view"

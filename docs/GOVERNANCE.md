@@ -76,7 +76,9 @@ Nothing is classified in a fresh adoption, and the viewer says so. `gloss
 criticality suggest` proposes a first pass from facts already in the graph,
 printed as a diff of the ontology files (`--write` applies it):
 
-- every `constraint` concept: a rule the business relies on;
+- every `constraint` concept that is not `internal: true`: a rule the business
+  relies on (an internal constraint, such as a rate limit or a flag, is an
+  engineering setting and is proposed only on the other rules);
 - every published concept: it crosses the seam into the business view;
 - every concept whose only verifiers are security tests (paths or names with
   auth, permission, csrf, crypto, pii, token and the like).
