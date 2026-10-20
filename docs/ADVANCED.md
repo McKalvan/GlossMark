@@ -68,7 +68,11 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 - **AUTO**: fingerprint-only changes, accepted proposals, derived edges.
 - **SOFT**: a link to an existing concept, valid, inside the allowed set, at or above `soft-conf-threshold`, changing only engineering views.
-- **HARD**: a new or proposed concept, a link outside an agent's remit or the allowed set, any ontology or manifest edit, anything touching a published concept, a criticality the policy gates, a MAJOR version bump, a cross-repo import.
+- **HARD**: a new or proposed concept, a link outside an agent's remit or the allowed set, any ontology or manifest edit, anything touching a published concept, a criticality the policy gates, a MAJOR version bump, a missing or undersized version bump, a cross-repo import, removing the last implementation of a concept anywhere.
+
+A label or `doc:` change on a core concept is HARD and changes every view that shows the concept: the definition is what the business view says. On an implementation concept it is SOFT, unless its file is under `policy.hard-paths` (default `ontology/**`, `**/.gloss.yaml`, `glossmark.yaml`): a change in a file under hard-paths is HARD whatever its semantic class, so the path rule is never lowered ([ADR 0018](adr/0018-gate-classification.md)).
+
+`gloss diff` also prints a **Realization changes** block (`realizations` in JSON): one line per concept whose deepest realizing or holding boundaries changed, such as `hire:Invoicing realized by {bw:hirehq-invoicing} → {bw:hirehq-invoicing, bw:invoicing-service}`. A boundary that loses its last implementation of a concept is a `realization-removed` change, gated at the concept's criticality, and HARD when no boundary realizes or holds the concept any more. A view the change deletes is listed under "Views changed" as `name (removed)`.
 
 ## Review states (the ledger)
 

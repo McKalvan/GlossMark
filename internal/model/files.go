@@ -657,6 +657,11 @@ func LoadViews(path string) (*Views, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseViews(path, b)
+}
+
+// ParseViews parses views.yaml content; path is used in messages only.
+func ParseViews(path string, b []byte) (*Views, error) {
 	var v Views
 	dec := yaml.NewDecoder(strings.NewReader(string(b)))
 	dec.KnownFields(true)
