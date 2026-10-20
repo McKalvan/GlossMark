@@ -1,8 +1,8 @@
-package zoo;
+package lib;
 
-// @gloss implements impl:HoofAssembler
-public class HoofAssembler {
-    // @gloss implements impl:HoofStep
-    public void attach(Hoof h) {
+// @gloss implements circ:MarcParser
+public class MarcParser {
+    // @gloss implements circ:MarcFieldMapper
+    public void map(MarcField f) {
     }
 }

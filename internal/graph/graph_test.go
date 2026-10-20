@@ -11,40 +11,40 @@ import (
 )
 
 func testGraph() *Graph {
-	g := New(map[string]string{"zoo": "https://onto.acme.dev/zoo/"})
-	for _, c := range []string{"Animal", "Horse", "Mare", "Stallion", "Donkey", "Cow"} {
-		iri, _ := g.Expand("zoo:" + c)
-		g.AddNode(&Node{NodeType: model.NodeConcept, ID: iri, CURIE: "zoo:" + c, NS: "zoo", Tier: "core", Kind: "entity"})
+	g := New(map[string]string{"lib": "https://onto.acme.dev/lib/"})
+	for _, c := range []string{"Item", "Media", "Book", "DVD", "Laptop", "Periodical"} {
+		iri, _ := g.Expand("lib:" + c)
+		g.AddNode(&Node{NodeType: model.NodeConcept, ID: iri, CURIE: "lib:" + c, NS: "lib", Tier: "core", Kind: "entity"})
 	}
 	isa := func(a, b string) {
-		s, _ := g.Expand("zoo:" + a)
-		o, _ := g.Expand("zoo:" + b)
+		s, _ := g.Expand("lib:" + a)
+		o, _ := g.Expand("lib:" + b)
 		g.AddEdge(&Edge{S: s, P: "is-a", O: o, Source: SourceDeclared})
 	}
-	isa("Horse", "Animal")
-	isa("Mare", "Horse")
-	isa("Stallion", "Horse")
-	isa("Donkey", "Animal")
-	isa("Cow", "Animal")
+	isa("Media", "Item")
+	isa("Book", "Media")
+	isa("DVD", "Media")
+	isa("Laptop", "Item")
+	isa("Periodical", "Item")
 	return g
 }
 
 func TestLCS(t *testing.T) {
 	g := testGraph()
-	id := func(c string) string { s, _ := g.Expand("zoo:" + c); return s }
-	got := g.LCS([]string{id("Mare"), id("Stallion")})
-	if len(got) != 1 || g.Curie(got[0]) != "zoo:Horse" {
-		t.Fatalf("LCS(Mare,Stallion) = %v", got)
+	id := func(c string) string { s, _ := g.Expand("lib:" + c); return s }
+	got := g.LCS([]string{id("Book"), id("DVD")})
+	if len(got) != 1 || g.Curie(got[0]) != "lib:Media" {
+		t.Fatalf("LCS(Book,DVD) = %v", got)
 	}
-	got = g.LCS([]string{id("Mare"), id("Donkey")})
-	if len(got) != 1 || g.Curie(got[0]) != "zoo:Animal" {
-		t.Fatalf("LCS(Mare,Donkey) = %v", got)
+	got = g.LCS([]string{id("Book"), id("Laptop")})
+	if len(got) != 1 || g.Curie(got[0]) != "lib:Item" {
+		t.Fatalf("LCS(Book,Laptop) = %v", got)
 	}
-	got = g.LCS([]string{id("Mare")})
-	if len(got) != 1 || g.Curie(got[0]) != "zoo:Mare" {
-		t.Fatalf("LCS(Mare) = %v", got)
+	got = g.LCS([]string{id("Book")})
+	if len(got) != 1 || g.Curie(got[0]) != "lib:Book" {
+		t.Fatalf("LCS(Book) = %v", got)
 	}
-	if !g.Subsumes(id("Animal"), id("Mare")) || g.Subsumes(id("Mare"), id("Animal")) {
+	if !g.Subsumes(id("Item"), id("Book")) || g.Subsumes(id("Book"), id("Item")) {
 		t.Fatal("Subsumes wrong")
 	}
 }
@@ -53,21 +53,21 @@ func TestLCS(t *testing.T) {
 // (two concepts sharing two parents' lines), or none.
 func TestSubsumer(t *testing.T) {
 	g := testGraph()
-	id := func(c string) string { s, _ := g.Expand("zoo:" + c); return s }
-	for _, c := range []string{"Pet", "Pony", "Mule", "Rock"} {
-		g.AddNode(&Node{NodeType: model.NodeConcept, ID: id(c), CURIE: "zoo:" + c, NS: "zoo"})
+	id := func(c string) string { s, _ := g.Expand("lib:" + c); return s }
+	for _, c := range []string{"Thing", "StoryKit", "LanguageKit", "Shelf"} {
+		g.AddNode(&Node{NodeType: model.NodeConcept, ID: id(c), CURIE: "lib:" + c, NS: "lib"})
 	}
-	for _, e := range [][2]string{{"Pet", "Animal"}, {"Pony", "Horse"}, {"Pony", "Pet"}, {"Mule", "Horse"}, {"Mule", "Pet"}} {
+	for _, e := range [][2]string{{"Thing", "Item"}, {"StoryKit", "Media"}, {"StoryKit", "Thing"}, {"LanguageKit", "Media"}, {"LanguageKit", "Thing"}} {
 		g.AddEdge(&Edge{S: id(e[0]), P: "is-a", O: id(e[1]), Source: SourceDeclared})
 	}
-	if l, cand := g.Subsumer([]string{id("Mare"), id("Stallion")}); g.Curie(l) != "zoo:Horse" || cand != nil {
-		t.Errorf("Subsumer(Mare, Stallion) = %q %v", l, cand)
+	if l, cand := g.Subsumer([]string{id("Book"), id("DVD")}); g.Curie(l) != "lib:Media" || cand != nil {
+		t.Errorf("Subsumer(Book, DVD) = %q %v", l, cand)
 	}
-	if l, cand := g.Subsumer([]string{id("Pony"), id("Mule")}); l != "" || len(cand) != 2 || g.Curie(cand[0]) != "zoo:Horse" || g.Curie(cand[1]) != "zoo:Pet" {
-		t.Errorf("Subsumer(Pony, Mule) = %q %v, want no unique subsumer: Horse, Pet", l, cand)
+	if l, cand := g.Subsumer([]string{id("StoryKit"), id("LanguageKit")}); l != "" || len(cand) != 2 || g.Curie(cand[0]) != "lib:Media" || g.Curie(cand[1]) != "lib:Thing" {
+		t.Errorf("Subsumer(StoryKit, LanguageKit) = %q %v, want no unique subsumer: Media, Thing", l, cand)
 	}
-	if l, cand := g.Subsumer([]string{id("Mare"), id("Rock")}); l != "" || cand != nil {
-		t.Errorf("Subsumer(Mare, Rock) = %q %v, want none", l, cand)
+	if l, cand := g.Subsumer([]string{id("Book"), id("Shelf")}); l != "" || cand != nil {
+		t.Errorf("Subsumer(Book, Shelf) = %q %v, want none", l, cand)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestGlob(t *testing.T) {
 		{"gen/**", "src/gen/a.go", false},
 		{"**/.gloss.yaml", "services/x/.gloss.yaml", true},
 		{"**/.gloss.yaml", ".gloss.yaml", true},
-		{"ontology/**", "ontology/zoo.gloss.yaml", true},
+		{"ontology/**", "ontology/lib.gloss.yaml", true},
 		{"*.json", "a/b/c.json", true},
 		{"**/test_*.py", "pkg/tests/test_foo.py", true},
 		{"**/*_test.go", "a_test.go", true},
@@ -111,17 +111,17 @@ func TestGlob(t *testing.T) {
 			t.Errorf("MatchGlob(%q,%q)=%v want %v", c.p, c.path, got, c.want)
 		}
 	}
-	if !model.MatchCurie("impl:Foal*", "impl:FoalRegistry") || model.MatchCurie("impl:Foal*", "zoo:Foal") || !model.MatchCurie("pa:*", "pa:X") {
+	if !model.MatchCurie("circ:Loan*", "circ:LoanStore") || model.MatchCurie("circ:Loan*", "lib:Loan") || !model.MatchCurie("hw:*", "hw:X") {
 		t.Fatal("MatchCurie wrong")
 	}
 }
 
 func TestCycles(t *testing.T) {
 	g := testGraph()
-	id := func(c string) string { s, _ := g.Expand("zoo:" + c); return s }
+	id := func(c string) string { s, _ := g.Expand("lib:" + c); return s }
 	isa := func(a, b string) { g.AddEdge(&Edge{S: id(a), P: "is-a", O: id(b), Source: SourceDeclared}) }
-	isa("Animal", "Mare") // Animal > Horse > Mare > Animal
-	isa("Cow", "Cow")     // self-loop
+	isa("Item", "Book")             // Item > Media > Book > Item
+	isa("Periodical", "Periodical") // self-loop
 	var all []string
 	for _, n := range g.NodesOf(model.NodeConcept) {
 		all = append(all, n.ID)
@@ -141,14 +141,14 @@ func TestCycles(t *testing.T) {
 	for _, s := range cycles[0] {
 		path = append(path, g.Curie(s.From))
 	}
-	if got := strings.Join(path, ">"); got != "zoo:Animal>zoo:Mare>zoo:Horse" {
-		t.Errorf("cycle = %s, want zoo:Animal>zoo:Mare>zoo:Horse", got)
+	if got := strings.Join(path, ">"); got != "lib:Book>lib:Media>lib:Item" {
+		t.Errorf("cycle = %s, want lib:Book>lib:Media>lib:Item", got)
 	}
-	if len(cycles[1]) != 1 || g.Curie(cycles[1][0].From) != "zoo:Cow" {
+	if len(cycles[1]) != 1 || g.Curie(cycles[1][0].From) != "lib:Periodical" {
 		t.Errorf("self-loop = %+v", cycles[1])
 	}
 	// Closures stay finite and exclude the start.
-	if anc := g.Ancestors(id("Mare")); len(anc) != 2 {
-		t.Errorf("Ancestors(Mare) on a cycle = %v", anc)
+	if anc := g.Ancestors(id("Book")); len(anc) != 2 {
+		t.Errorf("Ancestors(Book) on a cycle = %v", anc)
 	}
 }

@@ -45,14 +45,14 @@ glossmark.yaml, ontology/*.gloss.yaml, **/.gloss.yaml, inline @gloss markers
 `.glossmark/graph.jsonl`, one JSON object per line, sorted by (`type`, `id`/`s`, `p`, `o`, `path`, `line`) so `git diff` is meaningful.
 
 - Line 1: `{"type":"context","prefixes":{...},"generator":"gloss x.y"}` — doubles as the JSON-LD context seed.
-- Node lines: `{"type":"node","node":"concept|boundary|artifact|namespace|actor","id":"<IRI>","curie":"zoo:Mare","ns":"zoo","tier":"core","kind":"entity",...}`
+- Node lines: `{"type":"node","node":"concept|boundary|artifact|namespace|actor","id":"<IRI>","curie":"lib:Book","ns":"lib","tier":"core","kind":"entity",...}`
 - Edge lines: `{"type":"edge","s":"<IRI>","p":"is-a","o":"<IRI>","source":"declared|inline|derived|inferred","prov":{...}}`
 
 IRIs are stored, as the spec requires; CURIEs are kept beside them for readability. Artifact IRIs are `urn:gloss:artifact:<repo-relative-path>[#<symbol>]`. Boundary prefixes resolve through a `prefixes:` map in `glossmark.yaml`, falling back to `urn:gloss:boundary:<prefix>:<name>` with a warning.
 
 ### Marker grammar
 
-The reference regex from the spec is frozen, with one documented extension: a target may carry a `NEW:` infix (`impl:NEW:Gelding`) so proposals of new concepts parse as one token instead of leaving `:Gelding` as trailing text. Malformed markers are warnings at `file:line`, never silent drops. Positions are physical columns.
+The reference regex from the spec is frozen, with one documented extension: a target may carry a `NEW:` infix (`circ:NEW:DamageCheck`) so proposals of new concepts parse as one token instead of leaving `:DamageCheck` as trailing text. Malformed markers are warnings at `file:line`, never silent drops. Positions are physical columns.
 
 Anchoring without tree-sitter (POC): a per-language declaration detector (regex) finds the next declaration after the marker and fingerprints its signature line. This gives `scope=symbol` and stale detection in Phase 1; tree-sitter replaces the detector in Phase 2 without changing the graph.
 
@@ -92,8 +92,7 @@ internal/mcp/             MCP stdio server
 internal/agents/          AGENTS.md snippet
 schemas/                  JSON Schemas for glossmark.yaml, *.gloss.yaml, .gloss.yaml, views.yaml; LinkML schema for the graph
 corpus/                   Conformance corpus: one file per supported extension + expected.json
-examples/horse-factory/   The zoo example from the spec (one repo, both tiers)
-examples/payments/        The worked example: payments-api (owns pay:, pa:) and settlement-worker (imports pay:, owns sw:)
+examples/library/         The worked example: circulation (owns lib:, circ:) and holds-worker (imports lib:, owns hw:)
 docs/                     PLAN.md (this file), GRAMMAR.md, FILE-FORMATS.md, QUICKSTART.md, GRAPH.md
 hooks/                    pre-commit hook; .pre-commit-hooks.yaml at root
 action.yml                Composite GitHub Action: build, check, drift, diff, PR comment
@@ -107,9 +106,9 @@ action.yml                Composite GitHub Action: build, check, drift, diff, PR
 4. **Actor attribution.** `GLOSS_ACTOR` env var or `--actor` flag (`human:alice`, `agent:claude-code@claude-fable-5-1`); default `human:<git user.name>`. Git blame is the second trail and is not re-derived by the tool.
 5. **Coverage unit.** File-level by default (share of in-scope, comment-bearing, non-generated files with at least one accepted link). `--unit symbol` uses the declaration detector and is labelled approximate until tree-sitter lands.
 6. **Base graph for `gloss diff`.** Reads `<base>:.glossmark/graph.jsonl` from git when committed, else extracts `<base>` into a temp dir via `git archive` and builds it.
-7. **Imports.** Local paths resolve now (`source: ../payments-api/ontology/`); `git+` and `https://` sources are parsed and rejected with a clear message until the fetcher lands. A local directory containing a published `ontology.jsonld` is also accepted.
+7. **Imports.** Local paths resolve now (`source: ../circulation/ontology/`); `git+` and `https://` sources are parsed and rejected with a clear message until the fetcher lands. A local directory containing a published `ontology.jsonld` is also accepted.
 8. **Instances and fixtures.** Out of scope for this build; the schema reserves `shapes:` on impl concepts so the runtime check can land without a format change.
-9. **Comparison details the spec leaves open.** A manifest relation that declares nothing is not compared (no claim, no finding). `implements` lifts to `realizes`; `represents` lifts as itself and is reported, not gated, because manifests declare behaviour. Internal concepts and event emitters are exempt from the `realizes` comparison; events are compared through `publishes`/`subscribes`. Intended relations lift through the realized core concept, so `AuthorizeHandler realizes Authorization produces Payment` makes the boundary produce `Payment`. `is-a` and `part-of` cover one way: a declared supertype or whole covers a derived subtype or part, never the reverse, and a concept with no kind takes its nearest `is-a` ancestor's ([ADR 0009](adr/0009-hierarchy-direction.md)).
+9. **Comparison details the spec leaves open.** A manifest relation that declares nothing is not compared (no claim, no finding). `implements` lifts to `realizes`; `represents` lifts as itself and is reported, not gated, because manifests declare behaviour. Internal concepts and event emitters are exempt from the `realizes` comparison; events are compared through `publishes`/`subscribes`. Intended relations lift through the realized core concept, so `BookIntake realizes Cataloging produces Media` makes the boundary produce `Media`. `is-a` and `part-of` cover one way: a declared supertype or whole covers a derived subtype or part, never the reverse, and a concept with no kind takes its nearest `is-a` ancestor's ([ADR 0009](adr/0009-hierarchy-direction.md)).
 10. **Quoting the grammar.** Applying GlossMark to itself surfaced the quine problem: a comment that documents `@gloss` is itself a marker. The scanner, not the frozen regex, now treats text between a pair of backticks inside a comment as quoted prose, and skips the body of a Markdown fenced code block. The corpus files `quoted.md` and `quoted.go` pin the rule.
 11. **Self-hosting.** The repository owns `gm:` (core) and `gmi:` (implementation) and links its own packages, commands, schemas and docs; `internal/e2e/selfhost_test.go` fails on any lint error or failing drift finding. The example repositories and the corpus test files are excluded from the root workspace because they are workspaces of their own.
 12. **Landscape before federation.** `gloss landscape <repo>...` unions sibling checkouts by IRI and re-derives rollups, which gives the context-map edge and closes single-repo gaps today; the published-artifact fetcher will feed the same union later.
@@ -138,9 +137,9 @@ Four numbers, documented in `docs/VERSIONING.md`: the tool release (git tag, inj
 
 ## 9. Verification
 
-- `go test ./...` runs the conformance corpus, grammar edge cases, rollup rules on synthetic graphs, and end-to-end runs on both examples.
-- The payments example test asserts the spec's "What the tooling makes of it" table: one violation (Refunding handled, not declared), one gap (Capture implemented but untested), one landscape edge (CaptureConfirmed across repos), one HARD change (SettlementCutoff value), one consistent rollup after taxonomic lift.
-- `gloss build` on either example completes well under the 5 s gate.
+- `go test ./...` runs the conformance corpus, grammar edge cases, rollup rules on synthetic graphs, and end-to-end runs on both repositories of the library example.
+- The library example test asserts the spec's "What the tooling makes of it" table: one violation (Renewal handled, not declared), one gap (HoldReady declared by the platform, published only by holds-worker, closed by the landscape), one landscape edge (ItemReturned across repos), one HARD change (PickupWindow value), one consistent rollup after taxonomic lift.
+- `gloss build` on either example repository completes well under the 5 s gate.
 
 ## 10. Roadmap from the first two adoptions
 

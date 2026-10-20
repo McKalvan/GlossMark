@@ -1,5 +1,5 @@
 # .github/workflows/deploy.yml
-# @gloss deploys acme:payments-api scope=file
+# @gloss deploys acme:circulation-svc scope=file
 name: deploy
 on: [push]
 jobs:

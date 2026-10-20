@@ -14,15 +14,15 @@ viewer.
 in two places:
 
 ```yaml
-# ontology/pay.gloss.yaml — on a concept
+# ontology/lib.gloss.yaml — on a concept
 concepts:
-  Payment:  { kind: entity, criticality: critical }     # money moves on this
-  Merchant: { kind: entity, criticality: high }         # holds PII
-  Capture:  { kind: process, consumes: [Payment], criticality: high }
+  Patron:   { kind: entity, criticality: critical }     # reading records are confidential by law
+  Hold:     { kind: entity, criticality: high }         # names a patron: PII
+  Checkout: { kind: process, consumes: [Item, Patron], criticality: high }
 
-# services/api/.gloss.yaml — on a boundary
-boundary: acme:payments-api
-level: container
+# .gloss.yaml — on a boundary
+boundary: acme:library-platform
+level: system
 criticality: critical
 ```
 
@@ -51,8 +51,8 @@ A declared level always wins.
 
 - **Concept.** Without its own level, a concept takes the highest level of
   what it `realizes` or is `published` as; then of the concept it is
-  `part-of`; then of its `is-a` ancestors. So `pa:AuthorizeHandler realizes
-  pay:Authorization` is critical without anyone saying so twice. The rule is
+  `part-of`; then of its `is-a` ancestors. So `circ:CheckoutHandler realizes
+  lib:Checkout` is high without anyone saying so twice. The rule is
   the same in both tiers: a core concept with no level of its own inherits
   through `part-of` and `is-a` too, so declaring `cyc:BrakingComponent`
   critical makes `cyc:HydraulicDiscBrake`, four `is-a` levels down, critical,
@@ -78,8 +78,8 @@ a critical concept, or the app shell that `hosts` it, inherits nothing from it
 Inheritance never goes *down* from a boundary to a concept: a critical
 platform may contain a low-criticality metrics module, and the module's
 concepts, and the files that implement them, keep their own level. Set
-`criticality-floor: true` on a boundary when that is wrong for it: a payments
-service where every file touches money, a compliance boundary where every
+`criticality-floor: true` on a boundary when that is wrong for it: a circulation
+service where every file touches patron records, a compliance boundary where every
 change needs the owning reviewer. In the PR comment a link change is judged
 by what it links to, plus the floor when one applies.
 
@@ -117,10 +117,10 @@ level among its subject, its object and the boundary of its path, and the
 report says what was touched:
 
 ```
-Ontology impact — payments-api (acme:payments-api)   base main   gate HARD   criticality critical
-+ implements pay:Capture                services/api/handlers/capture.py:capture   [HIGH, agent, conf 0.90, SOFT]
-! pay:Payment value none → …            ontology/pay.gloss.yaml:7                  [CRITICAL, HARD: edit to ontology; criticality critical: pay:Payment]
-Criticality touched: pay:Payment critical (declared), acme:payments-api critical (via pay:Authorization), pay:Capture high (declared)
+Ontology impact — circulation (acme:circulation-svc)   base main   gate HARD   criticality critical
+! lib:Patron value none → …          ontology/lib.gloss.yaml:13                              [CRITICAL, HARD: edit to ontology; criticality critical: lib:Patron]
+? implements circ:CheckoutHandler    services/circulation/loans/checkout.py:check_out_many   [HIGH, agent, conf 0.90, SOFT: auto-accept eligible]
+Criticality touched: lib:Patron critical (declared), circ:CheckoutHandler high (via lib:Checkout)
 ```
 
 The gate policy can raise the review level by criticality. The default is that

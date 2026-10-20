@@ -9,16 +9,16 @@ import (
 	"testing"
 )
 
-const flowFile = `# ontology/impl.gloss.yaml  (implementation tier)
-namespace: impl
+const flowFile = `# ontology/circ.gloss.yaml  (implementation tier)
+namespace: circ
 version: 0.3.0
 concepts:
-  HorseBuilder:               { kind: process, realizes: zoo:Breeding }
-  HoofAssembler:              { kind: process, part-of: HorseBuilder, internal: true }     # unpublished: private to this repo
+  CatalogIntake:              { kind: process, realizes: lib:Cataloging }
+  MarcParser:                 { kind: process, part-of: CatalogIntake, internal: true }     # unpublished: private to this repo
   Throughput:
     kind: measure
     criticality: low                 # telemetry
-    realizes: zoo:ProductionCapacity
+    realizes: lib:LoanPeriod
     doc: |
       Multi-line block scalar.
       Second line.
@@ -32,7 +32,7 @@ relations:
 
 func tmp(t *testing.T, content string) string {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "impl.gloss.yaml")
+	p := filepath.Join(t.TempDir(), "circ.gloss.yaml")
 	if content != "" {
 		os.WriteFile(p, []byte(content), 0o644)
 	}
@@ -50,23 +50,23 @@ func read(t *testing.T, p string) string {
 
 func TestAddConceptPreservesFormatting(t *testing.T) {
 	p := tmp(t, flowFile)
-	if err := AddConcept(p, "Gelding", ConceptSpec{Kind: "process", Realizes: []string{"zoo:Breeding"}, Doc: "Castration step: colts, not fillies.", Aliases: []string{"castration", "cut-off step"}, Proposed: true, ProposedBy: "agent:bot@m"}); err != nil {
+	if err := AddConcept(p, "DamageCheck", ConceptSpec{Kind: "process", Realizes: []string{"lib:Cataloging"}, Doc: "Damage check: books, not DVDs.", Aliases: []string{"condition check", "wear review"}, Proposed: true, ProposedBy: "agent:bot@m"}); err != nil {
 		t.Fatal(err)
 	}
 	got := read(t, p)
 	want := strings.Replace(flowFile, "  }\nrelations:", "  }\n"+
-		"  Gelding:\n"+
+		"  DamageCheck:\n"+
 		"    kind: process\n"+
-		"    realizes: zoo:Breeding\n"+
-		"    doc: \"Castration step: colts, not fillies.\"\n"+
-		"    aliases: [castration, cut-off step]\n"+
+		"    realizes: lib:Cataloging\n"+
+		"    doc: \"Damage check: books, not DVDs.\"\n"+
+		"    aliases: [condition check, wear review]\n"+
 		"    proposed: true\n"+
 		"    proposed-by: agent:bot@m\n"+
 		"relations:", 1)
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
-	if err := AddConcept(p, "Gelding", ConceptSpec{Kind: "process"}); err == nil {
+	if err := AddConcept(p, "DamageCheck", ConceptSpec{Kind: "process"}); err == nil {
 		t.Error("adding an existing concept must fail")
 	}
 	// The other entries are untouched byte for byte.
@@ -195,20 +195,20 @@ func TestSetField(t *testing.T) {
 func TestPublishCopy(t *testing.T) {
 	src := tmp(t, flowFile)
 	dst := filepath.Join(t.TempDir(), "out.gloss.yaml")
-	keep := map[string]bool{"HorseBuilder": true, "Throughput": true}
+	keep := map[string]bool{"CatalogIntake": true, "Throughput": true}
 	if err := PublishCopy(src, dst, func(n string) bool { return keep[n] }, "implementation"); err != nil {
 		t.Fatal(err)
 	}
-	want := `# ontology/impl.gloss.yaml  (implementation tier)
-namespace: impl
+	want := `# ontology/circ.gloss.yaml  (implementation tier)
+namespace: circ
 version: 0.3.0
 tier: implementation
 concepts:
-  HorseBuilder:               { kind: process, realizes: zoo:Breeding }
+  CatalogIntake:              { kind: process, realizes: lib:Cataloging }
   Throughput:
     kind: measure
     criticality: low                 # telemetry
-    realizes: zoo:ProductionCapacity
+    realizes: lib:LoanPeriod
     doc: |
       Multi-line block scalar.
       Second line.

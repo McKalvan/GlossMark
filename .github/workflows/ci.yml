@@ -17,7 +17,6 @@ jobs:
       - name: Examples still build and drift as documented
         run: |
           go build -o gloss ./cmd/gloss
-          (cd examples/horse-factory && ../../gloss check && ../../gloss build -q)
-          (cd examples/payments/payments-api && ../../../gloss check)
-          (cd examples/payments/settlement-worker && ../../../gloss check)
-          ./gloss landscape examples/payments/payments-api examples/payments/settlement-worker --fail-on dangling
+          (cd examples/library/circulation && ../../../gloss check && ../../../gloss build -q)
+          (cd examples/library/holds-worker && ../../../gloss check && ../../../gloss build -q)
+          ./gloss landscape examples/library/circulation examples/library/holds-worker --fail-on dangling

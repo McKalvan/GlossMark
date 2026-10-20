@@ -75,13 +75,14 @@ func build(t *testing.T, root string) (*load.Workspace, *graph.Graph) {
 	return ws, res.Graph
 }
 
-// TestSuggestRecoversMarkers strips every code marker from horse-factory and
+// TestSuggestRecoversMarkers strips every code marker from the library
+// circulation example and
 // checks that suggest proposes reviewable `@gloss?` markers that pass check
 // with no kind warnings, inserts above decorators, and stops once marked.
 func TestSuggestRecoversMarkers(t *testing.T) {
 	root := t.TempDir()
-	copyStripped(t, filepath.Join("..", "..", "examples", "horse-factory"), root)
-	os.WriteFile(filepath.Join(root, "services/horse-factory/breeding/api.py"), []byte("import app\n\n\n@app.route(\n    \"/hooves\",\n)\ndef hoof_assembler_endpoint():\n    pass\n\n\ndef _private_helper():\n    pass\n"), 0o644)
+	copyStripped(t, filepath.Join("..", "..", "examples", "library", "circulation"), root)
+	os.WriteFile(filepath.Join(root, "services/circulation/cataloging/api.py"), []byte("import app\n\n\n@app.route(\n    \"/marc\",\n)\ndef marc_parser_endpoint():\n    pass\n\n\ndef _private_helper():\n    pass\n"), 0o644)
 	ws, g := build(t, root)
 	ps, _, err := Run(ws, g, nil, Options{})
 	if err != nil {
@@ -99,17 +100,17 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 	if len(ps) < 6 {
 		t.Errorf("only %d proposals: %+v", len(ps), ps)
 	}
-	if p, ok := got["services/horse-factory/models/mare.ts#Mare"]; !ok || p.Relation != "represents" || p.Target != "zoo:Mare" {
-		t.Errorf("Mare: %+v", p)
+	if p, ok := got["services/circulation/models/book.ts#Book"]; !ok || p.Relation != "represents" || p.Target != "lib:Book" {
+		t.Errorf("Book: %+v", p)
 	}
-	if p, ok := got["services/horse-factory/breeding/api.py#hoof_assembler_endpoint"]; !ok || p.Line != 4 {
+	if p, ok := got["services/circulation/cataloging/api.py#marc_parser_endpoint"]; !ok || p.Line != 4 {
 		t.Errorf("decorated function should get a marker above the decorator (line 4): %+v", p)
 	}
-	if _, ok := got["services/horse-factory/breeding/api.py#_private_helper"]; ok {
+	if _, ok := got["services/circulation/cataloging/api.py#_private_helper"]; ok {
 		t.Error("private helpers get no proposal")
 	}
 	patch, err := Patch(root, ps)
-	if err != nil || !strings.Contains(patch, "+-- @gloss? represents zoo:Foal") {
+	if err != nil || !strings.Contains(patch, "+-- @gloss? represents lib:Loan") {
 		t.Errorf("patch:\n%s", patch)
 	}
 	if err := Write(root, ps); err != nil {
@@ -130,7 +131,7 @@ func TestSuggestRecoversMarkers(t *testing.T) {
 // floor never proposes more.
 func TestMinConfIsTheFloor(t *testing.T) {
 	root := t.TempDir()
-	copyStripped(t, filepath.Join("..", "..", "examples", "horse-factory"), root)
+	copyStripped(t, filepath.Join("..", "..", "examples", "library", "circulation"), root)
 	ws, g := build(t, root)
 	prev := -1
 	for _, min := range []float64{0.01, 0.2, 0.4, 0.6, 0.8, 0.95} {

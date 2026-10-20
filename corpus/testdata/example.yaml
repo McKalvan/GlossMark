@@ -1,13 +1,13 @@
-# @gloss deploys impl:HorseFactoryService
+# @gloss deploys circ:CirculationService
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: horse-factory
+  name: circulation
 spec:
   replicas: 2
 ---
-# @gloss configures impl:FoalEventBus
+# @gloss configures circ:ReturnEventBus
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: foal-bus
+  name: return-bus

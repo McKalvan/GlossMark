@@ -207,8 +207,8 @@ func isTest(d marker.Decl, sig, path string) bool {
 	return strings.HasPrefix(name, "test") && len(name) > 4 && !lower(name[4:5])
 }
 
-// testSubject strips the test affixes from a test's name: test_refund,
-// TestRefund, RefundTest and RefundSpec all name Refund.
+// testSubject strips the test affixes from a test's name: test_renewal,
+// TestRenewal, RenewalTest and RenewalSpec all name Renewal.
 func testSubject(name string) string {
 	for _, p := range []string{"test_", "Test_", "Test", "test", "Benchmark", "Fuzz", "Example"} {
 		if strings.HasPrefix(name, p) && len(name) > len(p) {

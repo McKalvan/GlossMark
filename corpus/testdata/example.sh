@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# @gloss deploys impl:HorseFactoryService scope=file
+# @gloss deploys circ:CirculationService scope=file
 set -euo pipefail
 
-# @gloss configures impl:FoalEventBus
+# @gloss configures circ:ReturnEventBus
 configure_bus() {
-  echo "@gloss implements impl:Nothing"  # string, not a marker
+  echo "@gloss implements circ:Nothing"  # string, not a marker
 }

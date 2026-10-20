@@ -1,8 +1,8 @@
 // Package quoted shows that a comment may talk about the `@gloss` grammar.
 package quoted
 
-// Parse reads one `@gloss implements impl:Decoy` line; the quoted span is prose.
-// @gloss implements impl:HoofStep
+// Parse reads one `@gloss implements circ:Decoy` line; the quoted span is prose.
+// @gloss implements circ:MarcFieldMapper
 func Parse(s string) {}
 
 // Flip rewrites `@gloss?` to `@gloss` on the marker's line.

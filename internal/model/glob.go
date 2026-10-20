@@ -63,7 +63,7 @@ func globRegexp(pattern string) *regexp.Regexp {
 	return re
 }
 
-// MatchCurie matches a CURIE against a pattern such as `impl:*`, `impl:Foal*`
+// MatchCurie matches a CURIE against a pattern such as `circ:*`, `circ:Catalog*`
 // or an exact CURIE.
 func MatchCurie(pattern, curie string) bool {
 	if !strings.Contains(pattern, "*") {

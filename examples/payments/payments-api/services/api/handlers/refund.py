@@ -1,3 +1,0 @@
-# services/api/handlers/refund.py
-# @gloss? implements pay:Refunding conf=0.83      <- proposed by the agent that wrote it
-def refund(payment_id: str, amount: "Money") -> "Refund": ...

@@ -21,7 +21,7 @@ const (
 	evNameExact    = "name-exact"     // the declaration's words are the concept name's words
 	evAliasExact   = "alias-exact"    // ... or one of its aliases
 	evCalls        = "calls"          // a test calls a symbol linked to the concept; beats a word in the test's name
-	evNameContains = "name-contains"  // the declaration's name holds the whole concept name (RefundHandler: Refund)
+	evNameContains = "name-contains"  // the declaration's name holds the whole concept name (RenewalHandler: Renewal)
 	evAliasContain = "alias-contains" // ... or a whole multi-word alias
 	evTopic        = "topic"          // a listener or producer names the event's topic
 	evDoc          = "doc"            // the docstring or comment names the concept

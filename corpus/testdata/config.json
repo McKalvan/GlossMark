@@ -1,1 +1,1 @@
-{ "bus": { "topic": "foals" }, "registry": { "table": "foals" } }
+{ "bus": { "topic": "returns" }, "registry": { "table": "loans" } }

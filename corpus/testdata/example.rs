@@ -1,6 +1,6 @@
-//! Tail queue.
-// @gloss implements impl:TailQueue
-pub struct TailQueue {}
+//! Cover image cache.
+// @gloss implements circ:CoverImageCache
+pub struct CoverImageCache {}
 
-// @gloss implements impl:TailStep
-pub fn enqueue(t: Tail) {}
+// @gloss implements circ:CoverFetch
+pub fn fetch(c: Cover) {}

@@ -1,8 +1,0 @@
-# payments-api/services/api/.gloss.yaml
-boundary: acme:payments-api
-level: container
-part-of: acme:payments-platform
-realizes: [pay:Authorization, pay:Capture]
-default-namespace: pa
-allowed: [pay:Payment, pay:Refund, pay:Refunding, pay:Merchant, pay:CaptureConfirmed, pa:*]
-owner: payments-eng

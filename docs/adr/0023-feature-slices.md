@@ -5,13 +5,13 @@ Status: accepted, 2026-10-20. Closes issue #34.
 
 ## Context
 
-Someone working on one feature (withdrawals, capture) needs the part of the ontology that belongs to it: the core concept, its kinds and parts, the implementation concepts behind it, their code, tests and docs, the boundaries that hold them, and the events and constraints around them. Viewer focus works only on boundaries, curated views list concepts by hand and keep one hop, search only highlights, and `impact_of`, `concepts_for_path` and `gloss context` go from files to concepts, never from a concept to everything about it.
+Someone working on one feature (checkout, cataloging) needs the part of the ontology that belongs to it: the core concept, its kinds and parts, the implementation concepts behind it, their code, tests and docs, the boundaries that hold them, and the events and constraints around them. Viewer focus works only on boundaries, curated views list concepts by hand and keep one hop, search only highlights, and `impact_of`, `concepts_for_path` and `gloss context` go from files to concepts, never from a concept to everything about it.
 
-Following every edge for N hops does not work: hub concepts such as `pay:Payment`, or a shared event, reach most of the graph in two hops.
+Following every edge for N hops does not work: hub concepts such as `lib:Item`, or a shared event, reach most of the graph in two hops.
 
 ## Decision
 
-A **slice** is computed from one or more seeds by one function, `internal/slice.Compute`, over the canonical graph. Each relation is followed in one direction for one reason. Every node records a **role** and a **via** path: the edges, as they read, from a seed to the node (`pa:CaptureHandler realizes pay:Capture`, then `services/api/handlers/capture.py#capture implements pa:CaptureHandler`). Rounds are breadth-first and sorted, so the first way in is the shortest and the result is deterministic.
+A **slice** is computed from one or more seeds by one function, `internal/slice.Compute`, over the canonical graph. Each relation is followed in one direction for one reason. Every node records a **role** and a **via** path: the edges, as they read, from a seed to the node (`circ:CheckoutHandler realizes lib:Checkout`, then `services/circulation/loans/checkout.py#check_out implements circ:CheckoutHandler`). Rounds are breadth-first and sorted, so the first way in is the shortest and the result is deterministic.
 
 **Seeds.** A concept or boundary CURIE; an artifact (`path#symbol`), which stands for the concepts it links to; or a path, whose artifacts' linked concepts become the seeds (what `concepts_for_path` returns). A seed boundary brings in the boundaries inside it (`part-of`, transitively), every concept they realize, hold, represent, present or host (role `housed`) and the artifacts under them.
 
@@ -45,7 +45,7 @@ Other repositories' boundaries and concepts reach a slice through the same rules
 
 **Directions are the guard against hubs.** `realizes` is followed only downward (from a member to what realizes it), `is-a` only to subtypes, `part-of` only to parts, and flows only as one hop of context unless `--follow` names them. A member never pulls in a sibling through a shared supertype, a shared whole, a shared flow or a shared boundary.
 
-**Not rules.** Two artifacts in one file, or two concepts in one boundary, are not related by that alone: a router file or a service boundary would merge every feature it touches. A fact a slice should follow belongs in the ontology. The payments example gained one such fact: `pa:CaptureEmitter part-of pa:CaptureHandler`, the emitter being the step of capturing that publishes the confirmation.
+**Not rules.** Two artifacts in one file, or two concepts in one boundary, are not related by that alone: a router file or a service boundary would merge every feature it touches. A fact a slice should follow belongs in the ontology. The library example states one such fact: `circ:ReturnNotifier part-of circ:ReturnPipeline`, the notifier being the step of checking in that publishes the return.
 
 ## Surfaces
 
@@ -53,8 +53,8 @@ All of them call `Compute`, so they return the same nodes for the same seed; `cm
 
 - `gloss slice <curie|path>... [--context 0|1] [--follow rels] [--format text|json|md] [--repo root]...` prints the slice grouped by role, with each node's kind, tier, criticality, via path and drift findings, and a summary that lists the untested members.
 - MCP `slice_of` returns the same JSON. `gloss context --concept <curie>` renders the slice as a budgeted briefing for an agent working on a feature.
-- **Saved slices.** A view in `views.yaml` may give `slice: [pay:Withdrawal]` (CURIEs or globs) instead of `include:`; the projection shows the slice with context, recomputed on every build. `gloss impact` and MCP `impact_of` name the saved slices a change touches: a changed file whose artifacts or linked concepts are in the slice (sharing a boundary is not enough). `gloss diff` already reports per-view impact, so a PR that changes the slice is reported as changing that view.
-- **Viewer.** `gloss view` precomputes the slice (context on) of every concept and boundary into `views.json` as interned index lists (`slices`: `ids`, `roles`, `steps`, and per seed `[node, role, step...]`), so the page filters without a second implementation in JavaScript. "Slice on this" in the panel of a concept, boundary or artifact, or Alt+click on a node, shows only the slice; context is faded; a chip in the breadcrumb shows the active slice with a clear button; `#slice=pay:Withdrawal` in the URL makes it shareable. A folded member maps onto the node it folds into; an artifact slices on the concepts it links to. The slice combines with the filters and with Shift+click.
+- **Saved slices.** A view in `views.yaml` may give `slice: [lib:Cataloging]` (CURIEs or globs) instead of `include:`; the projection shows the slice with context, recomputed on every build. `gloss impact` and MCP `impact_of` name the saved slices a change touches: a changed file whose artifacts or linked concepts are in the slice (sharing a boundary is not enough). `gloss diff` already reports per-view impact, so a PR that changes the slice is reported as changing that view.
+- **Viewer.** `gloss view` precomputes the slice (context on) of every concept and boundary into `views.json` as interned index lists (`slices`: `ids`, `roles`, `steps`, and per seed `[node, role, step...]`), so the page filters without a second implementation in JavaScript. "Slice on this" in the panel of a concept, boundary or artifact, or Alt+click on a node, shows only the slice; context is faded; a chip in the breadcrumb shows the active slice with a clear button; `#slice=lib:Cataloging` in the URL makes it shareable. A folded member maps onto the node it folds into; an artifact slices on the concepts it links to. The slice combines with the filters and with Shift+click.
 
 ## Size limit
 

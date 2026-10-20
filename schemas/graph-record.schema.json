@@ -16,7 +16,7 @@
   ],
   "$defs": {
     "iri": {
-      "description": "A node identifier: an absolute IRI (https://onto.acme.dev/zoo/Horse), an artifact URN (urn:gloss:artifact:<path>[#<symbol>]), an actor URN (urn:gloss:actor:<kind>:<name>), or a placeholder URN (urn:gloss:new:<curie>, urn:gloss:glob:<pattern>, urn:gloss:unresolved:<text>).",
+      "description": "A node identifier: an absolute IRI (https://onto.acme.dev/library/Media), an artifact URN (urn:gloss:artifact:<path>[#<symbol>]), an actor URN (urn:gloss:actor:<kind>:<name>), or a placeholder URN (urn:gloss:new:<curie>, urn:gloss:glob:<pattern>, urn:gloss:unresolved:<text>).",
       "type": "string",
       "minLength": 1
     },
@@ -104,7 +104,7 @@
           "$ref": "#/$defs/iri"
         },
         "curie": {
-          "description": "CURIE alias of id when a prefix matches (impl:Horse, acme:horse-factory-svc, impl: for a namespace, human:claude for an actor).",
+          "description": "CURIE alias of id when a prefix matches (circ:CatalogIntake, acme:circulation-svc, circ: for a namespace, human:claude for an actor).",
           "type": "string"
         },
         "ns": {
@@ -289,7 +289,7 @@
           "$ref": "#/$defs/anchorScope"
         },
         "symbol": {
-          "description": "Declaration name, for example breed_stallion, Mare.foal, resource.aws_sqs_queue.capture, table.foals, Deployment/web.",
+          "description": "Declaration name, for example catalog_book, Book.isbn, resource.aws_dynamodb_table.loans, table.loans, Deployment/web.",
           "type": "string"
         },
         "kind": {
@@ -437,7 +437,7 @@
           }
         },
         "raw": {
-          "description": "The original target text as written (.Local, impl:NEW:X, pa:*).",
+          "description": "The original target text as written (.Local, circ:NEW:X, circ:*).",
           "type": "string"
         },
         "alias": {

@@ -1,0 +1,9 @@
+# glossmark.yaml  (repo root): the namespaces this repo owns and imports.
+owns:
+  lib:  { iri: https://onto.acme.dev/library/,     file: ontology/lib.gloss.yaml,  tier: core,           version: 1.0.0, owner: library-services }
+  circ: { iri: https://onto.acme.dev/circulation/, file: ontology/circ.gloss.yaml, tier: implementation, version: 0.3.0, owner: circulation-eng }
+prefixes:
+  acme: https://arch.acme.dev/boundaries/
+source-url: https://github.com/mckalvan/glossmark/blob/main/examples/library/circulation/{path}#L{line}
+policy:
+  soft-conf-threshold: 0.7

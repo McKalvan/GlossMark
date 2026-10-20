@@ -11,10 +11,10 @@ A gloss mark is one line, inside whatever comment syntax the file already uses.
 | --- | --- |
 | `?` | The link is a proposal nobody has accepted yet. Accepting is the one-character diff `@gloss?` → `@gloss` (`gloss accept`). |
 | `relation` | kebab-case, one of the inline relations: `implements`, `represents`, `presents`, `hosts`, `verifies`, `provisions`, `configures`, `deploys`, `documents`, `instructs`, `may-modify`, `publishes-value`, `produces`, `consumes`, `publishes`, `subscribes`. `tests` is an accepted alias of `verifies` and means the same: it is stored in the graph as `verifies`, with `"alias":"tests"` in the edge provenance; `gloss check` asks for `verifies` (GM240). |
-| `target` | A CURIE (`zoo:Mare`, `impl:HoofStep`), or `.Local` resolved against the enclosing manifest's `default-namespace`, or `ns:NEW:Name` to propose a concept that does not exist yet. `may-modify` targets may be globs (`pa:*`). |
+| `target` | A CURIE (`lib:Book`, `circ:MarcFieldMapper`), or `.Local` resolved against the enclosing manifest's `default-namespace`, or `ns:NEW:Name` to propose a concept that does not exist yet. `may-modify` targets may be globs (`circ:*`). |
 | `key=value` | Only `scope` (`file`, `symbol`, `block`, `line`, `range`), `conf` (0–1), `id`, `note`. Values with spaces are double-quoted. Nothing else goes inline; provenance lives in the ledger. |
 
-Targets may be in either tier. Use `impl:` for the mechanisms (handlers, pipelines, queues) that realize core processes; use a core concept directly when the artifact is the domain type (a `Mare` model class represents `zoo:Mare`).
+Targets may be in either tier. Use `circ:` for the mechanisms (handlers, pipelines, queues) that realize core processes; use a core concept directly when the artifact is the domain type (a `Book` model class represents `lib:Book`).
 
 ## Reference regex
 
@@ -26,9 +26,9 @@ Frozen by the design and shipped verbatim as `marker.ReferenceRegex`:
 
 The parser uses an extended form that agrees with the reference on every plain marker and additionally accepts:
 
-- the `NEW:` infix in a target (`impl:NEW:Gelding`), so a proposal of a new concept parses as one token;
+- the `NEW:` infix in a target (`circ:NEW:DamageCheck`), so a proposal of a new concept parses as one token;
 - `*` in targets, for `may-modify` globs;
-- double-quoted values (`note="castration step has no concept yet"`).
+- double-quoted values (`note="inspecting returned items has no concept yet"`).
 
 Any implementation in another language must pass the conformance corpus in `corpus/`.
 
@@ -38,8 +38,8 @@ Any implementation in another language must pass the conformance corpus in `corp
 - Inside a comment, text between a pair of backticks is quoted prose, so a comment can talk about `` `@gloss` `` or quote a whole marker without being one. In Markdown the body of a fenced code block (```` ``` ```` or `~~~`) is quoted as well. This is a scanner rule; the reference regex is unchanged.
 - Malformed markers are build warnings at `file:line:col` (codes `GM001`–`GM007`), never silent drops. Positions are physical columns.
 - Multi-line YAML-in-comment blocks are not supported; one marker, one line.
-- JSON has no comments: use a sidecar `foo.json.gloss` holding one marker per line, with JSON Pointers in `note=` and `scope=range` (`@gloss configures .DvdLoan scope=range note="/formats/DVD"`). A sidecar marker anchors to the file it annotates, never to the sidecar: a range anchors to the lines of the value its pointer names and fingerprints that value, and any other marker fingerprints the whole annotated file. A pointer that names nothing is a warning (GM123).
-- SPDX-style headers are accepted as sugar and parsed into the same form with `scope=file`: `Gloss-Implements: impl:X`, `Gloss-May-Modify: pa:*`.
+- JSON has no comments: use a sidecar `foo.json.gloss` holding one marker per line, with JSON Pointers in `note=` and `scope=range` (`@gloss configures .ReturnEventBus scope=range note="/bus"`). A sidecar marker anchors to the file it annotates, never to the sidecar: a range anchors to the lines of the value its pointer names and fingerprints that value, and any other marker fingerprints the whole annotated file. A pointer that names nothing is a warning (GM123).
+- SPDX-style headers are accepted as sugar and parsed into the same form with `scope=file`: `Gloss-Implements: circ:X`, `Gloss-May-Modify: circ:*`.
 - Generated and vendored paths are excluded by the manifest's `generated:` globs or `exclude:` in `glossmark.yaml`; tag the generator input instead.
 
 ## Anchoring
@@ -47,7 +47,7 @@ Any implementation in another language must pass the conformance corpus in `corp
 A marker binds, in order of precedence, to an explicit `scope=`, else to the next declaration (function, class, resource block, YAML document, Gherkin Feature, SQL `CREATE`, Markdown heading), skipping any decorator or annotation stack above it (`@app.route(...)`, `@dataclass`, `@Override`, `#[derive]`, multi-line arguments included, so the marker goes above the decorators where formatters leave it), else to the file when it sits in the header comment, else to the next block. Markers never contain code identifiers; the anchor is derived and stored three ways:
 
 1. path plus line range;
-2. a symbol string (`breed_stallion`, `HorseBuilder.AttachHoof`, `resource.aws_sqs_queue.capture`, `Deployment/horse-factory`, `table.foals`, `feature:Stallion production`) — a SCIP symbol once an indexer is joined;
+2. a symbol string (`catalog_book`, `HoldQueue.Fulfil`, `resource.aws_dynamodb_table.loans`, `Deployment/circulation`, `table.loans`, `feature:Checkout`) — a SCIP symbol once an indexer is joined;
 3. a content fingerprint of the normalized signature line (`sha256:` prefix), preceded by the decorator or annotation stack the detector skipped, so deleting `@requires_role(...)` stales the link like a signature change ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)).
 
 Go methods are always qualified by their receiver. In other languages a method keeps its bare name unless another marked declaration in the same file has the same name; then each is qualified by its enclosing classes (`InboundHandler.process`, `OutboundHandler.process`), and declarations that still share a name, such as overloads, take an ordinal in file order (`StringUtils.check`, `StringUtils.check#2`). A qualified symbol's fingerprint covers the qualified name, so identical signatures in two classes differ ([ADR 0008](adr/0008-same-named-declarations.md)).
@@ -57,37 +57,37 @@ A fingerprint change marks the link **stale** in the ledger until it is re-confi
 ## Examples across file types
 
 ```python
-# @gloss implements impl:StallionProduction
-def breed_stallion(sire: Horse, dam: Horse) -> Stallion: ...
+# @gloss implements circ:BookIntake
+def catalog_book(isbn: str, copies: int) -> Book: ...
 ```
 ```ts
-// @gloss? represents zoo:Mare conf=0.72
-export interface Mare { id: string; foalingDate?: Date }
+// @gloss? represents lib:Book conf=0.72
+export interface Book { isbn: string; dueOn?: Date }
 ```
 ```go
-// @gloss implements impl:HorseFactoryService scope=file
-package horsefactory
+// @gloss implements circ:CirculationService scope=file
+package circulation
 ```
 ```hcl
-# @gloss provisions impl:FoalRegistry
-resource "aws_dynamodb_table" "foals" { ... }
+# @gloss provisions circ:LoanStore
+resource "aws_dynamodb_table" "loans" { ... }
 ```
 ```yaml
-# @gloss deploys impl:HorseFactoryService
+# @gloss deploys circ:CirculationService
 apiVersion: apps/v1
 kind: Deployment
 ```
 ```markdown
-<!-- @gloss instructs impl:BreedingPlanner scope=file -->
-<!-- @gloss may-modify impl:Breeding*, zoo:Foal scope=file -->
+<!-- @gloss instructs circ:SubjectSuggester scope=file -->
+<!-- @gloss may-modify circ:Catalog*, circ:Subject*, lib:Book scope=file -->
 ```
 ```sql
--- @gloss represents zoo:Foal
-CREATE TABLE foals (id uuid PRIMARY KEY, dam_id uuid, sire_id uuid);
+-- @gloss represents lib:Loan
+CREATE TABLE loans (id uuid PRIMARY KEY, item_id uuid, patron_id uuid REFERENCES patrons, due_on date);
 ```
 ```gherkin
-# @gloss verifies impl:StallionProduction
-Feature: Stallion production
+# @gloss verifies lib:Checkout
+Feature: Checkout
 ```
 
 ## Diagnostics

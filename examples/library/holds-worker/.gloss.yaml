@@ -1,0 +1,8 @@
+# holds-worker/.gloss.yaml: a container of the library platform that lives in its own repo.
+boundary: acme:holds-worker
+level: container
+part-of: acme:library-platform
+realizes: [lib:HoldFulfillment, lib:PickupWindow]
+default-namespace: hw
+allowed: [lib:Hold, lib:Item, lib:HoldFulfillment, lib:ItemReturned, lib:HoldReady, lib:PickupWindow, hw:*]
+owner: holds-eng

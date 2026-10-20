@@ -1,0 +1,19 @@
+# ontology/views.yaml: declared projections over tier × zoom.
+views:
+  business:
+    doc: What the library sees. Implementation folds into what it realizes.
+    include: [lib:*]
+    collapse: { "circ:*": via realizes }      # circ nodes fold into what they realize
+    show-published: true
+    relations: [produces, consumes, constrains, publishes, is-a, realizes]
+    lift: range-lcs                            # {Book, DVD} shows as Media
+    zoom: system
+  engineering:
+    doc: Both tiers, two levels of MARC parsing, container zoom.
+    include: [lib:*, circ:*]
+    expand: { part-of: 2 }
+    zoom: container
+  loan-policy:
+    doc: A curated view (it names its concepts, so it opens expanded) of the loan period, what it constrains and the code behind it.
+    include: [lib:LoanPeriod, lib:Loan, circ:DefaultLoanPeriod]
+    zoom: code

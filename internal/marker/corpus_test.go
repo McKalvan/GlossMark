@@ -151,11 +151,11 @@ func summarize(found []Found) []string {
 
 func TestReferenceRegexAgreesOnPlainMarkers(t *testing.T) {
 	cases := []string{
-		"@gloss implements impl:StallionProduction",
-		"@gloss? represents zoo:Mare conf=0.72",
-		"@gloss implements impl:HorseFactoryService scope=file",
-		"@gloss produces zoo:Foal, zoo:FoalBorn",
-		"@gloss implements .AuthorizeHandler",
+		"@gloss implements circ:BookIntake",
+		"@gloss? represents lib:DVD conf=0.72",
+		"@gloss implements circ:CirculationService scope=file",
+		"@gloss produces lib:Book, lib:ItemReturned",
+		"@gloss implements .CheckoutHandler",
 	}
 	for _, c := range cases {
 		m, d := ParseLine(c, 1, 1)
@@ -166,10 +166,10 @@ func TestReferenceRegexAgreesOnPlainMarkers(t *testing.T) {
 }
 
 func TestIsNewTarget(t *testing.T) {
-	if !IsNewTarget("impl:NEW:Gelding") || IsNewTarget("impl:Gelding") || IsNewTarget(".NEW") {
+	if !IsNewTarget("circ:NEW:DamageCheck") || IsNewTarget("circ:DamageCheck") || IsNewTarget(".NEW") {
 		t.Fatal("IsNewTarget wrong")
 	}
-	if StripNew("impl:NEW:Gelding") != "impl:Gelding" {
+	if StripNew("circ:NEW:DamageCheck") != "circ:DamageCheck" {
 		t.Fatal("StripNew wrong")
 	}
 }

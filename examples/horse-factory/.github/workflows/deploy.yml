@@ -1,8 +1,0 @@
-# @gloss deploys impl:HorseFactoryService scope=file
-name: deploy
-on: [push]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo deploy

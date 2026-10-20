@@ -1,24 +1,24 @@
 """Markers above a decorator stack bind to the decorated declaration."""
 from dataclasses import dataclass
 
-# @gloss implements impl:FoalingPipeline
+# @gloss implements circ:ReturnPipeline
 @app.route(
-    "/foal",
+    "/return",
     methods=["POST"],  # a ')' in a comment does not close the call
 )
 @retry(times=3)
-def foal_endpoint():
+def return_endpoint():
     pass
 
 
-# @gloss implements impl:HoofStep
+# @gloss implements circ:MarcFieldMapper
 @dataclass(frozen=True)
-class Shoe:
+class Shelf:
     size: int
 
 
-# @gloss implements impl:TailQueue
+# @gloss implements circ:CoverImageCache
 @decorator(
     arg=1)
-def shoe():
+def shelve():
     pass

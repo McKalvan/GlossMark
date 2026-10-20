@@ -163,7 +163,7 @@ enums:
         description: An agent file's instructions concern a concept.
         comments: ["domain: artifact; range: concept, boundary; inline"]
       may-modify:
-        description: An agent's change remit. Targets may be globs (pa:*).
+        description: An agent's change remit. Targets may be globs (circ:*).
         comments: ["domain: artifact; range: concept, boundary; inline"]
       produces:
         description: Intended (concept) or actual (artifact) production; lifted to boundaries.
@@ -370,7 +370,7 @@ slots:
     description: A lifted edge's path from the linked concept to the object, one "relation CURIE" per hop.
     multivalued: true
   raw:
-    description: The original target text as written (.Local, impl:NEW:X, pa:*).
+    description: The original target text as written (.Local, circ:NEW:X, circ:*).
   alias:
     description: The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).
 

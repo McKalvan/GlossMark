@@ -52,7 +52,7 @@
           "pattern": "^[a-z][a-z0-9-]*$"
         },
         "targets": {
-          "description": "Target texts as written in the marker (.Local, zoo:Foal, impl:NEW:Gelding, pa:*).",
+          "description": "Target texts as written in the marker (.Local, lib:Book, circ:NEW:DamageCheck, circ:*).",
           "type": "array",
           "items": {
             "type": "string",

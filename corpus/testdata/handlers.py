@@ -1,15 +1,15 @@
 class InboundHandler:
-    # @gloss implements impl:Replenishment
+    # @gloss implements circ:Replenishment
     def process(self, msg):
         return msg
 
-    # @gloss implements impl:Receiving
+    # @gloss implements circ:Receiving
     def receive(self):
         pass
 
 
 class OutboundHandler:
-    # @gloss implements impl:WavePlanning
-    # @gloss verifies impl:WavePlanning
+    # @gloss implements circ:WavePlanning
+    # @gloss verifies circ:WavePlanning
     def process(self, msg):
         return msg

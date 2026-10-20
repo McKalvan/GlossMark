@@ -1,8 +1,8 @@
-# @gloss provisions impl:FoalRegistry
-resource "aws_dynamodb_table" "foals" {
-  name = "foals"
-  tags = { "gloss:concept" = "impl:FoalRegistry" } # optional runtime mirror, not a marker
+# @gloss provisions circ:LoanStore
+resource "aws_dynamodb_table" "loans" {
+  name = "loans"
+  tags = { "gloss:concept" = "circ:LoanStore" } # optional runtime mirror, not a marker
 }
 
-# @gloss provisions .CaptureQueue
-resource "aws_sqs_queue" "capture" { name = "capture-queue" }
+# @gloss provisions .ReturnQueue
+resource "aws_sqs_queue" "returns" { name = "return-queue" }

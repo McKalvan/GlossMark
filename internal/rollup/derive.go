@@ -135,7 +135,7 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 			}
 			// Infrastructure, configuration and deployment of a resource or a
 			// system-type realize it: a Terraform file that provisions the
-			// registry satisfies a manifest that declares realizes: [impl:FoalRegistry].
+			// registry satisfies a manifest that declares realizes: [circ:LoanStore].
 			for _, rel := range InfraRelations {
 				for _, e := range g.Out(a.ID, rel) {
 					on := g.Node(e.O)

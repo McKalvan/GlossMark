@@ -34,7 +34,7 @@ type Proposal struct {
 	Relation string  `json:"relation"`
 	Target   string  `json:"target"`
 	Conf     float64 `json:"conf"`
-	// Matched names the evidence: name-exact:Refund, doc:replenishment,
+	// Matched names the evidence: name-exact:Renewal, doc:replenishment,
 	// calls:doIt, data:tbl_rma, ...
 	Matched string `json:"matched"`
 	// Scope is file or block when one marker stands for a run of

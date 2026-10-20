@@ -1,7 +1,7 @@
 # @gloss implement
-# @gloss implements impl:X extra=1
-# @gloss implements impl:X scope=module
-# @gloss implements impl:X conf=1.5
-# @gloss implements impl:X trailing words here
-# @gloss implements impl:X scope=symbol
+# @gloss implements circ:X extra=1
+# @gloss implements circ:X scope=module
+# @gloss implements circ:X conf=1.5
+# @gloss implements circ:X trailing words here
+# @gloss implements circ:X scope=symbol
 def ok(): pass
