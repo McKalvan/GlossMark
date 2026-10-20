@@ -132,7 +132,58 @@ func TestDecoratorFingerprintMigrates(t *testing.T) {
 	}
 }
 
-// TestInternalCriticalUntested: an internal concept is left out of untested
+// TestRepeatedMarkerRemedy: GM131 suggests what spans the run. Above a run
+// of top-level functions that is scope=file, since scope=block covers one
+// function; above methods it is the enclosing class. Applying the advice
+// clears the warning and leaves one edge per concept (#76).
+func TestRepeatedMarkerRemedy(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Log: { kind: process, internal: true }\n  Queries: { kind: capability, internal: true }\n")
+	fns := "def zero():\n    return 0\n"
+	methods := "class Handlers:\n"
+	for _, f := range []string{"one", "two", "three"} {
+		fns += "\n\n# @gloss implements i:Log\n@route(\"/" + f + "\")\ndef " + f + "():\n    return 1\n"
+		methods += "    # @gloss implements i:Queries\n    def " + f + "(self):\n        return 1\n\n"
+	}
+	write("probe.py", fns)
+	write("methods.py", methods)
+	gm131 := func() map[string]string {
+		ws, g, _, _ := build(t, root)
+		out := map[string]string{}
+		for _, d := range check.Run(ws, g) {
+			if d.Code == "GM131" {
+				out[d.Path] = d.Msg
+			}
+		}
+		return out
+	}
+	got := gm131()
+	if m := got["probe.py"]; !strings.Contains(m, "one marker with scope=file at the top of the file") || !strings.Contains(m, "guards:") {
+		t.Errorf("top-level run: %q", m)
+	}
+	if m := got["methods.py"]; !strings.Contains(m, "one marker on the enclosing class or block") {
+		t.Errorf("method run: %q", m)
+	}
+	// Follow the advice.
+	write("probe.py", "# @gloss implements i:Log scope=file\n"+strings.ReplaceAll(fns, "# @gloss implements i:Log\n", ""))
+	write("methods.py", "# @gloss implements i:Queries scope=block\n"+strings.ReplaceAll(methods, "    # @gloss implements i:Queries\n", ""))
+	if got := gm131(); len(got) != 0 {
+		t.Errorf("after the remedy: %v", got)
+	}
+	_, g, _, _ := build(t, root)
+	edges := map[string]int{}
+	for _, e := range g.Edges() {
+		if e.P == "implements" && e.Source == "inline" {
+			edges[g.Curie(e.O)]++
+		}
+	}
+	if !reflect.DeepEqual(edges, map[string]int{"i:Log": 1, "i:Queries": 1}) {
+		t.Errorf("implements edges after the remedy = %v, want one per concept", edges)
+	}
+}
+
+// TestInternalCriticalUntested:an internal concept is left out of untested
 // and concept coverage unless its effective criticality is high or critical;
 // then losing its only test shows (#74).
 func TestInternalCriticalUntested(t *testing.T) {

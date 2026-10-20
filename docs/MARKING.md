@@ -19,7 +19,7 @@ Add `scope=file` when the whole file is about one concept and nothing inside it 
 
 ## One marker per public surface
 
-Mark the thing a reader would look for: the handler, the pipeline entry point, the model, the table, the test file. Do not mark every helper. Five consecutive helpers that each say `implements .AmountObfuscation` add five edges and no knowledge; `gloss check` reports any run of three or more (GM131) and suggests one marker with `scope=block` above it, or one on the public function that calls them.
+Mark the thing a reader would look for: the handler, the pipeline entry point, the model, the table, the test file. Do not mark every helper. Five consecutive helpers that each say `implements .AmountObfuscation` add five edges and no knowledge; `gloss check` reports any run of three or more (GM131) and suggests one marker that spans it: on the enclosing class for methods, `scope=file` for top-level functions (a `scope=block` marker covers only the next function), or one on the public function that calls them. Authentication, rate limits and other cross-cutting mechanisms on every handler belong in the ontology instead: `guards: [SubmitClaimHandler, ...]` on the mechanism's concept ([ADR 0015](adr/0015-guards.md)).
 
 Coverage counts concepts, not markers: an implementation concept is covered when at least one artifact links to it and at least one test verifies it (`gloss coverage`). Adding markers to raise the file percentage is the wrong lever; adding a test that `verifies` the concept is the right one.
 

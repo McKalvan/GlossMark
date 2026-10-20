@@ -103,7 +103,7 @@ Feature: Stallion production
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
-| GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them: one `scope=block` marker above the run says the same with one edge (two in a row is fine) |
+| GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them (two in a row is fine). The hint names what spans the run: for methods, one marker on the enclosing class or block; for top-level functions, where `scope=block` covers only the next one, one `scope=file` marker at the top of the file, one on the shared entry point, or, for a cross-cutting mechanism, `guards:` on its concept ([ADR 0015](adr/0015-guards.md)) |
 | GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
 | GM360 | a `value-from` names a file, line or symbol that does not exist |
