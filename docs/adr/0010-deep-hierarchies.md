@@ -19,6 +19,13 @@ The deep-hierarchies lab in glossmark-examples (a product taxonomy seven `is-a` 
 
 4. A concept is not an orphan when an `is-a` descendant is reached by any route that would make the descendant itself not an orphan: a direct link, a concept that realizes it, a part, or a deeper subtype. Before, only a direct link to a descendant counted, so `cyc:Lighting` was an orphan although `spk:LightListing`, which has code, realizes its subtype `cyc:FrontLight`, and the orphan list changed with unrelated `produces` markers. `orphan` now means "nothing below it is built".
 
+### Provenance names the whole chain (issue #89, F-DEEP-7)
+
+5. A lifted boundary edge keeps `via` as the list of CURIEs the derivation passed through, now all of them: the artifact, the concept it links, and every concept on the shortest path to the object. A new `steps` list spells the hops as `relation CURIE`. `via[1]` is still the linked concept, so readers of the old two-element form keep working.
+6. An inherited criticality carries `criticality-source`, the node at the end of the `criticality-from` chain that declares the level.
+7. `collapse: via realizes` folds a concept with no `realizes`, `published-as` or `part-of` where its `is-a` parent folds, so `spk:ShimanoXmlImporter` is folded into `cyc:CatalogueIngestion` with the `spk:Importer` that realizes it.
+8. `is-a` ancestors stay out of a boundary's derived set while the wholes above a part are in it. Implementing a step implements part of the whole; implementing a subtype does not implement the supertype in general. The asymmetry is deliberate and now visible in `steps`.
+
 ## Alternatives considered
 
 - **Admit the default namespace instead.** Rejected: `default-namespace: spk` admits every `spk:` concept, including unrelated ones, which is not "the implementation of what I declare".

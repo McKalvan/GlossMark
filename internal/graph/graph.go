@@ -64,6 +64,9 @@ type Node struct {
 	// it came from: "declared", or the CURIE it was inherited from.
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticality-from,omitempty"`
+	// CriticalitySource is the node that declares an inherited level: the
+	// end of the criticality-from chain. Empty when the level is declared.
+	CriticalitySource string `json:"criticality-source,omitempty"`
 	// CriticalityFloor: the boundary's level is a floor for its artifacts.
 	CriticalityFloor bool `json:"criticality-floor,omitempty"`
 	// Namespace attributes.
@@ -99,8 +102,14 @@ type Prov struct {
 	Sugar       bool     `json:"sugar,omitempty"`
 	// Rule names the rollup rule or inferrer that produced a derived edge.
 	Rule string `json:"rule,omitempty"`
-	// Via lists the CURIEs the derivation passed through.
+	// Via lists the CURIEs the derivation passed through: for a lifted
+	// boundary edge the artifact, the concept it links and every concept on
+	// the way to the object.
 	Via []string `json:"via,omitempty"`
+	// Steps spells out a lifted edge's path from the linked concept to the
+	// object, one "relation CURIE" per hop ("is-a spk:Importer",
+	// "realizes cyc:CatalogueIngestion").
+	Steps []string `json:"steps,omitempty"`
 	// Raw is the original target text (e.g. ".Local", "impl:NEW:X", "pa:*").
 	Raw string `json:"raw,omitempty"`
 	// Alias is the relation as written when the marker used an alias that
@@ -229,7 +238,7 @@ func (g *Graph) AddNode(n *Node) *Node {
 			ex.Owner = n.Owner
 		}
 		if ex.Criticality == "" {
-			ex.Criticality, ex.CriticalityFrom = n.Criticality, n.CriticalityFrom
+			ex.Criticality, ex.CriticalityFrom, ex.CriticalitySource = n.Criticality, n.CriticalityFrom, n.CriticalitySource
 		}
 		return ex
 	}

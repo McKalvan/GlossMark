@@ -8,6 +8,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/views"
 )
 
 // catalogue writes the deep-hierarchies lab workspace from the
@@ -159,6 +160,62 @@ func TestSupertypeReachedByRealization(t *testing.T) {
 	want := []string{"cyc:Cassette", "cyc:ElectronicFrontDerailleur", "cyc:FrontDerailleur", "cyc:ScanConfirm"}
 	if got := orphans(); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("orphans without produces = %v, want %v", got, want)
+	}
+}
+
+// view returns the projection of the named view, and its node by CURIE.
+func view(t *testing.T, ps []*views.Projection, name string) (*views.Projection, map[string]views.PNode) {
+	t.Helper()
+	for _, p := range ps {
+		if p.Name == name {
+			nodes := map[string]views.PNode{}
+			for _, n := range p.Nodes {
+				nodes[n.ID] = n
+			}
+			return p, nodes
+		}
+	}
+	t.Fatalf("no view %q", name)
+	return nil, nil
+}
+
+// TestDeepProvenance (#89): a derived fact names its whole chain. The via of
+// a lifted realizes lists every concept passed through and steps spells out
+// each hop; an inherited criticality names the concept that declared it;
+// collapse: via realizes folds is-a descendants of a realizer too.
+func TestDeepProvenance(t *testing.T) {
+	root, _ := catalogue(t)
+	ws, g, _, _ := build(t, root)
+	feeds, ci := g.NodeByCurie("spw:feeds"), g.NodeByCurie("cyc:CatalogueIngestion")
+	found := false
+	for _, e := range g.Out(feeds.ID, "realizes") {
+		if e.O != ci.ID || e.Prov == nil || len(e.Prov.Via) == 0 || !strings.HasSuffix(e.Prov.Via[0], "shimano_xml.py#parse_feed") {
+			continue
+		}
+		found = true
+		want := "spk:ShimanoXmlImporter,spk:XmlFeedImporter,spk:FeedImporter,spk:SupplierImporter,spk:Importer"
+		if got := strings.Join(e.Prov.Via[1:], ","); got != want {
+			t.Errorf("via = %v, want the artifact then %s", e.Prov.Via, want)
+		}
+		if got := strings.Join(e.Prov.Steps, ", "); got != "is-a spk:XmlFeedImporter, is-a spk:FeedImporter, is-a spk:SupplierImporter, is-a spk:Importer, realizes cyc:CatalogueIngestion" {
+			t.Errorf("steps = %s", got)
+		}
+	}
+	if !found {
+		t.Fatal("no spw:feeds realizes cyc:CatalogueIngestion edge from shimano_xml.py")
+	}
+	if n := g.NodeByCurie("cyc:HydraulicDiscBrake"); n.CriticalityFrom != "cyc:DiscBrake" || n.CriticalitySource != "cyc:BrakingComponent" {
+		t.Errorf("cyc:HydraulicDiscBrake criticality from %q source %q, want from cyc:DiscBrake, source cyc:BrakingComponent", n.CriticalityFrom, n.CriticalitySource)
+	}
+	if n := g.NodeByCurie("spk:ShimanoXmlImporter"); n.CriticalitySource != "spk:Importer" {
+		t.Errorf("spk:ShimanoXmlImporter criticality source %q, want spk:Importer", n.CriticalitySource)
+	}
+	if n := g.NodeByCurie("cyc:BrakingComponent"); n.CriticalitySource != "" {
+		t.Errorf("a declared level has no source, got %q", n.CriticalitySource)
+	}
+	_, biz := view(t, views.ProjectAll(g, ws.Views), "business")
+	if f := biz["cyc:CatalogueIngestion"].Folded; !has(f, "spk:ShimanoXmlImporter") || !has(f, "spk:CsvRowParser") {
+		t.Errorf("business fold of cyc:CatalogueIngestion = %v, want spk:ShimanoXmlImporter and spk:CsvRowParser", f)
 	}
 }
 

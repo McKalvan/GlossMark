@@ -245,6 +245,16 @@ func (p *projector) target(iri string, depth int) []string {
 				}
 			}
 		}
+		if len(ups) == 0 {
+			// A kind of a mechanism folds where the mechanism folds: it
+			// realizes what its is-a ancestor realizes, so every concept
+			// whose realizes closure reaches a core concept folds into it.
+			for _, e := range p.g.Out(iri, "is-a") {
+				if pn := p.g.Node(e.O); pn != nil && pn.NodeType == model.NodeConcept && e.Source != graph.SourceDerived {
+					ups = append(ups, e.O)
+				}
+			}
+		}
 		for _, u := range ups {
 			out = append(out, p.target(u, depth+1)...)
 		}
