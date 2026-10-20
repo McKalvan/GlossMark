@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -105,12 +106,35 @@ type Policy struct {
 	// Waivers are time-boxed exceptions for known gaps.
 	Waivers []Waiver `yaml:"waivers,omitempty" json:"waivers,omitempty"`
 	// CoverageFailUnder is the default for gloss coverage --fail-under
-	// (percent of implementation concepts with an artifact and a verifier).
-	CoverageFailUnder float64 `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
+	// (percent of implementation concepts with an artifact and a verifier),
+	// or "current" for the base's coverage (a ratchet).
+	CoverageFailUnder FailUnder `yaml:"coverage-fail-under,omitempty" json:"coverage-fail-under,omitempty"`
 	// CriticalityGates raises the gate of any change that touches a concept or
 	// boundary at or above a criticality level: level → AUTO | SOFT | HARD.
 	// Default: critical → HARD. See docs/GOVERNANCE.md.
 	CriticalityGates map[string]string `yaml:"criticality-gates,omitempty" json:"criticality-gates,omitempty"`
+}
+
+// FailUnder is a coverage threshold as written: a percentage, or "current".
+// It is validated when glossmark.yaml is read.
+type FailUnder string
+
+// UnmarshalYAML accepts a number or the word current.
+func (f *FailUnder) UnmarshalYAML(n *yaml.Node) error {
+	v := strings.TrimSpace(n.Value)
+	if n.Kind != yaml.ScalarNode {
+		return fmt.Errorf("line %d: coverage-fail-under: want a percentage or current", n.Line)
+	}
+	if strings.EqualFold(v, "current") {
+		*f = "current"
+		return nil
+	}
+	p, err := strconv.ParseFloat(v, 64)
+	if err != nil || p < 0 || p > 100 {
+		return fmt.Errorf("line %d: coverage-fail-under: %q is neither a percentage (0 to 100) nor current", n.Line, v)
+	}
+	*f = FailUnder(v)
+	return nil
 }
 
 // Waiver suppresses one finding until it expires.
@@ -128,7 +152,6 @@ func DefaultPolicy() *Policy {
 		// @gloss publishes-value gmi:DefaultSoftThreshold scope=line
 		SoftConfThreshold: 0.7,
 		HardPaths:         []string{"ontology/**", "**/.gloss.yaml", "glossmark.yaml"},
-		CoverageFailUnder: 0,
 		CriticalityGates:  map[string]string{"critical": "HARD"},
 	}
 }

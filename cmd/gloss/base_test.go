@@ -17,28 +17,12 @@ import (
 // tree's own files (#104), and impact reports it at all (#81), whether the
 // base graph is extracted from the tree or read from a committed graph.jsonl.
 func TestBaseSummary(t *testing.T) {
-	root := t.TempDir()
-	write := func(rel, content string) {
-		p := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(p), 0o755)
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	git := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
-		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
+	root, write, git := gitRepo(t)
 	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
 	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
 	write(".gloss.yaml", "boundary: o:b\nlevel: container\n")
 	write("a.py", "# @gloss implements z:Doing\ndef a(): pass\n")
 	write("b.py", "def b(): pass\n")
-	git("init", "-q")
 	git("add", ".")
 	git("commit", "-q", "-m", "base")
 	// Two unmarked files added after the base: base 1 of 2, head 1 of 4.
@@ -82,6 +66,57 @@ func TestBaseSummary(t *testing.T) {
 			t.Errorf("committed=%v: impact before %+v after %+v", committed, res.Impact.Before, res.Impact.After)
 		}
 	}
+}
+
+// TestCoveragePolicyRatchet: policy.coverage-fail-under: current in
+// glossmark.yaml loads, and gloss coverage applies the ratchet (#128).
+func TestCoveragePolicyRatchet(t *testing.T) {
+	root, write, git := gitRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\npolicy: { coverage-fail-under: current }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Other: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\nrealizes: [i:Doer, i:Other]\n")
+	write("a.py", "# @gloss implements .Doer\ndef a(): pass\n")
+	write("test_a.py", "# @gloss verifies .Doer\ndef test_a(): pass\n")
+	git("add", ".")
+	git("commit", "-q", "-m", "base")
+	args := []string{"--root", root, "--base", "HEAD"}
+	if code := cmdCheck([]string{"--root", root}); code != 0 {
+		t.Errorf("gloss check with coverage-fail-under: current exited %d", code)
+	}
+	// Unchanged: 1 of 2 at the base and at the head.
+	if code := cmdCoverage(args); code != 0 {
+		t.Errorf("coverage equal to the base's exited %d", code)
+	}
+	// A third untested concept: 1 of 3 is below the base's 1 of 2.
+	write("ontology/i.gloss.yaml", "concepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Other: { kind: process, realizes: z:Doing }\n  Third: { kind: process, realizes: z:Doing }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: i\nrealizes: [i:Doer, i:Other, i:Third]\n")
+	if code := cmdCoverage(args); code != 1 {
+		t.Errorf("coverage below the base's exited %d, want 1", code)
+	}
+}
+
+// gitRepo returns a fresh git repository and helpers to write files and run git in it.
+func gitRepo(t *testing.T) (string, func(rel, content string), func(args ...string)) {
+	t.Helper()
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	return root, write, git
 }
 
 // capture returns what f writes to stdout.

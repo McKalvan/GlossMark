@@ -88,9 +88,11 @@ func cmdCoverage(args []string) int {
 	rep := rollup.Compare(p.Graph, p.WS, opts)
 	m := rep.Metrics
 	threshold := -1.0
+	if *failUnder == "" {
+		*failUnder = string(pol.CoverageFailUnder)
+	}
 	switch strings.ToLower(*failUnder) {
 	case "":
-		threshold = pol.CoverageFailUnder
 	case "current":
 		bg, err := loadBaseGraph(p.WS, *base)
 		if err != nil {
