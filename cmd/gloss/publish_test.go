@@ -35,6 +35,7 @@ func publish(t *testing.T) string {
 
 // TestPublishPublishedAsOnce: published: { as: X } yields one published-as
 // entry, not the key plus the declared edge (issue #130).
+// @gloss verifies gmi:Publisher
 func TestPublishPublishedAsOnce(t *testing.T) {
 	out := publish(t)
 	b, err := os.ReadFile(filepath.Join(out, "shc", "ontology.jsonld"))
@@ -59,6 +60,7 @@ func TestPublishPublishedAsOnce(t *testing.T) {
 // the same concepts as ontology.jsonld (issue #129) and states its tier, so
 // an importer pointed at the directory enforces the published seam without
 // tier: on the import (issue #96).
+// @gloss verifies gmi:Publisher
 func TestPublishFiltersYAMLAndStatesTier(t *testing.T) {
 	out := publish(t)
 	ws := filepath.Dir(out)

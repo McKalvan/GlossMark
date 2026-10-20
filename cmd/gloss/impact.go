@@ -20,7 +20,7 @@ import (
 
 func init() {
 	register(command{"impact", "what a change touches: concepts, constraints, published seam, boundaries, tests and blast radius for changed files (or the given paths)", cmdImpact})
-	register(command{"context", "compact session-start briefing for an agent working in a directory (--dir); meant for a SessionStart hook", cmdContext})
+	register(command{"context", "compact session-start briefing for an agent working in a directory (--dir) or on a feature (--concept); meant for a SessionStart hook", cmdContext})
 	register(command{"hook", "gloss hook install: register the SessionStart hook in .claude/settings.json and the MCP server in .mcp.json", cmdHook})
 }
 
@@ -75,10 +75,11 @@ func cmdImpact(args []string) int {
 	if *format == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		enc.Encode(map[string]any{"files": touched, "impact": im})
+		enc.Encode(map[string]any{"files": touched, "impact": im, "slices": slicesTouched(p.Graph, p.WS, touched)})
 		return 0
 	}
 	fmt.Print(gate.RenderTouched(touched))
+	fmt.Print(renderSlicesTouched(slicesTouched(p.Graph, p.WS, touched)))
 	if im != nil {
 		fmt.Println()
 		fmt.Print(gate.RenderText(im))
@@ -104,12 +105,22 @@ func cmdContext(args []string) int {
 	max := fs.Int("max", 0, "maximum concepts to list (0: as many as the budget allows)")
 	budget := fs.Int("budget", 2000, "approximate token budget for the whole briefing (0: unlimited)")
 	changed := fs.Bool("changed", false, "open the briefing with what the uncommitted changes touch (gloss impact of the working tree)")
+	var concepts []string
+	fs.Func("concept", "brief on a feature instead of a directory: the slice of this concept, boundary or path (repeatable; see gloss slice)", func(s string) error { concepts = append(concepts, s); return nil })
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
+	}
+	if len(concepts) > 0 {
+		txt, err := conceptBriefing(p, concepts, *budget)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Print(txt)
+		return 0
 	}
 	d := *dir
 	if d == "" {
@@ -293,7 +304,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		}
 		fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(root, path))
 	}
-	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of\n", actor)
+	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of\n", actor)
 	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
 	return nil
 }

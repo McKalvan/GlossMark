@@ -230,6 +230,17 @@ func TestValueFromConfigKey(t *testing.T) {
 	if len(msgs) != 1 || !strings.Contains(msgs[0], "policies.claims-write.per_minute, policies.export.per_minute") {
 		t.Errorf("GM360 = %v, want one naming both candidates", msgs)
 	}
+	// Key paths work in each entry of a value-from list (ADR 0017).
+	write("config/limits.json", "{\n  \"claims\": { \"per_minute\": 30 }\n}\n")
+	write("ontology/i.gloss.yaml", strings.Replace(ont, "value-from: { path: config/ratelimit.yaml, symbol: policies.claims-write.per_minute }",
+		"value-from:\n      - { path: config/ratelimit.yaml, symbol: claims-write.per_minute }\n      - { path: config/limits.json, symbol: claims.per_minute }", 1))
+	ws, _ = load.Load(root)
+	res, _ = extract.Build(ws)
+	for _, d := range res.Diags {
+		if d.Code == "GM360" {
+			t.Errorf("value-from list: %s", d)
+		}
+	}
 }
 
 // TestImpactTestsVia: gloss impact counts a verifier of a concept that

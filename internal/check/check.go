@@ -67,6 +67,22 @@ func (c *checker) add(path string, line int, sev, code, msg string) {
 	c.out = append(c.out, d)
 }
 
+// declaredHolder returns the first boundary other than self whose manifest
+// declares holds for concept id, or "".
+func (c *checker) declaredHolder(id, self string) string {
+	var out []string
+	for _, e := range c.g.In(id, "holds") {
+		if e.Source == graph.SourceDeclared && e.S != self {
+			out = append(out, c.g.Curie(e.S))
+		}
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return ""
+	}
+	return out[0]
+}
+
 func (c *checker) prefixOf(curie string) string {
 	if i := strings.Index(curie, ":"); i > 0 {
 		return curie[:i]
@@ -534,6 +550,17 @@ func (c *checker) edges() {
 		if e.Source == graph.SourceInline && len(rel.RangeKinds) > 0 && on.NodeType == model.NodeConcept && on.Kind != "" && !contains(rel.RangeKinds, on.Kind) {
 			c.add(path, line, "warning", "GM221", fmt.Sprintf("%s usually targets a %s; %s is a %s", e.P, strings.Join(rel.RangeKinds, "/"), on.CURIE, on.Kind))
 		}
+		// Surfaces that hide a mechanism (ADR 0012): a shell hosts a whole
+		// system-type (or a page concept), and a page that edits a
+		// constraint's value configures it rather than presenting it.
+		if e.Source == graph.SourceInline && on.NodeType == model.NodeConcept && on.Kind != "" {
+			switch {
+			case e.P == "hosts" && on.Kind != "system-type" && len(c.g.Objects(on.ID, "presents"))+len(c.g.Objects(on.ID, "hosts")) == 0:
+				c.add(path, line, "warning", "GM223", fmt.Sprintf("hosts %s: %s is a %s, and hosts is for a shell around a whole system-type; if this code does the work, write implements, if it shows it, presents (hosts hides a missing mechanism from drift)", on.CURIE, on.CURIE, on.Kind))
+			case e.P == "presents" && on.Kind == "constraint":
+				c.add(path, line, "warning", "GM224", fmt.Sprintf("presents %s: %s is a constraint; a page that edits its value configures it (and its manifest declares configures:), code that enforces it implements it; a page that only shows it may stay presents", on.CURIE, on.CURIE))
+			}
+		}
 		// Deprecated targets.
 		if on.Deprecated {
 			msg := fmt.Sprintf("%s is deprecated", on.CURIE)
@@ -652,7 +679,15 @@ func (c *checker) manifests() {
 					continue
 				}
 				if allowed.Derived {
-					c.add(e.Prov.Path, e.Prov.Line, "warning", "GM503", fmt.Sprintf("%s %s is outside the allowed set derived from %s (HARD gate); declare the concept there, or write allowed: to widen it (gloss check --explain shows the set)", e.P, on.CURIE, m.Path))
+					msg := fmt.Sprintf("%s %s is outside the allowed set derived from %s (HARD gate); declare the concept there, or write allowed: to widen it (gloss check --explain shows the set)", e.P, on.CURIE, m.Path)
+					// An API or wire schema of data stored elsewhere presents it:
+					// represents would make this boundary hold it (ADR 0013).
+					if e.P == "represents" {
+						if holder := c.declaredHolder(on.ID, b.ID); holder != "" {
+							msg += fmt.Sprintf("; %s declares holds %s, so if this is an API or wire schema of data stored there, write presents %s instead", holder, on.CURIE, on.CURIE)
+						}
+					}
+					c.add(e.Prov.Path, e.Prov.Line, "warning", "GM503", msg)
 					continue
 				}
 				sev := "warning"

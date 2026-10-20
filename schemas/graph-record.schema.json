@@ -178,7 +178,7 @@
           "type": "boolean"
         },
         "value-from": {
-          "description": "path:line of the code a published value is bound to.",
+          "description": "path:line of the code a published value is bound to; several locations are joined with \", \" in path order, and live-value then joins their lines with \" | \".",
           "type": "string"
         },
         "live-value": {

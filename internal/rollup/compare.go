@@ -31,7 +31,7 @@ const (
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
-var ComparedRelations = []string{"realizes", "holds", "presents", "hosts", "produces", "consumes", "publishes", "subscribes"}
+var ComparedRelations = []string{"realizes", "holds", "presents", "hosts", "configures", "produces", "consumes", "publishes", "subscribes"}
 
 // Finding is one drift result.
 type Finding struct {
@@ -65,8 +65,9 @@ type Decision struct {
 }
 
 // Metrics are the CI numbers from the design. The headline is concept
-// coverage: implementation concepts that have at least one artifact and one
-// verifier. File coverage (files carrying an accepted link) is secondary,
+// coverage: implementation concepts, and core concepts code implements
+// directly, that have at least one artifact and one verifier (n/a when there
+// are none). File coverage (files carrying an accepted link) is secondary,
 // because one marker per helper raises it without adding knowledge.
 type Metrics struct {
 	ConceptsInScope    int     `json:"concepts_in_scope"`
@@ -170,6 +171,9 @@ type comparer struct {
 	r   *Report
 	// realizers maps a core concept to the concepts that realize it (lazy).
 	realizers map[string]map[string]bool
+	// undeclared marks the boundaries already reported for realizing
+	// concepts without declaring realizes under an inheriting parent.
+	undeclared map[string]bool
 }
 
 func (c *comparer) add(f Finding) {
@@ -209,7 +213,10 @@ func (c *comparer) boundaries() {
 					}
 				}
 			}
-			if len(declared) == 0 {
+			// An explicit empty list (realizes: []) is a claim of none: every
+			// derived edge is a violation. A relation not written is no claim.
+			none := c.manifestOf(b.CURIE).DeclaresNone(rel)
+			if len(declared) == 0 && !none {
 				continue // no claim, nothing to compare
 			}
 			derivedEdges := map[string][]*graph.Edge{}
@@ -221,6 +228,11 @@ func (c *comparer) boundaries() {
 			derived := sortedKeys(derivedEdges)
 			declared = uniq(declared)
 			consistent := true
+			var violations []Finding
+			// Under realizes: inherit, a concept realized only by nested
+			// boundaries that declare no realizes is theirs to report: one
+			// finding per such boundary, not one per concept at the parent.
+			fromUndeclared := map[string][]string{}
 			// Violations: derived not covered by any declared.
 			for _, d := range derived {
 				dn := c.g.Node(d)
@@ -242,6 +254,12 @@ func (c *comparer) boundaries() {
 				}
 				consistent = false
 				es := derivedEdges[d]
+				if len(inherited) > 0 {
+					if owner := c.undeclaredOwner(b.ID, es); owner != "" {
+						fromUndeclared[owner] = append(fromUndeclared[owner], d)
+						continue
+					}
+				}
 				proposed := true
 				var via []string
 				path, line := "", 0
@@ -259,13 +277,41 @@ func (c *comparer) boundaries() {
 				via = uniq(via)
 				lifted := c.lifted(rel, derived)
 				msg := fmt.Sprintf("%s %s %s but declares %s {%s}", b.CURIE, rel, c.g.Curie(d), rel, strings.Join(c.curies(declared), ", "))
-				if len(lifted) > 0 {
+				if len(declared) == 0 {
+					msg = fmt.Sprintf("%s %s %s, declared %s []: the manifest says this boundary %s nothing", b.CURIE, rel, c.g.Curie(d), rel, verb(rel))
+				}
+				if len(lifted) > 0 && len(declared) > 0 {
 					msg += fmt.Sprintf("; rollup: %s {%s} ⊄ declared", rel, strings.Join(lifted, ", "))
 				}
 				if proposed {
 					msg += " [proposed link]"
 				}
-				c.add(Finding{Kind: KindViolation, Severity: "error", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(d), Declared: c.curies(declared), Derived: c.curies(derived), Via: via, Proposed: proposed, Path: path, Line: line, Msg: msg})
+				violations = append(violations, Finding{Kind: KindViolation, Severity: "error", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(d), Declared: c.curies(declared), Derived: c.curies(derived), Via: via, Proposed: proposed, Path: path, Line: line, Msg: msg})
+			}
+			// The sets are printed once per boundary and relation: on the
+			// first violation in report order; the others name the concept.
+			sort.SliceStable(violations, func(i, j int) bool { return violations[i].Concept < violations[j].Concept })
+			for i, f := range violations {
+				if i > 0 {
+					f.Msg = fmt.Sprintf("%s %s %s, which its declared %s does not cover (sets on %s %s)", f.Boundary, rel, f.Concept, rel, f.Boundary, violations[0].Concept)
+					if f.Proposed {
+						f.Msg += " [proposed link]"
+					}
+				}
+				c.add(f)
+			}
+			for _, owner := range sortedKeys(fromUndeclared) {
+				if c.undeclared == nil {
+					c.undeclared = map[string]bool{}
+				}
+				if c.undeclared[owner] {
+					continue
+				}
+				c.undeclared[owner] = true
+				on := c.g.Node(owner)
+				concepts := c.curies(fromUndeclared[owner])
+				c.add(Finding{Kind: KindViolation, Severity: "error", Boundary: on.CURIE, Relation: rel, Derived: concepts, Path: on.File, Line: on.Line,
+					Msg: fmt.Sprintf("%s realizes %s but declares no realizes; %s inherits from it: declare them under realizes in %s: {%s}", on.CURIE, countNoun(len(concepts), "concept"), b.CURIE, on.File, strings.Join(concepts, ", "))})
 			}
 			// Gaps: declared not reached by any derived.
 			for _, s := range declared {
@@ -283,8 +329,11 @@ func (c *comparer) boundaries() {
 					continue
 				}
 				consistent = false
-				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line,
-					Msg: fmt.Sprintf("%s declares %s %s but nothing under it %s it: intended capability not implemented, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), verb(rel))})
+				msg := fmt.Sprintf("%s declares %s %s but nothing under it %s it: intended capability not implemented, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), verb(rel))
+				if other := c.reachedOtherwise(b.ID, rel, s); other != "" {
+					msg = fmt.Sprintf("%s declares %s %s but nothing under it %s it; its code %s it instead: declare %s, or change the marker", b.CURIE, rel, c.g.Curie(s), verb(rel), verb(other), other)
+				}
+				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line, Msg: msg})
 			}
 			if consistent {
 				lifted := c.lifted(rel, derived)
@@ -293,6 +342,54 @@ func (c *comparer) boundaries() {
 			}
 		}
 	}
+}
+
+// undeclaredOwner returns the boundary that alone accounts for derived
+// edges es at the inheriting boundary b: every edge comes from an artifact
+// whose own boundary is nested under b, declares no realizes and does not
+// inherit. It returns "" when any edge comes from b itself, from a boundary
+// that declares realizes, or from more than one boundary.
+func (c *comparer) undeclaredOwner(b string, es []*graph.Edge) string {
+	owner := ""
+	for _, e := range es {
+		if e.Prov == nil || len(e.Prov.Via) == 0 {
+			return ""
+		}
+		a := c.g.Node(graph.ArtifactPrefix + e.Prov.Via[0])
+		if a == nil || a.NodeType != model.NodeArtifact || a.Boundary == "" || a.Boundary == b {
+			return ""
+		}
+		ob := c.g.Node(a.Boundary)
+		if ob == nil {
+			return ""
+		}
+		m := c.manifestOf(ob.CURIE)
+		if m == nil || m.InheritsRealizes() || len(m.DeclaredSets()["realizes"]) > 0 {
+			return ""
+		}
+		if owner != "" && owner != a.Boundary {
+			return ""
+		}
+		owner = a.Boundary
+	}
+	return owner
+}
+
+// reachedOtherwise returns the first other compared relation through which
+// boundary b's code reaches declared concept s, or "": a manifest declaring
+// presents hp:Pricing over code that implements it gets a gap that says so.
+func (c *comparer) reachedOtherwise(b, rel, s string) string {
+	for _, other := range ComparedRelations {
+		if other == rel {
+			continue
+		}
+		for _, e := range c.g.Out(b, other) {
+			if e.Source == graph.SourceDerived && (Covers(c.g, s, e.O) || c.g.Subsumes(s, e.O)) {
+				return other
+			}
+		}
+	}
+	return ""
 }
 
 // wholeOfCovered reports whether derived concept d is only there because a
@@ -405,6 +502,8 @@ func verb(rel string) string {
 		return "presents"
 	case "hosts":
 		return "hosts"
+	case "configures":
+		return "configures"
 	}
 	return rel
 }
@@ -596,15 +695,23 @@ func (c *comparer) presentedOnly() {
 			continue
 		}
 		var by []string
-		// hosts is excluded: a shell hosting a whole system-type is expected to
-		// have no single implementation.
-		for _, rel := range []string{"presents"} {
+		rels := []string{"presents"}
+		// A shell hosting a whole system-type, or a page concept, is expected
+		// to have no single implementation; anything else hosted is a
+		// surface like a presented one (ADR 0012).
+		hosted := n.Kind != "system-type" && len(c.g.Objects(n.ID, "presents"))+len(c.g.Objects(n.ID, "hosts")) == 0
+		if hosted {
+			rels = append(rels, "hosts")
+		}
+		verbs := map[string]bool{}
+		for _, rel := range rels {
 			for _, e := range c.g.In(n.ID, rel) {
 				if e.Source == graph.SourceDerived {
 					continue
 				}
 				if s := c.g.Node(e.S); s != nil && s.NodeType != model.NodeBoundary {
 					by = append(by, c.g.Curie(e.S))
+					verbs[map[string]string{"presents": "presented", "hosts": "hosted"}[rel]] = true
 				}
 			}
 		}
@@ -612,8 +719,9 @@ func (c *comparer) presentedOnly() {
 			continue
 		}
 		by = uniq(by)
+		how := strings.Join(sortedKeys(verbs), " and ")
 		c.add(Finding{Kind: KindPresentedOnly, Severity: "warning", Concept: n.CURIE, Path: n.File, Line: n.Line, Via: by,
-			Msg: fmt.Sprintf("%s is presented (%s) but nothing implements it: a surface with no mechanism behind it", n.CURIE, strings.Join(by, ", "))})
+			Msg: fmt.Sprintf("%s is %s (%s) but nothing implements it: a surface with no mechanism behind it", n.CURIE, how, strings.Join(by, ", "))})
 	}
 }
 
@@ -676,7 +784,7 @@ func (c *comparer) implemented(id string, depth int) bool {
 	if depth > 8 {
 		return false
 	}
-	for _, e := range c.g.In(id, "implements") {
+	for _, e := range append(c.g.In(id, "implements"), c.g.In(id, "publishes-value")...) {
 		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
 			return true
 		}
@@ -755,7 +863,7 @@ func (c *comparer) realizersOf(core string) map[string]bool {
 
 // implementedIn reports whether an artifact in boundary b implements concept id.
 func (c *comparer) implementedIn(id, b string) bool {
-	for _, e := range c.g.In(id, "implements") {
+	for _, e := range append(c.g.In(id, "implements"), c.g.In(id, "publishes-value")...) {
 		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && a.Boundary == b {
 			return true
 		}
@@ -771,12 +879,15 @@ func (c *comparer) stale() {
 				continue
 			}
 			cur := strings.TrimPrefix(id, "value:")
-			live := ""
+			live, bound := "", e.Path
 			if n := c.g.NodeByCurie(cur); n != nil {
 				live = n.LiveValue
+				if n.ValueFrom != "" {
+					bound = n.ValueFrom
+				}
 			}
 			c.add(Finding{ID: KindValueDrift + ":" + cur, Kind: KindValueDrift, Severity: "error", Path: e.Path, Concept: cur,
-				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, e.Path, e.Live, live, cur)})
+				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, bound, e.Live, live, cur)})
 			continue
 		}
 		if e.Status != model.StatusStale {
@@ -856,9 +967,14 @@ func (c *comparer) metrics() {
 	}
 	// Concept coverage: owned implementation concepts (not deprecated, still
 	// proposed, or internal below high criticality) with an artifact and a
-	// verifier.
+	// verifier, and the owned core concepts code implements directly (a
+	// server-rendered page, a CLI, a BFF marked implements hp:X), which are
+	// mechanisms just the same (ADR 0013).
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Tier != model.TierImpl || InternalExempt(n) || n.Deprecated || n.Proposed {
+		if n.Imported || InternalExempt(n) || n.Deprecated || n.Proposed {
+			continue
+		}
+		if n.Tier != model.TierImpl && !c.implementedDirectly(n.ID) {
 			continue
 		}
 		m.ConceptsInScope++
@@ -886,6 +1002,26 @@ func (c *comparer) metrics() {
 	if m.InScopeFiles > 0 {
 		m.CoveragePct = 100 * float64(m.CoveredFiles) / float64(m.InScopeFiles)
 	}
+}
+
+// implementedDirectly reports whether an artifact's marker implements the
+// concept itself (not a test-path inference).
+func (c *comparer) implementedDirectly(id string) bool {
+	for _, e := range c.g.In(id, "implements") {
+		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && e.Source == graph.SourceInline {
+			return true
+		}
+	}
+	return false
+}
+
+// ConceptCoverage formats concept coverage for a report: the percentage, or
+// n/a when no concept is in scope, so an empty scope never reads as 0%.
+func (m Metrics) ConceptCoverage(format string) string {
+	if m.ConceptsInScope == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf(format, m.ConceptCoveragePct)
 }
 
 // WaiverDate is the layout of a waiver's expires: date.
@@ -1005,4 +1141,11 @@ func filterEmpty(xs []string) []string {
 		}
 	}
 	return out
+}
+
+func countNoun(n int, s string) string {
+	if n == 1 {
+		return "1 " + s
+	}
+	return fmt.Sprintf("%d %ss", n, s)
 }

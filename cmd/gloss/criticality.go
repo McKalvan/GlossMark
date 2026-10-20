@@ -33,7 +33,7 @@ func cmdCriticality(args []string) int {
 	}
 	sugg := rollup.SuggestCriticality(p.Graph)
 	if len(sugg) == 0 {
-		fmt.Fprintln(os.Stderr, "gloss criticality: nothing to suggest; every business constraint, published concept and security-verified concept is classified")
+		fmt.Fprintln(os.Stderr, "gloss criticality: 0 suggestions; every business constraint, published concept and security-verified concept is classified or inherits a declared level")
 		return 0
 	}
 	// Apply to scratch copies (or the files with --write) and show the diff.

@@ -17,6 +17,11 @@ import (
 // them to place concepts inside boundary boxes; criticality rolls up along them.
 var HousingRelations = []string{"realizes", "represents"}
 
+// RatingRelations are the boundary → concept relations a boundary without a
+// level of its own is rated by: what it houses, and what it configures (a
+// value editor carries the level of the rule it edits; ADR 0012).
+var RatingRelations = []string{"realizes", "represents", "configures"}
+
 // Criticality stamps every concept, boundary and artifact with its effective
 // governance level (see docs/GOVERNANCE.md). A declared level always wins.
 //
@@ -24,7 +29,9 @@ var HousingRelations = []string{"realizes", "represents"}
 //     is published as, else of the concept it is part of, else of its is-a
 //     ancestors.
 //   - A boundary without one takes the highest level of the concepts its code
-//     realizes or represents (declared or derived), else its parent's.
+//     realizes, represents or configures (declared or derived), else its
+//     parent's, unless it is a surface: a boundary that presents or hosts and
+//     is rated by nothing else stays unclassified (ADR 0012).
 //   - An artifact takes the highest level of the concepts it links to (not
 //     those it presents or hosts). A boundary's level is a floor for the
 //     artifacts beneath it only when its manifest sets criticality-floor: true.
@@ -81,7 +88,7 @@ func Criticality(g *graph.Graph) {
 	housed := func(b *graph.Node) (string, string) {
 		best := ""
 		var bestNode *graph.Node
-		for _, p := range HousingRelations {
+		for _, p := range RatingRelations {
 			for _, e := range g.Out(b.ID, p) {
 				o := g.Node(e.O)
 				if o == nil || o.NodeType != model.NodeConcept {
@@ -105,9 +112,11 @@ func Criticality(g *graph.Graph) {
 			b.Criticality, b.CriticalityFrom = lvl, from
 		}
 	}
-	// Parent fallback, walking up the part-of chain to the nearest classified ancestor.
+	// Parent fallback, walking up the part-of chain to the nearest classified
+	// ancestor. A surface takes no level from its neighbours: a BFF that only
+	// presents order placement is not as critical as the system around it.
 	for _, b := range bounds {
-		if b.Criticality != "" {
+		if b.Criticality != "" || surfaceOnly(g, b.ID) {
 			continue
 		}
 		for _, anc := range g.PartOfChain(b.ID) {
@@ -138,6 +147,22 @@ func Criticality(g *graph.Graph) {
 			a.Criticality, a.CriticalityFrom = best, bestNode.CURIE
 		}
 	}
+}
+
+// surfaceOnly reports whether boundary b presents or hosts something and
+// realizes, represents or configures nothing.
+func surfaceOnly(g *graph.Graph, b string) bool {
+	for _, p := range RatingRelations {
+		if len(g.Out(b, p)) > 0 {
+			return false
+		}
+	}
+	for _, p := range SurfaceRelations {
+		if len(g.Out(b, p)) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // CarriesCriticality reports whether an artifact takes the level of a concept
@@ -190,7 +215,8 @@ func better(lvl string, n *graph.Node, best string, bestNode *graph.Node) bool {
 }
 
 // Understated lists boundaries whose declared criticality is below that of a
-// concept their code realizes or represents: the governance drift signal.
+// concept their code realizes, represents or configures: the governance
+// drift signal.
 func Understated(g *graph.Graph) []Understatement {
 	var out []Understatement
 	seen := map[string]bool{}
@@ -198,7 +224,7 @@ func Understated(g *graph.Graph) []Understatement {
 		if b.CriticalityFrom != "declared" {
 			continue
 		}
-		for _, p := range HousingRelations {
+		for _, p := range RatingRelations {
 			for _, e := range g.Out(b.ID, p) {
 				o := g.Node(e.O)
 				if o == nil || o.NodeType != model.NodeConcept || seen[b.ID+"|"+o.ID] {
@@ -246,14 +272,30 @@ var securityTest = regexp.MustCompile(`(?i)(secur|auth|permission|access.?contro
 // concept crosses the seam into the business view, and a concept whose only
 // verifiers are security tests guards something sensitive. Each is high. Everything else stays unclassified; the
 // suggestion is a starting point a human edits, not a policy.
+//
+// A declared level is the review: a concept that has one, or inherits one
+// from a concept that declares it, is never suggested, so lowering a core
+// concept to medium on purpose sticks. An implementation concept that
+// realizes an unclassified core concept of this repository is not suggested
+// either; the suggestion goes to the core concept it realizes, from which
+// it would inherit.
 func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
-	var out []CriticalitySuggestion
-	for _, n := range g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Deprecated || n.CriticalityFrom == "declared" {
-			continue
+	reasons := map[string]string{}
+	var order []string
+	suggest := func(n *graph.Node, reason string) {
+		if _, ok := reasons[n.CURIE]; !ok {
+			order = append(order, n.CURIE)
+			reasons[n.CURIE] = reason
 		}
-		if model.CriticalityRank(n.Criticality) >= model.CriticalityRank("high") {
-			continue // already inherits high or above
+	}
+	unclassified := func(n *graph.Node) bool {
+		return n != nil && n.NodeType == model.NodeConcept && !n.Imported && !n.Deprecated && n.Criticality == ""
+	}
+	var deferred []*graph.Node
+	var deferredReason []string
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if !unclassified(n) {
+			continue // declared, inherited from a declaration, imported or deprecated
 		}
 		reason := ""
 		switch {
@@ -280,10 +322,41 @@ func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
 				reason = fmt.Sprintf("verified only by security tests (%d)", total)
 			}
 		}
-		if reason != "" {
-			out = append(out, CriticalitySuggestion{Concept: n.CURIE, Level: "high", Reason: reason})
+		if reason == "" {
+			continue
+		}
+		if n.Tier == model.TierImpl && len(coresOf(g, n, unclassified)) > 0 {
+			deferred, deferredReason = append(deferred, n), append(deferredReason, reason)
+			continue
+		}
+		suggest(n, reason)
+	}
+	for i, n := range deferred {
+		for _, core := range coresOf(g, n, unclassified) {
+			suggest(core, fmt.Sprintf("realized by %s (%s), which would inherit it", n.CURIE, deferredReason[i]))
 		}
 	}
+	var out []CriticalitySuggestion
+	for _, c := range order {
+		out = append(out, CriticalitySuggestion{Concept: c, Level: "high", Reason: reasons[c]})
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Concept < out[j].Concept })
+	return out
+}
+
+// coresOf returns the core concepts n realizes that pass keep: its declared
+// realizes targets, or, when it declares none, the core concepts its
+// realizes closure reaches (through is-a).
+func coresOf(g *graph.Graph, n *graph.Node, keep func(*graph.Node) bool) []*graph.Node {
+	var out []*graph.Node
+	targets := g.Objects(n.ID, "realizes")
+	if len(targets) == 0 {
+		targets = RealizesStar(g, n.ID)
+	}
+	for _, id := range targets {
+		if c := g.Node(id); keep(c) && c.Tier == model.TierCore {
+			out = append(out, c)
+		}
+	}
 	return out
 }

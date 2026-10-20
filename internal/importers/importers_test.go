@@ -202,3 +202,160 @@ func TestEnumValueDoesNotOverwriteGlossaryConcept(t *testing.T) {
 		t.Errorf("re-runs rewrote the file:\n%s", after)
 	}
 }
+
+// A brownfield staff glossary (issue #136): a section heading is not a
+// concept, kinds are read from the definition, and a deprecated status
+// names its successor.
+const libraryGlossary = `# Circulation glossary
+
+## Patron
+
+**Def.** A person registered to borrow items.
+
+## Checkout
+
+**Def.** Lending an item to a patron for a loan period.
+
+## Loan Period
+
+**Def.** How long a patron may keep an item before it is due.
+
+## Claims Returned
+
+**Def.** Recording a patron's claim that an overdue item was returned.
+
+## Fine Cap
+
+**Def.** A fine never exceeds the replacement cost of the item.
+
+## Retired terms
+
+Older names that still appear in reports, forms and the database.
+
+### Borrower
+
+**Def.** A patron, in the old circulation system.
+**Status:** deprecated in 2016 (CIRC-412); use Patron
+
+### Ticket
+
+**Def.** A fine slip.
+**Status:** retired; replaced by Fine Notice
+`
+
+func TestParseLibraryGlossary(t *testing.T) {
+	got := map[string]Entry{}
+	for _, e := range ParseGlossary(libraryGlossary) {
+		got[e.Name] = e
+	}
+	if _, ok := got["RetiredTerms"]; ok {
+		t.Error("a section heading above deeper headings became a concept")
+	}
+	for name, want := range map[string]string{"Patron": "entity:name", "Checkout": "process:definition", "LoanPeriod": "constraint:definition",
+		"ClaimsReturned": "process:definition", "FineCap": "constraint:definition", "Borrower": "entity:name"} {
+		if e := got[name]; e.Kind+":"+e.KindFrom != want {
+			t.Errorf("%s: %s:%s, want %s", name, e.Kind, e.KindFrom, want)
+		}
+	}
+	if b := got["Borrower"]; !b.Deprecated || b.ReplacedBy != "Patron" {
+		t.Errorf("Borrower = %+v", b)
+	}
+	if tk := got["Ticket"]; tk.ReplacedBy != "FineNotice" {
+		t.Errorf("Ticket = %+v", tk)
+	}
+	// A section heading with a Def. line is still a concept.
+	es := ParseGlossary("## Loan\n\n**Def.** Lending an item.\n\n### Renewal\n\n**Def.** Extending a loan.\n")
+	if len(es) != 2 {
+		t.Errorf("entries = %+v", es)
+	}
+	path := filepath.Join(t.TempDir(), "lib.gloss.yaml")
+	os.WriteFile(path, []byte("namespace: lib\nconcepts: {}\n"), 0o644)
+	r, err := Apply(path, ParseGlossary(libraryGlossary), "human:test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Kinds["Checkout"] != "process, guessed from the definition" {
+		t.Errorf("kinds = %v", r.Kinds)
+	}
+	if rb, _, _ := ontoedit.Get(path, "Borrower", "replaced-by"); rb != "Patron" {
+		t.Errorf("Borrower replaced-by = %q", rb)
+	}
+}
+
+// TestEnumValueNames (issue #136, L7): prefixed names every value with its enum.
+func TestEnumValueNames(t *testing.T) {
+	src := []byte("FineType: [OVERDUE, DAMAGE]\nLoanStatus: [ACTIVE, OVERDUE]\n")
+	names := func(prefixed bool) string {
+		es, err := ParseEnumsNamed(src, true, prefixed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, e := range es {
+			out = append(out, e.Name)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := names(false); got != "FineType,LoanStatus,Overdue,Damage,Active,LoanStatusOverdue" {
+		t.Errorf("bare = %s", got)
+	}
+	if got := names(true); got != "FineType,LoanStatus,FineTypeOverdue,FineTypeDamage,LoanStatusActive,LoanStatusOverdue" {
+		t.Errorf("prefixed = %s", got)
+	}
+}
+
+// TestImportRecord (issue #136, L8): with the import record, a doc improved
+// by hand survives a re-run until the source changes, and a concept deleted
+// after an import is not added again.
+func TestImportRecord(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "lib.gloss.yaml")
+	recPath := filepath.Join(dir, ".glossmark", RecordName)
+	os.WriteFile(path, []byte("namespace: lib\nconcepts: {}\n"), 0o644)
+	src := "PatronType: [ADULT, JUVENILE]\nLoanStatus: [ACTIVE]\n"
+	run := func(src string) *Result {
+		t.Helper()
+		rec, err := OpenRecord(recPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		es, _ := ParseEnums([]byte(src), false)
+		r, err := ApplyRecorded(path, "lib", es, "human:test", false, rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := rec.Save(); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	if r := run(src); len(r.Added) != 2 {
+		t.Fatalf("first import: %+v", r)
+	}
+	hand := "The kind of card a patron holds; sets the borrowing limit."
+	if err := ontoedit.SetField(path, "PatronType", "doc", ontoedit.Quote(hand)); err != nil {
+		t.Fatal(err)
+	}
+	if err := ontoedit.RemoveConcept(path, "LoanStatus"); err != nil {
+		t.Fatal(err)
+	}
+	r := run(src)
+	if len(r.Added)+len(r.Updated) != 0 || strings.Join(r.Kept, ",") != "PatronType" || len(r.Skipped) != 1 || !strings.Contains(r.Skipped[0], "LoanStatus: removed") {
+		t.Errorf("re-run: %+v", r)
+	}
+	if doc, _, _ := ontoedit.Get(path, "PatronType", "doc"); doc != hand {
+		t.Errorf("hand-edited doc replaced: %q", doc)
+	}
+	// The source changes: the doc follows it.
+	r = run("PatronType: [ADULT, JUVENILE, SENIOR]\nLoanStatus: [ACTIVE]\n")
+	if strings.Join(r.Updated, ",") != "PatronType" {
+		t.Errorf("source change: %+v", r)
+	}
+	if doc, _, _ := ontoedit.Get(path, "PatronType", "doc"); doc != "One of: ADULT, JUVENILE, SENIOR." {
+		t.Errorf("doc after a source change: %q", doc)
+	}
+	b, _ := os.ReadFile(recPath)
+	if !strings.HasPrefix(string(b), `{"type":"header","format":1`) || !strings.Contains(string(b), `"name":"PatronType"`) {
+		t.Errorf("record:\n%s", b)
+	}
+}

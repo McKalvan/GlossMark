@@ -65,6 +65,8 @@ type extractor struct {
 	g   *graph.Graph
 	res *Result
 	ids map[string]string // marker id → path:line of its first marker
+	// bindings are the lines each published value is bound to.
+	bindings map[*graph.Node][]valueBinding
 }
 
 func (ex *extractor) diag(path string, line int, sev, code, msg string) {
@@ -134,8 +136,10 @@ func (ex *extractor) ontologies() {
 				_, cur := ex.resolveRef(c.Published.As, ns)
 				n.Published = cur
 			}
-			if c.ValueFrom != nil && ex.ws.Owned[ns] {
-				ex.bindValue(n, c.ValueFrom, file, c.Line)
+			if ex.ws.Owned[ns] {
+				for i := range c.ValueFrom {
+					ex.bindValue(n, &c.ValueFrom[i], file, c.Line)
+				}
 			}
 			ex.g.AddNode(n)
 			add := func(p string, targets []string) {
@@ -407,8 +411,7 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.A
 		ex.g.AddEdge(e)
 		if mk.Relation == "publishes-value" {
 			if cn := ex.g.Node(oiri); cn != nil && cn.NodeType == model.NodeConcept && anchor.StartLine > 0 && anchor.StartLine <= len(lines) {
-				text := strings.TrimSpace(lines[anchor.StartLine-1])
-				cn.ValueFrom, cn.LiveValue, cn.ValueFP = fmt.Sprintf("%s:%d", target, anchor.StartLine), text, valueFP(text)
+				ex.addBinding(cn, fmt.Sprintf("%s:%d", target, anchor.StartLine), strings.TrimSpace(lines[anchor.StartLine-1]))
 			}
 		}
 		fm.Edges = append(fm.Edges, e)
@@ -492,8 +495,39 @@ func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, 
 		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from needs symbol: or line:", n.CURIE))
 		return
 	}
-	text := strings.TrimSpace(lines[at-1])
-	n.ValueFrom, n.LiveValue, n.ValueFP = fmt.Sprintf("%s:%d", rel, at), text, valueFP(text)
+	ex.addBinding(n, fmt.Sprintf("%s:%d", rel, at), strings.TrimSpace(lines[at-1]))
+}
+
+// valueBinding is one line of code a published value is bound to.
+type valueBinding struct{ at, text string }
+
+// addBinding records that concept n's published value is held at location
+// at (path:line). A value bound in several places (a value-from list, or
+// publishes-value markers in two languages) keeps every location: the node's
+// value-from lists them in order, live-value joins their lines with " | ",
+// and the fingerprint covers all of them, so a change to any one is drift.
+func (ex *extractor) addBinding(n *graph.Node, at, text string) {
+	if ex.bindings == nil {
+		ex.bindings = map[*graph.Node][]valueBinding{}
+	}
+	for _, b := range ex.bindings[n] {
+		if b.at == at {
+			return
+		}
+	}
+	bs := append(ex.bindings[n], valueBinding{at, text})
+	sort.Slice(bs, func(i, j int) bool { return bs[i].at < bs[j].at })
+	ex.bindings[n] = bs
+	var ats, texts []string
+	for _, b := range bs {
+		ats, texts = append(ats, b.at), append(texts, b.text)
+	}
+	n.ValueFrom, n.LiveValue = strings.Join(ats, ", "), strings.Join(texts, " | ")
+	if len(bs) == 1 {
+		n.ValueFP = valueFP(text)
+	} else {
+		n.ValueFP = valueFP(strings.Join(texts, "\n"))
+	}
 }
 
 func valueFP(text string) string {
