@@ -112,7 +112,9 @@ policy:
 ```
 
 Bookkeeping changes (an accepted proposal, a stale fingerprint) are reported
-with their level but never raised by it.
+with their level but never raised by it. A changed decorator stack on an
+unchanged signature (`decorators-changed`, ADR 0014) is not bookkeeping: a
+deleted `@requires_role` on a critical handler is HARD under the default.
 
 One classifier gates a link everywhere: `gloss diff`, `gloss impact`,
 `gloss context --changed`, `gloss status`, `gloss accept --policy` and the MCP

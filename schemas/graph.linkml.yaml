@@ -296,8 +296,11 @@ slots:
     minimum_value: 1
   signature:
     description: Whitespace-normalized signature line.
+  decorators:
+    description: Whitespace-normalized decorator or annotation stack between the marker and the declaration, in order; part of the fingerprint (ADR 0014).
+    multivalued: true
   fingerprint:
-    description: sha256:<hex prefix> of the signature (symbol/block/line) or of the whole file (file).
+    description: sha256:<hex prefix> of the decorator stack and signature (symbol/block), the line (line) or the whole file (file).
     pattern: "^sha256:[0-9a-f]+$"
 
   # Edge
@@ -481,6 +484,7 @@ classes:
       - start
       - end
       - signature
+      - decorators
       - fingerprint
     slot_usage:
       scope:

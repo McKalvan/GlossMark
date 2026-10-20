@@ -66,13 +66,13 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 ## Gates (`gloss diff`)
 
-- **AUTO**: fingerprint-only changes, accepted proposals, derived edges.
+- **AUTO**: fingerprint-only changes, accepted proposals, derived edges. A changed decorator stack on an unchanged signature (`decorators changed: removed @requires_role("approver")`, [ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)) is AUTO too, but `criticality-gates` raises it.
 - **SOFT**: a link to an existing concept, valid, inside the allowed set, at or above `soft-conf-threshold`, changing only engineering views.
 - **HARD**: a new or proposed concept, a link outside an agent's remit or the allowed set, any ontology or manifest edit, anything touching a published concept, a criticality the policy gates, a MAJOR version bump, a cross-repo import.
 
 ## Review states (the ledger)
 
-`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature changes (`gloss accept <id>` re-confirms it); any → `removed` when the marker disappears, except `rejected`, which stays the decision. A rejected `@gloss?` line still in the source adds no edge: it does not lift, gate, drift or count toward coverage, and `gloss suggest` does not propose the link again. A `value-from` baseline (`value:<curie>`) is `accepted` or `drifted` (the bound code changed, the published value did not) until `gloss accept --value`; it is never `stale`, so clearing stale links cannot hide a value drift. The ledger belongs in git.
+`proposed` → `accepted` (the `?` was removed, or `gloss accept`) or `rejected` (`gloss reject`); `accepted` → `stale` when the anchor's signature or decorator stack changes (`gloss accept <id>` re-confirms it); any → `removed` when the marker disappears, except `rejected`, which stays the decision. A rejected `@gloss?` line still in the source adds no edge: it does not lift, gate, drift or count toward coverage, and `gloss suggest` does not propose the link again. A `value-from` baseline (`value:<curie>`) is `accepted` or `drifted` (the bound code changed, the published value did not) until `gloss accept --value`; it is never `stale`, so clearing stale links cannot hide a value drift. The ledger belongs in git.
 
 ## Concept kinds
 

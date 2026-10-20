@@ -7,6 +7,7 @@ package gate
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -480,7 +481,7 @@ func declaredCriticality(n *graph.Node) string {
 // raises its gate to what the policy demands for that level.
 func (c *classifier) governance() {
 	bookkeeping := map[string]bool{"link-accepted": true, "concept-accepted": true, "stale": true, "fingerprint-changed": true}
-	linkKinds := map[string]bool{"link-added": true, "link-removed": true, "new-concept": true, "link-accepted": true, "stale": true, "fingerprint-changed": true}
+	linkKinds := map[string]bool{"link-added": true, "link-removed": true, "new-concept": true, "link-accepted": true, "stale": true, "fingerprint-changed": true, "decorators-changed": true}
 	touched := map[string]CriticalityTouch{}
 	for i := range c.im.Changes {
 		ch := &c.im.Changes[i]
@@ -770,8 +771,13 @@ func (c *classifier) links() {
 				c.add(Change{Gate: AUTO, Kind: "link-accepted", Glyph: "+", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, Actor: e.Prov.Actor, MarkerID: e.Prov.ID,
 					Reasons: []string{"proposal accepted (@gloss? → @gloss)"}, Msg: fmt.Sprintf("%s %s accepted", e.P, c.head.Curie(e.O))})
 			} else if b.Prov.Fingerprint != e.Prov.Fingerprint {
-				c.add(Change{Gate: AUTO, Kind: "fingerprint-changed", Glyph: "~", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, MarkerID: e.Prov.ID,
-					Reasons: []string{"fingerprint-only change on an unchanged concept"}, Msg: fmt.Sprintf("%s %s anchor signature changed", e.P, c.head.Curie(e.O))})
+				if removed, added, ok := decoratorChange(c.base.Node(b.S), c.head.Node(e.S)); ok {
+					c.add(Change{Gate: AUTO, Kind: "decorators-changed", Glyph: "~", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, MarkerID: e.Prov.ID,
+						Reasons: []string{"decorator stack changed on an unchanged signature"}, Msg: fmt.Sprintf("%s %s decorators changed%s", e.P, c.head.Curie(e.O), decoratorDetail(removed, added))})
+				} else {
+					c.add(Change{Gate: AUTO, Kind: "fingerprint-changed", Glyph: "~", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, MarkerID: e.Prov.ID,
+						Reasons: []string{"fingerprint-only change on an unchanged concept"}, Msg: fmt.Sprintf("%s %s anchor signature changed", e.P, c.head.Curie(e.O))})
+				}
 			}
 			continue
 		}
@@ -808,6 +814,44 @@ func (c *classifier) links() {
 		c.add(Change{Gate: gate, Kind: "link-removed", Glyph: "-", Relation: e.P, Subject: c.base.Curie(e.S), Object: c.base.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, MarkerID: e.Prov.ID, Reasons: why,
 			Msg: fmt.Sprintf("%s %s removed", e.P, c.base.Curie(e.O))})
 	}
+}
+
+// decoratorChange reports the decorators removed from and added to an
+// artifact whose signature line is unchanged (ADR 0014). ok is false when
+// the signature changed too, or neither artifact has an anchor.
+func decoratorChange(base, head *graph.Node) (removed, added []string, ok bool) {
+	if base == nil || head == nil || base.Anchor == nil || head.Anchor == nil || base.Anchor.Signature != head.Anchor.Signature {
+		return nil, nil, false
+	}
+	if slices.Equal(base.Anchor.Decorators, head.Anchor.Decorators) {
+		return nil, nil, false
+	}
+	in := func(s []string, x string) bool { return slices.Contains(s, x) }
+	for _, d := range base.Anchor.Decorators {
+		if !in(head.Anchor.Decorators, d) {
+			removed = append(removed, d)
+		}
+	}
+	for _, d := range head.Anchor.Decorators {
+		if !in(base.Anchor.Decorators, d) {
+			added = append(added, d)
+		}
+	}
+	return removed, added, true
+}
+
+func decoratorDetail(removed, added []string) string {
+	var parts []string
+	if len(removed) > 0 {
+		parts = append(parts, "removed "+strings.Join(removed, ", "))
+	}
+	if len(added) > 0 {
+		parts = append(parts, "added "+strings.Join(added, ", "))
+	}
+	if len(parts) == 0 {
+		return " (reordered)"
+	}
+	return ": " + strings.Join(parts, "; ")
 }
 
 func (c *classifier) stale() {

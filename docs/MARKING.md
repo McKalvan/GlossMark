@@ -38,7 +38,7 @@ def foal():
     ...
 ```
 
-The declaration detector skips the decorator stack, including multi-line arguments, and anchors to `foal`. Formatters leave the comment there. Inside a block comment or a docstring is fine as long as the text is a comment; a marker inside a string literal is ignored.
+The declaration detector skips the decorator stack, including multi-line arguments, and anchors to `foal`. The stack is part of the anchor's fingerprint, so deleting or changing a decorator such as `@requires_role("approver")` stales the link and shows in `gloss diff` as `decorators changed` ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)). Formatters leave the comment there. Inside a block comment or a docstring is fine as long as the text is a comment; a marker inside a string literal is ignored.
 
 ## Core or implementation target?
 
