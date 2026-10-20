@@ -633,6 +633,7 @@ type LedgerEntry struct {
 	ReviewedAt        string   `json:"reviewed_at,omitempty"`
 	AnchorFingerprint string   `json:"anchor_fingerprint,omitempty"`
 	Rationale         string   `json:"rationale,omitempty"`
+	ReviewReason      string   `json:"review_reason,omitempty"` // gloss reject --reason; Rationale is the author's note=
 	Gate              string   `json:"gate,omitempty"`
 	LastSeen          string   `json:"last_seen,omitempty"`
 	// Value and Live record, for a value binding (marker id value:<curie>),

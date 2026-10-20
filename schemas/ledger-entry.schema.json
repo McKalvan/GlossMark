@@ -106,6 +106,10 @@
           "description": "The marker's note= text or the sidecar key.",
           "type": "string"
         },
+        "review_reason": {
+          "description": "The reviewer's reason for a rejection (gloss reject --reason); kept apart from the marker's note=.",
+          "type": "string"
+        },
         "gate": {
           "description": "Gate class recorded for the entry (reserved; not currently written by the tooling).",
           "type": "string"

@@ -402,7 +402,8 @@ func (l *Ledger) Accept(id, reviewer, fingerprint string, now time.Time) bool {
 	return true
 }
 
-// Reject marks an entry rejected with a reason.
+// Reject marks an entry rejected with the reviewer's reason. The reason goes
+// to review_reason, so the marker's note= (the rationale) survives beside it.
 func (l *Ledger) Reject(id, reviewer, reason string, now time.Time) bool {
 	e, ok := l.Entries[id]
 	if !ok {
@@ -411,7 +412,7 @@ func (l *Ledger) Reject(id, reviewer, reason string, now time.Time) bool {
 	e.Status = model.StatusRejected
 	e.ReviewedBy, e.ReviewedAt = reviewer, now.Format(time.RFC3339)
 	if reason != "" {
-		e.Rationale = reason
+		e.ReviewReason = reason
 	}
 	l.dirty = true
 	return true
@@ -487,6 +488,7 @@ func (l *Ledger) ExportPROV() ([]byte, error) {
 		At        string `json:"prov:startedAtTime"`
 		Status    string `json:"gm:status"`
 		Reviewer  string `json:"gm:reviewedBy,omitempty"`
+		Reason    string `json:"gm:reviewReason,omitempty"`
 	}
 	var acts []activity
 	ids := make([]string, 0, len(l.Entries))
@@ -497,7 +499,7 @@ func (l *Ledger) ExportPROV() ([]byte, error) {
 	for _, id := range ids {
 		e := l.Entries[id]
 		acts = append(acts, activity{ID: "urn:gloss:activity:" + id, Type: "prov:Activity", Agent: "urn:gloss:actor:" + e.Actor,
-			Generated: "urn:gloss:marker:" + id, At: e.Created, Status: e.Status, Reviewer: e.ReviewedBy})
+			Generated: "urn:gloss:marker:" + id, At: e.Created, Status: e.Status, Reviewer: e.ReviewedBy, Reason: e.ReviewReason})
 	}
 	doc := map[string]any{
 		"@context": map[string]string{"prov": "http://www.w3.org/ns/prov#", "gm": graph.VocabIRI},

@@ -312,7 +312,7 @@ func rejectConcept(p *pipeline, c, rev, reason string, remove bool) error {
 		return err
 	}
 	if !p.Ledger.Reject("concept:"+c, rev, reason, time.Now().UTC()) {
-		p.Ledger.Entries["concept:"+c] = &model.LedgerEntry{MarkerID: "concept:" + c, Path: relOrAbs(p.WS.Root, path), Relation: "concept", Targets: []string{c}, Created: time.Now().UTC().Format(time.RFC3339), Status: model.StatusRejected, ReviewedBy: rev, Rationale: reason}
+		p.Ledger.Entries["concept:"+c] = &model.LedgerEntry{MarkerID: "concept:" + c, Path: relOrAbs(p.WS.Root, path), Relation: "concept", Targets: []string{c}, Created: time.Now().UTC().Format(time.RFC3339), Status: model.StatusRejected, ReviewedBy: rev, ReviewReason: reason}
 		p.Ledger.Touch()
 	}
 	if remove {

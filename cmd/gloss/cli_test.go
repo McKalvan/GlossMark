@@ -119,6 +119,33 @@ func TestProposeFromNewEntryFlags(t *testing.T) {
 	}
 }
 
+// Issue #119: the reviewer's reason survives a marker note= in its own field
+// and reaches the PROV export.
+func TestRejectReasonBesideNote(t *testing.T) {
+	root := workspace(t, "horse-factory")
+	sel := "services/horse-factory/breeding/engine.py:22" // the impl:NEW:Gelding proposal, which carries note=
+	if code, _ := gloss(t, "reject", sel, "--reason", "gelding is not a step we run", "--root", root); code != 0 {
+		t.Fatalf("reject: exit %d", code)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, ".glossmark", "ledger.jsonl"))
+	var row string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.Contains(l, "impl:NEW:Gelding") {
+			row = l
+		}
+	}
+	if !strings.Contains(row, `"review_reason":"gelding is not a step we run"`) || !strings.Contains(row, `"rationale":"castration step has no concept yet"`) {
+		t.Errorf("ledger row = %s", row)
+	}
+	prov := filepath.Join(root, "prov.jsonld")
+	if code, _ := gloss(t, "export", "--prov", prov, "--root", root); code != 0 {
+		t.Fatalf("export --prov: exit %d", code)
+	}
+	if b, _ := os.ReadFile(prov); !strings.Contains(string(b), `"gm:reviewReason": "gelding is not a step we run"`) {
+		t.Errorf("PROV export lacks the reason")
+	}
+}
+
 // addConcept inserts ontology lines right after the "concepts:" key.
 func addConcept(t *testing.T, root, file, lines string) {
 	t.Helper()
