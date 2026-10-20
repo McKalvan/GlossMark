@@ -22,6 +22,10 @@ type Anchor struct {
 	EndLine     int    `json:"end"`                   // last line (inclusive)
 	Signature   string `json:"signature,omitempty"`   // normalized signature line
 	Fingerprint string `json:"fingerprint,omitempty"` // sha256: prefix of signature (symbol/block) or of the whole file (file)
+	// Legacy is the file fingerprint as releases before ADR 0006 computed it
+	// (every line hashed), so a ledger written by one migrates instead of
+	// going stale.
+	Legacy string `json:"-"`
 }
 
 type declRule struct {
@@ -291,13 +295,32 @@ func yamlDocAnchor(lines []string, j int) (Anchor, bool) {
 	return Anchor{}, false
 }
 
+// fileAnchor fingerprints the whole file except what is metadata about it
+// (ADR 0006): lines that carry `@gloss`, so accepting a proposal (the ? edit)
+// or adding a marker does not stale the file's links, and the block that
+// gloss agents --write regenerates between gloss:begin and gloss:end.
 func fileAnchor(lines []string) Anchor {
-	h := sha256.New()
+	h, legacy := sha256.New(), sha256.New()
+	generated := false
 	for _, l := range lines {
-		h.Write([]byte(strings.TrimRight(l, " \t\r")))
+		l = strings.TrimRight(l, " \t\r")
+		legacy.Write([]byte(l))
+		legacy.Write([]byte{'\n'})
+		switch {
+		case strings.Contains(l, "gloss:begin"):
+			generated = true
+			continue
+		case strings.Contains(l, "gloss:end"):
+			generated = false
+			continue
+		case generated || strings.Contains(l, "@gloss"):
+			continue
+		}
+		h.Write([]byte(l))
 		h.Write([]byte{'\n'})
 	}
-	return Anchor{Scope: "file", StartLine: 1, EndLine: max(len(lines), 1), Fingerprint: "sha256:" + hex.EncodeToString(h.Sum(nil))[:16]}
+	return Anchor{Scope: "file", StartLine: 1, EndLine: max(len(lines), 1), Fingerprint: "sha256:" + hex.EncodeToString(h.Sum(nil))[:16],
+		Legacy: "sha256:" + hex.EncodeToString(legacy.Sum(nil))[:16]}
 }
 
 // blockEnd estimates the last line of the declaration starting at j.

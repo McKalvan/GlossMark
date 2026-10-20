@@ -146,6 +146,70 @@ func TestRejectReasonBesideNote(t *testing.T) {
 	}
 }
 
+// tiny writes a minimal two-tier workspace plus the given files.
+func tiny(t *testing.T, files map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	base := map[string]string{
+		"glossmark.yaml":        "owns:\n  z: { iri: https://x/z/, file: ontology/z.gloss.yaml, tier: core }\n  i: { iri: https://x/i/, file: ontology/i.gloss.yaml, tier: implementation }\n",
+		"ontology/z.gloss.yaml": "namespace: z\nconcepts:\n  Doing: { kind: process }\n",
+		"ontology/i.gloss.yaml": "namespace: i\nconcepts:\n  Doer: { kind: process, realizes: z:Doing }\n",
+		".gloss.yaml":           "boundary: o:b\nlevel: container\ndefault-namespace: i\n",
+	}
+	for k, v := range files {
+		base[k] = v
+	}
+	for rel, content := range base {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// ledgerStatus returns the ledger status of every row whose line contains sub.
+func ledgerStatus(t *testing.T, root, sub string) []string {
+	t.Helper()
+	b, _ := os.ReadFile(filepath.Join(root, ".glossmark", "ledger.jsonl"))
+	var out []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.Contains(l, sub) {
+			_, s, _ := strings.Cut(l, `"status":"`)
+			s, _, _ = strings.Cut(s, `"`)
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Issue #42: accepting a scope=file proposal does not stale it, and accept
+// re-confirms a link a real edit made stale.
+func TestAcceptFileScopeAndReconfirm(t *testing.T) {
+	root := tiny(t, map[string]string{"tests/test_doer.py": "# @gloss? verifies .Doer scope=file\ndef test_doer(): pass\n"})
+	gloss(t, "build", "-q", "--root", root)
+	if code, _ := gloss(t, "accept", "--all", "--root", root); code != 0 {
+		t.Fatalf("accept --all: exit %d", code)
+	}
+	gloss(t, "build", "-q", "--root", root)
+	if st := ledgerStatus(t, root, "verifies"); len(st) != 1 || st[0] != "accepted" {
+		t.Fatalf("after accept --all and build: %v, want [accepted]", st)
+	}
+	os.WriteFile(filepath.Join(root, "tests/test_doer.py"), []byte("# @gloss verifies .Doer scope=file\ndef test_doer(): assert True\n"), 0o644)
+	gloss(t, "build", "-q", "--root", root)
+	if st := ledgerStatus(t, root, "verifies"); len(st) != 1 || st[0] != "stale" {
+		t.Fatalf("after a real edit: %v, want [stale]", st)
+	}
+	if code, _ := gloss(t, "accept", "tests/test_doer.py:1", "--root", root); code != 0 {
+		t.Fatalf("accept on a stale link: exit %d", code)
+	}
+	gloss(t, "build", "-q", "--root", root)
+	if st := ledgerStatus(t, root, "verifies"); len(st) != 1 || st[0] != "accepted" {
+		t.Fatalf("after re-confirm: %v, want [accepted]", st)
+	}
+}
+
 // addConcept inserts ontology lines right after the "concepts:" key.
 func addConcept(t *testing.T, root, file, lines string) {
 	t.Helper()

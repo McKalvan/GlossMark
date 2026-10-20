@@ -228,7 +228,7 @@ func (l *Ledger) Save() error {
 //	? removed in source   → accepted, reviewed_by = actor
 //	? re-added            → proposed
 //	fingerprint changed   → stale (accepted links only)
-//	fingerprint restored  → stays stale until re-accepted
+//	fingerprint restored  → stays stale until re-accepted (gloss accept <id>)
 func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor string, now time.Time) {
 	ts := now.Format(time.RFC3339)
 	seen := map[string]bool{}
@@ -270,6 +270,9 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			case !fm.Marker.Proposed && e.Status == model.StatusProposed:
 				e.Status = model.StatusAccepted
 				e.ReviewedBy, e.ReviewedAt = actor, ts
+				e.AnchorFingerprint = fm.Anchor.Fingerprint
+			case !fm.Marker.Proposed && e.Status == model.StatusAccepted && e.AnchorFingerprint != "" && e.AnchorFingerprint == fm.Anchor.Legacy:
+				// Recorded before marker lines left the file fingerprint (ADR 0006).
 				e.AnchorFingerprint = fm.Anchor.Fingerprint
 			case !fm.Marker.Proposed && e.Status == model.StatusAccepted && e.AnchorFingerprint != "" && e.AnchorFingerprint != fm.Anchor.Fingerprint:
 				e.Status = model.StatusStale

@@ -164,6 +164,15 @@ func cmdAccept(args []string) int {
 	n := 0
 	for _, fm := range targets {
 		if !fm.Marker.Proposed {
+			// A stale link is re-confirmed: the current anchor becomes the baseline.
+			if e := p.Ledger.Entry(fm.ID); e != nil && e.Status == model.StatusStale {
+				fmt.Printf("%s %s:%d %s %s (stale)\n", map[bool]string{true: "would re-confirm", false: "re-confirm"}[*dry], fm.Path, fm.Marker.Line, fm.Marker.Relation, join(fm.Marker.Targets))
+				if !*dry {
+					p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
+					n++
+				}
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "%s:%d: %s is not proposed; nothing to accept\n", fm.Path, fm.Marker.Line, fm.ID)
 			continue
 		}

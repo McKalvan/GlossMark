@@ -37,7 +37,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | --- | --- |
 | *(none)* | the next declaration after the marker; the file when the marker sits in the header comment; else the next block |
 | `symbol` | the next declaration, and a warning (GM122) when none is detected |
-| `file` | the whole file (fingerprint of its content) |
+| `file` | the whole file (fingerprint of its content, leaving out lines that carry `@gloss` and the `gloss:begin`…`gloss:end` block, ADR 0006) |
 | `block` | the next indented or braced block, whatever it is |
 | `line` | the next line |
 | `range` | a range named in `note=` (sidecars for JSON use JSON Pointers) |

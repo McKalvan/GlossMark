@@ -50,7 +50,7 @@ A marker binds, in order of precedence, to an explicit `scope=`, else to the nex
 2. a symbol string (`breed_stallion`, `HorseBuilder.AttachHoof`, `resource.aws_sqs_queue.capture`, `Deployment/horse-factory`, `table.foals`, `feature:Stallion production`) — a SCIP symbol once an indexer is joined;
 3. a content fingerprint of the normalized signature line (`sha256:` prefix).
 
-A fingerprint change marks the link **stale** in the ledger until it is re-accepted. In Phase 1 the declaration detector is regex-based per language; tree-sitter replaces it in Phase 2 without changing the graph.
+A fingerprint change marks the link **stale** in the ledger until it is re-confirmed with `gloss accept <id>`. A `scope=file` fingerprint covers the whole file except lines that carry `@gloss` and the `gloss:begin`…`gloss:end` block, so accepting a proposal or adding a marker does not stale it (ADR 0006). In Phase 1 the declaration detector is regex-based per language; tree-sitter replaces it in Phase 2 without changing the graph.
 
 ## Examples across file types
 
