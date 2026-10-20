@@ -26,7 +26,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `realizes` | | ✓ | ✓ | implementation concept → core concept; a boundary → what its code stands for |
 | `holds` | | | ✓ | boundary holds an entity's data; derived from `represents` on entities |
 | `is-a` | | ✓ | | taxonomy; the closure is computed, a concept inherits `realizes` through it |
-| `part-of`, `has-part` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
+| `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
+| `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |
 | `published-as` | | ✓ | | written as `published: { as: core:X }`: the only seam between tiers and across repositories |
 | `constrains`, `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
 | `depends-on`, `calls`, `derived-from`, `same-as` | | | | derived or reserved (imports, SCIP, SSSOM) |
