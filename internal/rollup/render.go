@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var kindOrder = []string{KindViolation, KindValueDrift, KindOverdue, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested, KindOverlap}
+var kindOrder = []string{KindViolation, KindValueDrift, KindOverdue, KindOutOfRange, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested, KindDeprecatedUse, KindOverlap}
 
 var kindTitle = map[string]string{
 	KindViolation:     "Violations (boundary exceeds its declared capability)",
@@ -22,9 +22,11 @@ var kindTitle = map[string]string{
 	KindPresentedOnly: "Presented but not implemented (a surface with no mechanism)",
 	KindOverlap:       "Overlaps (one concept, several unrelated boundaries, no declared migration)",
 	KindOverdue:       "Overdue retirements (retire-by passed, code still there)",
+	KindOutOfRange:    "Imports out of range",
+	KindDeprecatedUse: "Deprecated in use",
 }
 
-var kindGlyph = map[string]string{KindOverlap: "⇉", KindOverdue: "⌛", KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
+var kindGlyph = map[string]string{KindOverlap: "⇉", KindOverdue: "⌛", KindOutOfRange: "✗", KindDeprecatedUse: "~", KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
 
 // RenderText renders the report for a terminal.
 func RenderText(r *Report, all bool) string {

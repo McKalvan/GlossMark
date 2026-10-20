@@ -138,7 +138,7 @@ gloss coverage --fail-under 80   # headline: implementation concepts with an art
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
-gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift
+gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift, import versions, deprecated concepts still in use
 gloss mcp                        # MCP server on stdio for agents
 gloss doctor                     # one line per setup check with its fix: gloss on PATH (and that it is GlossMark), GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
 ```

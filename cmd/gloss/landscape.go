@@ -74,6 +74,10 @@ func cmdLandscape(args []string) int {
 	g := union(graphs, ws)
 	rollup.Derive(g, ws.Vocab)
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy(), Now: time.Now()})
+	// Version state per repository, and who still uses deprecated concepts.
+	entries, imports, outOfRange := landscapeVersions(repos, wss)
+	rep.Findings = append(rep.Findings, outOfRange...)
+	rep.Findings = append(rep.Findings, rollup.DeprecatedUse(g)...)
 	// Context-map edges: implied depends-on (consumer → producer) between
 	// boundaries, except between a boundary and one that contains it.
 	var ctx []string
@@ -88,13 +92,24 @@ func cmdLandscape(args []string) int {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		enc.Encode(map[string]any{"repos": repos, "context_map": ctx, "drift": rep, "stats": g.Stats()})
+		enc.Encode(map[string]any{"repos": entries, "imports": imports, "context_map": ctx, "drift": rep, "stats": g.Stats()})
 	case "markdown":
 		fmt.Printf("### Landscape: %s\n\n", strings.Join(baseNames(repos), ", "))
 		if len(ctx) > 0 {
 			fmt.Print("**Context map** (consumer → producer)\n\n")
 			for _, c := range ctx {
 				fmt.Printf("- %s\n", c)
+			}
+			fmt.Println()
+		}
+		if len(imports) > 0 {
+			fmt.Print("**Imports**\n\n| importer | namespace | range | locked | resolved | status |\n| --- | --- | --- | --- | --- | --- |\n")
+			for _, r := range imports {
+				st := r.Status
+				if r.Detail != "" {
+					st += " (" + r.Detail + ")"
+				}
+				fmt.Printf("| %s | %s | %s | %s | %s | %s |\n", r.Repo, r.Namespace, orNoneV(r.Range), orNoneV(r.Locked), orNoneV(r.Resolved), st)
 			}
 			fmt.Println()
 		}
@@ -107,6 +122,7 @@ func cmdLandscape(args []string) int {
 				fmt.Printf("  %s\n", c)
 			}
 		}
+		fmt.Print(renderImports(imports))
 		fmt.Println()
 		fmt.Print(rollup.RenderText(rep, fs.all))
 	}

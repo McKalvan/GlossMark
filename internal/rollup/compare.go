@@ -1167,7 +1167,7 @@ func (c *comparer) waive() {
 }
 
 // FindingKinds are the kinds a finding can have, in the order --fail-on lists them.
-var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindOverdue, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindOverlap, KindStale, KindProposed, KindConsistent}
+var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindOverdue, KindOutOfRange, KindDeprecatedUse, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindOverlap, KindStale, KindProposed, KindConsistent}
 
 // ParseFailOn splits a --fail-on list and rejects unknown kinds, so a typo
 // cannot silently disable part of a gate. "none" (or nothing) fails on nothing.

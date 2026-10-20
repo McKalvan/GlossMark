@@ -74,6 +74,50 @@ func TestLandscapeReplacedBy(t *testing.T) {
 	}
 }
 
+// TestLandscapeVersions: the landscape lists each importer's range, lock and
+// resolved version, fails on out-of-range when asked, lists references to
+// deprecated concepts with their replacement, and puts versions in JSON (#109).
+func TestLandscapeVersions(t *testing.T) {
+	tmp := t.TempDir()
+	writeTree(t, tmp, map[string]string{
+		"meter-core/glossmark.yaml":           "owns:\n  grid: { iri: https://x.test/grid/, tier: core }\n",
+		"meter-core/ontology/grid.gloss.yaml": "version: 2.0.0\nconcepts:\n  Outage: { kind: event, deprecated: true, replaced-by: SupplyInterruption }\n  SupplyInterruption: { kind: event }\n",
+		"billing/glossmark.yaml":              "imports:\n  grid: { iri: https://x.test/grid/, version: \"~1.0.0\", source: ../meter-core/ontology/grid.gloss.yaml }\n",
+		"outage-map/glossmark.yaml":           "imports:\n  grid: { iri: https://x.test/grid/, version: \"^2.0\", source: ../meter-core/ontology/grid.gloss.yaml }\nprefixes:\n  om: https://x.test/om/\n",
+		"outage-map/.gloss.yaml":              "boundary: om:map\nlevel: system\nsubscribes: [grid:Outage]\n",
+		"outage-map/src/outages.ts":           "// @gloss subscribes grid:Outage\nexport function onOutage() {}\n",
+	})
+	args := []string{filepath.Join(tmp, "meter-core"), filepath.Join(tmp, "billing"), filepath.Join(tmp, "outage-map")}
+	out, _ := capture(t, append([]string{"landscape", "--fail-on", "none"}, args...)...)
+	for _, want := range []string{
+		"billing    grid      ~1.0.0 none   2.0.0    out of range (resolves 2.0.0, requires ~1.0.0)",
+		"outage-map grid      ^2.0   none   2.0.0    not locked",
+		"billing imports grid: ~1.0.0 but resolves 2.0.0",
+		"Deprecated in use",
+		"outage-map/src/outages.ts:1 subscribes grid:Outage: deprecated; replaced-by grid:SupplyInterruption",
+		"om:map subscribes grid:Outage: deprecated; replaced-by grid:SupplyInterruption",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("landscape lacks %q:\n%s", want, out)
+		}
+	}
+	// A pinned importer behind a newer release says what is available.
+	if out, code := capture(t, "lock", "--root", filepath.Join(tmp, "outage-map")); code != 0 {
+		t.Fatalf("lock: %s", out)
+	}
+	writeTree(t, tmp, map[string]string{"meter-core/ontology/grid.gloss.yaml": "version: 2.1.0\nconcepts:\n  Outage: { kind: event, deprecated: true, replaced-by: SupplyInterruption }\n  SupplyInterruption: { kind: event }\n  Meter: { kind: entity }\n"})
+	if out, _ := capture(t, append([]string{"landscape", "--fail-on", "none"}, args...)...); !strings.Contains(out, "outage-map grid      ^2.0   2.0.0  2.0.0    lock behind (2.1.0 available, inside ^2.0)") {
+		t.Errorf("lock behind not reported:\n%s", out)
+	}
+	if _, code := capture(t, append([]string{"landscape", "--fail-on", "out-of-range"}, args...)...); code != 1 {
+		t.Errorf("--fail-on out-of-range exited %d, want 1", code)
+	}
+	js, _ := capture(t, append([]string{"landscape", "--format", "json", "--fail-on", "none"}, args...)...)
+	if !strings.Contains(js, `"owns": {`) || !strings.Contains(js, `"grid": "2.1.0"`) || !strings.Contains(js, `"status": "out of range"`) {
+		t.Errorf("JSON lacks versions:\n%s", js)
+	}
+}
+
 // TestLandscapeContextMap: the context map reads consumer → producer, as its
 // header says, and draws no edge between a boundary and one that contains it,
 // by directory nesting or part-of (issue #103).
