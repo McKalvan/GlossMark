@@ -214,6 +214,62 @@ func TestHostsHidesNoMechanism(t *testing.T) {
 	}
 }
 
+// TestSurfacePlacementIgnoresCurieStyle: a surface whose code implements a
+// core concept directly ties with the engine that implements it through an
+// implementation concept, so the concept goes to their nearest common box
+// whichever CURIE style each used (#48); and a service that declares holds
+// for an entity keeps it when a gateway schema also represents it (#54).
+func TestSurfacePlacementIgnoresCurieStyle(t *testing.T) {
+	cases := []struct {
+		name, concept, want string
+		files               map[string]string
+	}{
+		{"direct core CURIE", "hp:OrderPlacement", "hpb:harbor", map[string]string{
+			"bff/.gloss.yaml":       "boundary: hpb:mobile-bff\nlevel: container\npart-of: hpb:harbor\nrealizes: [hp:OrderPlacement]\n",
+			"bff/routes/reorder.ts": "// @gloss implements hp:OrderPlacement\nexport function reorder() {}\n",
+		}},
+		{"implementation CURIE", "hp:OrderPlacement", "hpb:harbor", map[string]string{
+			"ontology/hpx.gloss.yaml": "concepts:\n  OrderIntake: { kind: process, realizes: hp:OrderPlacement }\n  CreditCheck: { kind: constraint, realizes: hp:CreditLimit }\n  MobileBff: { kind: system-type, realizes: hp:OrderPlacement }\n",
+			"bff/.gloss.yaml":         "boundary: hpb:mobile-bff\nlevel: container\npart-of: hpb:harbor\nrealizes: [hpx:MobileBff]\n",
+			"bff/routes/reorder.ts":   "// @gloss implements hpx:MobileBff\nexport function reorder() {}\n",
+		}},
+		{"admin implements the limit", "hp:CreditLimit", "hpb:harbor", map[string]string{
+			"admin/.gloss.yaml":         "boundary: hpb:admin\nlevel: container\npart-of: hpb:harbor\nrealizes: [hp:CreditLimit]\n",
+			"admin/CreditLimitPage.tsx": "// @gloss implements hp:CreditLimit\nexport function Page() {}\n",
+		}},
+		{"gateway schema represents the entity", "hp:Order", "hpb:orders", map[string]string{
+			"orders/.gloss.yaml":     "boundary: hpb:orders\nlevel: container\npart-of: hpb:harbor\nrealizes: [hpx:OrderIntake, hpx:CreditCheck]\nholds: [hp:Order]\ndefault-namespace: hpx\n",
+			"orders/models.py":       "# @gloss represents hp:Order\nclass Order: pass\n",
+			"gateway/.gloss.yaml":    "boundary: hpb:gateway\nlevel: container\npart-of: hpb:harbor\npresents: [hp:OrderPlacement]\n",
+			"gateway/schema.graphql": "# @gloss represents hp:Order scope=block\ntype Order { id: ID! }\n",
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root, write := harbor(t)
+			for rel, content := range tc.files {
+				write(rel, content)
+			}
+			if b := placementOf(t, root, tc.concept); b != tc.want {
+				t.Errorf("%s placed in %q, want %q", tc.concept, b, tc.want)
+			}
+			if !strings.Contains(tc.name, "gateway") {
+				return
+			}
+			ws, g, _, _ := build(t, root)
+			var gm503 []string
+			for _, d := range check.Run(ws, g) {
+				if d.Code == "GM503" {
+					gm503 = append(gm503, d.Msg)
+				}
+			}
+			if len(gm503) != 1 || !strings.Contains(gm503[0], "hpb:orders declares holds hp:Order") || !strings.Contains(gm503[0], "write presents hp:Order") {
+				t.Errorf("GM503 = %v, want one suggesting presents", gm503)
+			}
+		})
+	}
+}
+
 // TestConfiguresInManifests: a page that edits a constraint's value is
 // declared with configures:, which the derived allowed set admits (its test
 // too), lifts to the boundary as configures on any kind, is compared by

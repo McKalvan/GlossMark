@@ -65,6 +65,22 @@ func (c *checker) add(path string, line int, sev, code, msg string) {
 	c.out = append(c.out, d)
 }
 
+// declaredHolder returns the first boundary other than self whose manifest
+// declares holds for concept id, or "".
+func (c *checker) declaredHolder(id, self string) string {
+	var out []string
+	for _, e := range c.g.In(id, "holds") {
+		if e.Source == graph.SourceDeclared && e.S != self {
+			out = append(out, c.g.Curie(e.S))
+		}
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return ""
+	}
+	return out[0]
+}
+
 func (c *checker) prefixOf(curie string) string {
 	if i := strings.Index(curie, ":"); i > 0 {
 		return curie[:i]
@@ -636,7 +652,15 @@ func (c *checker) manifests() {
 					continue
 				}
 				if allowed.Derived {
-					c.add(e.Prov.Path, e.Prov.Line, "warning", "GM503", fmt.Sprintf("%s %s is outside the allowed set derived from %s (HARD gate); declare the concept there, or write allowed: to widen it (gloss check --explain shows the set)", e.P, on.CURIE, m.Path))
+					msg := fmt.Sprintf("%s %s is outside the allowed set derived from %s (HARD gate); declare the concept there, or write allowed: to widen it (gloss check --explain shows the set)", e.P, on.CURIE, m.Path)
+					// An API or wire schema of data stored elsewhere presents it:
+					// represents would make this boundary hold it (ADR 0013).
+					if e.P == "represents" {
+						if holder := c.declaredHolder(on.ID, b.ID); holder != "" {
+							msg += fmt.Sprintf("; %s declares holds %s, so if this is an API or wire schema of data stored there, write presents %s instead", holder, on.CURIE, on.CURIE)
+						}
+					}
+					c.add(e.Prov.Path, e.Prov.Line, "warning", "GM503", msg)
 					continue
 				}
 				sev := "warning"

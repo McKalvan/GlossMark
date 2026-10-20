@@ -48,6 +48,10 @@ Target the implementation concept when the artifact is a mechanism (`implements 
 
 A page, screen or report that *shows* a concept is not its mechanism. Model the page as `presents` (`pfi:FirePage: { kind: process, presents: pf:FirePlanning }`, or `// @gloss presents pf:FirePlanning` on the component) and the app frame as `hosts`. Neither makes the boundary realize the concept or inherit its criticality, so the engine's tests and the page's tests are counted apart ([ADR 0001](adr/0001-presents-and-hosts.md)).
 
+## API and wire schemas
+
+A GraphQL type, an OpenAPI schema or a protobuf message in a gateway looks like a data shape, but when the entity is stored elsewhere the gateway does not hold it. Mark it `presents hp:Order` (or leave it unmarked), not `represents`: `represents` makes the boundary `hold` the entity. Keep `represents` for the table, model or file where the data lives. `gloss check` says so when a `represents` falls outside the allowed set and another boundary declares `holds` for the concept (GM503).
+
 ## Value editors
 
 An admin page or a settings screen that edits a concept's value at runtime (a credit limit stored in a row, a feature threshold) is neither the mechanism that enforces it nor only a view of it. Mark it `@gloss configures hp:CreditLimit` and declare `configures: [hp:CreditLimit]` in its boundary's manifest. The constraint stays drawn in the engine's box, the page takes the constraint's criticality (a mistake on it changes the rule), its test may `verify` the concept without GM503, and `gloss drift` compares the declaration with the code ([ADR 0012](adr/0012-surfaces.md)). A value bound to a line of code is `value-from` or `publishes-value` instead.
