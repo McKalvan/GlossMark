@@ -1008,7 +1008,8 @@ func TestRedundantMarkersAndConceptCoverage(t *testing.T) {
 }
 
 // TestVerifiesCanonical: the test-path inferrer emits verifies, and an inline
-// tests marker is accepted with a prefer-verifies warning (GM240).
+// tests marker is accepted with a prefer-verifies warning (GM240) and stored
+// as verifies, with the written form in prov.alias.
 func TestVerifiesCanonical(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, content string) {
@@ -1026,6 +1027,21 @@ func TestVerifiesCanonical(t *testing.T) {
 	doer := g.NodeByCurie("i:Doer")
 	if len(g.In(doer.ID, "verifies")) == 0 || len(g.In(doer.ID, "tests")) != 0 {
 		t.Errorf("inferrer should emit verifies, not tests: verifies=%d tests=%d", len(g.In(doer.ID, "verifies")), len(g.In(doer.ID, "tests")))
+	}
+	other := g.NodeByCurie("i:Other")
+	var vs []*graph.Edge
+	for _, e := range g.In(other.ID, "verifies") {
+		if e.Source == graph.SourceInline {
+			vs = append(vs, e)
+		}
+	}
+	if len(vs) != 1 || vs[0].Prov.Alias != "tests" {
+		t.Errorf("tests marker should be stored as one inline verifies with alias tests: %+v", vs)
+	}
+	for _, e := range g.Edges() {
+		if e.P == "tests" {
+			t.Errorf("no edge should carry the alias as predicate: %s %s %s (%s)", e.S, e.P, e.O, e.Source)
+		}
 	}
 	var gm240 []int
 	for _, d := range check.Run(ws, g) {

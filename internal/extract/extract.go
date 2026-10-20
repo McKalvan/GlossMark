@@ -301,15 +301,21 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, lines []string,
 		id = MarkerID(target, mk.Relation, mk.Targets, anchor.Symbol, anchor.Scope)
 	}
 	fm := FoundMarker{Path: rel, Marker: mk, Anchor: anchor, ID: id}
+	// An alias is stored as its canonical relation, so a query for verifies
+	// finds every test link; the written form stays in prov.alias.
+	pred, alias := mk.Relation, ""
+	if pred == "tests" {
+		pred, alias = "verifies", "tests"
+	}
 	for _, t := range mk.Targets {
 		oiri, raw := ex.resolveTarget(t, m, rel, mk.Line)
 		prov := &graph.Prov{Path: rel, Line: mk.Line, Col: mk.Col, Scope: anchor.Scope, Symbol: anchor.Symbol, Fingerprint: anchor.Fingerprint,
-			Proposed: mk.Proposed, ID: id, Note: mk.Keys["note"], Sugar: mk.Sugar, Raw: raw}
+			Proposed: mk.Proposed, ID: id, Note: mk.Keys["note"], Sugar: mk.Sugar, Raw: raw, Alias: alias}
 		if c := mk.Conf(); c >= 0 {
 			cc := c
 			prov.Conf = &cc
 		}
-		e := &graph.Edge{S: aid, P: mk.Relation, O: oiri, Source: graph.SourceInline, Prov: prov}
+		e := &graph.Edge{S: aid, P: pred, O: oiri, Source: graph.SourceInline, Prov: prov}
 		ex.g.AddEdge(e)
 		if mk.Relation == "publishes-value" {
 			if cn := ex.g.Node(oiri); cn != nil && cn.NodeType == model.NodeConcept && anchor.StartLine > 0 && anchor.StartLine <= len(lines) {

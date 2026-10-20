@@ -98,6 +98,9 @@ type Prov struct {
 	Via []string `json:"via,omitempty"`
 	// Raw is the original target text (e.g. ".Local", "impl:NEW:X", "pa:*").
 	Raw string `json:"raw,omitempty"`
+	// Alias is the relation as written when the marker used an alias that
+	// was stored as its canonical relation ("tests", stored as verifies).
+	Alias string `json:"alias,omitempty"`
 }
 
 // Edge is one triple with provenance.

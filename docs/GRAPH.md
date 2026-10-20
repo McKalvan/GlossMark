@@ -22,7 +22,7 @@ Edge records (`"type":"edge"`), sorted by subject, predicate, object, source, pa
 {"type":"edge","s":"https://arch.acme.dev/boundaries/horse-factory-svc","p":"realizes","o":"https://onto.acme.dev/zoo/Breeding","source":"derived","prov":{"rule":"realization-lift","via":["services/horse-factory/breeding/engine.py#foal_male","impl:StallionProduction"]}}
 ```
 
-`source` is `declared` (ontology files, manifests), `inline` (markers), `inferred` (inferrers such as test paths) or `derived` (rollup rules). Proposals carry `"proposed":true`; confidences `"conf":0.72`.
+`source` is `declared` (ontology files, manifests), `inline` (markers), `inferred` (inferrers such as test paths) or `derived` (rollup rules). Proposals carry `"proposed":true`; confidences `"conf":0.72`. A marker written with the alias `tests` is stored as `verifies` with `"alias":"tests"` in its provenance, so every test link is a `verifies` edge.
 
 Special object IRIs: `urn:gloss:new:impl:NEW:Gelding` (a proposed new concept), `urn:gloss:glob:pa:*` (a `may-modify` glob), `urn:gloss:unresolved:x:Y` (unknown prefix).
 

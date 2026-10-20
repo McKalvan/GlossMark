@@ -412,6 +412,10 @@
         "raw": {
           "description": "The original target text as written (.Local, impl:NEW:X, pa:*).",
           "type": "string"
+        },
+        "alias": {
+          "description": "The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).",
+          "type": "string"
         }
       }
     }

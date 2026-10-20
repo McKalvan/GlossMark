@@ -287,7 +287,7 @@ func (c *checker) edges() {
 			if !rel.Inline {
 				c.add(path, line, "error", "GM201", fmt.Sprintf("relation %q cannot be used in an inline marker (ontology or manifest only)", e.P))
 			}
-			if e.P == "tests" {
+			if e.Prov != nil && e.Prov.Alias == "tests" {
 				c.add(path, line, "warning", "GM240", "prefer verifies: it is the one test relation; tests is an accepted alias that means the same")
 			}
 		case graph.SourceDeclared:

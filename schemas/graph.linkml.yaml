@@ -355,6 +355,8 @@ slots:
     multivalued: true
   raw:
     description: The original target text as written (.Local, impl:NEW:X, pa:*).
+  alias:
+    description: The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).
 
 # ---------------------------------------------------------------------------
 # Classes
@@ -510,3 +512,4 @@ classes:
       - rule
       - via
       - raw
+      - alias
