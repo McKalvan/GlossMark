@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -40,11 +41,15 @@ func cmdLandscape(args []string) int {
 		fmt.Fprintln(os.Stderr, "gloss landscape:", err)
 		return 2
 	}
-	ws, g, err := assembleLandscape(repos)
+	ws, g, wss, err := assembleLandscapeRepos(repos)
 	if err != nil {
 		return fail(err)
 	}
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy(), Now: time.Now()})
+	// Version state per repository, and who still uses deprecated concepts.
+	entries, imports, outOfRange := landscapeVersions(repos, wss)
+	rep.Findings = append(rep.Findings, outOfRange...)
+	rep.Findings = append(rep.Findings, rollup.DeprecatedUse(g)...)
 	// Context-map edges: implied depends-on (consumer → producer) between
 	// boundaries, except between a boundary and one that contains it.
 	var ctx []string
@@ -59,13 +64,24 @@ func cmdLandscape(args []string) int {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		enc.Encode(map[string]any{"repos": repos, "context_map": ctx, "drift": rep, "stats": g.Stats()})
+		enc.Encode(map[string]any{"repos": entries, "imports": imports, "context_map": ctx, "drift": rep, "stats": g.Stats()})
 	case "markdown":
 		fmt.Printf("### Landscape: %s\n\n", strings.Join(baseNames(repos), ", "))
 		if len(ctx) > 0 {
 			fmt.Print("**Context map** (consumer → producer)\n\n")
 			for _, c := range ctx {
 				fmt.Printf("- %s\n", c)
+			}
+			fmt.Println()
+		}
+		if len(imports) > 0 {
+			fmt.Print("**Imports**\n\n| importer | namespace | range | locked | resolved | status |\n| --- | --- | --- | --- | --- | --- |\n")
+			for _, r := range imports {
+				st := r.Status
+				if r.Detail != "" {
+					st += " (" + r.Detail + ")"
+				}
+				fmt.Printf("| %s | %s | %s | %s | %s | %s |\n", r.Repo, r.Namespace, orNoneV(r.Range), orNoneV(r.Locked), orNoneV(r.Resolved), st)
 			}
 			fmt.Println()
 		}
@@ -78,6 +94,7 @@ func cmdLandscape(args []string) int {
 				fmt.Printf("  %s\n", c)
 			}
 		}
+		fmt.Print(renderImports(imports))
 		fmt.Println()
 		fmt.Print(rollup.RenderText(rep, fs.all))
 	}
@@ -108,23 +125,34 @@ func cmdLandscape(args []string) int {
 // the repository name so they stay unique, unions the graphs by IRI and
 // re-derives the rollups on the union.
 func assembleLandscape(repos []string) (*load.Workspace, *graph.Graph, error) {
+	ws, g, _, err := assembleLandscapeRepos(repos)
+	return ws, g, err
+}
+
+// assembleLandscapeRepos is assembleLandscape that also returns each
+// repository's own workspace (for its imports, lock and versions).
+func assembleLandscapeRepos(repos []string) (*load.Workspace, *graph.Graph, []*load.Workspace, error) {
 	var wss []*load.Workspace
 	var graphs []*graph.Graph
 	for _, r := range repos {
 		p, err := buildGraph(r, false)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", r, err)
+			return nil, nil, nil, fmt.Errorf("%s: %w", r, err)
 		}
-		// Prefix artifact paths with the repo name so they stay unique in the union.
+		// Prefix every path with the repo name so it stays unique in the
+		// union and every finding says which repository it is in. An
+		// imported ontology's ../sibling/ path cleans to sibling/.
 		name := filepath.Base(p.WS.Root)
-		for _, n := range p.Graph.NodesOf(model.NodeArtifact) {
-			n.Path = name + "/" + n.Path
-			n.Label = name + "/" + n.Label
-			n.File = name + "/" + n.File
+		for _, n := range p.Graph.Nodes() {
+			if n.NodeType == model.NodeArtifact {
+				n.Path = name + "/" + n.Path
+				n.Label = name + "/" + n.Label
+			}
+			n.File = inRepo(name, n.File)
 		}
 		for _, e := range p.Graph.Edges() {
-			if e.Prov != nil && e.Prov.Path != "" && e.Source != graph.SourceDeclared {
-				e.Prov.Path = name + "/" + e.Prov.Path
+			if e.Prov != nil {
+				e.Prov.Path = inRepo(name, e.Prov.Path)
 			}
 		}
 		wss = append(wss, p.WS)
@@ -132,11 +160,11 @@ func assembleLandscape(repos []string) (*load.Workspace, *graph.Graph, error) {
 	}
 	ws, err := load.Merge(wss)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	g := union(graphs, ws)
 	rollup.Derive(g, ws.Vocab)
-	return ws, g, nil
+	return ws, g, wss, nil
 }
 
 type landscapeFlags struct {
@@ -156,7 +184,7 @@ func newLandscapeFlags() *landscapeFlags {
 	fs.StringVar(&f.format, "format", "text", "text | json | markdown")
 	fs.StringVar(&f.viewOut, "view", "", "write the landscape viewer HTML here")
 	fs.StringVar(&f.graphOut, "graph", "", "write the union graph.jsonl here")
-	fs.StringVar(&f.failOn, "fail-on", "violation,dangling", "finding kinds that fail the command")
+	fs.StringVar(&f.failOn, "fail-on", "violation,dangling,overdue", "finding kinds that fail the command")
 	fs.BoolVar(&f.all, "all", false, "also list consistent pairs")
 	f.fs = fs
 	return f
@@ -227,6 +255,14 @@ func boundaryAncestors(g *graph.Graph, ws *load.Workspace) map[string]map[string
 		out[id] = seen
 	}
 	return out
+}
+
+// inRepo prefixes a workspace-relative path with the repository name.
+func inRepo(name, p string) string {
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	return path.Clean(name + "/" + filepath.ToSlash(p))
 }
 
 func baseNames(paths []string) []string {

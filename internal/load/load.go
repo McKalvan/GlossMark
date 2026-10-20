@@ -197,8 +197,11 @@ func Load(root string) (*Workspace, error) {
 	}
 	// Views.
 	vpath := filepath.Join(root, filepath.FromSlash(cfg.Views))
-	if v, err := model.LoadViews(vpath); err == nil {
+	if v, unknown, err := model.LoadViews(vpath); err == nil {
 		ws.Views = v
+		for _, k := range unknown {
+			ws.Diags = append(ws.Diags, marker.Diagnostic{Path: filepath.ToSlash(cfg.Views), Line: k.Line, Severity: "error", Code: "GM118", Msg: fmt.Sprintf("unknown key %q in the views file; the rest of the file still applies", k.Key)})
+		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	} else {
