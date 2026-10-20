@@ -270,6 +270,38 @@ func TestSurfacePlacementIgnoresCurieStyle(t *testing.T) {
 	}
 }
 
+// TestSurfaceBoundaryLevel: a boundary whose code only presents takes no
+// level from its parent, so it is not rated above the same boundary when
+// its code implements the concept; a value editor is rated by what it
+// configures; a declared level still wins (#56, ADR 0012).
+func TestSurfaceBoundaryLevel(t *testing.T) {
+	level := func(files map[string]string, boundary string) string {
+		t.Helper()
+		root, write := harbor(t)
+		for rel, content := range files {
+			write(rel, content)
+		}
+		_, g, _, _ := build(t, root)
+		return g.NodeByCurie(boundary).Criticality
+	}
+	const bff = "boundary: hpb:mobile-bff\nlevel: container\npart-of: hpb:harbor\n"
+	implementing := level(map[string]string{"bff/.gloss.yaml": bff, "bff/reorder.ts": "// @gloss implements hp:OrderPlacement\nexport function r() {}\n"}, "hpb:mobile-bff")
+	presenting := level(map[string]string{"bff/.gloss.yaml": bff, "bff/reorder.ts": "// @gloss presents hp:OrderPlacement\nexport function r() {}\n"}, "hpb:mobile-bff")
+	if implementing != "high" || presenting != "" {
+		t.Errorf("mobile-bff level: implementing %q, presenting %q; want high and unclassified", implementing, presenting)
+	}
+	if l := level(map[string]string{"bff/.gloss.yaml": bff + "criticality: medium\n", "bff/reorder.ts": "// @gloss presents hp:OrderPlacement\nexport function r() {}\n"}, "hpb:mobile-bff"); l != "medium" {
+		t.Errorf("declared level = %q, want medium", l)
+	}
+	if l := level(map[string]string{"admin/.gloss.yaml": "boundary: hpb:admin\nlevel: container\npart-of: hpb:harbor\n", "admin/Page.tsx": "// @gloss configures hp:CreditLimit\nexport function P() {}\n"}, "hpb:admin"); l != "critical" {
+		t.Errorf("value editor level = %q, want critical", l)
+	}
+	// A boundary with no links at all still inherits its parent's level.
+	if l := level(map[string]string{"docs/.gloss.yaml": "boundary: hpb:docs\nlevel: container\npart-of: hpb:harbor\n", "docs/x.py": "x = 1\n"}, "hpb:docs"); l != "critical" {
+		t.Errorf("unlinked boundary level = %q, want the parent's critical", l)
+	}
+}
+
 // TestConfiguresInManifests: a page that edits a constraint's value is
 // declared with configures:, which the derived allowed set admits (its test
 // too), lifts to the boundary as configures on any kind, is compared by

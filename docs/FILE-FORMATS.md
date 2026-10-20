@@ -93,7 +93,7 @@ default-namespace: impl          # .Name in markers below resolves to impl:Name
 allowed: [zoo:Horse, zoo:Mare, impl:Breeding*, impl:Foal*]   # optional narrowing; see below
 generated: ["gen/**"]
 owner: horse-platform
-criticality: high                # optional; else the highest of what the code realizes, else the parent's
+criticality: high                # optional; else the highest of what the code realizes, represents or configures, else the parent's (not for a boundary that only presents or hosts)
 criticality-floor: true          # optional: the level above is a floor for every artifact beneath this directory
 deprecated: true                 # optional: the boundary is being retired
 replaced-by: acme:foaling-svc    # optional: the boundary taking over, here or in another repository

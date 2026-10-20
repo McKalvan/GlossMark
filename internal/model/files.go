@@ -454,7 +454,8 @@ type Manifest struct {
 	Owner            string     `yaml:"owner,omitempty" json:"owner,omitempty"`
 	// Criticality of the boundary (low | medium | high | critical). When unset
 	// it is the highest criticality of the concepts the boundary realizes,
-	// else its parent's. See docs/GOVERNANCE.md.
+	// represents or configures, else its parent's unless the boundary only
+	// presents or hosts. See docs/GOVERNANCE.md.
 	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
 	// CriticalityFloor makes the boundary's level a floor for every artifact
 	// beneath it, including nested boundaries. Without it an artifact takes
