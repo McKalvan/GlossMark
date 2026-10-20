@@ -58,7 +58,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | rogue | a `ns:NEW:Name` proposal: a decision request for the namespace owner | |
 | orphan | a concept no artifact links to | |
 | untested | an implemented concept nothing verifies (a test of a core concept counts for an implementation concept realizing it only when that is the sole realizer or the test sits in a boundary holding one of its artifacts) | |
-| presented-only | a page presents the concept but nothing implements it | |
+| presented-only | a page presents the concept, or a shell hosts a concept that is not a system-type, but nothing implements it | |
 | stale | an accepted link whose anchored signature changed since acceptance | |
 | proposed | an ontology entry with `proposed: true` awaiting `gloss accept --concept` | |
 
@@ -76,7 +76,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 ## Concept kinds
 
-`entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type`. `implements` expects a process, capability, system-type, event, constraint or measure; `represents` an entity, event, measure, resource or constraint; `publishes` and `subscribes` an event (GM221 warns otherwise).
+`entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type`. `implements` expects a process, capability, system-type, event, constraint or measure; `represents` an entity, event, measure, resource or constraint; `publishes` and `subscribes` an event (GM221 warns otherwise). `hosts` expects a system-type, or a page concept that itself presents or hosts something (GM223 warns otherwise: a CLI command or a router that does the work implements it), and `presents` on a constraint warns (GM224) because a page that edits a limit `configures` it ([ADR 0012](adr/0012-surfaces.md)).
 
 ## Files and version numbers
 

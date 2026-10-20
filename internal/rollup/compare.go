@@ -624,15 +624,23 @@ func (c *comparer) presentedOnly() {
 			continue
 		}
 		var by []string
-		// hosts is excluded: a shell hosting a whole system-type is expected to
-		// have no single implementation.
-		for _, rel := range []string{"presents"} {
+		rels := []string{"presents"}
+		// A shell hosting a whole system-type, or a page concept, is expected
+		// to have no single implementation; anything else hosted is a
+		// surface like a presented one (ADR 0012).
+		hosted := n.Kind != "system-type" && len(c.g.Objects(n.ID, "presents"))+len(c.g.Objects(n.ID, "hosts")) == 0
+		if hosted {
+			rels = append(rels, "hosts")
+		}
+		verbs := map[string]bool{}
+		for _, rel := range rels {
 			for _, e := range c.g.In(n.ID, rel) {
 				if e.Source == graph.SourceDerived {
 					continue
 				}
 				if s := c.g.Node(e.S); s != nil && s.NodeType != model.NodeBoundary {
 					by = append(by, c.g.Curie(e.S))
+					verbs[map[string]string{"presents": "presented", "hosts": "hosted"}[rel]] = true
 				}
 			}
 		}
@@ -640,8 +648,9 @@ func (c *comparer) presentedOnly() {
 			continue
 		}
 		by = uniq(by)
+		how := strings.Join(sortedKeys(verbs), " and ")
 		c.add(Finding{Kind: KindPresentedOnly, Severity: "warning", Concept: n.CURIE, Path: n.File, Line: n.Line, Via: by,
-			Msg: fmt.Sprintf("%s is presented (%s) but nothing implements it: a surface with no mechanism behind it", n.CURIE, strings.Join(by, ", "))})
+			Msg: fmt.Sprintf("%s is %s (%s) but nothing implements it: a surface with no mechanism behind it", n.CURIE, how, strings.Join(by, ", "))})
 	}
 }
 

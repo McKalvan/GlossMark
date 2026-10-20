@@ -30,7 +30,7 @@ Rules:
 1. Both lift to the boundary as themselves, through the implemented concept and directly from markers. Neither ever lifts to `realizes`, and `RealizesStar` does not follow them.
 2. A manifest may declare `presents:` and `hosts:`; `gloss drift` compares them like `realizes`.
 3. Criticality does not flow through them. A concept inherits only through `realizes`, `published-as`, `part-of` and `is-a`; an artifact takes no level from a concept it presents or hosts; a boundary is classified by what it realizes or represents.
-4. A concept something `presents` but nothing `implements` is a new drift finding, `presented-only`: a surface with no mechanism behind it. `hosts` is excluded, because a shell hosting a whole system-type is expected to have no single implementation.
+4. A concept something `presents` but nothing `implements` is a new drift finding, `presented-only`: a surface with no mechanism behind it. `hosts` is excluded, because a shell hosting a whole system-type is expected to have no single implementation. ([ADR 0012](0012-surfaces.md) narrows the exclusion to system-types and page concepts.)
 5. An implementation concept that `presents` or `hosts` a core concept satisfies GM320 like one that realizes it.
 6. View containment uses `realizes` and `represents` only, so a concept is drawn inside the boundary that computes it, not every boundary that shows it.
 

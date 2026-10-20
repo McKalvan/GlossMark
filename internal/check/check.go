@@ -507,6 +507,17 @@ func (c *checker) edges() {
 		if e.Source == graph.SourceInline && len(rel.RangeKinds) > 0 && on.NodeType == model.NodeConcept && on.Kind != "" && !contains(rel.RangeKinds, on.Kind) {
 			c.add(path, line, "warning", "GM221", fmt.Sprintf("%s usually targets a %s; %s is a %s", e.P, strings.Join(rel.RangeKinds, "/"), on.CURIE, on.Kind))
 		}
+		// Surfaces that hide a mechanism (ADR 0012): a shell hosts a whole
+		// system-type (or a page concept), and a page that edits a
+		// constraint's value configures it rather than presenting it.
+		if e.Source == graph.SourceInline && on.NodeType == model.NodeConcept && on.Kind != "" {
+			switch {
+			case e.P == "hosts" && on.Kind != "system-type" && len(c.g.Objects(on.ID, "presents"))+len(c.g.Objects(on.ID, "hosts")) == 0:
+				c.add(path, line, "warning", "GM223", fmt.Sprintf("hosts %s: %s is a %s, and hosts is for a shell around a whole system-type; if this code does the work, write implements, if it shows it, presents (hosts hides a missing mechanism from drift)", on.CURIE, on.CURIE, on.Kind))
+			case e.P == "presents" && on.Kind == "constraint":
+				c.add(path, line, "warning", "GM224", fmt.Sprintf("presents %s: %s is a constraint; a page that edits its value configures it (and its manifest declares configures:), code that enforces it implements it; a page that only shows it may stay presents", on.CURIE, on.CURIE))
+			}
+		}
 		// Deprecated targets.
 		if on.Deprecated {
 			msg := fmt.Sprintf("%s is deprecated", on.CURIE)

@@ -164,6 +164,56 @@ func TestDeclaredEmptyList(t *testing.T) {
 	}
 }
 
+// TestHostsHidesNoMechanism: hosts on a process warns in check (GM223) and
+// is presented-only in drift when nothing implements it; hosts on a
+// system-type or a page concept does neither; presents on a constraint
+// suggests configures (GM224) (#50, ADR 0012).
+func TestHostsHidesNoMechanism(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  hp: { iri: https://x/hp/, tier: core }\n  hpx: { iri: https://x/hpx/, tier: implementation }\n")
+	write("ontology/hp.gloss.yaml", "concepts:\n"+
+		"  PeriodClose: { kind: process, criticality: critical }\n"+
+		"  Finance: { kind: system-type }\n"+
+		"  CreditLimit: { kind: constraint }\n"+
+		"  Pricing: { kind: process }\n")
+	write("ontology/hpx.gloss.yaml", "concepts:\n  QuotePage: { kind: process, presents: hp:Pricing }\n")
+	write("tools/hpctl/.gloss.yaml", "boundary: hpb:hpctl\nlevel: container\nhosts: [hp:PeriodClose]\n")
+	write("tools/hpctl/cli.py", "# @gloss hosts hp:Finance\nimport click\n")
+	write("tools/hpctl/shell.py", "# @gloss hosts hpx:QuotePage\nimport click\n")
+	write("tools/hpctl/close_period.py", "import click\n\n\n# @gloss hosts hp:PeriodClose\ndef close_period(): pass\n")
+	write("tools/hpctl/limits.py", "# @gloss presents hp:CreditLimit\ndef show(): pass\n")
+	ws, g, _, lg := build(t, root)
+	codes := map[string][]string{}
+	for _, d := range check.Run(ws, g) {
+		codes[d.Code] = append(codes[d.Code], d.String())
+	}
+	if w := codes["GM223"]; len(w) != 1 || !strings.HasPrefix(w[0], "tools/hpctl/close_period.py:4:") {
+		t.Errorf("GM223 = %v, want one on close_period.py:4", w)
+	}
+	if w := codes["GM224"]; len(w) != 1 || !strings.Contains(w[0], "configures") {
+		t.Errorf("GM224 = %v, want one suggesting configures", w)
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	po := map[string]string{}
+	for _, f := range findings(rep, rollup.KindPresentedOnly) {
+		po[f.Concept] = f.Msg
+	}
+	if !strings.Contains(po["hp:PeriodClose"], "is hosted") {
+		t.Errorf("presented-only = %v, want hp:PeriodClose hosted", po)
+	}
+	if _, ok := po["hp:Finance"]; ok {
+		t.Errorf("a hosted system-type is not presented-only: %v", po)
+	}
+	if _, ok := po["hpx:QuotePage"]; ok {
+		t.Errorf("a hosted page concept is not presented-only: %v", po)
+	}
+	for _, r := range rollup.ConceptStatus(g, rep) {
+		if r.Concept == "hp:PeriodClose" && r.Status == rollup.StatusImplemented {
+			t.Errorf("hp:PeriodClose status = %s", r.Status)
+		}
+	}
+}
+
 // TestConfiguresInManifests: a page that edits a constraint's value is
 // declared with configures:, which the derived allowed set admits (its test
 // too), lifts to the boundary as configures on any kind, is compared by

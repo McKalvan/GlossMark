@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:DeclaredCapability scope=file -->
 # ADR 0012: Surfaces say what they do: configures, placement, empty declarations and levels
 
-Status: accepted, 2026-10-20. Builds on [ADR 0001](0001-presents-and-hosts.md). Closes issues #49 (F-SURF-3) and #51 (F-SURF-5).
+Status: accepted, 2026-10-20. Builds on [ADR 0001](0001-presents-and-hosts.md). Closes issues #49 (F-SURF-3), #50 (F-SURF-4) and #51 (F-SURF-5).
 
 ## Context
 
@@ -11,6 +11,8 @@ An admin page that edits a constraint's value is neither the mechanism nor only 
 
 The manifest is where an architect states what a boundary is for, and `drift` catches code that exceeds it. For surfaces that worked one way only: a boundary declaring `realizes: [hp:X]` whose code only presents X got a gap, but a boundary declared as a surface (`presents: [hp:X]`) whose code `implements` X got nothing, because an undeclared relation is not compared and `realizes: []` was read as no key. No manifest could forbid a relation.
 
+ADR 0001 rule 4 exempts `hosts` from `presented-only` because a shell hosting a whole system-type is expected to have no single implementation, but nothing checked that the hosted concept was a system-type. Marking a critical process `hosts` (a plausible reading for a CLI command, a router or a GraphQL server) gave a concept with no mechanism and no finding anywhere.
+
 ## Decision
 
 1. **`configures` is a manifest relation.** A manifest may declare `configures: [hp:CreditLimit]`. It is in the derived allowed set like every declared relation, and `gloss drift` compares it like `presents`.
@@ -18,3 +20,4 @@ The manifest is where an architect states what a boundary is for, and `drift` ca
 3. **`configures` carries criticality and never places.** The artifact takes the level of the concept it configures (a mistake on the page changes the rule); the concept is still drawn in the box of the boundary that realizes or represents it. A concept only configured, presented or hosted is placed `surface`.
 4. **An explicit empty list declares none.** `realizes: []` (or `holds: []`, `presents: []` and so on) means "this boundary does none of it": the relation is compared, and every derived edge is a violation, `hpb:storefront realizes hp:Pricing, declared realizes []`. A relation that is not written is still not compared, so existing manifests are unaffected. `realizes: [inherit]` is not empty.
 5. **A gap names the relation the code used instead.** When a declared `presents hp:Pricing` is not reached as `presents` but the boundary's code reaches it through another compared relation, the gap says so: "nothing under it presents it; its code implements it instead".
+6. **`hosts` is for system-types.** An inline `hosts` on a concept that is not a system-type, nor a page concept that itself presents or hosts something, is a `gloss check` warning (GM223). Such a hosted concept with nothing implementing it is `presented-only` in `gloss drift`, like a presented one. An inline `presents` on a constraint warns too (GM224): a page that edits the limit configures it.
