@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Relation scope=file -->
 # ADR 0025: Mapping sets — cross-namespace equivalences with a review lifecycle
 
-Status: **proposed** (scope), 2026-10-21. Fills the "SSSOM mappings" item that PLAN.md lists as deferred in Phase 3.
+Status: accepted (scope), 2026-10-21; not yet implemented. Fills the "SSSOM mappings" item that PLAN.md lists as deferred in Phase 3.
 
 ## Context
 
@@ -11,7 +11,7 @@ Two teams name the same thing differently: `zoo:Horse` and `farm:Equine`, or `pa
 - Nothing records that two concepts mean the same thing, so `gloss propose` and `gloss suggest` happily mint a duplicate of a concept that already exists under another team's name.
 - Most important: when an ontology change is proposed on one side (a definition rewritten, a concept deprecated, retyped or removed), nothing tells the people who rely on an equivalence that its meaning moved. A mapping silently goes wrong.
 
-## Decision (proposed)
+## Decision
 
 ### 1. Format: standard SSSOM/TSV, no extensions
 
@@ -141,12 +141,14 @@ M1 and M2 together answer the original need: a proposed ontology change shows wh
 
 Reading SSSOM/JSON or RDF (TSV only; export covers the other direction), inferring new mappings by chaining (`semapv:MappingChaining`), merging nodes, instance-level mappings, and the Backstage ownership join.
 
-## Open questions
+## Decisions taken on the open questions
 
-1. **Where cross-team sets live.** In one of the two repositories, oriented by the own-subject rule; in a registry repository for landscape-only sets; or both. Recommended: both, as in section 2.
-2. **How far `exactMatch` reaches in M3.** Context map and search only, or also cross-repo drift. Recommended: both in the landscape, never in a single repository's drift.
-3. **Who approves.** The set owner alone, or the owners of both namespaces. Recommended: the set owner approves; the diff names the other namespace's owner and CODEOWNERS on the set file can require them.
-4. **Gate for `closeMatch` and `relatedMatch` proposals.** SOFT, so `accept --policy` may accept them; or HARD like the rest.
+The user decided, 2026-10-21:
+
+1. **Where cross-team sets live: both.** A repository keeps sets where it owns one side of every row; a registry repository holds sets where neither side is owned, applied only in `gloss landscape` (section 2).
+2. **How far `exactMatch` reaches: landscape drift too.** It drives context-map edges and search, and cross-repo drift in `gloss landscape` treats the two concepts as one. It never changes a single repository's own drift (section 6).
+3. **Who approves: the set owner.** The diff names the other namespace's owner, and CODEOWNERS on the set file can require them where a team wants both sides.
+4. **Gate for `closeMatch` and `relatedMatch`: SOFT.** `gloss accept --policy` may accept them; `criticality-gates` still raise them on critical concepts (section 5).
 
 ## Alternatives considered
 
