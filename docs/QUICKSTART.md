@@ -132,6 +132,8 @@ Generate the vocabulary agents should see first:
 gloss agents --dir services/circulation --write AGENTS.md
 ```
 
+The block gives the marker syntax (with `id=`), the inline relations (`verifies` for tests, not its alias `tests`), and one table row per concept with its kind, its effective criticality, and notes: `PROPOSED` for a concept awaiting acceptance, its doc, what it realizes and its aliases.
+
 ## 6. Run the tooling
 
 ```sh
@@ -140,7 +142,7 @@ gloss lock                       # pin imports: glossmark.lock + vendored copies
 gloss build                      # .glossmark/graph.jsonl + context.jsonld + ledger.jsonl
 gloss drift                      # violations, gaps, orphans, rogues, stale, untested, metrics
 gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
-gloss status                     # proposed / stale / rejected links
+gloss status                     # proposed / stale / rejected links; each proposal with its gate and the reason gloss diff gives ([HARD: outside allowed; conf 0.55 below threshold 0.70])
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings
 gloss coverage --fail-under 80   # headline: concepts with an artifact and a verifier (implementation concepts, internal ones only at high or critical, and core concepts code implements directly; n/a when none); files are secondary
@@ -156,7 +158,9 @@ gloss doctor                     # one line per setup check with its fix: gloss 
 
 `.glossmark/ledger.jsonl` is the review record: who wrote each marker, whether a human accepted or rejected it, and whether it went stale. **Commit it** together with `graph.jsonl`; without it a fresh clone or a CI run forgets every decision. `gloss hook install` says so, and the pre-commit hook stages it.
 
-The actor belongs to a marker's first appearance, not to whoever runs the last build. For a marker the ledger does not know yet, `gloss build` takes, in order: the actor the last built `graph.jsonl` recorded for it; `GLOSS_ACTOR` (`agent:claude-code@claude-fable-5-1`, `human:alice`); the `git blame` author of the marker line when it is committed; else `human:<git user.name>`. `gloss hook install` writes `GLOSS_ACTOR=agent:claude-code` into the SessionStart hook and the MCP server's env (`--actor` to change it), and calls `gloss` by name only when `PATH` finds the binary running the install (else by its absolute path), so links an agent writes are attributed to the agent and the agent-remit gate (`may-modify`) applies to them. Set `GLOSS_ACTOR` yourself in any other agent harness. `gloss build` warns when a rebuild would change the actor on an existing marker.
+The actor belongs to a marker's first appearance, not to whoever runs the last build. For a marker the ledger does not know yet, `gloss build` takes, in order: the actor the last built `graph.jsonl` recorded for it; `GLOSS_ACTOR` (`agent:claude-code@claude-fable-5-1`, `human:alice`); the `git blame` author of the marker line when it is committed; else `human:<git user.name>`. `gloss hook install` writes `GLOSS_ACTOR=agent:claude-code` into the MCP server's env and into the SessionStart hook (`--actor` to change it), and calls `gloss` by name only when `PATH` finds the binary running the install (else by its absolute path), so links an agent writes are attributed to the agent and the agent-remit gate (`may-modify`) applies to them. The hook also appends `export GLOSS_ACTOR=...` to `$CLAUDE_ENV_FILE`, which Claude Code sources before every shell command of the session, so a `gloss build` the agent runs later carries the actor too, not only the briefing. Set `GLOSS_ACTOR` yourself in any other agent harness.
+
+**Subagents need their own actor.** Subagents share the session's shell environment and its MCP server, so without more they all write as the session's actor, and the remit gate checks every link against one agent. Give each subagent its actor in its agent file (`.claude/agents/prep-cook.md`): "run gloss commands as `GLOSS_ACTOR=agent:prep-cook gloss build`". The name after `agent:` is the agent file's name, which is what ties the link to that agent's `may-modify` remit and lets `gloss context` show only its remit. A link a subagent writes through the shared MCP server is attributed to the server's actor; prefer writing `@gloss?` lines and running `gloss build` with the subagent's actor. `gloss build` warns when a rebuild would change the actor on an existing marker.
 
 ## Agent experience
 
