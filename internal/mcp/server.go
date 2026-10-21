@@ -307,6 +307,7 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 		return slice.Of(g, ws.Root, a.Seeds, slice.Options{Context: a.Context == nil || *a.Context, Follow: fl}, rep.Findings)
 	case "drift":
 		rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: ws.Config.EffectivePolicy()})
+		rollup.AddDeprecatedUse(rep, g, ws.Config.EffectivePolicy(), time.Now())
 		return rep, nil
 	}
 	return nil, fmt.Errorf("unknown tool %q", name)
