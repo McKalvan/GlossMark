@@ -55,7 +55,7 @@ Every source, deterministic or not, produces the same record: one JSON object pe
            "modified":"2025-03-01","hash":"sha256:9e1f..."}}
 ```
 
-- `signal` is one of a closed list: `type-decl`, `field`, `function-decl`, `inherits`, `enum-type`, `enum-value`, `module`, `table`, `column`, `foreign-key`, `schema-type` (proto, Avro, GraphQL, OpenAPI), `route`, `topic` (queue, event, cron), `test-name`, `guard-message`, `ui-string`, `doc-heading`, `doc-definition` (a bold term), `doc-phrase` (a two- or three-word run of prose), `rule-sentence` (a sentence that states a rule), `transition` (an assignment of a lifecycle value), `glossary-entry`, `rename`, `reference-term`, `issue-title`, `acceptance-criterion`. `field`, `module`, `doc-phrase`, `rule-sentence` and `transition` were added by the spike (section 12).
+- `signal` is one of a closed list: `type-decl`, `field`, `function-decl`, `inherits`, `enum-type`, `enum-value`, `module`, `table`, `column`, `foreign-key`, `schema-type` (proto, Avro, GraphQL, OpenAPI), `route`, `topic` (queue, event, cron), `test-name`, `guard-message`, `ui-string`, `doc-heading`, `doc-definition` (a bold term), `doc-phrase` (a two- or three-word run of prose), `rule-sentence` (a sentence that states a rule), `transition` (an assignment of a lifecycle value), `value-set` (a named collection of literals or enum members: a classification rule or a catalogue), `glossary-entry`, `rename`, `reference-term`, `issue-title`, `acceptance-criterion`. `field`, `module`, `doc-phrase`, `rule-sentence`, `transition` and `value-set` were added by the spike and the dry run (sections 12 and 13).
 - `unit` is the application the evidence belongs to (section 7).
 - **Quotes are not committed.** A record keeps a locator and a hash, never the source text, unless the owner opts in (`derive: { commit-quotes: true }` in `glossmark.yaml`). Connector content stays out of the repository by default; concept docs are written by the agent in its own words.
 
@@ -282,6 +282,40 @@ gloss harvest --root ../AiArena --exclude 'docs/ontology/**' --exclude CLAUDE.md
 gloss harvest --in evidence.jsonl --cluster --format text
 gloss harvest --in evidence.jsonl --about "attempt credit" --format text
 ```
+
+### 13. Dry run of the skill on pfinance
+
+Status: done by hand, following `skills/derive-ontology/SKILL.md` step by step, with the repository's owner answering the interview. Nothing was written to pfinance; the draft was checked in a scratch copy.
+
+**Run.** pfinance has 71 files: one Streamlit application, a Python library and Terraform. The owner confirmed the README is the only spec and that they own the namespace, in English. The harvest found 902 observations and 189 candidates, 23 of them named two or more ways.
+
+The draft had 55 core and 26 implementation concepts. After the critique it had 70 and 29, all proposed. `gloss check` reported 0 errors and 0 warnings. The owner answered 7 interview questions live and left 4 for the packet.
+
+**What the run changed in the harvester.** These are built and tested.
+
+| Gap | Effect | Fix |
+|---|---|---|
+| Streamlit writes UI copy as `st.header("…")`, not JSX | no UI evidence at all; UI-only features ("Load demo data", "Master data sheet") read as docs-only, i.e. false *planned* | `st.*` calls with a literal label are `ui-string` |
+| page modules carry an order prefix (`1_Import_Data.py`) | the page and its title were two candidates | the prefix is dropped from `module` |
+| icons in titles ("💰 pfinance") | names with an emoji | stripped from `ui-string` and `doc-heading` |
+| rules live in named sets (`LIQUID_TYPES`, `LIABILITY_TYPES`, `NON_SPENDING_CATEGORIES`) and catalogues in lists (`CATEGORIES`, `ASSET_CLASSES`) | the liquidity, liability and non-spending rules had no rule evidence | `value-set`, with each member as `member:` context (162 on AgentArena) |
+| a module docstring states a rule | not read | module docstrings feed `rule-sentence` |
+
+It was not fixed: a rule worded without a rule word ("`amount > 0` is money flowing in") is still found only through its subject.
+
+**What the run changed in the skill.**
+
+1. **The critique is the most productive step.** A fresh subagent with source access found 15 problems. Most were about fidelity rather than tier: one "rule" that was two (cash flow drops the unfinished period; burn rate divides by elapsed days), rules aimed at the wrong concepts, and the mortgage mirrored into loan and real-estate accounts. It also found missing measures and rules (home equity, FIRE progress, last known balance, retirement detection) and docs that contradict the code. The skill now requires the critic to have source access and to check fidelity and repository-doc drift.
+2. **The interview may anchor.** The owner accepted the recommended option for all 7 questions. Each question now states its evidence and offers *leave it open*, and the packet reports the acceptance rate.
+3. **Rules in code-first repositories** come from test names and named sets, not must/never sentences. The skill reads `value-set` and `test-name` for constraints.
+4. **Scope includes demo-data generators.** `scripts/generate_sample_data.py` added merchant names as candidates.
+
+**Against the earlier one-pass adoption** (branch `claude/glossmark-ontology`: 50 core and 61 implementation concepts, written by an agent reading QUICKSTART):
+- 26 core names are identical, and most other differences are renames (`Importing` and `Import`, `Deduplication` and `ReimportSafe`).
+- The derived draft adds 25 rules and measures tied to code behaviour (`HomeEquity`, `FireProgress`, `LastKnownBalance`, `CorrectionScope`, `ElapsedTimeAverage`, the account-type kinds). It omits layers that fail the paper test (`FinancialRecord`, `Metric`, `DemoDataset`).
+- It also lacks two abstractions the one-pass draft had, `Liability` and `SafeWithdrawalRate`, both of which went to the owner as questions.
+
+The two are not directly comparable, because the derived draft had an owner and a critic. But that is the point of the design.
 
 ## Alternatives considered
 

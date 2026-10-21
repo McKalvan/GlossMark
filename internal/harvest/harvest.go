@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/mckalvan/glossmark/internal/importers"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -140,11 +141,19 @@ func (h *harvester) unitFor(rel string) string {
 
 func (h *harvester) add(signal, surface, rel string, line int, context ...string) {
 	surface = strings.TrimSpace(surface)
+	if signal == "ui-string" || signal == "doc-heading" {
+		// An icon in a title ("💰 pfinance", "⚙️ Settings") is not part of the name.
+		surface = strings.TrimLeftFunc(surface, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	}
 	if surface == "" {
 		return
 	}
 	h.out = append(h.out, newEvidence(h.unitFor(rel), signal, surface, rel, line, context...))
 }
+
+// pageOrder is the ordering prefix of a page module (Streamlit's
+// 2_Cash_Flow.py, Next.js-style 01-intro.tsx).
+var pageOrder = regexp.MustCompile(`^\d+[_-]`)
 
 // genericModules name a layer or a convention, not a domain.
 var genericModules = map[string]bool{"src": true, "lib": true, "libs": true, "app": true, "apps": true, "pkg": true, "internal": true, "cmd": true, "components": true,
@@ -155,7 +164,7 @@ var genericModules = map[string]bool{"src": true, "lib": true, "libs": true, "ap
 
 // module records a source file's stem or a source directory's name.
 func (h *harvester) module(rel, name string) {
-	name = strings.TrimSuffix(name, path.Ext(name))
+	name = pageOrder.ReplaceAllString(strings.TrimSuffix(name, path.Ext(name)), "")
 	if genericModules[strings.ToLower(name)] || strings.HasPrefix(name, "test_") || strings.HasSuffix(name, "_test") || strings.HasPrefix(name, "_") {
 		return
 	}
@@ -211,6 +220,11 @@ func (h *harvester) file(rel string, lines []string, style marker.CommentStyle, 
 			for _, s := range ruleSentences(d.Doc) {
 				h.add("rule-sentence", s, rel, d.Line)
 			}
+		}
+	}
+	if !test && ext == ".py" {
+		for _, s := range ruleSentences(moduleDocstring(lines)) {
+			h.add("rule-sentence", s, rel, 1)
 		}
 	}
 	h.lineSignals(rel, lines, test, ext, decls)
@@ -419,6 +433,7 @@ var (
 	jsGuard    = regexp.MustCompile(`\bthrow\s+new\s+\w*\(\s*['"` + "`" + `]([^'"` + "`" + `]{6,160})['"` + "`" + `]`)
 	goGuard    = regexp.MustCompile(`(?:errors\.New|fmt\.Errorf)\(\s*"([^"%]{6,160})`)
 	jsxText    = regexp.MustCompile(`>\s*([A-Z][A-Za-z'’ ,.!?-]{1,80}?)\s*<`)
+	pyUI       = regexp.MustCompile(`\bst\.(?:title|header|subheader|metric|button|caption|expander|toggle|checkbox|radio|selectbox|multiselect|slider|number_input|text_input|date_input|file_uploader|download_button|tab|info|warning|success|error)\(\s*f?["']([^"'{}\n]{2,80})["']`)
 	jsxAttr    = regexp.MustCompile(`\b(?:title|label|placeholder|aria-label|alt)=["']([^"'{}]{2,80})["']`)
 	sqlRename  = regexp.MustCompile(`(?i)\brename\s+(?:column\s+)?(\w+)\s+to\s+(\w+)`)
 	sqlRenameT = regexp.MustCompile(`(?i)\balter\s+table\s+(?:if\s+exists\s+)?([\w."]+)\s+rename\s+to\s+(\w+)`)
@@ -441,6 +456,13 @@ func (h *harvester) lineSignals(rel string, lines []string, test bool, ext strin
 				h.add("test-name", m[2], rel, n)
 			}
 			continue
+		}
+		if name, members, _ := valueSet(lines, i); name != "" {
+			ctx := make([]string, 0, len(members))
+			for _, v := range members {
+				ctx = append(ctx, "member:"+v)
+			}
+			h.add("value-set", name, rel, n, ctx...)
 		}
 		for _, re := range []*regexp.Regexp{pyRoute, pyPrefix, jsRoute, uiRoute, goRoute} {
 			if m := re.FindStringSubmatch(ln); m != nil && m[1] != "" && m[1] != "/" {
@@ -476,6 +498,11 @@ func (h *harvester) lineSignals(rel string, lines []string, test bool, ext strin
 		}
 		if m := opCreate.FindStringSubmatch(ln); m != nil {
 			h.add("table", m[1], rel, n)
+		}
+		if ext == ".py" {
+			for _, m := range pyUI.FindAllStringSubmatch(ln, -1) {
+				h.add("ui-string", m[1], rel, n)
+			}
 		}
 		if uiExt[ext] {
 			for _, m := range jsxText.FindAllStringSubmatch(ln, -1) {

@@ -24,7 +24,7 @@ The result is draft tier files with every entry `proposed: true`, a derivation r
 
 1. **Re-run?** If `.glossmark/derivation.jsonl` exists, read it first: every decision in it stands (step 9). Then skip to step 2 and report what changed at the end.
 2. **Applications.** `gloss init --dry-run` lists the deployables (`gloss init` is not run yet). Each is a unit of derivation. With more than one unit, expect the same word to mean different things in different units.
-3. **Product versus content.** List what is in the tree but is not this product: vendored code, generated clients, fixtures, examples, other applications' code kept as data (exercise packages, sample repos, templates). Each becomes an `--exclude` glob. Getting this wrong floods the harvest with foreign vocabulary.
+3. **Product versus content.** List what is in the tree but is not this product: vendored code, generated clients, fixtures, examples, demo or sample data and the scripts that generate it, and other applications' code kept as data (exercise packages, sample repos, templates). Each becomes an `--exclude` glob. Getting this wrong floods the harvest with foreign vocabulary.
 4. **Existing vocabulary.** A glossary, an `enums.yaml`, an ADR index, a `backlog.yaml`: the harvester reads them. Note which one the owner maintains.
 5. **External sources.** Check which connectors this session has. List candidate PRDs, specs and trackers.
 6. **Ask the survey questions** (live, multiple choice, one batch):
@@ -94,7 +94,9 @@ For each shortlisted candidate decide, and write down why:
   - Signals for lifecycle: a `status`/`state` field, `transition` evidence, comparisons in guards or tests.
   - Signals for catalogue: seeds, configuration, pricing tables, lookups.
   - Mixed signals become a question.
-- **Constraints come from sentences.** For each important core concept, read its rules: `gloss harvest --in $SCRATCH/all.jsonl --about "<concept>" --format text | grep -E 'rule-sentence|guard-message|test-name'`. Name each rule the business would recognise as a `constraint` (`KeyNeverPersisted`, `AtMostOneRecordAttempt`) that `constrains:` its subject. Rule sentences number in the hundreds; only the ones the owner would defend become concepts.
+- **Constraints come from sentences, sets and test names.** For each important core concept, read its rules: `gloss harvest --in $SCRATCH/all.jsonl --about "<concept>" --format text | grep -E 'rule-sentence|guard-message|test-name|value-set'`.
+  - A repository with few docs states its rules in test names ("cashflow summary excludes transfers") and in named sets (`value-set`: `LIQUID_TYPES = {CHECKING, SAVINGS, ...}`, `NON_SPENDING_CATEGORIES`), not in must/never sentences.
+  - A `value-set` of literals is often a catalogue (`CATEGORIES`): its members are instances. Name each rule the business would recognise as a `constraint` (`KeyNeverPersisted`, `AtMostOneRecordAttempt`) that `constrains:` its subject. Rule sentences number in the hundreds; only the ones the owner would defend become concepts.
 - **Events come from transitions.**
   - `transition` evidence gives the value, the type (`of:`) and the function (`in:`). The session lifecycle reads as `submit → submitted`, `_grade → graded`; name the events from it (`Submitted`, `Graded`).
   - An `of:` type that holds a result rather than a lifecycle (diff statuses, judge outcomes) is not an event source.
@@ -122,7 +124,9 @@ The category is a hint, not a verdict. On the measured repository no rule separa
 
 ## 7. Critique
 
-Start a **fresh subagent**. Give it the draft tier files, `clusters.jsonl` and `all.jsonl`, but not your reasoning, and ask it to report against this checklist:
+Start a **fresh subagent**. Give it the draft tier files, `clusters.jsonl`, `all.jsonl` **and read access to the source**, but not your reasoning, and ask it to report against this checklist.
+
+Do not skip this step. On the first dry run the critic found 15 problems, more than any other step. Most were about fidelity, not tier: rules stated more neatly than the code behaves. The checklist:
 
 - a core name equal to a type name with no non-code evidence (the class-diagram smell);
 - a core concept that names a technology, table, framework or file;
@@ -130,7 +134,10 @@ Start a **fresh subagent**. Give it the draft tier files, `clusters.jsonl` and `
 - two concepts whose evidence overlaps by more than half (a missed merge);
 - one name with evidence in two units whose contexts share nothing (a missed homonym);
 - a core namespace whose concepts fall into clusters that rarely reference each other (two bounded contexts: propose a split, do not count concepts);
-- a concept resting on one test name or one heading.
+- a concept resting on one test name or one heading;
+- a rule, measure or doc stated more neatly than the code behaves. Read the function, not its name: one "rule" may be two, and a doc may describe what the README promises rather than what the code does;
+- rules and measures the draft lacks that a page title, a test name, a named set or an analytics function states;
+- a repository document that contradicts the code: a question for the owner (stale doc or wrong code?), not something to fix silently.
 
 Fix what it finds or turn it into a question.
 
@@ -138,7 +145,7 @@ Fix what it finds or turn it into a question.
 
 1. **Collect** every open decision: merges, splits, names, tiers, planned, concept versus instance, stale doc versus wrong code, namespace splits.
 2. **Rank** by leverage: how many concepts and evidence lines the answer changes, weighted by how much the sources disagree.
-3. **Ask the top ~10 live**, as multiple choice with your recommendation first. Use the fixed question types:
+3. **Ask the top ~10 live**, as multiple choice with your recommendation first. Each question states the evidence behind it in one line and offers a *leave it open* option. Use the fixed question types:
    - *same thing?*
    - *different things?*
    - *core or implementation?*
@@ -148,6 +155,7 @@ Fix what it finds or turn it into a question.
    - *split this namespace?*
 4. **Route the rest** into the packet, each with `route-to:` the stakeholder best placed to answer (a product manager, a compliance lead).
 5. **Record** each answer as a decision (step 9) with its actor. If the person answering is not the namespace owner, mark it `owner_confirmed: false`.
+6. **Report** how many recommendations the owner accepted. If they accepted every one, say so in the packet: either the recommendations were right or they steered the answers, and a reviewer should know which questions to look at again.
 
 Auto-accept nothing in this version. Everything is `proposed: true` until the owner accepts it with `gloss accept --concept`.
 

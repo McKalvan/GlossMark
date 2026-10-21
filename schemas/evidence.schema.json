@@ -69,7 +69,8 @@
             "topic",
             "transition",
             "type-decl",
-            "ui-string"
+            "ui-string",
+            "value-set"
           ]
         },
         "surface": {
@@ -139,7 +140,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Typed hints, prefix:value: is-a:, table:, fk:, enum:, of:, in:, attr:, parent:, class:, alias:, renamed-to:, from:."
+          "description": "Typed hints, prefix:value: is-a:, table:, fk:, enum:, of:, in:, attr:, member:, parent:, class:, alias:, renamed-to:, from:."
         }
       }
     }

@@ -30,7 +30,7 @@ const (
 
 // signalFamily is the closed list of signals and the family each belongs to.
 var signalFamily = map[string]string{
-	"type-decl": FamilyCode, "field": FamilyCode, "function-decl": FamilyCode, "inherits": FamilyCode, "enum-type": FamilyCode, "enum-value": FamilyCode, "module": FamilyCode, "transition": FamilyCode, "topic": FamilyCode,
+	"type-decl": FamilyCode, "field": FamilyCode, "function-decl": FamilyCode, "inherits": FamilyCode, "enum-type": FamilyCode, "enum-value": FamilyCode, "module": FamilyCode, "transition": FamilyCode, "value-set": FamilyCode, "topic": FamilyCode,
 	"table": FamilyData, "column": FamilyData, "foreign-key": FamilyData, "schema-type": FamilyData,
 	"test-name": FamilyBehaviour, "guard-message": FamilyBehaviour,
 	"route": FamilySurface, "ui-string": FamilySurface,

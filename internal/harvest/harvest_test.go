@@ -63,8 +63,11 @@ func TestHarvestSignals(t *testing.T) {
 		"rule-sentence A patron must never hold more than five items at once.": "",
 		"rule-sentence A hold expires after seven days and cannot be renewed.": "",
 		"rule-sentence An overdue loan cannot be renewed by the patron.":       "services/circulation",
-		"transition overdue":  "services/circulation",
-		"transition RETURNED": "services/circulation",
+		"ui-string Loan report":   "apps/dashboard",
+		"ui-string Overdue loans": "apps/dashboard",
+		"module Loan_Report":      "apps/dashboard",
+		"transition overdue":      "services/circulation",
+		"transition RETURNED":     "services/circulation",
 	}
 	for k, unit := range want {
 		e, ok := got[k]
@@ -76,7 +79,7 @@ func TestHarvestSignals(t *testing.T) {
 			t.Errorf("%s: unit %q, want %q", k, e.Unit, unit)
 		}
 	}
-	if e := got["column patron_id"]; e.Source.Path != "services/circulation/loans/models.py" || e.Source.Line != 19 || e.Context[0] != "table:loans" {
+	if e := got["column patron_id"]; e.Source.Path != "services/circulation/loans/models.py" || e.Source.Line != 21 || e.Context[0] != "table:loans" {
 		t.Errorf("patron_id = %+v", e)
 	}
 	if e := got["transition overdue"]; strings.Join(e.Context, " ") != "attr:status of:LoanPatch in:mark_overdue" {
@@ -91,8 +94,17 @@ func TestHarvestSignals(t *testing.T) {
 			rules++
 		}
 	}
-	if rules != 3 {
-		t.Errorf("%d rule sentences, want 3 (one per rule, none for a sentence without a rule word)", rules)
+	if rules != 4 {
+		t.Errorf("%d rule sentences, want 4 (one per rule, none for a sentence without a rule word)", rules)
+	}
+	if e := got["rule-sentence A patron must never hold two loans of one copy."]; e.Source.Line != 1 {
+		t.Errorf("module docstring rule: %+v", e)
+	}
+	if e := got["value-set BLOCKING_STATUSES"]; strings.Join(e.Context, " ") != "member:OVERDUE member:lost" {
+		t.Errorf("BLOCKING_STATUSES = %+v", e)
+	}
+	if e := got["value-set FORMATS"]; strings.Join(e.Context, " ") != "member:book member:dvd" {
+		t.Errorf("FORMATS = %+v", e)
 	}
 	for _, k := range []string{"doc-heading Not a heading inside a fence", "function-decl _private_helper", "field local_counter", "field id", "function-decl test_overdue_loan_cannot_be_renewed"} {
 		if _, ok := got[k]; ok {

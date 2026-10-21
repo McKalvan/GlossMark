@@ -1,3 +1,5 @@
+"""Loan models. A patron must never hold two loans of one copy."""
+
 from datetime import date
 from enum import Enum
 
@@ -45,3 +47,12 @@ def return_loan(loan: LoanRow) -> None:
 
 def _private_helper() -> None:
     pass
+
+
+# Statuses that keep a loan out of the renewal flow.
+BLOCKING_STATUSES = frozenset({LoanStatus.OVERDUE, "lost"})
+
+FORMATS = [
+    "book",  # print
+    "dvd",
+]

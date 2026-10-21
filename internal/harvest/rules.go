@@ -175,3 +175,76 @@ func enclosing(decls []marker.Decl, line int) string {
 	}
 	return best
 }
+
+var (
+	valueSetStart = regexp.MustCompile(`^(?:export\s+)?(?:const\s+)?([A-Z][A-Z0-9_]+)\s*(?::[^=]+)?=\s*(?:frozenset\(|set\(|tuple\(|new Set\(|Object\.freeze\()?\s*([\[{(])`)
+	setMember     = regexp.MustCompile(`["']([^"']+)["']|\b(?:[A-Za-z_]\w*\.)+([A-Za-z_]\w*)\b`)
+)
+
+// maxValueSetLines bounds how far a named collection is read.
+const maxValueSetLines = 60
+
+// valueSet reads a module-level named collection of literals or enum members
+// starting at line i (LIQUID_TYPES = {AccountType.CHECKING, ...},
+// CATEGORIES = ["Income", ...]): a classification rule or a catalogue the
+// business keeps. It returns the name, the members and the last line read.
+func valueSet(lines []string, i int) (name string, members []string, end int) {
+	m := valueSetStart.FindStringSubmatch(lines[i])
+	if m == nil {
+		return "", nil, i
+	}
+	closer := map[string]string{"[": "]", "{": "}", "(": ")"}[m[2]]
+	body := lines[i][len(m[0]):]
+	end = i
+	for !strings.Contains(body, closer) && end+1 < len(lines) && end-i < maxValueSetLines {
+		end++
+		body += " " + strings.SplitN(lines[end], "#", 2)[0]
+	}
+	body = strings.SplitN(body, closer, 2)[0]
+	for _, mm := range setMember.FindAllStringSubmatch(body, -1) {
+		// A quote inside a string ("Trader Joe's") can pair the wrong
+		// quotes; what is left between them has no letter.
+		if v := strings.TrimSpace(mm[1] + mm[2]); strings.IndexFunc(v, unicode.IsLetter) >= 0 {
+			members = append(members, v)
+		}
+	}
+	if len(members) < 2 {
+		return "", nil, i
+	}
+	return m[1], members, end
+}
+
+// moduleDocstring returns a Python module's leading docstring, or "".
+func moduleDocstring(lines []string) string {
+	i := 0
+	for i < len(lines) && (strings.TrimSpace(lines[i]) == "" || strings.HasPrefix(strings.TrimSpace(lines[i]), "#")) {
+		i++
+	}
+	if i == len(lines) {
+		return ""
+	}
+	t := strings.TrimSpace(lines[i])
+	q := ""
+	for _, p := range []string{`"""`, `'''`} {
+		if strings.HasPrefix(t, p) {
+			q = p
+		}
+	}
+	if q == "" {
+		return ""
+	}
+	t = strings.TrimPrefix(t, q)
+	if strings.Contains(t, q) {
+		return strings.SplitN(t, q, 2)[0]
+	}
+	var b []string
+	b = append(b, t)
+	for i++; i < len(lines); i++ {
+		if strings.Contains(lines[i], q) {
+			b = append(b, strings.SplitN(lines[i], q, 2)[0])
+			break
+		}
+		b = append(b, strings.TrimSpace(lines[i]))
+	}
+	return strings.Join(b, " ")
+}
