@@ -105,11 +105,38 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .chg.HARD{border-color:var(--hard)}.chg.SOFT{border-color:var(--soft)}.chg.AUTO{border-color:var(--auto)}
 .chg .path{color:var(--muted);font-size:11px;word-break:break-all}
 .badge{display:inline-block;padding:0 5px;border-radius:8px;background:var(--line);font-size:11px;margin-left:4px}
+#sheetBtn{display:none}
+/* Phones: one-line header and toolbar (the toolbar scrolls sideways), and the
+   panel as a bottom sheet over the canvas, collapsed to its handle until tapped,
+   so opening it does not resize the map. */
+@supports (height:100dvh){body{height:100dvh}}
 @media (max-width:760px){
   #hint{display:none}
-  main{flex-direction:column}
-  aside{width:auto;max-height:38vh;border-left:0;border-top:1px solid var(--line)}
-  header,.bar,#filters{padding-left:12px;padding-right:12px}
+  main{position:relative}
+  header{gap:8px;padding:6px 12px;flex-wrap:nowrap}
+  header h1{font-size:14px}
+  #generated{display:none}
+  #repo{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  header .spacer{flex:1 1 0;min-width:0}
+  header label.meta{flex:none}
+  #themeBtn{flex:none}
+  .bar{flex-wrap:nowrap;overflow-x:auto;padding:6px 12px;scrollbar-width:none}
+  .bar::-webkit-scrollbar{display:none}
+  .bar>*{flex:none}
+  #crumbs{flex-wrap:nowrap;white-space:nowrap}
+  /* 16px keeps iOS from zooming the page when a field gets focus. */
+  select,input[type=text]{font-size:16px;padding:3px 6px}
+  input[type=text]{min-width:0;width:140px}
+  #filters{padding-left:12px;padding-right:12px;max-height:40vh;overflow-y:auto}
+  .chip{padding:3px 10px}
+  #status{bottom:50px}
+  aside{position:absolute;left:0;right:0;bottom:0;width:auto;height:48%;border-left:0;border-top:1px solid var(--line);padding:0 14px 12px;z-index:4;box-shadow:0 -6px 18px rgba(0,0,0,.12)}
+  aside.min{height:auto;overflow:hidden;padding-bottom:0}
+  aside.min #panelBody{display:none}
+  #sheetBtn{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:1;width:calc(100% + 28px);margin:0 -14px 8px;padding:10px 14px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--panel);text-align:left}
+  aside.min #sheetBtn{margin-bottom:0;border-bottom:0}
+  #sheetBtn .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  #sheetBtn .c{color:var(--muted)}
 }
 </style>
 </head>
@@ -142,7 +169,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
     <div id="status"></div>
     <div id="hint"></div>
   </div>
-  <aside id="panel"></aside>
+  <aside id="panel" class="min"><button id="sheetBtn" type="button" aria-expanded="false"><span class="t"></span><span class="c"></span></button><div id="panelBody"></div></aside>
 </main>
 <script id="gloss-data" type="application/json">__GLOSS_DATA__</script>
 <!--GLOSS_DATA_SCRIPT-->
@@ -248,9 +275,11 @@ const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 /* ---- state ---- */
 const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set()});
 const S={slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
-  cam:{x:0,y:0,k:1},theme:'auto'};
+  cam:{x:0,y:0,k:1},camMoved:false,theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
-const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage');
+const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage'),panel=$('panel');
+const coarse=!!(window.matchMedia&&matchMedia('(pointer: coarse)').matches);
+let lastPtr='mouse'; // the last pointer type: touch gets wider hit targets
 let RC=new Map(); // rect cache for open boundaries, reset per frame
 
 /* Deterministic PRNG so the layout is the same on every load. */
@@ -552,6 +581,9 @@ function shortLabel(n){const l=n.label||n.id||'';return l.length>30?l.slice(0,28
    boundary then takes part in its parent's layout as one big node sized to its
    contents. Absolute positions are written back top-down. */
 function layout(all){
+  // A portrait stage (a phone) pulls harder sideways than down, so the layout
+  // comes out tall to match it; a landscape one is laid out as before.
+  const asp=Math.sqrt(Math.min(2.5,Math.max(1,(cv.clientHeight||1)/(cv.clientWidth||1)))),GX=0.03*asp,GY=0.03/asp;
   const groups=new Map();
   VN.forEach(n=>{const k=n._lc?n._lc.id:'';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(n);});
   function doGroup(cid){
@@ -592,7 +624,7 @@ function layout(all){
             if(Math.abs(ox)<hw&&Math.abs(oy)<hh){const px=(hw-Math.abs(ox)),py=(hh-Math.abs(oy));
               if(px<py){F[o*2]+=Math.sign(ox||1)*px*0.6;}else{F[o*2+1]+=Math.sign(oy||1)*py*0.6;}}}
         }
-        F[a*2]-=pa.x*0.03;F[a*2+1]-=pa.y*0.03; // gravity
+        F[a*2]-=pa.x*GX;F[a*2+1]-=pa.y*GY; // gravity
       }
       springs.forEach(s=>{const pa=P[s.i],pb=P[s.j],dx=pb.x-pa.x,dy=pb.y-pa.y,d=Math.hypot(dx,dy)||1,ux=dx/d,uy=dy/d;
         const ideal=(s.contain?0.7:1)*K*0.9+extent(items[s.i],ux,uy)+extent(items[s.j],ux,uy),f=(d-ideal)/d*(s.contain?0.12:0.06)*Math.min(2,Math.sqrt(s.n));
@@ -661,6 +693,8 @@ function rectOf(b){
   }
   RC.set(b.id,r);return r;
 }
+// viewH: the canvas height not covered by the bottom sheet (phones only).
+function viewH(){return cv.clientHeight-(getComputedStyle(panel).position==='absolute'?panel.offsetHeight:0);}
 function centre(n){if(n._open){const r=rectOf(n);return {x:r.x+r.w/2,y:r.y+r.h/2};}return S.pos.get(n.id);}
 function fit(){
   if(!VN.length)return;
@@ -668,8 +702,8 @@ function fit(){
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   VN.forEach(n=>{if(n._open){const r=rectOf(n);x0=Math.min(x0,r.x);x1=Math.max(x1,r.x+r.w);y0=Math.min(y0,r.y);y1=Math.max(y1,r.y+r.h);return;}
     const p=S.pos.get(n.id);x0=Math.min(x0,p.x-n._w/2);x1=Math.max(x1,p.x+n._w/2);y0=Math.min(y0,p.y-n._h/2);y1=Math.max(y1,p.y+n._h/2+16);});
-  const W=cv.clientWidth,H=cv.clientHeight,k=Math.min(1.5,Math.max(.08,Math.min(W/(x1-x0+120),H/(y1-y0+120))));
-  S.cam={k,x:W/2-(x0+x1)/2*k,y:H/2-(y0+y1)/2*k};
+  const W=cv.clientWidth,H=viewH(),m=Math.min(120,Math.min(W,H)*.12),k=Math.min(1.5,Math.max(.08,Math.min(W/(x1-x0+m),H/(y1-y0+m))));
+  S.cam={k,x:W/2-(x0+x1)/2*k,y:H/2-(y0+y1)/2*k};S.camMoved=false;
   draw();
 }
 
@@ -842,18 +876,23 @@ function draw(){
 
 /* ---- hit testing ---- */
 function toWorld(sx,sy){return {x:(sx-S.cam.x)/S.cam.k,y:(sy-S.cam.y)/S.cam.k};}
+// A finger gets a margin of 12 screen pixels around each target; the nearest
+// node within it wins, the topmost on a tie (the mouse has no margin).
+const slop=()=>(lastPtr==='mouse'?0:12)/S.cam.k;
 function hitNode(w){
   RC=new Map();
+  const sl=slop();let best=null,bd=Infinity;
   for(let i=VN.length-1;i>=0;i--){const n=VN[i];if(n._open)continue;const p=S.pos.get(n.id);
-    if(n.type==='concept'){if(Math.hypot(w.x-p.x,w.y-p.y)<=n._r+4)return n;}
-    else if(Math.abs(w.x-p.x)<=n._w/2+2&&Math.abs(w.y-p.y)<=n._h/2+2)return n;}
+    const d=n.type==='concept'?Math.max(0,Math.hypot(w.x-p.x,w.y-p.y)-n._r-4):Math.hypot(Math.max(0,Math.abs(w.x-p.x)-n._w/2-2),Math.max(0,Math.abs(w.y-p.y)-n._h/2-2));
+    if(d<=sl&&d<bd){best=n;bd=d;if(!d)break;}}
+  if(best)return best;
   // open boundaries by their title strip, innermost first
   const open=VN.filter(n=>n._open).sort((a,b)=>depthOf(b)-depthOf(a));
-  for(const b of open){const r=rectOf(b);if(w.x>=r.x&&w.x<=r.x+r.w&&w.y>=r.y&&w.y<=r.y+TITLE)return b;}
+  for(const b of open){const r=rectOf(b);if(w.x>=r.x-sl&&w.x<=r.x+r.w+sl&&w.y>=r.y-sl&&w.y<=r.y+TITLE)return b;}
   return null;
 }
 function hitEdge(w){
-  const tol=7/S.cam.k;let best=null,bd=tol;
+  const tol=(lastPtr==='mouse'?7:14)/S.cam.k;let best=null,bd=tol;
   RC=new Map();
   VE.forEach(e=>{if(e.contain)return;const gm=edgeGeom(e);if(!gm)return;const {a,b,cx,cy}=gm;
     for(let t=0;t<=1;t+=.05){const u=1-t,x=u*u*a.x+2*u*t*cx+t*t*b.x,y=u*u*a.y+2*u*t*cy+t*t*b.y,dd=Math.hypot(w.x-x,w.y-y);if(dd<bd){bd=dd;best=e;}}});
@@ -971,7 +1010,7 @@ function renderPanel(){
     h+=`<h2>Where you are</h2><div style="color:var(--muted)">`;
     if(S.focus&&byId.has(S.focus))h+=`Focused on <b>${esc(byId.get(S.focus).label||S.focus)}</b>: its contents and what they connect to. `;
     else h+=`The top of the system: ${tops.length} top-level boundar${tops.length===1?'y':'ies'}${loose.length?` and ${loose.length} unplaced concept${loose.length===1?'':'s'} outside them (${VN.filter(n=>n.group).map(g=>loose.filter(k=>k._lc===g).length+' '+esc(g.placement)).join(', ')||'no placement'})`:''}. `;
-    h+=`Click a boundary to open it, double-click to focus on it. Drag to pan, wheel to zoom, Esc to step back.</div>`;
+    h+=coarse?`Tap a boundary to open it, double-tap to focus on it. Drag to pan, pinch to zoom.</div>`:`Click a boundary to open it, double-click to focus on it. Drag to pan, wheel to zoom, Esc to step back.</div>`;
     if(tops.length){
       const sorted=tops.slice().sort((a,b)=>critRank(b.criticality)-critRank(a.criticality)||(a.label||a.id).localeCompare(b.label||b.id));
       h+=`<ul>${sorted.map(b=>'<li>'+nodeLink(b)+' <span class="badge">'+esc(b.kind||'boundary')+'</span>'+(b._hidden?' <span class="via">'+b._hidden+' inside</span>':'')+(b.criticality?' '+critPill(b.criticality):'')+'</li>').join('')}</ul>`;
@@ -1001,8 +1040,17 @@ function renderPanel(){
       list.forEach(c=>{h+=`<div class="chg ${esc(g)}"><div>${c.kind?'<b>'+esc(c.kind)+'</b> ':''}${esc(c.msg||'')}${c.criticality?' '+critPill(c.criticality):''}</div>${c.path?'<div class="path mono">'+esc(c.path)+(c.line?':'+esc(c.line):'')+'</div>':''}</div>`;});
     });
   }
-  $('panel').innerHTML=h;
+  $('panelBody').innerHTML=h;
+  sheetLabel();
 }
+// The bottom sheet's handle (phones): what is selected, and whether it is open.
+function sheetLabel(){
+  const s=S.sel,open=!panel.classList.contains('min');
+  panel.querySelector('#sheetBtn .t').textContent=s?(s.id?(s.label||s.id):(s.s.label||s.s.id)+' \u2014'+s.p+'\u2192 '+(s.o.label||s.o.id)):S.slice?'Slice: '+S.slice.seeds.join(', '):'Details & legend';
+  panel.querySelector('#sheetBtn .c').textContent=open?'\u25be hide':'\u25b4 details';
+  $('sheetBtn').setAttribute('aria-expanded',String(open));
+}
+$('sheetBtn').addEventListener('click',()=>{panel.classList.toggle('min');panel.scrollTop=0;sheetLabel();});
 // Legend items: swatch, label and a definition worded as in docs/GRAPH.md,
 // docs/GOVERNANCE.md, docs/MARKING.md and docs/ADVANCED.md.
 const LEGEND=[
@@ -1073,11 +1121,11 @@ function reveal(n){ // expand every container, then select and centre
   let c=n._c||containerOf(n),g=0;while(c&&g++<64){S.expanded.add(c.id);c=c._c||containerOf(c);}
   if(n.internal&&!S.internal){S.internal=true;const el=$('internal');if(el)el.checked=true;}
   if(S.focus&&!(n.id===S.focus||under(n,byId.get(S.focus))))S.focus=null;
-  rebuild(false);S.sel=n;const p=centre(n);if(p){S.cam.x=cv.clientWidth/2-p.x*S.cam.k;S.cam.y=cv.clientHeight/2-p.y*S.cam.k;}
+  rebuild(false);S.sel=n;const p=centre(n);if(p){S.cam.x=cv.clientWidth/2-p.x*S.cam.k;S.cam.y=viewH()/2-p.y*S.cam.k;S.camMoved=true;}
   renderPanel();draw();
 }
-$('panel').addEventListener('toggle',ev=>{if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;},true);
-$('panel').addEventListener('click',ev=>{
+panel.addEventListener('toggle',ev=>{if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;},true);
+panel.addEventListener('click',ev=>{
   const b=ev.target.closest('button[data-act]');
   if(b&&S.sel&&S.sel.id){
     const n=S.sel;
@@ -1099,21 +1147,40 @@ $('panel').addEventListener('click',ev=>{
 
 /* ---- interaction ---- */
 let drag=null,moved=false;
+// Touch: the pointers down on the canvas; two of them pinch to zoom and pan.
+const pts=new Map();let pinch=null;
+function pinchGeom(){const [a,b]=[...pts.values()];return {d:Math.hypot(a.x-b.x,a.y-b.y)||1,x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
 function moveSubtree(n,dx,dy){const p=S.pos.get(n.id);if(p){p.x+=dx;p.y+=dy;}descendants(n,[]).forEach(k=>{const q=S.pos.get(k.id);if(q){q.x+=dx;q.y+=dy;}});}
 cv.addEventListener('pointerdown',ev=>{
+  lastPtr=ev.pointerType||'mouse';
+  pts.set(ev.pointerId,{x:ev.offsetX,y:ev.offsetY});
+  if(pts.size>=2){ // a second finger: stop dragging, start pinching
+    cv.setPointerCapture(ev.pointerId);
+    if(pts.size===2){drag=null;moved=true;tip.style.display='none';const g=pinchGeom();pinch={...g,cam:{...S.cam}};}
+    return;
+  }
   const w=toWorld(ev.offsetX,ev.offsetY),n=hitNode(w);
   drag={sx:ev.offsetX,sy:ev.offsetY,cam:{...S.cam},node:n,lx:w.x,ly:w.y};
   moved=false;cv.classList.add('drag');cv.setPointerCapture(ev.pointerId);
 });
 cv.addEventListener('pointermove',ev=>{
+  if(pts.has(ev.pointerId))pts.set(ev.pointerId,{x:ev.offsetX,y:ev.offsetY});
+  if(pinch){
+    if(pts.size<2)return;
+    const g=pinchGeom(),k=Math.min(8,Math.max(.05,pinch.cam.k*g.d/pinch.d));
+    // The world point under the fingers' first midpoint follows the midpoint.
+    const wx=(pinch.x-pinch.cam.x)/pinch.cam.k,wy=(pinch.y-pinch.cam.y)/pinch.cam.k;
+    S.cam={k,x:g.x-wx*k,y:g.y-wy*k};S.camMoved=true;draw();return;
+  }
   if(drag){
     const dx=ev.offsetX-drag.sx,dy=ev.offsetY-drag.sy;
     if(Math.hypot(dx,dy)>3)moved=true;
     if(!moved)return;
     if(drag.node){const w=toWorld(ev.offsetX,ev.offsetY);moveSubtree(drag.node,w.x-drag.lx,w.y-drag.ly);drag.lx=w.x;drag.ly=w.y;S.pinned.add(drag.node.id);}
-    else{S.cam.x=drag.cam.x+dx;S.cam.y=drag.cam.y+dy;}
+    else{S.cam.x=drag.cam.x+dx;S.cam.y=drag.cam.y+dy;S.camMoved=true;}
     tip.style.display='none';draw();return;
   }
+  if(ev.pointerType!=='mouse'&&ev.pointerType)return; // no hover on touch
   const w=toWorld(ev.offsetX,ev.offsetY),h=hitNode(w)||hitEdge(w);
   if(h!==S.hover){S.hover=h;draw();}
   cv.classList.toggle('hit',!!h);
@@ -1144,17 +1211,20 @@ function endDrag(ev){
   renderPanel();draw();
 }
 function collapse(n){if(n.group)return;S.expanded.delete(n.id);descendants(n,[]).forEach(k=>{if(!k.group)S.expanded.delete(k.id);});if(S.focus&&(S.focus===n.id||under(byId.get(S.focus),n)))S.focus=null;}
-cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',()=>{drag=null;cv.classList.remove('drag');});
+// After a pinch, the fingers lift one by one; none of them is a tap.
+cv.addEventListener('pointerup',ev=>{pts.delete(ev.pointerId);if(pinch||moved&&!drag){if(pts.size<2)pinch=null;return;}endDrag(ev);});
+cv.addEventListener('pointercancel',ev=>{pts.delete(ev.pointerId);if(pts.size<2)pinch=null;drag=null;cv.classList.remove('drag');});
 cv.addEventListener('pointerleave',()=>{if(!drag){S.hover=null;tip.style.display='none';draw();}});
 cv.addEventListener('wheel',ev=>{
   ev.preventDefault();
   const f=Math.exp(-ev.deltaY*0.0015),k=Math.min(8,Math.max(.05,S.cam.k*f)),r=k/S.cam.k;
-  S.cam.x=ev.offsetX-(ev.offsetX-S.cam.x)*r;S.cam.y=ev.offsetY-(ev.offsetY-S.cam.y)*r;S.cam.k=k;draw();
+  S.cam.x=ev.offsetX-(ev.offsetX-S.cam.x)*r;S.cam.y=ev.offsetY-(ev.offsetY-S.cam.y)*r;S.cam.k=k;S.camMoved=true;draw();
 },{passive:false});
 window.addEventListener('keydown',ev=>{if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
   if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
   if(ev.key==='f')fit();});
-new ResizeObserver(()=>draw()).observe(stage);
+// A resize (a phone turned sideways) refits the map unless the reader has panned or zoomed.
+new ResizeObserver(()=>{if(!S.camMoved&&VN.length)fit();else draw();}).observe(stage);
 
 /* ---- controls ---- */
 const sel=$('viewSel');
@@ -1188,7 +1258,7 @@ window.glossViewer={
     const p=S.pos.get(n.id);return p?{x0:p.x-n._hw,x1:p.x+n._hw,y0:p.y-n._h/2-4,y1:p.y+n._h/2+18,open:false}:null;},
   edges(){return VE.filter(e=>!e.contain).map(e=>({s:e.s.id,p:e.p,o:e.o.id}));},
   select(id){const n=byId.get(id);if(!n)return false;reveal(n);return true;},
-  panel(){return $('panel').innerText;},
+  panel(){return $('panelBody').innerText;},
   filter(group,value){if(!S.f[group])return false;S.f[group].has(value)?S.f[group].delete(value):S.f[group].add(value);buildFilters();rebuild(false);renderPanel();draw();return true;},
   slice(seeds){setSlice(seeds&&seeds.length?seeds:null);return S.slice?[...S.slice.roles.keys()].sort():null;},
   sliceOf(seed){const m=sliceOf(seed);return m?m.map(x=>x.id).sort():null;},
