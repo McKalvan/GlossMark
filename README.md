@@ -24,7 +24,7 @@ $ gloss drift
   services/circulation/loans/returns.py:10 implements circ:NEW:DamageCheck: rogue concept; becomes a decision request
 ◇ Presented but not implemented (a surface with no mechanism)
   lib:Hold is presented (apps/opac/src/PlaceHold.tsx#PlaceHold) but nothing implements it: a surface with no mechanism behind it
-Concepts covered 22% (2/9 with an artifact and a verifier)   Files 83% (15/18)   Orphans: 6   Rogue: 1   Violations: 2   Gaps: 1   Stale: 0   Untested: 4   Proposed links: 4   Proposed concepts: 0
+Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue: 1   Violations: 2   Gaps: 1   Stale: 0   Untested: 4   Proposed links: 4   Proposed concepts: 0
 ```
 
 ## What is in this repository

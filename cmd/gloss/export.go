@@ -44,6 +44,7 @@ func cmdExport(args []string) int {
 	}
 	if *status {
 		rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
+		rollup.AddDeprecatedUse(rep, p.Graph, p.WS.Config.EffectivePolicy(), time.Now())
 		b, err := json.MarshalIndent(rollup.ConceptStatus(p.Graph, rep), "", "  ")
 		if err != nil {
 			return fail(err)

@@ -67,6 +67,10 @@ var (
 	// "const val NAME" would otherwise read as the TS "const val".
 	ktRules = []declRule{
 		{regexp.MustCompile(`^\s*(?:(?:private|public|internal|protected|override|open|final|abstract|lateinit|const|lazy|implicit|inline)\s+)*(?:val|var)\s+([A-Za-z_]\w*)`), "variable", nil},
+		// fun with any modifiers (suspend, inline, operator, ...), type
+		// parameters and an extension receiver; a backtick name (a test
+		// name with spaces) is recorded without its backticks.
+		{regexp.MustCompile("^\\s*(?:(?:private|public|internal|protected|override|open|final|abstract|suspend|inline|operator|infix|tailrec|external|actual|expect)\\s+)*fun\\s+(?:<[^>]*>\\s*)?(?:[\\w?]+(?:<[^>]*>)?\\??\\.)*(?:`([^`]+)`|([A-Za-z_]\\w*))\\s*\\("), "function", nil},
 	}
 	goRules = []declRule{
 		{regexp.MustCompile(`^func\s+\(\s*\w+\s+\*?([A-Za-z_]\w*)\s*\)\s*([A-Za-z_]\w*)`), "method", func(m []string) string { return m[1] + "." + m[2] }},
@@ -110,6 +114,15 @@ var (
 		{regexp.MustCompile(`^\s*(?:function\s+)?([A-Za-z_]\w*)\s*\(\)`), "function", nil},
 		{regexp.MustCompile(`^\s*(FROM|RUN|ENTRYPOINT|CMD|COPY)\b`), "instruction", nil},
 	}
+	plRules = []declRule{
+		{regexp.MustCompile(`^\s*sub\s+([A-Za-z_][\w:]*)`), "function", nil},
+		{regexp.MustCompile(`^\s*package\s+([A-Za-z_][\w:]*)`), "package", nil},
+	}
+	prismaRules = []declRule{
+		{regexp.MustCompile(`^\s*(model|view)\s+([A-Za-z_]\w*)\s*\{`), "model", func(m []string) string { return m[2] }},
+		{regexp.MustCompile(`^\s*(enum|type)\s+([A-Za-z_]\w*)\s*\{`), "type", func(m []string) string { return m[2] }},
+		{regexp.MustCompile(`^\s*(datasource|generator)\s+([A-Za-z_]\w*)\s*\{`), "block", func(m []string) string { return m[1] + "." + m[2] }},
+	}
 	protoRules = []declRule{
 		{regexp.MustCompile(`^\s*(message|service|enum|rpc)\s+([A-Za-z_]\w*)`), "proto", func(m []string) string { return m[2] }},
 	}
@@ -144,6 +157,10 @@ func rulesFor(path string) []declRule {
 		return shRules
 	case ".proto":
 		return protoRules
+	case ".pl", ".pm":
+		return plRules
+	case ".prisma":
+		return prismaRules
 	}
 	if base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile.") {
 		return shRules
@@ -410,18 +427,38 @@ func blockEnd(lines []string, j int, path string) int {
 			end = k
 		}
 		return end
-	case ".sql":
-		for k := j; k < len(lines); k++ {
-			if strings.Contains(lines[k], ";") {
-				return k
+	case ".sql", ".ddl", ".psql":
+		return sqlEnd(lines, j)
+	case ".pl", ".pm":
+		// A statement-form package runs to the next package or the end of
+		// the file; a sub, or a package { block }, matches braces below.
+		if perlPackage.MatchString(start) {
+			end := j
+			for k := j + 1; k < len(lines); k++ {
+				t := strings.TrimSpace(lines[k])
+				if strings.HasPrefix(t, "package ") {
+					break
+				}
+				if t != "" {
+					end = k
+				}
 			}
+			return end
 		}
-		return j
 	}
-	// Brace languages: match braces from the first '{' at or after j.
-	depth := 0
+	// Brace languages: match braces from the first '{' at or after j. A
+	// parameter list that spans lines (a Kotlin primary constructor, a long
+	// signature) is part of the signature, so the body may open after it;
+	// with no '{' on the signature's last line or the two after it, or a
+	// blank line first, the declaration has no body and ends with its
+	// signature.
+	depth, parens := 0, 0
 	opened := false
+	sigEnd := j
 	for k := j; k < len(lines); k++ {
+		if !opened && k > sigEnd && (k > sigEnd+2 || strings.TrimSpace(lines[k]) == "") {
+			return sigEnd
+		}
 		for _, ch := range lines[k] {
 			switch ch {
 			case '{':
@@ -429,14 +466,63 @@ func blockEnd(lines []string, j int, path string) int {
 				opened = true
 			case '}':
 				depth--
+			case '(':
+				parens++
+			case ')':
+				parens--
 			}
 		}
 		if opened && depth <= 0 {
 			return k
 		}
-		if !opened && k > j+2 {
-			// one-liner without braces
-			return j
+		if !opened && parens > 0 {
+			if k-j >= 60 {
+				return j // unbalanced: a paren in a string, say
+			}
+			sigEnd = k + 1
+		}
+	}
+	return j
+}
+
+var (
+	perlPackage = regexp.MustCompile(`^\s*package\s+[\w:]+\s*;`)
+	dollarQuote = regexp.MustCompile(`^\$(?:[A-Za-z_]\w*)?\$`)
+)
+
+// sqlEnd returns the line of the ';' that ends the SQL statement starting
+// at j. A ';' inside a dollar-quoted body ($$ ... $$ or $fn$ ... $fn$, the
+// body of a PostgreSQL CREATE FUNCTION or PROCEDURE), a quoted string or a
+// -- comment does not end it, so a function ends at the line that closes
+// its body ($$ LANGUAGE plpgsql;).
+func sqlEnd(lines []string, j int) int {
+	tag := "" // the open dollar quote, if any
+	for k := j; k < len(lines); k++ {
+		ln := lines[k]
+		inStr := false
+		for i := 0; i < len(ln); i++ {
+			switch {
+			case tag != "":
+				if strings.HasPrefix(ln[i:], tag) {
+					i += len(tag) - 1
+					tag = ""
+				}
+			case inStr:
+				if ln[i] == '\'' {
+					inStr = false
+				}
+			case ln[i] == '\'':
+				inStr = true
+			case strings.HasPrefix(ln[i:], "--"):
+				i = len(ln)
+			case ln[i] == '$':
+				if q := dollarQuote.FindString(ln[i:]); q != "" {
+					tag = q
+					i += len(q) - 1
+				}
+			case ln[i] == ';':
+				return k
+			}
 		}
 	}
 	return j

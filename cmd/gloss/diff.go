@@ -98,6 +98,9 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 	if ref == "" {
 		return graph.New(ws.Prefixes), nil
 	}
+	if err := verifyBase(ws.Root, ref); err != nil {
+		return nil, err
+	}
 	if out, err := gitOut(ws.Root, "show", ref+":"+prefix+load.StateDir+"/graph.jsonl"); err == nil {
 		// A graph another release committed may fingerprint anchors
 		// differently (ADR 0006, ADR 0014); re-extracting the base with this
@@ -208,6 +211,27 @@ func baseFiles(ws *load.Workspace, ref string, bg *graph.Graph) []string {
 		}
 	}
 	return files
+}
+
+// verifyBase fails with a message naming --base when ref is not a commit
+// here: in CI, usually a shallow clone that never fetched origin/main.
+func verifyBase(root, ref string) error {
+	if _, err := gitOut(root, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err != nil {
+		return fmt.Errorf("base %s is not a commit in this repository; fetch it (git fetch origin main, or a deeper clone in CI) or name another ref with --base <ref>", ref)
+	}
+	return nil
+}
+
+// baseHasWorkspace reports whether the base commit has glossmark.yaml where
+// this workspace has it; the commit that adopts GlossMark has none.
+func baseHasWorkspace(ws *load.Workspace, ref string) (bool, string) {
+	prefix, err := gitOut(ws.Root, "rev-parse", "--show-prefix")
+	if err != nil {
+		return false, "."
+	}
+	prefix = strings.TrimSpace(prefix)
+	_, err = gitOut(ws.Root, "cat-file", "-e", ref+":"+prefix+load.ConfigName)
+	return err == nil, firstNonEmpty(strings.TrimSuffix(prefix, "/"), ".")
 }
 
 func changedFiles(root, ref string) ([]string, error) {

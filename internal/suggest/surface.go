@@ -18,7 +18,7 @@ const (
 	roleFunc     = "func"     // top-level function, Go method
 	roleMember   = "member"   // method inside a class
 	roleTest     = "test"     // test function or class in a test path, Gherkin
-	roleTable    = "table"    // SQL table, view, function, procedure
+	roleTable    = "table"    // SQL table, view, function, procedure; Prisma model
 	roleResource = "resource" // Terraform resource or module
 	roleHeading  = "heading"  // Markdown heading
 	roleWorkload = "workload" // Kubernetes Deployment, CronJob, ...
@@ -65,6 +65,9 @@ func surface(d marker.Decl, lines []string, path string, test bool) (role string
 			return roleTable, true
 		}
 		return "", false
+	case "model":
+		// A Prisma model or view is a table.
+		return roleTable, true
 	case "proto":
 		if strings.HasPrefix(sig, "rpc") {
 			return roleFunc, true

@@ -38,7 +38,23 @@ def check_in():
     ...
 ```
 
-The declaration detector skips the decorator stack, including multi-line arguments, and anchors to `check_in`. The stack is part of the anchor's fingerprint, so deleting or changing a decorator such as `@requires_role("approver")` stales the link and shows in `gloss diff` as `decorators changed` ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)). Formatters leave the comment there. Inside a block comment or a docstring is fine as long as the text is a comment; a marker inside a string literal is ignored.
+The declaration detector skips the decorator stack, including multi-line arguments, and anchors to `check_in`. The stack is part of the anchor's fingerprint, so deleting or changing a decorator such as `@requires_role("approver")` stales the link and shows in `gloss diff` as `decorators changed` ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)). Formatters leave the comment there. Inside a block comment or a docstring is fine as long as the text is a comment; a marker inside a string literal is ignored. The scanner reads line by line, so a heredoc or a multi-line string is not a string to it: a line in a bash heredoc that starts with `#` is a comment of the script, and `# @gloss ...` there is a marker of the script (see [GRAMMAR.md](GRAMMAR.md#rules)). Assemble such a line instead (`printf '# @%s ...' gloss`).
+
+## Agent files
+
+Claude Code agent and skill files (`.claude/agents/*.md`, `SKILL.md`) need their YAML frontmatter on line 1. Put the markers right below it, with `scope=file`:
+
+```markdown
+---
+name: cataloging-assistant
+description: Suggests subject headings for new acquisitions.
+---
+<!-- @gloss instructs circ:SubjectSuggester scope=file -->
+<!-- @gloss may-modify circ:Catalog*, circ:Subject*, lib:Book scope=file -->
+# Cataloging assistant
+```
+
+Without `scope=file` a marker below the frontmatter binds to the next heading (`# Cataloging assistant`), not to the file. `CLAUDE.md` and `AGENTS.md` have no frontmatter, so their markers go on line 1, still with `scope=file`. A new or changed `instructs` or `may-modify` link is HARD in `gloss diff`.
 
 ## Core or implementation target?
 
@@ -72,10 +88,10 @@ Write `@gloss?` when you are not sure, and `conf=0.8` with an agent's confidence
 
 ## What `gloss suggest` drafts, and what it leaves to you
 
-`gloss suggest` proposes on public surfaces only: top-level declarations and the methods of classes, tables and views, Terraform resources, tests, Markdown headings, Kubernetes workloads, and page and layout components. It skips package clauses, `impl` blocks, indexes, module-level variables, private declarations, and fakes and fixtures in test files. Its evidence is the declaration's name, a concept doc that names it, its docstring or comment, the tables its body touches, and the code a test calls. Programming words such as handler, manager and process never match on their own (extend the list under `suggest: stopwords:`). It proposes implements, represents, verifies, provisions, documents, deploys, presents, hosts, subscribes, consumes and publishes, and collapses a run of identical proposals into one `scope=file` or `scope=block` marker. A deprecated concept is still a target, because brownfield code still says its name: the proposal carries `note="lib:Borrower is deprecated, replaced-by lib:Patron; ..."`, is never an auto-accept candidate (the gate classes a link to a deprecated concept HARD), and you choose between keeping it and linking the replacement. A `proposed: true` concept is not a target until it is accepted ([ADR 0030](adr/0030-suggest-targets-deprecated-not-proposed.md)). Write `configures`, `publishes-value`, `instructs`, `may-modify` and `produces` by hand, and the markers in sidecars, JSON, Dockerfiles and CI workflows ([ADR 0022](adr/0022-what-suggest-proposes.md)).
+`gloss suggest` proposes on public surfaces only: top-level declarations and the methods of classes, tables, views and Prisma models, Terraform resources, tests, Markdown headings, Kubernetes workloads, and page and layout components. It skips package clauses, `impl` blocks, indexes, module-level variables, private declarations, and fakes and fixtures in test files. Its evidence is the declaration's name, a concept doc that names it, its docstring or comment, the tables its body touches, and the code a test calls. Programming words such as handler, manager and process never match on their own (extend the list under `suggest: stopwords:`). It proposes implements, represents, verifies, provisions, documents, deploys, presents, hosts, subscribes, consumes and publishes, and collapses a run of identical proposals into one `scope=file` or `scope=block` marker. A deprecated concept is still a target, because brownfield code still says its name: the proposal carries `note="lib:Borrower is deprecated, replaced-by lib:Patron; ..."`, is never an auto-accept candidate (the gate classes a link to a deprecated concept HARD), and you choose between keeping it and linking the replacement. A `proposed: true` concept is not a target until it is accepted ([ADR 0030](adr/0030-suggest-targets-deprecated-not-proposed.md)). Write `configures`, `publishes-value`, `instructs`, `may-modify` and `produces` by hand, and the markers in sidecars, JSON, Dockerfiles and CI workflows ([ADR 0022](adr/0022-what-suggest-proposes.md)).
 
 ## What not to mark
 
-- Generated code: exclude it with `generated:` in the manifest and mark the generator's input.
+- Generated code: exclude it with `generated:` in the manifest and mark the generator's input (a Prisma `schema.prisma`, not its `migrations/`). Neither `gloss build` nor `gloss suggest` reads a generated path.
 - Vendored code: `exclude:` in `glossmark.yaml`.
 - Glue that implements nothing a domain expert would name: leave it unmarked. An orphan concept (`gloss drift`) is a better signal than a forced link.
