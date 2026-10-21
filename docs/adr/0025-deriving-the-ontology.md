@@ -79,10 +79,10 @@ Every source, deterministic or not, produces the same record: one JSON object pe
 
 | Phase | Who | Output |
 |---|---|---|
-| 1. Survey | agent | units (section 7); source inventory with family, authority and age; asks the owner which external docs are authoritative and which are stale |
+| 1. Survey | agent | units (section 7); source inventory with family, authority and age; asks the owner which external docs are authoritative and which are stale, who owns each namespace, and which language its names are in |
 | 2. Harvest | `gloss harvest`; one subagent per connector or tracker in parallel, each writing evidence through `--ingest` | `evidence.jsonl` (scratch, regenerable) |
 | 3. Cluster | `gloss harvest --cluster`, then the agent merges and splits | candidate concepts, each with its evidence |
-| 4. Canonicalise | agent | one name per concept from the highest-authority user-facing source; other surfaces as `aliases:`; homonyms split and qualified by unit or context |
+| 4. Canonicalise | agent | one name per concept from the highest-authority user-facing source, in the namespace's naming language; other surfaces, including other-language ones, as `aliases:`; homonyms split and qualified by unit or context |
 | 5. Tier | agent | core, implementation (with the core concept it `realizes`), instance, or noise. Test: *would this exist if the business ran on paper?* |
 | 6. Structure | agent | `kind`, `is-a` (from inheritance, discriminator columns, enum families), `part-of` (from foreign keys and composition), constraints (from guards and tests), events (from topics) |
 | 7. Triangulate | deterministic over the clusters | per concept, which source families agree (section 6) |
@@ -90,7 +90,11 @@ Every source, deterministic or not, produces the same record: one JSON object pe
 | 9. Interview | agent with the owner, live | answers to the highest-leverage questions, recorded as decisions |
 | 10. Emit | agent, then `gloss check` | tier files with `proposed: true`; the derivation record; the review packet; seeds for `gloss suggest` |
 
-**Critique checklist.** Core names that equal a type name with no non-code evidence (the class-diagram smell); a core concept that names a technology, table or framework; an implementation concept that realizes nothing and is not `internal`; a core tier over about 100 concepts in one namespace (a sign of several bounded contexts); a concept whose only evidence is one test name or one heading; two concepts whose evidence sets overlap by more than half (a missed merge); one surface with evidence in two units whose contexts share nothing (a missed homonym).
+**Critique checklist.** Core names that equal a type name with no non-code evidence (the class-diagram smell); a core concept that names a technology, table or framework; an implementation concept that realizes nothing and is not `internal`; a core namespace whose concepts fall into clusters that rarely reference each other (a sign of several bounded contexts; see below); a concept whose only evidence is one test name or one heading; two concepts whose evidence sets overlap by more than half (a missed merge); one surface with evidence in two units whose contexts share nothing (a missed homonym).
+
+**Splitting a namespace.** Size alone does not decide. The critic builds a graph over the namespace's concepts, with an edge wherever two concepts share evidence (a table or foreign key, a doc section, a test, a route) or a proposed relation (`is-a`, `part-of`, `consumes`). When that graph falls into clusters with few edges between them, the clusters are proposed as separate core namespaces and the split becomes an interview question; the concepts on the few cross-cluster edges are candidates for a shared, published namespace. About 100 concepts in one namespace prints a warning to look, nothing more.
+
+**Naming language.** The owner chooses each namespace's naming language in the survey. Names are in that language; every surface in another language (a German spec term for an English type, say) becomes an alias, so `search_concepts` and `gloss suggest` match either. Docs are written in the naming language.
 
 **Interview.** At most about ten questions live, ranked by leverage: the evidence records and concepts an answer would change, weighted by disagreement between sources. Question types are fixed so answers map to decisions: *same thing?* (merge), *different things?* (split), *core or implementation?*, *which name?*, *is this doc stale or is the code wrong?*, *is this a concept or an instance?* Everything below the cut goes into the review packet as a ranked decision list.
 
@@ -140,7 +144,7 @@ Enum values and configuration split by what the business does with them:
 
 A core derived from one application's material is still shaped by that application. Published industry vocabularies are the one source that no implementation of *this* business shaped, so they are closest to the platonic core. They are used narrowly:
 
-- **Opt-in, by file.** The owner selects a reference vocabulary in the survey phase; `gloss harvest --reference <file>` reads it (RDF/OWL or JSON-LD) into `reference-term` evidence. Nothing is fetched implicitly, and each vocabulary's licence is checked before it is bundled or recommended.
+- **Bring your own, by file.** GlossMark bundles no reference vocabulary, so the binary carries no third-party licence. The owner supplies one in the survey phase; `gloss harvest --reference <file>` reads it (RDF/OWL or JSON-LD) into `reference-term` evidence. The docs list known vocabularies and where to get them. Nothing is fetched implicitly.
 - **Never evidence of existence.** A reference term with no evidence from the user's own material is not proposed. Derivation does not import FIBO; it borrows from it.
 - **Tie-breaker for names.** When the user's own sources disagree on a name (`Customer`, `Client`, `Party`), a reference term that matches one of them breaks the tie. The other surfaces stay aliases.
 - **Structure hints.** A reference `subClassOf` or part-whole relation between two concepts that both have their own evidence is proposed as `is-a` or `part-of`, at the confidence its kind of evidence measures (8.1).
@@ -219,8 +223,6 @@ When D1 is built, `gm:` gains the concepts it introduces (evidence, derivation, 
 
 ## Open questions
 
-Settled while workshopping: docs-only concepts are `planned` (6.1); lifecycle and kind values are concepts and catalogue values are instances (6.2); reference ontologies break naming ties and seed mappings but never add concepts (6.3); the namespace owner answers, packet questions route to stakeholders and can be answered in the PR, and stand-in decisions are marked unconfirmed (section 5); derived decisions carry a calibrated `conf` with auto-accept above a repository's chosen precision, except for the decisions listed in 8.1.
+Settled while workshopping: docs-only concepts are `planned` (6.1); lifecycle and kind values are concepts and catalogue values are instances (6.2); reference ontologies break naming ties and seed mappings but never add concepts (6.3); the namespace owner answers, packet questions route to stakeholders and can be answered in the PR, and stand-in decisions are marked unconfirmed (section 5); derived decisions carry a calibrated `conf` with auto-accept above a repository's chosen precision, except for the decisions listed in 8.1; namespaces split by cohesion, not by count (section 5); the owner picks each namespace's naming language and other-language surfaces are aliases (section 5); no reference vocabulary is bundled (6.3).
 
-1. What is a sensible concept budget per core namespace before derivation insists on splitting into bounded contexts?
-2. How does naming work when the docs are in one language and the code in another?
-3. Which reference vocabularies are worth bundling, and under which licences?
+None at the moment; the D1 spike of `gloss harvest` on AgentArena is expected to raise the next ones.
