@@ -306,7 +306,7 @@ It was not fixed: a rule worded without a rule word ("`amount > 0` is money flow
 **What the run changed in the skill.**
 
 1. **The critique is the most productive step.** A fresh subagent with source access found 15 problems. Most were about fidelity rather than tier: one "rule" that was two (cash flow drops the unfinished period; burn rate divides by elapsed days), rules aimed at the wrong concepts, and the mortgage mirrored into loan and real-estate accounts. It also found missing measures and rules (home equity, FIRE progress, last known balance, retirement detection) and docs that contradict the code. The skill now requires the critic to have source access and to check fidelity and repository-doc drift.
-2. **The interview may anchor.** The owner accepted the recommended option for all 7 questions. Each question now states its evidence and offers *leave it open*, and the packet reports the acceptance rate.
+2. **The interview may anchor.** The owner accepted the recommended option for all 7 questions. Each question now states its evidence and offers *leave it open*, and the packet reports the acceptance rate. With those changes, the owner answered the 4 packet questions and chose against the recommendation once (*Ledger* over *MasterData*): 10 of 11 overall.
 3. **Rules in code-first repositories** come from test names and named sets, not must/never sentences. The skill reads `value-set` and `test-name` for constraints.
 4. **Scope includes demo-data generators.** `scripts/generate_sample_data.py` added merchant names as candidates.
 
@@ -316,6 +316,8 @@ It was not fixed: a rule worded without a rule word ("`amount > 0` is money flow
 - It also lacks two abstractions the one-pass draft had, `Liability` and `SafeWithdrawalRate`, both of which went to the owner as questions.
 
 The two are not directly comparable, because the derived draft had an owner and a critic. But that is the point of the design.
+
+**Adoption.** The owner then answered the packet questions, and the derived ontology was adopted on pfinance ([McKalvan/pfinance#4](https://github.com/McKalvan/pfinance/pull/4)). The result: 71 core and 29 implementation concepts, all proposed; 100 markers; 0 errors, warnings, violations or gaps under the development build and the pinned v0.1.0 release; 5 orphans and 5 untested concepts listed in the PR. Every pfinance test passes, and ruff reports nothing new.
 
 ## Alternatives considered
 

@@ -183,7 +183,7 @@ gloss check    # 0 errors; read every warning
 {"type":"decision","decision":"merge","keys":["borrow","patron"],"concept":"lib:Patron","actor":"human:alice","owner_confirmed":true,"date":"2026-10-21"}
 ```
 
-`decision` is one of `merge`, `split` (with `"by": "<unit or glob>"`), `rename`, `tier`, `reject`, `instance` (with `"of": "<concept>"`), `planned`. Keys are cluster keys, not evidence ids, because ids move when lines move. On a re-run:
+`decision` is one of `merge`, `split` (with `"by": "<unit or glob>"`), `rename`, `tier`, `reject`, `instance` (with `"of": "<concept>"`), `planned`, `stale-doc` (the code is right and a repository document is not; the fix belongs in a separate change). Keys are cluster keys, not evidence ids, because ids move when lines move. On a re-run:
 - apply every recorded decision before proposing anything;
 - never re-propose a rejected key;
 - report **new terms** (shortlisted keys with no concept and no decision), **lost evidence** (a concept whose code evidence disappeared: a candidate for `deprecated`) and **changed sources** (an external hash that moved).
