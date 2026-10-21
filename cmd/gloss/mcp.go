@@ -15,6 +15,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/mapping"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/mcp"
 	"github.com/mckalvan/glossmark/internal/model"
@@ -211,8 +212,13 @@ func (b *mcpBackend) ProposeConcept(cp mcp.ConceptProposal) (any, error) {
 	b.mu.Lock()
 	b.p = nil
 	b.mu.Unlock()
-	return map[string]any{"curie": curie, "file": relOrAbs(p.WS.Root, path), "status": "proposed", "markers_rewritten": rewritten,
-		"next": "link to it with @gloss? ... " + curie + "; a human accepts it with: gloss accept --concept " + curie}, nil
+	out := map[string]any{"curie": curie, "file": relOrAbs(p.WS.Root, path), "status": "proposed", "markers_rewritten": rewritten,
+		"next": "link to it with @gloss? ... " + curie + "; a human accepts it with: gloss accept --concept " + curie}
+	if dups := mapping.Duplicates(p.Graph, curie, cp.Kind, cp.Doc, cp.Aliases); len(dups) > 0 {
+		out["possible_duplicates"] = dups
+		out["duplicate_hint"] = "a concept in another namespace that means the same is better recorded with propose_mapping than as a new name; one in the same namespace is the concept to use"
+	}
+	return out, nil
 }
 
 func (b *mcpBackend) Context(dir string, budget int, changed bool) (string, error) {
@@ -256,4 +262,32 @@ func cmdMCP(args []string) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// ProposeMapping writes a proposed SSSOM row (ADR 0025) and classifies its gate.
+func (b *mcpBackend) ProposeMapping(mp mcp.MappingProposal) (any, error) {
+	b.mu.Lock()
+	b.p = nil
+	b.mu.Unlock()
+	p, err := buildGraph(b.root, false)
+	if err != nil {
+		return nil, err
+	}
+	actor := os.Getenv("GLOSS_ACTOR")
+	if actor == "" {
+		actor = "agent:mcp"
+	}
+	conf := -1.0
+	if mp.Conf != nil {
+		conf = *mp.Conf
+	}
+	res, err := proposeMapping(p, MappingRequest{Subject: mp.Subject, Predicate: mp.Predicate, Object: mp.Object, Set: mp.Set, Justification: mp.Justification,
+		Conf: conf, Comment: mp.Comment, Actor: actor})
+	b.mu.Lock()
+	b.p = nil
+	b.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }

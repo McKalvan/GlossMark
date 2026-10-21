@@ -377,6 +377,9 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 		}
 	}
 	for id, e := range l.Entries {
+		if strings.HasPrefix(id, "mapping:") {
+			continue // SyncMappings owns mapping entries (ADR 0025)
+		}
 		// Deleting a rejected proposal is the expected cleanup, not a new
 		// state: the rejection stays the decision (ADR 0005).
 		if !seen[id] && e.Status != model.StatusRemoved && e.Status != model.StatusRejected {
@@ -392,7 +395,7 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 // number of edges removed; the caller re-derives when it is not zero.
 func (l *Ledger) DropRejected(g *graph.Graph) int {
 	return g.RemoveEdges(func(e *graph.Edge) bool {
-		if e.Prov == nil || e.Prov.ID == "" || (e.Source != graph.SourceInline && e.Source != graph.SourceInferred) {
+		if e.Prov == nil || e.Prov.ID == "" || (e.Source != graph.SourceInline && e.Source != graph.SourceInferred && e.Source != graph.SourceMapping) {
 			return false
 		}
 		le, ok := l.Entries[e.Prov.ID]

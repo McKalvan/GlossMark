@@ -21,6 +21,10 @@ func Merge(wss []*Workspace) (*Workspace, error) {
 	out := &Workspace{Root: filepath.Dir(wss[0].Root), Config: &model.Config{Owns: map[string]*model.NamespaceDecl{}, Imports: map[string]*model.ImportDecl{}, Prefixes: map[string]string{}},
 		Ontologies: map[string]*model.Ontology{}, Owned: map[string]bool{}, Imported: map[string]*model.ImportDecl{}, Vocab: model.NewVocabulary(), Prefixes: map[string]string{}}
 	out.Config.Policy = wss[0].Config.Policy
+	for _, ws := range wss {
+		// Any repository (a mapping registry, typically) may turn on lift.
+		out.Config.MappingLift = out.Config.MappingLift || ws.Config.MappingLift
+	}
 	out.Config.Views = wss[0].Config.Views
 	out.Views = wss[0].Views
 	// Two prefixes bound to one namespace IRI would merge two namespaces

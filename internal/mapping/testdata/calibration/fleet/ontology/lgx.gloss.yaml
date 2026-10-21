@@ -1,0 +1,12 @@
+concepts:
+  Truck:       { kind: entity }
+  Operator:    { kind: entity, aliases: [driver] }
+  Route:       { kind: entity, doc: "A planned sequence of stops." }
+  Journey:     { kind: entity }
+  Warehouse:   { kind: entity, aliases: [depot] }
+  Consignment: { kind: entity, aliases: [shipment] }
+  Stop:        { kind: entity }
+  Delivery:    { kind: event, doc: "A parcel handed to the recipient." }
+  Service:     { kind: process, aliases: [maintenance] }
+  Mileage:     { kind: measure }
+  FuelCard:    { kind: entity }

@@ -95,7 +95,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .sw.i{border-style:dashed}.sw.p{box-shadow:0 0 0 2px var(--gold)}
 .sw.k{background:transparent;border-width:2.5px}
 .sw.k.low{border-color:var(--crit-low)}.sw.k.medium{border-color:var(--crit-medium)}.sw.k.high{border-color:var(--crit-high)}.sw.k.critical{border-color:var(--crit-critical)}
-.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}
+.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}.ln.map{border-top:3px double var(--edge)}
 .ln.add{border-color:var(--added)}.ln.rem{border-color:var(--removed)}
 .gate{font-weight:650;padding:1px 6px;border-radius:4px;color:#fff;font-size:11px}
 .gate.HARD{background:var(--hard)}.gate.SOFT{background:var(--soft)}.gate.AUTO{background:var(--auto)}
@@ -475,7 +475,7 @@ function rebuild(seedAll){
     let g=agg.get(k);
     if(!g){g={s:a,o:b,p:e.p,src:new Set(),count:0,via:new Set(),lifted:false,proposed:true,rerouted:false,parts:[],diff:''};agg.set(k,g);}
     g.src.add(e.source||'declared');g.count+=e.count||1;(e.via||[]).forEach(v=>g.via.add(v));
-    if(e.lifted)g.lifted=true;if(!e.proposed)g.proposed=false;
+    if(e.lifted)g.lifted=true;if(!e.proposed)g.proposed=false;if(e.review)g.review=e.review;
     if(a.id!==e.s||b.id!==e.o)g.rerouted=true;
     g.parts.push(e);
     const ek=ekey(e);
@@ -630,6 +630,7 @@ function edgeDash(e){
   if(e.diff!=='removed'&&e.proposed)return [2,4];
   if(e.source==='derived')return [6,4];
   if(e.source==='mixed')return [10,3,2,3];
+  if(e.source==='mapping')return [14,3,3,3];
   return [];
 }
 function edgeWidth(e){return (e.source==='inline'?1:1.6)+(e.lifted?1.6:0);}
@@ -833,7 +834,7 @@ function nodeTip(n){
 }
 function edgeTip(e){
   const iface=(e.s._open&&under(e.o,e.s))||(e.o._open&&under(e.s,e.o));
-  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
+  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.review==='stale'?' · stale: re-review':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
   if(e.via&&e.via.size)h+=`<br><span class="k">via</span><ul>${[...e.via].slice(0,10).map(v=>'<li>'+esc(v)+'</li>').join('')}${e.via.size>10?'<li>…</li>':''}</ul>`;
   return h;
 }
@@ -976,6 +977,7 @@ const LEGEND=[
     ['<i class="ln thin"></i>','inline','Thin line: from a @gloss marker in the code.'],
     ['<i class="ln d"></i>','derived','Dashed line: derived by the rollup rules (such as the realization lift); written by the tool, never by hand.'],
     ['<i class="ln dot"></i>','proposed','Dotted line: a proposal (@gloss? or a proposed: true entry) that a human has not yet accepted.'],
+    ['<i class="ln map"></i>','mapping','Long dash-dot line: an SSSOM mapping between namespaces (exact, close, broad, narrow or related match); the panel says whether it is proposed, accepted or stale.'],
     ['<i class="ln thick"></i>','lifted','Thick line marked ↑: a boundary’s links to several concepts lifted to their least common subsumer (is-a); the panel lists the originals under via.']]},
   {name:'Diff',diff:true,items:[
     ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.'],
@@ -985,6 +987,11 @@ const LEGEND=[
 // Relation definitions, read as "A <relation> B" in the direction the edge is drawn.
 // Worded from docs/ADVANCED.md and internal/model/vocab.go.
 const RELDEFS={
+  'same-as':'A and B mean the same thing in two namespaces: an accepted exact match from a mapping set. In a landscape they count as one concept for drift and the context map.',
+  'close-match':'A and B are close enough to interchange in some contexts: a close match from a mapping set. Informational.',
+  'broad-match':'B is broader than A: a broad match from a mapping set. With mapping-lift on, A is-a B in the landscape.',
+  'narrow-match':'B is narrower than A: a narrow match from a mapping set. With mapping-lift on, B is-a A in the landscape.',
+  'related-match':'A and B are associated, not interchangeable: a related match from a mapping set. Informational.',
   'realizes':'A stands for B. An implementation concept realizes the core concept it is the mechanism for; a boundary realizes what its code implements. Places B inside A\u2019s box. Often derived by rollup from implements.',
   'implements':'A is the code that does the work of B: the handler, pipeline or module behind a process, capability or event. Lifts to the boundary as realizes.',
   'represents':'A is the data shape of B: a model, table or schema. On an entity it lifts to the boundary as holds.',

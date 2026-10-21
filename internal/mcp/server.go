@@ -38,6 +38,19 @@ type Backend interface {
 	ProposeConcept(p ConceptProposal) (any, error)
 	// Context renders the session briefing for a directory.
 	Context(dir string, budget int, changed bool) (string, error)
+	// ProposeMapping adds a proposed row to a mapping set (ADR 0025).
+	ProposeMapping(m MappingProposal) (any, error)
+}
+
+// MappingProposal is an equivalence an agent proposes between two concepts.
+type MappingProposal struct {
+	Subject       string   `json:"subject"`
+	Predicate     string   `json:"predicate"`
+	Object        string   `json:"object"`
+	Set           string   `json:"set,omitempty"`
+	Justification string   `json:"justification,omitempty"`
+	Conf          *float64 `json:"conf,omitempty"`
+	Comment       string   `json:"comment,omitempty"`
 }
 
 // ConceptProposal is a new concept an agent wants to add with proposed: true.
@@ -162,6 +175,9 @@ var tools = []tool{
 	{"propose_concept", "Add a concept to the owning ontology file with proposed: true (the ontology's @gloss?) and rewrite ns:NEW:Name markers to it. Implementation concepts need realizes (a core concept), presents/hosts, or internal. " + agents.ProposalSentence,
 		obj(map[string]any{"curie": str("ns:Name in a namespace this repo owns"), "kind": str("entity | process | capability | event | measure | constraint | resource | system-type"), "doc": str("One sentence: what it is and why it is needed"),
 			"realizes": map[string]any{"type": "array", "items": str("core concept CURIE")}, "is_a": map[string]any{"type": "array", "items": str("parent CURIE")}, "internal": map[string]any{"type": "boolean"}, "aliases": map[string]any{"type": "array", "items": str("")}}, "curie", "kind")},
+	{"propose_mapping", "Propose that two concepts of different namespaces match (an SSSOM mapping, ADR 0025): adds a row without reviewer_id to the repository's mapping set and returns its gate. Predicates: exact, close, broad, narrow, related. Use it when another team's concept means what you need instead of proposing a new concept. The set owner accepts it with gloss map accept.",
+		obj(map[string]any{"subject": str("Concept CURIE (the owned side becomes the subject)"), "predicate": str("exact | close | broad | narrow | related, or skos:exactMatch ..."), "object": str("Concept CURIE in another namespace"),
+			"set": str("Mapping set name (optional when there is one)"), "justification": str("llm | agent | lexical | manual (default llm for agents)"), "conf": map[string]any{"type": "number"}, "comment": str("Why they match")}, "subject", "predicate", "object")},
 	{"context", "The compact briefing for a directory: its boundary, allowed targets, your remit, the concepts most relevant to the directory first, and current state. Call it once when you start working in a directory.",
 		obj(map[string]any{"dir": str("Repo-relative directory (default: repo root)"), "budget": map[string]any{"type": "integer", "description": "Approximate token budget (default 2000)"}, "changed": map[string]any{"type": "boolean", "description": "Open with what the uncommitted changes touch"}})},
 	{"slice_of", "Everything relevant to a feature (docs/adr/0023-feature-slices.md): from seeds (concept or boundary CURIEs, artifacts path#symbol, or paths) the kinds, parts, realizations, artifacts, tests and boundaries that belong to it, plus a faded context ring. Each node carries its role and the via path of edges that brought it in, its criticality and its drift findings; the summary lists what is untested. Same JSON as gloss slice --format json.",
@@ -269,6 +285,12 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("pass proposals, paths or base")
 		}
 		return out, nil
+	case "propose_mapping":
+		var mp MappingProposal
+		if err := json.Unmarshal(args, &mp); err != nil {
+			return nil, err
+		}
+		return s.backend.ProposeMapping(mp)
 	case "propose_concept":
 		var cp ConceptProposal
 		if err := json.Unmarshal(args, &cp); err != nil {

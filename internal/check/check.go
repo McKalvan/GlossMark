@@ -21,7 +21,7 @@ import (
 
 // Run returns lint diagnostics for a built graph. Codes:
 //
-//	GM2xx references   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
+//	GM2xx references   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance   GM7xx mapping sets
 func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c := &checker{ws: ws, g: g}
 	c.ontologyFiles()
@@ -31,6 +31,7 @@ func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c.markers()
 	c.manifests()
 	c.governance()
+	c.mappings()
 	c.waivers()
 	sort.SliceStable(c.out, func(i, j int) bool {
 		a, b := c.out[i], c.out[j]
@@ -485,8 +486,8 @@ const minRun = 3
 
 func (c *checker) edges() {
 	for _, e := range c.g.Edges() {
-		if e.Source == graph.SourceDerived {
-			continue
+		if e.Source == graph.SourceDerived || e.Source == graph.SourceMapping {
+			continue // mapping edges are checked by mappings() (GM7xx)
 		}
 		path, line := "", 0
 		if e.Prov != nil {

@@ -5,8 +5,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/mapping"
 )
 
 func init() {
@@ -63,7 +65,59 @@ func cmdLock(args []string) int {
 		fmt.Printf("gloss lock: %s: %s (%s) %s%s\n", prefix, orNone(r.Version), orNone(r.Range), r.Hash[:19], note)
 	}
 	fmt.Printf("gloss lock: written %s and %s/%s/; commit them\n", load.LockName, load.StateDir, load.ImportsDir)
+	if *update {
+		reportMappingsMoved(p, sel)
+	}
 	return 0
+}
+
+// reportMappingsMoved lists the mappings whose imported endpoint changed
+// between the copy that was pinned and the one just locked (ADR 0025 §4):
+// they go stale on the next build and need a review.
+func reportMappingsMoved(before *pipeline, sel map[string]*load.Resolved) {
+	moved := map[string]bool{}
+	for prefix, r := range before.WS.Resolved {
+		if n := sel[prefix]; n != nil && n.Hash != r.Hash {
+			moved[prefix] = true
+		}
+	}
+	if len(moved) == 0 || len(before.Res.Mappings) == 0 {
+		return
+	}
+	after, err := buildGraph(before.WS.Root, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gloss lock: could not compare mappings after the update: %v\n", err)
+		return
+	}
+	var lines []string
+	for _, fm := range before.Res.Mappings {
+		if fm.Negative || !fm.Supported || len(fm.Unresolved) > 0 || !fm.Row.Reviewed() {
+			continue
+		}
+		for _, end := range []string{fm.Subject, fm.Object} {
+			c := before.Graph.Curie(end)
+			if !moved[nsOf(c)] {
+				continue
+			}
+			was, now := mapping.Facts(before.Graph, end), mapping.Facts(after.Graph, end)
+			switch {
+			case was != nil && now == nil:
+				lines = append(lines, fmt.Sprintf("  %s %s %s: %s no longer exists upstream (dangling)", fm.SubjectCURIE, fm.Predicate.CURIE, fm.ObjectCURIE, c))
+			case was != nil:
+				if ch := mapping.ChangedFacts(was, now); len(ch) > 0 {
+					lines = append(lines, fmt.Sprintf("  %s %s %s: %s %s changed", fm.SubjectCURIE, fm.Predicate.CURIE, fm.ObjectCURIE, c, strings.Join(ch, ", ")))
+				}
+			}
+		}
+	}
+	if len(lines) == 0 {
+		fmt.Println("gloss lock: no accepted mapping's imported endpoint changed")
+		return
+	}
+	fmt.Printf("gloss lock: %s whose imported endpoint changed; they go stale on the next build, review each with gloss map accept or reject:\n", plural(len(lines), "mapping"))
+	for _, l := range lines {
+		fmt.Println(l)
+	}
 }
 
 func orNone(s string) string {

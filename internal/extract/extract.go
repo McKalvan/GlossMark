@@ -32,6 +32,9 @@ type Result struct {
 	Markers []FoundMarker
 	// ScannedFiles is the number of files read.
 	ScannedFiles int
+	// Mappings lists every row of every mapping set (ADR 0025), negative
+	// rows included, resolved against the workspace.
+	Mappings []FoundMapping
 }
 
 // FoundMarker ties a marker to the edges it produced.
@@ -57,6 +60,7 @@ func Build(ws *load.Workspace) (*Result, error) {
 	if err := ex.files(); err != nil {
 		return nil, err
 	}
+	ex.mappings()
 	return res, nil
 }
 

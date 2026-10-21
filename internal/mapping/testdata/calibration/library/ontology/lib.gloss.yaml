@@ -1,0 +1,11 @@
+concepts:
+  Patron:    { kind: entity, aliases: [borrower, member] }
+  Loan:      { kind: entity, aliases: [checkout] }
+  Item:      { kind: entity, aliases: [copy] }
+  Hold:      { kind: entity, aliases: [reservation] }
+  Fine:      { kind: measure }
+  Branch:    { kind: entity }
+  Catalogue: { kind: entity }
+  Return:    { kind: process }
+  Renewal:   { kind: process }
+  DueDate:   { kind: measure }

@@ -1,0 +1,13 @@
+concepts:
+  Student:     { kind: entity }
+  Member:      { kind: entity, doc: "Anyone with a library card at the school." }
+  Checkout:    { kind: entity }
+  Book:        { kind: entity }
+  Reservation: { kind: entity }
+  LateFee:     { kind: measure, aliases: [fine] }
+  Campus:      { kind: entity, aliases: [branch] }
+  Course:      { kind: entity }
+  Catalog:     { kind: entity }
+  ReturnDesk:  { kind: resource }
+  DueDate:     { kind: measure }
+  Hold:        { kind: process, doc: "Stopping a student's registration until fees are paid." }

@@ -1,0 +1,12 @@
+concepts:
+  Vehicle:     { kind: entity, aliases: [truck] }
+  Driver:      { kind: entity }
+  Route:       { kind: entity }
+  Trip:        { kind: entity, aliases: [journey] }
+  Depot:       { kind: entity }
+  FuelLog:     { kind: entity }
+  Maintenance: { kind: process }
+  Shipment:    { kind: entity }
+  Stop:        { kind: entity }
+  Delivery:    { kind: process }
+  Odometer:    { kind: measure }

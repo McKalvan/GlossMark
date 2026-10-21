@@ -1,0 +1,3 @@
+owns:
+  pay: { iri: https://cal.example/pay/, file: ontology/pay.gloss.yaml, tier: core }
+  led: { iri: https://cal.example/led/, file: ontology/led.gloss.yaml, tier: core }

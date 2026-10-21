@@ -1,0 +1,11 @@
+pay:Payment	exact	led:Payment
+pay:Refund	exact	led:Reversal
+pay:Merchant	exact	led:Vendor
+pay:Customer	exact	led:Client
+pay:Settlement	exact	led:Settlement
+pay:Payout	exact	led:Disbursement
+pay:Authorization	close	led:Hold
+pay:Dispute	close	led:ChargebackCase
+pay:Fee	close	led:FeeAmount
+pay:Invoice	exact	led:Bill
+pay:Currency	close	led:CurrencyCode

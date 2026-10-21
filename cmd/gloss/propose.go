@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mckalvan/glossmark/internal/check"
+	"github.com/mckalvan/glossmark/internal/mapping"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/ontoedit"
@@ -96,6 +97,7 @@ func cmdPropose(args []string) int {
 	}
 	fmt.Println()
 	fmt.Printf("  a human accepts it with: gloss accept --concept %s\n", curie)
+	printDuplicates(curie, mapping.Duplicates(p.Graph, curie, spec.Kind, spec.Doc, spec.Aliases), p.WS.Owned)
 	// Record in the ledger now so status shows it before the next build.
 	if _, err := buildGraph(*root, true); err != nil {
 		return fail(err)
@@ -333,4 +335,18 @@ func rejectConcept(p *pipeline, c, rev, reason string, remove bool) error {
 		}
 	}
 	return nil
+}
+
+// printDuplicates warns when a proposed concept looks like one that exists
+// (ADR 0025 §8): in its own namespace, use that concept; in another, record
+// the equivalence as a mapping instead of a second name.
+func printDuplicates(curie string, dups []mapping.Candidate, owned map[string]bool) {
+	for _, d := range dups {
+		if nsOf(d.Object) == nsOf(curie) {
+			fmt.Printf("  warning: %s may duplicate %s (%s); use it, or reject the proposal\n", curie, d.Object, d.Why)
+			continue
+		}
+		fmt.Printf("  warning: %s may be another team's %s (%s, conf %.2f); if so, record it as a mapping instead of a new concept: gloss map propose %s %s %s\n",
+			curie, d.Object, d.Why, d.Conf, curie, d.Predicate, d.Object)
+	}
 }

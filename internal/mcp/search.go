@@ -21,6 +21,9 @@ type Hit struct {
 	Realizes    []string `json:"realizes,omitempty"`
 	Aliases     []string `json:"aliases,omitempty"`
 	Proposed    bool     `json:"proposed,omitempty"`
+	// Mapped lists the concept's counterparts in other namespaces from
+	// mapping sets (ADR 0025): "skos:exactMatch farm:Equine (accepted)".
+	Mapped []string `json:"mapped,omitempty"`
 	// Artifacts is how many artifacts link to the concept; ties rank the
 	// better-connected concept first.
 	Artifacts int    `json:"artifacts"`
@@ -91,6 +94,9 @@ func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
 			if a := g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
 				h.Artifacts++
 			}
+		}
+		for _, m := range Counterparts(g, n.ID) {
+			h.Mapped = append(h.Mapped, m.String())
 		}
 		hits = append(hits, h)
 	}
@@ -192,6 +198,13 @@ func scoreConcept(g *graph.Graph, n *graph.Node, words []string, raw string) (in
 	}
 	if fuzzy > 0 && fuzzy == len(words) {
 		add(25, "fuzzy")
+	}
+	// One hop through a mapping: another team's name for the same concept.
+	for _, m := range Counterparts(g, n.ID) {
+		local := m.Curie[strings.Index(m.Curie, ":")+1:]
+		if strings.Join(tokens(local), "") == qjoined || overlap(words, tokens(local)) == len(words) {
+			add(32, "via "+m.Predicate+" "+m.Curie)
+		}
 	}
 	// One hop: a core concept this realizes, or a superclass, matching strongly.
 	for _, p := range []string{"realizes", "published-as", "is-a"} {
@@ -371,3 +384,36 @@ func lev(a, b string) int {
 // on (CamelCase, snake_case and kebab-case split, suffixes stripped,
 // synonyms mapped, stop words dropped), so other matchers agree with it.
 func Tokens(s string) []string { return tokens(s) }
+
+// Counterpart is a concept a mapping relates another concept to.
+type Counterpart struct {
+	Curie     string `json:"curie"`
+	Predicate string `json:"predicate"` // as written in the set, e.g. skos:exactMatch
+	Review    string `json:"review"`    // proposed, accepted or stale
+	Set       string `json:"set"`
+}
+
+func (c Counterpart) String() string { return c.Predicate + " " + c.Curie + " (" + c.Review + ")" }
+
+// Counterparts returns the mapping counterparts of a concept, either direction.
+func Counterparts(g *graph.Graph, id string) []Counterpart {
+	var out []Counterpart
+	add := func(e *graph.Edge, other string) {
+		if e.Source != graph.SourceMapping || e.Prov == nil {
+			return
+		}
+		r := e.Prov.Review
+		if r == "" {
+			r = map[bool]string{true: "proposed", false: "accepted"}[e.Prov.Proposed]
+		}
+		out = append(out, Counterpart{Curie: g.Curie(other), Predicate: e.Prov.Raw, Review: r, Set: e.Prov.Set})
+	}
+	for _, e := range g.Out(id, "") {
+		add(e, e.O)
+	}
+	for _, e := range g.In(id, "") {
+		add(e, e.S)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Curie < out[j].Curie })
+	return out
+}

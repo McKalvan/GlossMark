@@ -1,0 +1,10 @@
+flt:Vehicle	close	lgx:Truck
+flt:Driver	exact	lgx:Operator
+flt:Route	exact	lgx:Route
+flt:Trip	exact	lgx:Journey
+flt:Depot	close	lgx:Warehouse
+flt:Shipment	exact	lgx:Consignment
+flt:Stop	exact	lgx:Stop
+flt:Delivery	close	lgx:Delivery
+flt:Maintenance	exact	lgx:Service
+flt:Odometer	close	lgx:Mileage

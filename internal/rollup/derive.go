@@ -171,15 +171,46 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 	// (consumer → producer) unless one is declared.
 	type pair struct{ from, to string }
 	implied := map[pair][]string{}
+	// Concepts an accepted exact match makes equivalent (landscape only, ADR
+	// 0025) count as one: a subscriber of one depends on a publisher of the other.
+	type group struct {
+		producers, consumers map[string]bool
+		members              []string
+	}
+	groups := map[string]*group{}
+	var keys0 []string
 	for _, c := range g.NodesOf(model.NodeConcept) {
 		producers := boundarySubjects(g, c.ID, "publishes", "produces")
 		consumers := boundarySubjects(g, c.ID, "subscribes", "consumes")
+		if len(producers) == 0 && len(consumers) == 0 {
+			continue
+		}
+		k := g.Canonical(c.ID)
+		gr := groups[k]
+		if gr == nil {
+			gr = &group{producers: map[string]bool{}, consumers: map[string]bool{}}
+			groups[k] = gr
+			keys0 = append(keys0, k)
+		}
+		for _, p := range producers {
+			gr.producers[p] = true
+		}
 		for _, s := range consumers {
-			for _, p := range producers {
+			gr.consumers[s] = true
+		}
+		gr.members = append(gr.members, g.Curie(c.ID))
+	}
+	sort.Strings(keys0)
+	for _, k := range keys0 {
+		gr := groups[k]
+		sort.Strings(gr.members)
+		label := strings.Join(gr.members, " = ")
+		for _, s := range sortedSet(gr.consumers) {
+			for _, p := range sortedSet(gr.producers) {
 				if s == p || isAncestorBoundary(g, s, p) || isAncestorBoundary(g, p, s) {
 					continue
 				}
-				implied[pair{s, p}] = append(implied[pair{s, p}], g.Curie(c.ID))
+				implied[pair{s, p}] = append(implied[pair{s, p}], label)
 			}
 		}
 	}
@@ -374,4 +405,13 @@ func Covers(g *graph.Graph, s, d string) bool {
 		}
 	}
 	return false
+}
+
+func sortedSet(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

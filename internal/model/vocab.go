@@ -15,6 +15,8 @@ const (
 	NodeArtifact  NodeType = "artifact"
 	NodeNamespace NodeType = "namespace"
 	NodeActor     NodeType = "actor"
+	// NodeMappingSet is an SSSOM mapping set (ADR 0025).
+	NodeMappingSet NodeType = "mapping-set"
 )
 
 // Tiers.
@@ -140,7 +142,11 @@ var BuiltinRelations = []Relation{
 	{Name: "calls", Domain: ab, Range: ab, Derived: true},
 	{Name: "owns", Domain: []NodeType{NodeActor}, Range: []NodeType{NodeBoundary}, Manifest: true, Doc: "Imported from CODEOWNERS or Backstage spec.owner."},
 	{Name: "derived-from", Domain: any_, Range: any_},
-	{Name: "same-as", Domain: any_, Range: any_, Doc: "SSSOM equivalence."},
+	{Name: "same-as", Domain: any_, Range: any_, Doc: "SSSOM equivalence: skos:exactMatch, owl:equivalentClass or owl:sameAs in a mapping set (ADR 0025). Emitted from mapping sets only."},
+	{Name: "broad-match", Domain: any_, Range: any_, Doc: "skos:broadMatch in a mapping set: the subject's meaning is narrower than the object's. Acts as is-a in gloss landscape when mapping-lift is on."},
+	{Name: "narrow-match", Domain: any_, Range: any_, Doc: "skos:narrowMatch in a mapping set: the subject's meaning is broader than the object's."},
+	{Name: "close-match", Domain: any_, Range: any_, Doc: "skos:closeMatch in a mapping set: similar enough to interchange in some contexts. Informational."},
+	{Name: "related-match", Domain: any_, Range: any_, Doc: "skos:relatedMatch in a mapping set: an associative link. Informational."},
 }
 
 // Vocabulary is the effective relation table: builtins plus ontology overrides.

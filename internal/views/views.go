@@ -96,6 +96,9 @@ type PEdge struct {
 	// place, the incomparable minimal common subsumers of the set it belongs
 	// to: the lift was tried and declined.
 	NoUniqueSubsumer []string `json:"noUniqueSubsumer,omitempty"`
+	// Review is a mapping edge's review state (proposed, accepted, stale;
+	// ADR 0025); empty for every other edge.
+	Review string `json:"review,omitempty"`
 }
 
 func (e PEdge) key() string { return e.S + "|" + e.P + "|" + e.O }
@@ -939,6 +942,9 @@ func (p *projector) edges() {
 				a.n++
 				if e.Prov == nil || !e.Prov.Proposed {
 					a.all = false
+				}
+				if e.Source == graph.SourceMapping && e.Prov != nil && e.Prov.Review != "" {
+					a.e.Review = e.Prov.Review
 				}
 				if e.Prov != nil && len(e.Prov.Via) > 0 {
 					a.e.Via = uniq(append(a.e.Via, e.Prov.Via...))

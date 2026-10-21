@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mckalvan/glossmark/internal/mapping"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/version"
@@ -49,6 +50,8 @@ type Workspace struct {
 	// Lock is glossmark.lock when present.
 	Lock    *Lock
 	lockErr error
+	// MappingSets are the SSSOM mapping sets under mappings: (ADR 0025).
+	MappingSets []*mapping.Set
 }
 
 // FindRoot walks up from start until it finds glossmark.yaml.
@@ -217,6 +220,8 @@ func Load(root string) (*Workspace, error) {
 	}
 	// Import version ranges and the lockfile.
 	ws.Diags = append(ws.Diags, verifyImports(ws)...)
+	// Mapping sets (ADR 0025).
+	ws.loadMappings()
 	// Walk the tree for manifests and candidate files.
 	if err := ws.walk(); err != nil {
 		return nil, err

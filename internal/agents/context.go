@@ -300,6 +300,30 @@ func conceptLine(g *graph.Graph, n *graph.Node) string {
 	if len(n.Aliases) > 0 {
 		tags = append(tags, "aka "+strings.Join(n.Aliases, "/"))
 	}
+	// Mapped counterparts (ADR 0025): another team's name for the concept.
+	var mapped []string
+	for _, e := range append(g.Out(n.ID, ""), g.In(n.ID, "")...) {
+		if e.Source != graph.SourceMapping || e.Prov == nil || e.Prov.Proposed {
+			continue
+		}
+		other := e.O
+		if other == n.ID {
+			other = e.S
+		}
+		sym := "~"
+		if e.P == "same-as" {
+			sym = "="
+		}
+		m := sym + " " + g.Curie(other)
+		if e.Prov.Review == model.StatusStale {
+			m += " (stale)"
+		}
+		mapped = append(mapped, m)
+	}
+	if len(mapped) > 0 {
+		sort.Strings(mapped)
+		tags = append(tags, "maps "+strings.Join(mapped, ", "))
+	}
 	line := fmt.Sprintf("- %s (%s)", n.CURIE, n.Kind)
 	if len(tags) > 0 {
 		line += ": " + strings.Join(tags, ", ")

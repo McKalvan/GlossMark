@@ -1,0 +1,15 @@
+concepts:
+  Payment:        { kind: entity, doc: "A transfer of money recorded against an account." }
+  Reversal:       { kind: entity }
+  Vendor:         { kind: entity, aliases: [merchant, supplier] }
+  Client:         { kind: entity, aliases: [customer] }
+  Posting:        { kind: process }
+  Settlement:     { kind: process, doc: "Moving balances between institutions at the end of the day." }
+  Disbursement:   { kind: entity, aliases: [payout] }
+  Hold:           { kind: process, doc: "Reserving funds before posting." }
+  ChargebackCase: { kind: entity }
+  FeeAmount:      { kind: measure }
+  Bill:           { kind: entity, aliases: [invoice] }
+  CurrencyCode:   { kind: entity }
+  Account:        { kind: entity }
+  Journal:        { kind: entity }

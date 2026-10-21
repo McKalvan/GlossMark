@@ -76,6 +76,11 @@ type Config struct {
 	TestPaths []string `yaml:"test-paths,omitempty" json:"test-paths,omitempty"`
 	// Suggest tunes gloss suggest.
 	Suggest *SuggestConfig `yaml:"suggest,omitempty" json:"suggest,omitempty"`
+	// Mappings lists the SSSOM mapping sets this repository keeps (ADR 0025).
+	Mappings map[string]*MappingDecl `yaml:"mappings,omitempty" json:"mappings,omitempty"`
+	// MappingLift lets accepted broadMatch and narrowMatch mappings act as
+	// is-a for taxonomic lift in gloss landscape (ADR 0025 §6). Off by default.
+	MappingLift bool `yaml:"mapping-lift,omitempty" json:"mapping-lift,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
@@ -287,6 +292,22 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.Views == "" {
 		c.Views = "ontology/views.yaml"
+	}
+	for name, m := range c.Mappings {
+		if m == nil {
+			m = &MappingDecl{}
+			c.Mappings[name] = m
+		}
+		if m.File == "" {
+			m.File = "mappings/" + name + ".sssom.tsv"
+		}
+		switch m.Scope {
+		case "":
+			m.Scope = MappingScopeRepo
+		case MappingScopeRepo, MappingScopeLandscape:
+		default:
+			return nil, fmt.Errorf("%s: mappings.%s: scope must be repo or landscape, got %q", path, name, m.Scope)
+		}
 	}
 	return &c, nil
 }
@@ -803,6 +824,19 @@ const (
 	StatusDrifted = "drifted"
 )
 
+// Mapping set scopes (ADR 0025 §2).
+const (
+	MappingScopeRepo      = "repo"      // every row has an endpoint this repository owns
+	MappingScopeLandscape = "landscape" // neither side need be owned; applies only in gloss landscape
+)
+
+// MappingDecl declares one SSSOM mapping set under mappings: in glossmark.yaml.
+type MappingDecl struct {
+	File  string `yaml:"file,omitempty" json:"file,omitempty"`
+	Owner string `yaml:"owner,omitempty" json:"owner,omitempty"`
+	Scope string `yaml:"scope,omitempty" json:"scope,omitempty"`
+}
+
 // LedgerEntry records provenance and review state for one marker.
 type LedgerEntry struct {
 	MarkerID          string   `json:"marker_id"`
@@ -825,4 +859,11 @@ type LedgerEntry struct {
 	// the ontology value and the bound code line when last accepted.
 	Value string `json:"value,omitempty"`
 	Live  string `json:"live,omitempty"`
+	// Mapping entries (marker id mapping:<subject>|<predicate>|<object>,
+	// ADR 0025): the set, whether the row negates its predicate, and both
+	// endpoints' concept fingerprints when the mapping was last reviewed.
+	Set                string `json:"set,omitempty"`
+	Negative           bool   `json:"negative,omitempty"`
+	SubjectFingerprint string `json:"subject_fingerprint,omitempty"`
+	ObjectFingerprint  string `json:"object_fingerprint,omitempty"`
 }

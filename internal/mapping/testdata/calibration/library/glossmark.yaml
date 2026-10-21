@@ -1,0 +1,3 @@
+owns:
+  lib: { iri: https://cal.example/lib/, file: ontology/lib.gloss.yaml, tier: core }
+  sch: { iri: https://cal.example/sch/, file: ontology/sch.gloss.yaml, tier: core }

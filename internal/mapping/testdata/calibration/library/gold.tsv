@@ -1,0 +1,8 @@
+lib:Patron	exact	sch:Member
+lib:Loan	exact	sch:Checkout
+lib:Hold	exact	sch:Reservation
+lib:Fine	close	sch:LateFee
+lib:Branch	close	sch:Campus
+lib:Catalogue	exact	sch:Catalog
+lib:DueDate	exact	sch:DueDate
+lib:Item	close	sch:Book

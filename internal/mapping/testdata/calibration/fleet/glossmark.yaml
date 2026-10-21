@@ -1,0 +1,3 @@
+owns:
+  flt: { iri: https://cal.example/flt/, file: ontology/flt.gloss.yaml, tier: core }
+  lgx: { iri: https://cal.example/lgx/, file: ontology/lgx.gloss.yaml, tier: core }

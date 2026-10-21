@@ -28,6 +28,7 @@ const (
 	SourceInline   = "inline"   // `@gloss` markers
 	SourceDerived  = "derived"  // rollup rules
 	SourceInferred = "inferred" // inferrers (test paths)
+	SourceMapping  = "mapping"  // SSSOM mapping sets (ADR 0025)
 )
 
 // Node is one graph node.
@@ -115,6 +116,10 @@ type Prov struct {
 	// Alias is the relation as written when the marker used an alias that
 	// was stored as its canonical relation ("tests", stored as verifies).
 	Alias string `json:"alias,omitempty"`
+	// Set names the mapping set of a mapping edge; Review is its review
+	// state from the ledger (proposed, accepted or stale). ADR 0025.
+	Set    string `json:"set,omitempty"`
+	Review string `json:"review,omitempty"`
 }
 
 // Edge is one triple with provenance.
@@ -154,6 +159,10 @@ type Graph struct {
 	keys      map[string]bool
 	out       map[string]map[string][]*Edge
 	in        map[string]map[string][]*Edge
+	// equiv maps a concept to its equivalence class representative and
+	// classes a representative to its members (SetEquivalence; landscape only).
+	equiv   map[string]string
+	classes map[string][]string
 }
 
 // New returns an empty graph with the given prefix table.
@@ -435,10 +444,20 @@ func (g *Graph) Closure(start, p string, inverse bool) []string {
 }
 
 // Ancestors returns the is-a closure of a concept (its superclasses).
-func (g *Graph) Ancestors(c string) []string { return g.Closure(c, "is-a", false) }
+func (g *Graph) Ancestors(c string) []string {
+	if g.HasEquivalence() {
+		return g.equivClosure(c, false)
+	}
+	return g.Closure(c, "is-a", false)
+}
 
 // Descendants returns the inverse is-a closure.
-func (g *Graph) Descendants(c string) []string { return g.Closure(c, "is-a", true) }
+func (g *Graph) Descendants(c string) []string {
+	if g.HasEquivalence() {
+		return g.equivClosure(c, true)
+	}
+	return g.Closure(c, "is-a", true)
+}
 
 // Subsumes reports whether general is-a* covers specific (reflexive).
 func (g *Graph) Subsumes(general, specific string) bool {

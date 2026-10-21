@@ -199,6 +199,7 @@ func Classify(base, head *graph.Graph, ws *load.Workspace, opt Options) *Impact 
 	c.manifests()
 	c.links()
 	c.stale()
+	c.mappings()
 	if !opt.Adoption {
 		c.realizations()
 	}
@@ -970,8 +971,8 @@ func decoratorDetail(removed, added []string) string {
 
 func (c *classifier) stale() {
 	for id, le := range c.opt.HeadLedger {
-		if le.Status != model.StatusStale || strings.HasPrefix(id, "value:") {
-			continue // a drifted value is published-value-drifted, not a stale link
+		if le.Status != model.StatusStale || strings.HasPrefix(id, "value:") || strings.HasPrefix(id, "mapping:") {
+			continue // a drifted value is published-value-drifted, a stale mapping mapping-affected
 		}
 		c.add(Change{Gate: AUTO, Kind: "stale", Glyph: "~", Relation: le.Relation, Object: strings.Join(le.Targets, ", "), Path: le.Path, MarkerID: id,
 			Reasons: []string{"signature changed; re-confirm"}, Msg: fmt.Sprintf("stale %s %s", le.Relation, strings.Join(le.Targets, ", "))})

@@ -1,0 +1,13 @@
+concepts:
+  Payment:       { kind: entity, doc: "Money moving from a customer to a merchant for a purchase." }
+  Refund:        { kind: entity, aliases: [reversal], doc: "Money returned to the customer for a purchase." }
+  Merchant:      { kind: entity }
+  Customer:      { kind: entity }
+  Capture:       { kind: process }
+  Settlement:    { kind: process, doc: "Paying the merchant what was captured, net of fees." }
+  Payout:        { kind: entity }
+  Authorization: { kind: process }
+  Dispute:       { kind: entity }
+  Fee:           { kind: measure }
+  Invoice:       { kind: entity }
+  Currency:      { kind: entity }

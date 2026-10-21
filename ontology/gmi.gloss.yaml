@@ -1,6 +1,6 @@
 # ontology/gmi.gloss.yaml (implementation tier): the Go packages and commands that realize gm:.
 namespace: gmi
-version: 0.1.0
+version: 0.2.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark }
   # Reading a workspace
@@ -17,6 +17,8 @@ concepts:
   Gate:               { kind: process, realizes: gm:Gating }
   ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale] }
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
+  MappingSets:        { kind: process, realizes: gm:MappingCuration, publishes: [gm:MappingStale], doc: "The SSSOM/TSV reader and writer, mapping fingerprints and staleness, mapping checks and gates (ADR 0025)." }
+  MappingCommands:    { kind: process, realizes: gm:MappingCuration, doc: "gloss map: init, propose, accept, reject, repoint, status, suggest and export." }
   # Outputs
   ViewProjector:      { kind: process, realizes: gm:Projection }
   HtmlViewer:         { kind: process, part-of: ViewProjector, presents: gm:View, doc: "The static page that shows a projection: a UI surface for views, not their mechanism." }

@@ -60,11 +60,12 @@ func cmdLandscape(args []string) int {
 		}
 	}
 	sort.Strings(ctx)
+	ms := lastMappings
 	switch fs.format {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		enc.Encode(map[string]any{"repos": entries, "imports": imports, "context_map": ctx, "drift": rep, "stats": g.Stats()})
+		enc.Encode(map[string]any{"repos": entries, "imports": imports, "context_map": ctx, "mappings": ms, "drift": rep, "stats": g.Stats()})
 	case "markdown":
 		fmt.Printf("### Landscape: %s\n\n", strings.Join(baseNames(repos), ", "))
 		if len(ctx) > 0 {
@@ -95,6 +96,7 @@ func cmdLandscape(args []string) int {
 			}
 		}
 		fmt.Print(renderImports(imports))
+		fmt.Print(renderMappings(ms))
 		fmt.Println()
 		fmt.Print(rollup.RenderText(rep, fs.all))
 	}
@@ -163,6 +165,7 @@ func assembleLandscapeRepos(repos []string) (*load.Workspace, *graph.Graph, []*l
 		return nil, nil, nil, err
 	}
 	g := union(graphs, ws)
+	lastMappings = rollup.ApplyMappings(g, ws.Config.MappingLift)
 	rollup.Derive(g, ws.Vocab)
 	return ws, g, wss, nil
 }
@@ -272,4 +275,30 @@ func baseNames(paths []string) []string {
 		out = append(out, filepath.Base(abs))
 	}
 	return out
+}
+
+// lastMappings is what ApplyMappings reported for the last assembled landscape.
+var lastMappings rollup.MappingSummary
+
+// renderMappings is the landscape's mapping section (ADR 0025 §6).
+func renderMappings(ms rollup.MappingSummary) string {
+	if ms.Accepted+ms.Proposed == 0 && len(ms.Dangling) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "\nMappings: %d accepted (%d stale), %d proposed", ms.Accepted, ms.Stale, ms.Proposed)
+	if ms.Lifted > 0 {
+		fmt.Fprintf(&sb, ", %d is-a from broad/narrow matches (mapping-lift)", ms.Lifted)
+	}
+	sb.WriteString("\n")
+	for _, c := range ms.Classes {
+		fmt.Fprintf(&sb, "  same concept: %s\n", strings.Join(c, " = "))
+	}
+	for _, s := range ms.StaleMappings {
+		fmt.Fprintf(&sb, "  stale: %s (an endpoint changed since review)\n", s)
+	}
+	for _, d := range ms.Dangling {
+		fmt.Fprintf(&sb, "  dangling: %s\n", d)
+	}
+	return sb.String()
 }
