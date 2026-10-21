@@ -214,7 +214,7 @@ func (d *doctor) actor() {
 		d.add("GLOSS_ACTOR", Warn, "unset and git user.name is empty: new markers would be attributed to human:unknown", "git config user.name, or export GLOSS_ACTOR")
 		return
 	}
-	d.add("GLOSS_ACTOR", OK, fmt.Sprintf("unset; new markers by a human are attributed to %s. Agents need it set (gloss hook install writes it into the hook and the MCP server)", def), "")
+	d.add("GLOSS_ACTOR", OK, fmt.Sprintf("unset; new markers by a human are attributed to %s. Agents need it set (gloss hook install writes it into the MCP server and exports it to the agent's shell from the SessionStart hook)", def), "")
 }
 
 func (d *doctor) hook() {
@@ -239,6 +239,10 @@ func (d *doctor) hook() {
 		}
 		if len(missing) > 0 {
 			d.add("agent hook", Warn, "installed, but GLOSS_ACTOR is missing from "+strings.Join(missing, " and ")+": links an agent writes are attributed to the git user", "gloss hook install (rewrites both with GLOSS_ACTOR=agent:claude-code)")
+			return
+		}
+		if !bytes.Contains(settings, []byte("CLAUDE_ENV_FILE")) {
+			d.add("agent hook", Warn, "the hook sets GLOSS_ACTOR for the briefing only: a gloss build the agent runs from its shell is attributed to the git user", "gloss hook install (the hook then exports GLOSS_ACTOR through $CLAUDE_ENV_FILE)")
 			return
 		}
 		d.add("agent hook", OK, "SessionStart hook and MCP server registered with GLOSS_ACTOR", "")

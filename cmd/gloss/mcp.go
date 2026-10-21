@@ -205,6 +205,11 @@ func (b *mcpBackend) ProposeConcept(cp mcp.ConceptProposal) (any, error) {
 	}
 	curie := ns + ":" + name
 	rewritten, _ := ontoedit.RewriteNewMarkers(absFiles(p), curie)
+	if rewritten > 0 {
+		if err := carryMarkerIDs(p); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := buildGraph(b.root, true); err != nil {
 		return nil, err
 	}

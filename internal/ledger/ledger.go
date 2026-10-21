@@ -229,6 +229,10 @@ func (l *Ledger) Save() error {
 //	? re-added            → proposed
 //	fingerprint changed   → stale (accepted links only)
 //	fingerprint restored  → stays stale until re-accepted (gloss accept <id>)
+//	marker gone           → removed, unless rejected (the decision stays)
+//
+// A review command that rewrites a marker's target moves its entry to the
+// new id with Rename before the next Sync, so the rewrite is not a removal.
 func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor string, now time.Time) {
 	ts := now.Format(time.RFC3339)
 	seen := map[string]bool{}
@@ -438,6 +442,44 @@ func (l *Ledger) Reject(id, reviewer, reason string, now time.Time) bool {
 	return true
 }
 
+// Rename moves the entry of marker from to the id to, because a review
+// command rewrote the marker's target and so changed its derived id (gloss
+// propose --from-new turns ns:NEW:Name into ns:Name; gloss reject --concept
+// --remove turns it back). The entry keeps its actor, creation time, status
+// and rationale, and lists from among its previous ids, so the history of
+// one proposal stays on one row and no removed row is left behind (ADR
+// 0027). A row already at to that is not removed (a live marker) is kept and
+// nothing moves; a removed one, which an older release left behind, is
+// replaced and its own previous ids carried over.
+func (l *Ledger) Rename(from, to string) bool {
+	e, ok := l.Entries[from]
+	if !ok || from == to {
+		return false
+	}
+	var prev []string
+	if old, ok := l.Entries[to]; ok {
+		if old.Status != model.StatusRemoved {
+			return false
+		}
+		prev = append(prev, old.PreviousIDs...)
+	}
+	prev = append(prev, e.PreviousIDs...)
+	prev = append(prev, from)
+	seen := map[string]bool{to: true}
+	e.PreviousIDs = nil
+	for _, id := range prev {
+		if !seen[id] {
+			seen[id] = true
+			e.PreviousIDs = append(e.PreviousIDs, id)
+		}
+	}
+	e.MarkerID = to
+	delete(l.Entries, from)
+	l.Entries[to] = e
+	l.dirty = true
+	return true
+}
+
 // Entry returns the entry for a marker id.
 func (l *Ledger) Entry(id string) *model.LedgerEntry { return l.Entries[id] }
 
@@ -498,32 +540,78 @@ func (l *Ledger) ActorChanges(previous map[string]string) []ActorChange {
 	return out
 }
 
-// ExportPROV renders the ledger as PROV-O-shaped JSON-LD.
+// ExportPROV renders the ledger as PROV-O-shaped JSON-LD: one prov:Activity
+// per entry, associated with the prov:Agent that wrote the marker, and one
+// prov:Agent per actor and reviewer (prov:Person for human:, prov:SoftwareAgent
+// for agent:). The author's rationale and the reviewer's reason are attributes
+// of the activity, so a rejection reads with both sides (ADR 0027).
 func (l *Ledger) ExportPROV() ([]byte, error) {
 	type activity struct {
-		ID        string `json:"@id"`
-		Type      string `json:"@type"`
-		Agent     string `json:"prov:wasAssociatedWith"`
-		Generated string `json:"prov:generated"`
-		At        string `json:"prov:startedAtTime"`
-		Status    string `json:"gm:status"`
-		Reviewer  string `json:"gm:reviewedBy,omitempty"`
-		Reason    string `json:"gm:reviewReason,omitempty"`
+		ID         string   `json:"@id"`
+		Type       string   `json:"@type"`
+		Agent      string   `json:"prov:wasAssociatedWith,omitempty"`
+		Generated  string   `json:"prov:generated"`
+		At         string   `json:"prov:startedAtTime"`
+		Status     string   `json:"gm:status"`
+		Relation   string   `json:"gm:relation,omitempty"`
+		Targets    []string `json:"gm:target,omitempty"`
+		Path       string   `json:"gm:path,omitempty"`
+		Rationale  string   `json:"gm:rationale,omitempty"`
+		Reviewer   string   `json:"gm:reviewedBy,omitempty"`
+		ReviewedAt string   `json:"gm:reviewedAt,omitempty"`
+		Reason     string   `json:"gm:reviewReason,omitempty"`
+		Previous   []string `json:"gm:previousId,omitempty"`
 	}
-	var acts []activity
+	type agent struct {
+		ID    string   `json:"@id"`
+		Type  []string `json:"@type"`
+		Label string   `json:"rdfs:label"`
+		Model string   `json:"gm:model,omitempty"`
+	}
+	var nodes []any
 	ids := make([]string, 0, len(l.Entries))
 	for id := range l.Entries {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
+	actors := map[string]bool{}
+	iri := func(actor string) string {
+		if actor == "" {
+			return ""
+		}
+		actors[actor] = true
+		return "urn:gloss:actor:" + actor
+	}
 	for _, id := range ids {
 		e := l.Entries[id]
-		acts = append(acts, activity{ID: "urn:gloss:activity:" + id, Type: "prov:Activity", Agent: "urn:gloss:actor:" + e.Actor,
-			Generated: "urn:gloss:marker:" + id, At: e.Created, Status: e.Status, Reviewer: e.ReviewedBy, Reason: e.ReviewReason})
+		var prev []string
+		for _, p := range e.PreviousIDs {
+			prev = append(prev, "urn:gloss:marker:"+p)
+		}
+		nodes = append(nodes, activity{ID: "urn:gloss:activity:" + id, Type: "prov:Activity", Agent: iri(e.Actor),
+			Generated: "urn:gloss:marker:" + id, At: e.Created, Status: e.Status, Relation: e.Relation, Targets: e.Targets, Path: e.Path,
+			Rationale: e.Rationale, Reviewer: iri(e.ReviewedBy), ReviewedAt: e.ReviewedAt, Reason: e.ReviewReason, Previous: prev})
 	}
+	names := make([]string, 0, len(actors))
+	for a := range actors {
+		names = append(names, a)
+	}
+	sort.Strings(names)
+	for _, a := range names {
+		t := []string{"prov:Agent"}
+		switch {
+		case strings.HasPrefix(a, "human:"):
+			t = append(t, "prov:Person")
+		case strings.HasPrefix(a, "agent:"):
+			t = append(t, "prov:SoftwareAgent")
+		}
+		nodes = append(nodes, agent{ID: "urn:gloss:actor:" + a, Type: t, Label: a, Model: modelOf(a)})
+	}
+	ref := map[string]string{"@type": "@id"}
 	doc := map[string]any{
-		"@context": map[string]string{"prov": "http://www.w3.org/ns/prov#", "gm": graph.VocabIRI},
-		"@graph":   acts,
+		"@context": map[string]any{"prov": "http://www.w3.org/ns/prov#", "gm": graph.VocabIRI, "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+			"prov:wasAssociatedWith": ref, "prov:generated": ref, "gm:reviewedBy": ref, "gm:previousId": ref},
+		"@graph": nodes,
 	}
 	return json.MarshalIndent(doc, "", "  ")
 }

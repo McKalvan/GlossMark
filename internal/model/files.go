@@ -796,7 +796,7 @@ const (
 	StatusAccepted = "accepted"
 	StatusRejected = "rejected"
 	StatusStale    = "stale"
-	StatusRemoved  = "removed" // marker no longer present in the tree
+	StatusRemoved  = "removed" // marker no longer present in the tree, without a review decision
 	// StatusDrifted is a value:<curie> baseline whose bound code changed while
 	// the published value did not. It is not stale: clearing stale links must
 	// never clear a value drift.
@@ -825,4 +825,9 @@ type LedgerEntry struct {
 	// the ontology value and the bound code line when last accepted.
 	Value string `json:"value,omitempty"`
 	Live  string `json:"live,omitempty"`
+	// PreviousIDs are the ids this marker had before a review command
+	// rewrote its target (propose --from-new, reject --concept --remove)
+	// and so changed its derived id; the entry carries its history across
+	// the rewrite instead of leaving a removed row behind (ADR 0027).
+	PreviousIDs []string `json:"previous_ids,omitempty"`
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mckalvan/glossmark/internal/check"
+	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/ontoedit"
@@ -96,6 +97,11 @@ func cmdPropose(args []string) int {
 	}
 	fmt.Println()
 	fmt.Printf("  a human accepts it with: gloss accept --concept %s\n", curie)
+	if n > 0 {
+		if err := carryMarkerIDs(p); err != nil {
+			return fail(err)
+		}
+	}
 	// Record in the ledger now so status shows it before the next build.
 	if _, err := buildGraph(*root, true); err != nil {
 		return fail(err)
@@ -148,6 +154,34 @@ func absFiles(p *pipeline) []string {
 		out = append(out, p.WS.Abs(f))
 	}
 	return out
+}
+
+// carryMarkerIDs keeps the review history of markers whose target a review
+// command just rewrote in the source (ns:NEW:Name to ns:Name, or back). The
+// marker id is derived from the targets, so the rewrite changes it; without
+// this the old row would turn removed and a fresh row start, splitting one
+// proposal's history across two ids (ADR 0027). The rewrite keeps every
+// marker at its line and column, so a marker at the same place whose id
+// changed is the same marker: its ledger entry in p moves to the new id and
+// p's ledger is saved, so the build that follows syncs onto it.
+func carryMarkerIDs(p *pipeline) error {
+	after, err := buildGraph(p.WS.Root, false)
+	if err != nil {
+		return err
+	}
+	at := func(fm extract.FoundMarker) string {
+		return fmt.Sprintf("%s:%d:%d", fm.Path, fm.Marker.Line, fm.Marker.Col)
+	}
+	now := map[string]extract.FoundMarker{}
+	for _, fm := range after.Res.Markers {
+		now[at(fm)] = fm
+	}
+	for _, fm := range p.Res.Markers {
+		if nf, ok := now[at(fm)]; ok && nf.ID != fm.ID && nf.Marker.Relation == fm.Marker.Relation {
+			p.Ledger.Rename(fm.ID, nf.ID)
+		}
+	}
+	return p.Ledger.Save()
 }
 
 func splitList(s string) []string {
@@ -223,6 +257,9 @@ func proposeFromNew(p *pipeline, actor string, tmpl ontoedit.ConceptSpec) int {
 		fmt.Printf("gloss propose: %s; implementation concepts still need realizes: or internal: true before acceptance\n", plural(n, "concept"))
 	} else {
 		fmt.Printf("gloss propose: %s\n", plural(n, "concept"))
+	}
+	if err := carryMarkerIDs(p); err != nil {
+		return fail(err)
 	}
 	p2, err := buildGraph(p.WS.Root, true)
 	if err != nil {

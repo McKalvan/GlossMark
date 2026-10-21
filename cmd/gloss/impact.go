@@ -261,6 +261,18 @@ func shellWord(s string) string {
 	return s
 }
 
+// hookCommand is the SessionStart hook: it appends `export GLOSS_ACTOR=actor`
+// to $CLAUDE_ENV_FILE, which Claude Code sources before every shell command
+// of the session, so a `gloss build` the agent runs later is attributed to it
+// too, not only the briefing (issue #158). Outside Claude Code the variable
+// is unset and the line goes to /dev/null. Subagents share the session's
+// shell environment, so each sets its own actor on its gloss commands
+// (docs/QUICKSTART.md).
+func hookCommand(actor, bin string) string {
+	a := shellWord(actor)
+	return fmt.Sprintf("echo export GLOSS_ACTOR=%s >> \"${CLAUDE_ENV_FILE:-/dev/null}\"; GLOSS_ACTOR=%s %s context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", shellWord(a), a, shellWord(bin))
+}
+
 // installHooks registers the SessionStart hook and the MCP server for a
 // repository, both running with GLOSS_ACTOR=actor.
 func installHooks(root, actor string, hook, mcp bool) error {
@@ -275,7 +287,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s %s context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor, shellWord(bin))}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": hookCommand(actor, bin)}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
 		for i, it := range list {
@@ -325,7 +337,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		}
 		fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(root, path))
 	}
-	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of\n", actor)
+	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s (the hook exports it to the session's shell); agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of\n", actor)
 	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
 	return nil
 }

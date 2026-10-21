@@ -18,7 +18,7 @@ import (
 func init() {
 	register(command{"accept", "accept proposed links: the one-character diff @gloss? → @gloss plus the ledger entry", cmdAccept})
 	register(command{"reject", "reject a proposed link with a reason (optionally remove the marker line)", cmdReject})
-	register(command{"status", "list proposed, stale and rejected links from the ledger", cmdStatus})
+	register(command{"status", "list proposed, stale and rejected links from the ledger, each proposal with its gate and the reason gloss diff gives", cmdStatus})
 }
 
 func reviewer(root string) string {
@@ -250,6 +250,13 @@ func cmdReject(args []string) int {
 			}
 			fmt.Printf("reject concept %s — %s\n", c, *reason)
 		}
+		if *remove {
+			// The markers that linked to a removed concept went back to
+			// ns:NEW:Name; their entries follow them (ADR 0027).
+			if err := carryMarkerIDs(p); err != nil {
+				return fail(err)
+			}
+		}
 		if err := p.Ledger.Save(); err != nil {
 			return fail(err)
 		}
@@ -298,6 +305,40 @@ func removeMarkerLine(p *pipeline, fm extract.FoundMarker) error {
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
+// proposalGate renders the gate of a proposed marker the way gloss diff does:
+// "[SOFT: auto-accept eligible]", or "[HARD: <reasons>]" so a reader can tell
+// a confidence below the threshold from a target outside the allowed set
+// without running diff. It is "" for an id with no marker in the tree (a
+// proposed concept).
+func proposalGate(p *pipeline, pol *model.Policy, id string) string {
+	for _, fm := range p.Res.Markers {
+		if fm.ID != id {
+			continue
+		}
+		cls := gate.SOFT
+		var why []string
+		seen := map[string]bool{}
+		for _, ed := range fm.Edges {
+			c, r := gate.ClassifyLink(p.Graph, p.WS, ed, pol)
+			cls = gate.Max(cls, c)
+			if c != gate.HARD {
+				continue
+			}
+			for _, x := range r {
+				if !seen[x] {
+					seen[x] = true
+					why = append(why, x)
+				}
+			}
+		}
+		if cls == gate.HARD {
+			return "  [HARD: " + strings.Join(why, "; ") + "]"
+		}
+		return "  [" + string(cls) + ": auto-accept eligible]"
+	}
+	return ""
+}
+
 func cmdStatus(args []string) int {
 	fs, root := newFlags("status")
 	if err := parseFlags(fs, args); err != nil {
@@ -316,15 +357,10 @@ func cmdStatus(args []string) int {
 		fmt.Printf("%s (%d)\n", st, len(es))
 		for _, e := range es {
 			g := ""
-			for _, fm := range p.Res.Markers {
-				if fm.ID == e.MarkerID {
-					cls := gate.SOFT
-					for _, ed := range fm.Edges {
-						c, _ := gate.ClassifyLink(p.Graph, p.WS, ed, pol)
-						cls = gate.Max(cls, c)
-					}
-					g = "  [" + string(cls) + "]"
-				}
+			if st == model.StatusProposed {
+				// Only a proposal waits on a gate: a stale link was accepted
+				// and a rejected one decided, so neither gets one (issue #158).
+				g = proposalGate(p, pol, e.MarkerID)
 			}
 			conf := ""
 			if e.Conf > 0 {
