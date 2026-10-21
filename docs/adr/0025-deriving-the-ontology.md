@@ -40,6 +40,7 @@ Ontology derivation becomes a first-class, repeatable process: deterministic **h
 | Types, modules, functions | harvest | what exists | engineering names, code structure |
 | Git history | harvest | renames, retirements, intent | noise |
 | Existing glossaries, enum files | harvest (existing importers) | an owner's own vocabulary | age |
+| Reference ontologies (schema.org, FIBO, FHIR, ISO 20022) | harvest, from a vocabulary file the owner selects | names and structure no implementation shaped | a whole industry, not this business (6.3) |
 
 ### 3. The evidence record
 
@@ -93,6 +94,8 @@ Every source, deterministic or not, produces the same record: one JSON object pe
 
 **Interview.** At most about ten questions live, ranked by leverage: the evidence records and concepts an answer would change, weighted by disagreement between sources. Question types are fixed so answers map to decisions: *same thing?* (merge), *different things?* (split), *core or implementation?*, *which name?*, *is this doc stale or is the code wrong?*, *is this a concept or an instance?* Everything below the cut goes into the review packet as a ranked decision list.
 
+**Who answers.** The person answering is the namespace's `owner` (the `owner:` of its `owns:` entry in `glossmark.yaml`). Derivation runs before `init`, so the survey phase asks who owns each proposed namespace and writes that into the namespace plan (section 7). Live questions go to the owner in the session. Each packet question carries a `route-to:` naming the stakeholder best placed to answer it (the product manager for checkout, the compliance lead for a constraint), and can be answered in the PR, so an owner who is not in the session loses nothing. Every decision records its actor and whether the owner confirmed it. When the person deciding is not the namespace owner (a solo developer, or an engineer standing in), the decision stands but is marked `owner-confirmed: false`. `gloss status` counts unconfirmed core decisions, so business sign-off is visible debt rather than a blocker.
+
 ### 6. Triangulation is the main output
 
 For each candidate concept, the record states which source families evidence it. The categories are findings the owner reviews, not just inputs:
@@ -133,6 +136,16 @@ Enum values and configuration split by what the business does with them:
 - **Signals.** Lifecycle: the enum is a `status` or `state` column, it is assigned in several places, it is compared in guards or tests, or it names transitions (`renew`, `return`). Catalogue: the values appear in seeds, fixtures, configuration files, pricing tables, or a localised display-name list, and code mostly looks them up rather than branching on them. The agent decides from these signals; an enum family with mixed signals becomes an interview question.
 - `gloss import --from enums` needs a matching option (`--values instances` for a named enum) so that an imported catalogue enum does not add its values as concepts. That is a follow-up to ADR 0016, decision 10.
 
+#### 6.3 Reference ontologies
+
+A core derived from one application's material is still shaped by that application. Published industry vocabularies are the one source that no implementation of *this* business shaped, so they are closest to the platonic core. They are used narrowly:
+
+- **Opt-in, by file.** The owner selects a reference vocabulary in the survey phase; `gloss harvest --reference <file>` reads it (RDF/OWL or JSON-LD) into `reference-term` evidence. Nothing is fetched implicitly, and each vocabulary's licence is checked before it is bundled or recommended.
+- **Never evidence of existence.** A reference term with no evidence from the user's own material is not proposed. Derivation does not import FIBO; it borrows from it.
+- **Tie-breaker for names.** When the user's own sources disagree on a name (`Customer`, `Client`, `Party`), a reference term that matches one of them breaks the tie. The other surfaces stay aliases.
+- **Structure hints.** A reference `subClassOf` or part-whole relation between two concepts that both have their own evidence is proposed as `is-a` or `part-of`, at the confidence its kind of evidence measures (8.1).
+- **Mappings.** A matched concept records `exact-match` or `close-match` (SKOS semantics) to the reference IRI in the derivation record. These are the seed for the SSSOM mappings deferred in [PLAN.md](../PLAN.md), so an ontology derived today can be exported as mapped to an industry standard later without a second alignment.
+
 ### 7. Several applications
 
 The unit of derivation is the **application**, as `gloss init` already defines one: a deployable with a project file (ADR 0016, decision 1). A single-application repository is the case of one unit. Derivation runs per unit and then an **alignment** phase compares units:
@@ -153,6 +166,21 @@ Scope by phase: units inside one workspace (a monorepo) in the first version, be
 - per decision: merge, split (with the discriminating unit or path glob), rename, tier, reject-as-noise, instance; the actor (`human:<id>` or `agent:<name>`) and the date.
 
 On a re-run, new evidence whose surface a concept already claims attaches to that concept; a rejected surface stays rejected; a split stays split. The re-run reports what changed: **new terms** (evidence with no concept), **lost evidence** (a concept whose code evidence disappeared, a candidate for `deprecated`), and **changed sources** (a doc whose hash moved since the concept was accepted). Run on a repository that has already adopted GlossMark, this is ontology drift at the product level, alongside `gloss drift` at the code level.
+
+#### 8.1 Confidence and auto-accept
+
+Every derived concept, alias, tier assignment and structural edge carries a `conf`, and as with `gloss suggest` (ADR 0021) `conf` is not a feeling: it is the precision its kind of evidence measured on the gold sets (section 10). A decision's kind of evidence is a small, fixed feature set: which source families corroborate it, which family supplied the name, whether a reference ontology matched, and whether the tier test was unanimous across those families. On a gold set, a derived concept counts as correct when it matches a gold concept by name or alias in the same tier.
+
+As in ADR 0024, a repository chooses a precision (`derive: { auto-accept-precision: 0.9 }` in `glossmark.yaml`), and the threshold on `conf` is derived from it and printed with the precision measured. At or above it a decision is auto-accepted: written without `proposed: true` and recorded in the derivation record and ledger with the agent as actor and no reviewer, exactly as agent-written links already are. The owner still sees it in the review packet, collapsed under "accepted automatically", and can reverse it.
+
+Auto-accept never applies to the decisions that make the core the business's rather than the agent's:
+
+- a homonym split, or a merge across applications (section 7);
+- a concept the alignment phase proposes as `published`, since publishing is the HARD seam;
+- a concept with `criticality: high` or `critical`, or a `constraint` of any criticality;
+- a `planned` concept, whose only evidence is a document that may be stale.
+
+These always go to the owner. Until a repository has run `gloss suggest --calibrate`'s derivation counterpart on its own reviewed output, the shipped threshold comes from GlossMark's gold sets, and the packet says so.
 
 ### 9. Hand-off to linking
 
@@ -191,9 +219,8 @@ When D1 is built, `gm:` gains the concepts it introduces (evidence, derivation, 
 
 ## Open questions
 
-Settled while workshopping: docs-only concepts are `planned` (6.1); lifecycle and kind values are concepts and catalogue values are instances (6.2).
+Settled while workshopping: docs-only concepts are `planned` (6.1); lifecycle and kind values are concepts and catalogue values are instances (6.2); reference ontologies break naming ties and seed mappings but never add concepts (6.3); the namespace owner answers, packet questions route to stakeholders and can be answered in the PR, and stand-in decisions are marked unconfirmed (section 5); derived decisions carry a calibrated `conf` with auto-accept above a repository's chosen precision, except for the decisions listed in 8.1.
 
-1. Who is "the owner" in the interview when a product has several product managers, or none?
-2. What is a sensible concept budget per core namespace before derivation insists on splitting into bounded contexts?
-3. How does naming work when the docs are in one language and the code in another?
-4. Should the interview be available asynchronously (a review packet answered in the PR) for owners who are not in the session?
+1. What is a sensible concept budget per core namespace before derivation insists on splitting into bounded contexts?
+2. How does naming work when the docs are in one language and the code in another?
+3. Which reference vocabularies are worth bundling, and under which licences?
