@@ -1,0 +1,8 @@
+# Supplier feeds: the importers, five is-a levels below spk:Importer.
+boundary: spw:feeds
+level: component
+label: Supplier feed importers
+part-of: spw:ingest
+realizes: [cyc:CatalogueIngestion]
+produces: [cyc:Component]
+owner: catalogue-team

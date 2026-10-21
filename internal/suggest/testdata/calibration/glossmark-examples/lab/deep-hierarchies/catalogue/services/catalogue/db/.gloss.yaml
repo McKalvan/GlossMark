@@ -1,0 +1,7 @@
+# Catalogue tables. cyc:Product declares kind: entity; cyc:HydraulicDiscBrake gets it only through five is-a levels.
+boundary: spw:catalogue-db
+level: component
+label: Catalogue database
+part-of: spw:catalogue
+holds: [cyc:Product, cyc:HydraulicDiscBrake]
+owner: catalogue-team

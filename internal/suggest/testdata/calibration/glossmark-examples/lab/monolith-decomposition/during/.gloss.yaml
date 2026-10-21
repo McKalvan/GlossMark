@@ -1,0 +1,5 @@
+boundary: bw:tool-hire
+level: system
+label: Brightwater Tool Hire
+realizes: inherit
+owner: hire-platform

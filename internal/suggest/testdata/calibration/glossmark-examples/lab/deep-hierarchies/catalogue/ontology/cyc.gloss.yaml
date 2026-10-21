@@ -1,0 +1,47 @@
+# ontology/cyc.gloss.yaml: the core tier.
+# A product taxonomy seven is-a levels deep, with two multiple-inheritance
+# leaves, and an order-fulfilment partonomy five part-of levels deep.
+namespace: cyc
+version: 0.1.0
+concepts:
+  # Product taxonomy (is-a). Depth in brackets, Product = 1.
+  Product:                  { kind: entity, doc: "Anything the shop lists and sells." }
+  Component:                { is-a: Product, doc: "A part fitted to a bicycle." }                                  # 2
+  DrivetrainComponent:      { is-a: Component, doc: "A part that transmits pedalling power to the rear wheel." }   # 3
+  ShiftingComponent:        { is-a: DrivetrainComponent, doc: "A part that changes gear." }                       # 4
+  Cassette:                 { is-a: DrivetrainComponent, doc: "The rear sprocket cluster." }                      # 4
+  Derailleur:               { is-a: ShiftingComponent, doc: "A mechanism that moves the chain between sprockets." } # 5
+  RearDerailleur:           { is-a: Derailleur, doc: "The derailleur at the cassette." }                          # 6
+  FrontDerailleur:          { is-a: Derailleur, doc: "The derailleur at the chainrings." }                        # 6
+  ElectronicRearDerailleur: { is-a: [RearDerailleur, PoweredDevice], doc: "A battery-powered rear derailleur." }  # 7
+  ElectronicFrontDerailleur: { is-a: [FrontDerailleur, PoweredDevice], doc: "A battery-powered front derailleur." } # 7
+  BrakingComponent:
+    is-a: Component
+    criticality: critical
+    doc: "A part that stops the bicycle. A wrong listing is a safety recall."
+  Brake:                    { is-a: BrakingComponent, doc: "A complete brake caliper or rim brake." }            # 4
+  DiscBrake:                { is-a: Brake, doc: "A brake that clamps a rotor." }                                  # 5
+  HydraulicDiscBrake:       { is-a: DiscBrake, doc: "A disc brake actuated by fluid." }                           # 6
+  Accessory:                { is-a: Product, doc: "Something carried on or with the bicycle, not fitted to it." } # 2
+  Lighting:                 { is-a: Accessory, doc: "Lights and reflectors." }                                    # 3
+  FrontLight:               { is-a: [Lighting, PoweredDevice], doc: "A battery-powered headlight." }              # 4
+  PoweredDevice:            { is-a: Product, doc: "A product with a battery that the shop must ship as dangerous goods." } # 2
+
+  # Catalogue
+  CatalogueIngestion:
+    kind: process
+    criticality: low
+    doc: "Turning supplier feeds into catalogue entries."
+  ProductListing:
+    kind: capability
+    doc: "Showing a product with its compatibility and price."
+
+  # Order fulfilment partonomy (part-of). Depth in brackets.
+  OrderFulfilment:          { kind: process, criticality: high, doc: "Getting a paid order out of the warehouse." }   # 1
+  Picking:                  { kind: process, part-of: OrderFulfilment, doc: "Collecting an order's items from the shelves." } # 2
+  PickWave:                 { kind: process, part-of: Picking, doc: "A batch of orders picked in one walk." }        # 3
+  BinPick:                  { kind: process, part-of: PickWave, doc: "Taking items from one bin." }                  # 4
+  ScanConfirm:              { kind: process, part-of: BinPick, doc: "Scanning the item to confirm the right part left the bin." } # 5
+
+relations:
+  produces: { lift: range-lcs }

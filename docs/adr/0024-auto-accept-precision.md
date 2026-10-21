@@ -1,7 +1,7 @@
 <!-- @gloss documents gmi:SuggestCalibration scope=file -->
 # ADR 0024: A repository sets the precision auto-accept must meet
 
-Status: accepted, 2026-10-20. Follows ADR 0021. Refs issues #65 (F-CAL-1) and #69 (F-CAL-5).
+Status: accepted, 2026-10-20. Follows ADR 0021. Refs issues #65 (F-CAL-1) and #69 (F-CAL-5). [ADR 0032](0032-suggest-calibration-set-grows.md) adds three calibration sets, holds deprecated proposals out of the threshold, and remeasures (default threshold 0.82; held out, 13.0 % auto-accepted at 92.9 %).
 
 ## Context
 

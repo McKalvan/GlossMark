@@ -1,0 +1,7 @@
+# Listings: declares the taxonomy root; the code realizes leaves four to seven levels down.
+boundary: spw:listing
+level: component
+label: Product listings
+part-of: spw:catalogue
+realizes: [cyc:ProductListing, cyc:Product]
+owner: storefront-team

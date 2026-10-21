@@ -1,0 +1,62 @@
+# Implementation tier. Each cross-cutting mechanism names the handlers it applies
+# to with guards: (declared below), so no handler carries a marker for it.
+namespace: xapi
+version: 0.1.0
+concepts:
+  ExpensesApi:
+    kind: system-type
+    realizes: [exp:ClaimSubmission, exp:ClaimApproval, exp:ClaimHistory, exp:ClaimExport]
+    doc: "The Flask expense claims API."
+  SubmitClaimHandler:
+    kind: process
+    realizes: exp:ClaimSubmission
+    doc: "POST /claims."
+  ClaimQueries:
+    kind: capability
+    realizes: exp:ClaimHistory
+    doc: "GET /claims and GET /claims/{id}."
+  ClaimDecisionHandler:
+    kind: process
+    realizes: exp:ClaimApproval
+    doc: "POST /claims/{id}/approve and /reject."
+  ApprovedClaimsExport:
+    kind: capability
+    realizes: exp:ClaimExport
+    doc: "GET /exports/approved.csv."
+
+  # Cross-cutting mechanisms
+  BearerAuthentication:
+    kind: process
+    realizes: exp:AccessControl
+    guards: [SubmitClaimHandler, ClaimQueries, ClaimDecisionHandler, ApprovedClaimsExport]
+    doc: "The before_request hook that verifies the bearer token, and the requires_role decorator."
+  RateLimiting:
+    kind: process
+    internal: true
+    guards: [SubmitClaimHandler, ClaimDecisionHandler, ApprovedClaimsExport]
+    doc: "Per-principal token buckets, applied with @rate_limit(policy)."
+  ClaimWriteRateLimit:
+    kind: constraint
+    internal: true
+    constrains: [SubmitClaimHandler, ClaimDecisionHandler]
+    criticality: medium        # reviewed: too low a limit degrades the product, nothing worse
+    value: "30"
+    doc: "Requests per minute one principal may make to the claims-write policy."
+  FeatureFlags:
+    kind: capability
+    internal: true
+    doc: "Flags read from flags.yaml; a disabled flag answers 404 on its routes."
+  BulkExportFlag:
+    kind: constraint
+    internal: true
+    constrains: [ApprovedClaimsExport]
+    criticality: low           # reviewed: the export is behind a role check either way
+    value: "false"
+    doc: "Whether the finance CSV export is switched on."
+  RequestLogging:
+    kind: process
+    internal: true
+    criticality: low
+    doc: "Structured JSON logs and one access-log line per request, for every route."
+relations:
+  guards: {}

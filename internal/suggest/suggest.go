@@ -84,7 +84,8 @@ var codeExts = map[string]bool{".py": true, ".ts": true, ".tsx": true, ".js": tr
 
 // Coverage says which relations and file types suggest proposes, for gloss
 // suggest -h and MARKING.md; everything else is written by hand.
-const Coverage = `relations: implements, represents, verifies, provisions (Terraform resources), documents (Markdown headings),
+const Coverage = `relations: implements (SQL functions and procedures too), represents, verifies, provisions (Terraform resources, not the
+roles, subnet groups, policies and other resources that only support one), documents (Markdown headings),
 deploys (Kubernetes workloads), presents and hosts (page and layout components), subscribes, consumes and publishes
 (listener annotations and producer or consumer calls); one scope=file or scope=block marker stands for a run.
 targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts.
@@ -238,8 +239,10 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 
 // callableConf is the conf a link suggest proposes itself must reach
 // before the tests that call its symbol are proposed to verify its
-// target: the default floor, so only a link it would emit.
-const callableConf = DefaultMinConf
+// target: a link right more often than wrong. At the default floor, tests
+// followed every weak name match the table let through, and calls
+// evidence fed on itself each time the table was refitted (ADR 0032).
+const callableConf = 0.5
 
 // callee is a linked declaration a test may call: its target and the names
 // that own it (its class or receiver, its file's stem), which a test that
@@ -398,7 +401,7 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 			continue
 		}
 		seen[h.c.curie] = true
-		rel := relationFor(role, d.Kind, h.c.n.Kind, consumer, producer)
+		rel := relationFor(role, d.Kind, h.c.n.Kind, h.c.impl, consumer, producer)
 		if !r.usable(f, h.c, rel) {
 			continue
 		}
@@ -409,6 +412,19 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 		return hit{}, "", false, false
 	}
 	best := valid[0]
+	// A data shape a process's doc names is what the process handles, not
+	// its mechanism ("announces ShipmentDelivered"): a type whose own name
+	// is an entity or event the type can represent links to that instead
+	// (ADR 0032). The displaced concept is no tie.
+	var displaced *concept
+	if role == roleType && best.kind == evNamedInDoc && rels[best.c.curie] == "implements" {
+		for _, h := range valid[1:] {
+			if (h.kind == evNameExact || h.kind == evAliasExact) && rels[h.c.curie] == "represents" {
+				displaced, best = best.c, h
+				break
+			}
+		}
+	}
 	// Code names the business concept but implements its mechanism: an
 	// implementation concept that realizes the core concept the name
 	// matched, and that the declaration also resembles, is the better
@@ -416,7 +432,7 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 	// several such mechanisms, only one the code calls or that names the
 	// declaration wins. Documentation describes the business concept and
 	// keeps it.
-	if !best.c.impl && role != roleHeading {
+	if !best.c.impl && role != roleHeading && displaced == nil {
 		var impls []hit
 		for _, h := range valid[1:] {
 			if h.c.impl && h.c.realizes[best.c.curie] {
@@ -438,7 +454,7 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 	}
 	tie := false
 	for _, h := range valid {
-		if h.c == best.c || h.strength() < best.strength() {
+		if h.c == best.c || h.c == displaced || h.strength() < best.strength() {
 			continue
 		}
 		if h.c.realizes[best.c.curie] || best.c.realizes[h.c.curie] {
@@ -494,7 +510,7 @@ func (r *runner) usable(f *file, c *concept, rel string) bool {
 
 // relationFor chooses the relation for a declaration of the given role
 // and a target of the given kind.
-func relationFor(role, declKind, conceptKind string, consumer, producer bool) string {
+func relationFor(role, declKind, conceptKind string, impl, consumer, producer bool) string {
 	switch role {
 	case roleTest:
 		return "verifies"
@@ -522,7 +538,10 @@ func relationFor(role, declKind, conceptKind string, consumer, producer bool) st
 	if declKind == "proto" && role == roleType {
 		return "represents"
 	}
-	if role == roleType && (conceptKind == "entity" || conceptKind == "event" || conceptKind == "measure" || conceptKind == "resource") {
+	// An implementation-tier measure is the code that computes it
+	// (OnTimeRateCalculator, NoShowReport), so a type named for it
+	// implements it; a core measure's type holds its values (ADR 0032).
+	if role == roleType && (conceptKind == "entity" || conceptKind == "event" || conceptKind == "measure" && !impl || conceptKind == "resource") {
 		return "represents"
 	}
 	return "implements"

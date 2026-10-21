@@ -29,10 +29,10 @@ type calibrationSet struct {
 }
 
 // examples is where the sets copied from github.com/McKalvan/glossmark-examples
-// (at ed53dfe) live: its showcase workspaces and the concept-poor lab
-// workspace, whose markers were written and reviewed by hand when each
-// was adopted. Their READMEs, demo scripts and expected outputs are left
-// out. lab/confidence-calibration/meterworks is not a set: it carries no
+// (at ed53dfe) live: its showcase workspaces, the concept-poor lab
+// workspace and three more lab workspaces under lab/, whose markers were
+// written and reviewed by hand when each was adopted. Their READMEs, demo
+// scripts and expected outputs are left out. lab/confidence-calibration/meterworks is not a set: it carries no
 // markers, and its labels.csv only covers what suggest v0.1.0 proposed.
 var examples = filepath.Join("testdata", "calibration", "glossmark-examples")
 
@@ -57,6 +57,14 @@ var calibrationSets = []calibrationSet{
 	{name: "ex/dispatch", src: filepath.Join(examples, "freight-federation", "dispatch")},
 	{name: "ex/tracking", src: filepath.Join(examples, "freight-federation", "tracking")},
 	{name: "ex/opstool", src: filepath.Join(examples, "opstool")},
+	// Lab workspaces whose markers state one reviewed answer (ADR 0032):
+	// the variant each lab's verdict recommends, and one stage of the
+	// monolith split (the during stage holds both sides). The lab
+	// variants that differ only in which relation they chose are left
+	// out: their labels disagree by design.
+	{name: "lab/cross-cutting", src: filepath.Join(examples, "lab", "cross-cutting-concerns", "variant-c-constraints")},
+	{name: "lab/deep-hierarchies", src: filepath.Join(examples, "lab", "deep-hierarchies", "catalogue")},
+	{name: "lab/monolith-split", src: filepath.Join(examples, "lab", "monolith-decomposition", "during")},
 }
 
 type calibrated struct {
@@ -146,7 +154,7 @@ func heldOut(cs []calibrated) (all Report, perSet []Report, sc []Scored) {
 		sc = append(sc, rc...)
 		ls = append(ls, c.labels...)
 		for _, s := range rc {
-			if s.Conf >= rule.Threshold-1e-9 {
+			if s.AutoAccepts(rule.Threshold) {
 				all.Auto.add(s)
 			}
 			if s.Conf >= DefaultMinConf-1e-9 {
@@ -198,7 +206,7 @@ func TestCalibrationReport(t *testing.T) {
 	if out := os.Getenv("GLOSS_CALIBRATION_DUMP"); out != "" {
 		var sb strings.Builder
 		for _, s := range all {
-			sb.WriteString(strings.Join([]string{s.Verdict, s.Basis, strconv.FormatFloat(s.Conf, 'f', 2, 64), s.Path, s.Symbol, s.Relation, s.Full, s.Matched}, "\t") + "\n")
+			sb.WriteString(strings.Join([]string{s.Verdict, s.Basis, strconv.FormatFloat(s.Conf, 'f', 2, 64), s.Path, s.Symbol, s.Relation, s.Full, s.Matched, strconv.FormatBool(s.Deprecated)}, "\t") + "\n")
 		}
 		os.WriteFile(out, []byte(sb.String()), 0o644)
 	}
@@ -234,23 +242,23 @@ func TestCalibrationTableIsFitted(t *testing.T) {
 	tab := Fit(all)
 	stale := os.Getenv("GLOSS_CALIBRATION_REFIT") != ""
 	// A basis seen MinBasisN times has its own row; the rarer ones are
-	// read from their evidence row, which is checked as a whole.
+	// read from their role or evidence row (calib.Table.Row), and the rare
+	// bases read from one row are checked together.
 	rows := map[string]calib.Count{}
+	some := map[string]string{} // a basis read from the row
 	for basis, c := range tab {
-		k := basis
-		if c.N < calib.MinBasisN {
-			k = calib.Evidence(basis) + " (rare bases)"
+		k := tab.Row(basis)
+		if k != basis {
+			k += " (rare bases)"
 		}
 		r := rows[k]
 		r.N += c.N
 		r.Correct += c.Correct
 		rows[k] = r
+		some[k] = basis
 	}
 	for k, c := range rows {
-		basis := strings.TrimSuffix(k, " (rare bases)")
-		if basis != k {
-			basis += "/\x00rare"
-		}
+		basis := some[k]
 		p := float64(c.Correct+1) / float64(c.N+2)
 		if d := math.Abs(confFor(basis) - p); d > 2*math.Sqrt(p*(1-p)/float64(c.N+2))+0.05 {
 			t.Errorf("basis %s: conf %.2f, measured %.2f (%d of %d correct)", k, confFor(basis), p, c.Correct, c.N)
@@ -301,7 +309,8 @@ func goLiteral(m calib.Table) string {
 	var sb strings.Builder
 	sb.WriteString("Table{\n")
 	for _, k := range keys {
-		fmt.Fprintf(&sb, "\t%q: {%d, %d},\n", k, m[k].N, m[k].Correct)
+		c := m[k]
+		fmt.Fprintf(&sb, "\t%q: {%d, %d, %d, %d},\n", k, c.N, c.Correct, c.Held, c.HeldCorrect)
 	}
 	sb.WriteString("}")
 	return sb.String()

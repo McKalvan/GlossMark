@@ -1,0 +1,22 @@
+# ontology/views.yaml: the two presets plus two views that probe depth.
+views:
+  business:
+    include: [cyc:*]
+    collapse: { "spk:*": via realizes }
+    relations: [produces, is-a, part-of]
+    lift: range-lcs
+    zoom: system
+  engineering:
+    include: [cyc:*, spk:*]
+    expand: { part-of: 2 }
+    zoom: container
+  components:
+    doc: "Every boundary level open: where does each concept land?"
+    include: [cyc:*, spk:*]
+    expand: { part-of: 5 }
+    zoom: component
+  drivetrain:
+    doc: "Curated: the electronic derailleurs and what produces them."
+    include: [cyc:ElectronicRearDerailleur, cyc:ElectronicFrontDerailleur, cyc:Cassette]
+    lift: range-lcs
+    zoom: component

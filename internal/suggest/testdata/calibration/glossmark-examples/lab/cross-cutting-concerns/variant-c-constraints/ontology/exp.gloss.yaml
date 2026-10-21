@@ -1,0 +1,27 @@
+# Core tier: what the finance team and employees recognise.
+namespace: exp
+version: 0.1.0
+concepts:
+  ExpenseClaim:
+    kind: entity
+    doc: "An employee's request to be reimbursed for one expense."
+  ClaimSubmission:
+    kind: process
+    produces: [ExpenseClaim]
+    doc: "An employee submits an expense claim."
+  ClaimApproval:
+    kind: process
+    consumes: [ExpenseClaim]
+    criticality: high
+    doc: "An approver approves or rejects a submitted claim; nobody decides their own claim."
+  ClaimHistory:
+    kind: capability
+    doc: "An employee looks up the claims they submitted."
+  ClaimExport:
+    kind: capability
+    doc: "Finance exports approved claims for payout."
+  AccessControl:
+    kind: constraint
+    criticality: high
+    constrains: [ClaimSubmission, ClaimApproval, ClaimHistory, ClaimExport]
+    doc: "Only identified staff use the system; only approvers decide claims, and never their own."

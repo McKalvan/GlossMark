@@ -1,0 +1,6 @@
+# .gloss.yaml: the system. It realizes what its containers declare.
+boundary: spw:spokewise
+level: system
+label: Spokewise parts shop
+realizes: inherit
+owner: spokewise-platform

@@ -1,0 +1,7 @@
+# The catalogue container: inherits from ingest and listing.
+boundary: spw:catalogue
+level: container
+label: Catalogue service
+part-of: spw:spokewise
+realizes: inherit
+owner: catalogue-team

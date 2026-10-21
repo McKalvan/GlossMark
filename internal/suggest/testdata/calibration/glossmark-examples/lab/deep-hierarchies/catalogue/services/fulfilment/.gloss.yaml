@@ -1,0 +1,7 @@
+# The fulfilment container: inherits from picking (which inherits from scanning).
+boundary: spw:fulfilment
+level: container
+label: Fulfilment service
+part-of: spw:spokewise
+realizes: [inherit, spk:FulfilmentEngine]
+owner: warehouse-team

@@ -31,8 +31,9 @@ const (
 // what role it plays. It skips what the first adoptions deleted by the
 // dozen (#68): package clauses and namespace modules, Rust impl blocks, SQL
 // indexes and types, module-level variables, language-private declarations,
-// and every declaration in a test file that is not a test (fakes, stubs,
-// fixtures, builders).
+// every declaration in a test file that is not a test (fakes, stubs,
+// fixtures, builders), and the Terraform resources that only support
+// another (ADR 0032).
 func surface(d marker.Decl, lines []string, path string, test bool) (role string, ok bool) {
 	ext := strings.ToLower(filepath.Ext(path))
 	sig := strings.TrimSpace(lines[d.Line-1])
@@ -61,8 +62,12 @@ func surface(d marker.Decl, lines []string, path string, test bool) (role string
 	case "sql":
 		kind := strings.SplitN(d.Symbol, ".", 2)[0]
 		switch kind {
-		case "table", "view", "function", "procedure", "materialized view":
+		case "table", "view", "materialized view":
 			return roleTable, true
+		case "function", "procedure":
+			// A routine does work: it implements a process, as the
+			// function that calls it would (ADR 0032).
+			return roleFunc, true
 		}
 		return "", false
 	case "model":
@@ -74,7 +79,7 @@ func surface(d marker.Decl, lines []string, path string, test bool) (role string
 		}
 		return roleType, true
 	case "resource":
-		if strings.HasPrefix(d.Symbol, "data.") {
+		if strings.HasPrefix(d.Symbol, "data.") || supporting(d.Symbol) {
 			return "", false
 		}
 		return roleResource, true
@@ -98,6 +103,19 @@ func surface(d marker.Decl, lines []string, path string, test bool) (role string
 		return roleMember, true
 	}
 	return pageRole(path, roleFunc), true
+}
+
+// supportingResource matches the Terraform resource types that configure,
+// secure or wire up another resource: a subnet group or a role is not the
+// database or the worker it is named after (aws_db_subnet_group.booking,
+// aws_iam_role.reminders, #65). The resource it supports carries the
+// marker.
+var supportingResource = regexp.MustCompile(`_(subnet_group|parameter_group|option_group|iam_role|policy|attachment|event_target|lifecycle_configuration|versioning|public_access_block|encryption_configuration|kms_key|kms_alias|security_group|security_group_rule|task_definition|log_group|metric_alarm|permission)$`)
+
+// supporting reports a Terraform resource that only supports another.
+func supporting(sym string) bool {
+	parts := strings.Split(sym, ".")
+	return len(parts) == 3 && parts[0] == "resource" && supportingResource.MatchString(parts[1])
 }
 
 // pageRole turns a component in a page file into a page, and one in a
