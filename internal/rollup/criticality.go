@@ -4,8 +4,9 @@ package rollup
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
+	"strings"
+	"unicode"
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
@@ -279,8 +280,66 @@ type CriticalitySuggestion struct {
 	Reason  string `json:"reason"`
 }
 
-// securityTest matches test paths and symbols that name a security concern.
-var securityTest = regexp.MustCompile(`(?i)(secur|auth|permission|access.?control|acl|rbac|csrf|xss|inject|crypt|privacy|pii|gdpr|secret|token|sanitiz|tamper|fraud)`)
+// securityWords are the words of a test path or symbol that name a security
+// concern, matched whole after splitting on case and punctuation: auth in
+// test_auth_flow, never in TestPayoutAuthorizedNotifies, where authorized is
+// a payment state. A word ending in * matches as a prefix (security,
+// secured). authorize and authorized alone are domain words; authorization,
+// unauthorized and authz are security ones.
+var securityWords = []string{"secur*", "insecure", "auth", "authn", "authz", "authenticat*", "unauthenticated", "authorization", "unauthorized", "oauth*",
+	"permission*", "acl", "acls", "rbac", "abac", "csrf", "xss", "inject*", "crypt*", "encrypt*", "decrypt*", "privacy", "pii", "gdpr",
+	"secret*", "token*", "sanitiz*", "tamper*", "fraud*"}
+
+// identWords splits an identifier or a path into lower-case words: at
+// anything but a letter, and at case changes (CSRFToken is csrf, token;
+// test_auth_flow is test, auth, flow).
+func identWords(s string) []string {
+	var words []string
+	rs := []rune(s)
+	start := -1
+	flush := func(end int) {
+		if start >= 0 && end > start {
+			words = append(words, strings.ToLower(string(rs[start:end])))
+		}
+		start = -1
+	}
+	for i, r := range rs {
+		if !unicode.IsLetter(r) {
+			flush(i)
+			continue
+		}
+		if start >= 0 && unicode.IsUpper(r) {
+			prev := rs[i-1]
+			// fooBar splits before B; CSRFToken splits before T.
+			if unicode.IsLower(prev) || (unicode.IsUpper(prev) && i+1 < len(rs) && unicode.IsLower(rs[i+1])) {
+				flush(i)
+			}
+		}
+		if start < 0 {
+			start = i
+		}
+	}
+	flush(len(rs))
+	return words
+}
+
+// securityTest reports whether a test path or symbol names a security
+// concern: one of its words is a security word, or two adjacent words say
+// access control.
+func securityTest(s string) bool {
+	words := identWords(s)
+	for i, w := range words {
+		if w == "access" && i+1 < len(words) && words[i+1] == "control" {
+			return true
+		}
+		for _, sw := range securityWords {
+			if p, ok := strings.CutSuffix(sw, "*"); ok && strings.HasPrefix(w, p) || w == sw {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // SuggestCriticality proposes a first classification for owned concepts that
 // have none, from facts already in the graph: a constraint is a rule the
@@ -331,7 +390,7 @@ func SuggestCriticality(g *graph.Graph) []CriticalitySuggestion {
 					continue
 				}
 				total++
-				if securityTest.MatchString(a.Path) || (a.Anchor != nil && securityTest.MatchString(a.Anchor.Symbol)) {
+				if securityTest(a.Path) || (a.Anchor != nil && securityTest(a.Anchor.Symbol)) {
 					sec++
 				}
 			}

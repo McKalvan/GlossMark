@@ -14,8 +14,13 @@ import (
 
 // Rule names stamped into derived edges.
 const (
-	RuleContainment  = "containment"
-	RuleRealization  = "realization-lift"
+	RuleContainment = "containment"
+	RuleRealization = "realization-lift"
+	// RuleIntended marks a flow (produces, consumes, publishes, subscribes)
+	// a boundary has because a concept its code implements declares it: the
+	// concept's intent, not a fact of the code. Drift compares it with the
+	// manifest apart from the code's own flows (ADR 0026).
+	RuleIntended     = "intended-lift"
 	RuleImplied      = "implied-relationship"
 	RuleRealizesCore = "realizes-core"
 )
@@ -74,11 +79,13 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 		direct := func(p, o string, a *graph.Node, e *graph.Edge) {
 			g.AddEdge(&graph.Edge{S: b.ID, P: p, O: o, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: []string{g.Curie(a.ID)}, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
 		}
-		// lift adds b rel o, reached from the concept e links along path.
-		lift := func(p, o string, a *graph.Node, e *graph.Edge, path []Hop) {
+		// liftAs adds b rel o under rule, reached from the concept e links
+		// along path; lift is liftAs for a fact of the code.
+		liftAs := func(rule, p, o string, a *graph.Node, e *graph.Edge, path []Hop) {
 			via, steps := liftVia(g, a.ID, e.O, path)
-			g.AddEdge(&graph.Edge{S: b.ID, P: p, O: o, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: RuleRealization, Via: via, Steps: steps, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
+			g.AddEdge(&graph.Edge{S: b.ID, P: p, O: o, Source: graph.SourceDerived, Prov: &graph.Prov{Rule: rule, Via: via, Steps: steps, Path: e.Prov.Path, Line: e.Prov.Line, Proposed: e.Prov.Proposed}})
 		}
+		lift := func(p, o string, a *graph.Node, e *graph.Edge, path []Hop) { liftAs(RuleRealization, p, o, a, e, path) }
 		// liftStar lifts every concept e's object stands for under rel.
 		liftStar := func(rel string, a *graph.Node, e *graph.Edge) {
 			paths := RealizesPaths(g, e.O)
@@ -97,16 +104,22 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 				// Impl concepts lift to core through their own realizes (transitively).
 				liftStar("realizes", a, e)
 				// Intended relations declared on the implemented concept, and on the
-				// core concepts it realizes, lift to the boundary. So do the surface
-				// relations: code implementing pfi:FirePage, which presents
-				// pf:FirePlanning, makes the boundary present it, not realize it.
+				// core concepts it realizes, lift to the boundary as intent: drift
+				// compares them with the manifest but never lets them stand in
+				// for code (ADR 0026). The surface relations lift as facts: code
+				// implementing pfi:FirePage, which presents pf:FirePlanning, makes
+				// the boundary present it, not realize it.
 				paths := RealizesPaths(g, e.O)
 				paths[e.O] = nil
 				for _, c := range sortedKeys(paths) {
 					for _, rel := range append(append([]string{}, SurfaceRelations...), LiftedRelations...) {
+						rule := RuleRealization
+						if !has(SurfaceRelations, rel) {
+							rule = RuleIntended
+						}
 						for _, x := range g.Objects(c, rel) {
 							if IsConcrete(x) {
-								lift(rel, x, a, e, append(append([]Hop{}, paths[c]...), Hop{rel, x}))
+								liftAs(rule, rel, x, a, e, append(append([]Hop{}, paths[c]...), Hop{rel, x}))
 							}
 						}
 					}

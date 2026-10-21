@@ -26,8 +26,12 @@ type ConceptStatusRow struct {
 	Status    string   `json:"status"`
 	Artifacts int      `json:"artifacts"` // implementing artifacts (see implementing)
 	Verifiers int      `json:"verifiers"`
-	Findings  []string `json:"findings,omitempty"` // every finding kind on it (presented-only, stale, ...)
-	Doc       string   `json:"doc,omitempty"`
+	Findings  []string `json:"findings,omitempty"` // every finding kind on it (presented-only, stale, deprecated-use, ...)
+	// Deprecated marks a concept the ontology retires, with its successor:
+	// an external checker can flag every use without parsing the ontology.
+	Deprecated bool   `json:"deprecated,omitempty"`
+	ReplacedBy string `json:"replaced-by,omitempty"`
+	Doc        string `json:"doc,omitempty"`
 }
 
 // ConceptStatus summarizes every owned concept for an external checker (a
@@ -46,7 +50,7 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 		if n.Imported {
 			continue
 		}
-		r := ConceptStatusRow{Concept: n.CURIE, Tier: n.Tier, Kind: n.Kind, Doc: n.Doc, Findings: uniq(kinds[n.CURIE])}
+		r := ConceptStatusRow{Concept: n.CURIE, Tier: n.Tier, Kind: n.Kind, Doc: n.Doc, Findings: uniq(kinds[n.CURIE]), Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy}
 		// The concept and the implementation concepts that realize it.
 		ids := []string{n.ID}
 		for _, s := range g.Subjects(n.ID, "realizes") {

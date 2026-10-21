@@ -343,7 +343,13 @@ func (ws *Workspace) walk() error {
 			return nil
 		}
 		if strings.HasSuffix(rel, ".gloss.yaml") && strings.HasPrefix(rel, "ontology/") {
-			return nil // ontology files are not marker carriers
+			// Ontology files are not marker carriers. Only the files owns:
+			// and imports: name are loaded; one that neither names is
+			// ignored, usually an attempt to extend another repo's namespace.
+			if d := ws.unloadedOntology(path, rel); d != nil {
+				ws.Diags = append(ws.Diags, *d)
+			}
+			return nil
 		}
 		if info, err := d.Info(); err == nil && info.Size() > maxFileSize {
 			return nil
@@ -416,6 +422,37 @@ func styleKey(rel string) string {
 	return base
 }
 
+// unloadedOntology returns a GM402 warning for an ontology file under
+// ontology/ that no owns: or imports: entry loads, naming the namespace it
+// declares: its concepts do not exist, and nothing else would say so.
+func (ws *Workspace) unloadedOntology(path, rel string) *marker.Diagnostic {
+	same := func(p string) bool { return p != "" && filepath.Clean(p) == filepath.Clean(path) }
+	for _, o := range ws.Ontologies {
+		if same(o.Path) {
+			return nil
+		}
+	}
+	for _, r := range ws.Resolved {
+		if r != nil && (same(r.Path) || (r.Upstream != nil && same(r.Upstream.Path))) {
+			return nil
+		}
+	}
+	o, err := model.LoadOntology(path)
+	if err != nil {
+		return nil // not ours to parse; an owned file that fails to load is GM100/GM104
+	}
+	msg := ""
+	switch ns := o.Namespace; {
+	case ns == "":
+		msg = fmt.Sprintf("%s is not loaded: no owns: or imports: entry in %s names it and it declares no namespace:; its concepts do not exist", rel, ConfigName)
+	case ws.Owned[ns]:
+		msg = fmt.Sprintf("%s declares namespace %s: but is not loaded: owns.%s.file is %s, one file per namespace; move its concepts there", rel, ns, ns, ws.Rel(ws.Ontologies[ns].Path))
+	default:
+		msg = fmt.Sprintf("%s declares namespace %s:, which this repo does not own, so it is not loaded and its concepts do not exist (own-subject rule). Extend %s: from a namespace you own (a concept that is-a or part-of the imported one), or propose the concepts to %s:'s owner", rel, ns, ns, ns)
+	}
+	return &marker.Diagnostic{Path: rel, Line: 1, Severity: "warning", Code: "GM402", Msg: msg}
+}
+
 // generated reports whether a file matches its manifest's generated globs.
 func (ws *Workspace) generated(f string) bool {
 	m := ws.ManifestFor(f)
@@ -427,6 +464,23 @@ func (ws *Workspace) generated(f string) bool {
 		sub = strings.TrimPrefix(f, m.Dir+"/")
 	}
 	return model.MatchAnyGlob(m.Generated, sub)
+}
+
+// Ignored reports whether a repo-relative path is one GlossMark never reads
+// as source: under a skipped directory (the tool's own .glossmark/ state
+// among them) or an exclude: glob, or matched by its manifest's generated:
+// globs. A change to such a file is attributable to no concept, so gloss
+// impact and gloss context --changed leave it out. glossmark.yaml, manifests
+// and ontology files are read, and are not ignored.
+func (ws *Workspace) Ignored(rel string) bool {
+	parts := strings.Split(rel, "/")
+	for i := 0; i < len(parts)-1; i++ {
+		dir := strings.Join(parts[:i+1], "/")
+		if defaultSkipDirs[parts[i]] || model.MatchAnyGlob(ws.Config.Exclude, dir) || model.MatchAnyGlob(ws.Config.Exclude, dir+"/") {
+			return true
+		}
+	}
+	return model.MatchAnyGlob(ws.Config.Exclude, rel) || ws.generated(rel)
 }
 
 // InScope reports whether a repo-relative file path is one the walk would
@@ -462,6 +516,22 @@ func (ws *Workspace) ManifestFor(rel string) *model.Manifest {
 			if best == nil || len(m.Dir) > len(best.Dir) {
 				best = m
 			}
+		}
+	}
+	return best
+}
+
+// EnclosingManifest returns the nearest manifest in a directory strictly
+// above m's, or nil. A manifest that names no part-of is part of its
+// boundary (ADR 0026).
+func (ws *Workspace) EnclosingManifest(m *model.Manifest) *model.Manifest {
+	var best *model.Manifest
+	for _, o := range ws.Manifests {
+		if o == m || o.Dir == m.Dir || !(o.Dir == "" || strings.HasPrefix(m.Dir, o.Dir+"/")) {
+			continue
+		}
+		if best == nil || len(o.Dir) > len(best.Dir) {
+			best = o
 		}
 	}
 	return best

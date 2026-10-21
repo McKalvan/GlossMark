@@ -87,6 +87,12 @@ func TestDoctor(t *testing.T) {
 	write(".github/workflows/gloss.yml", "jobs:\n  g:\n    steps:\n      - uses: mckalvan/glossmark@v0.1.0\n")
 	write(".claude/settings.json", `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"GLOSS_ACTOR=agent:claude-code gloss context"}]}]}}`)
 	write(".mcp.json", `{"mcpServers":{"glossmark":{"command":"gloss","args":["mcp"],"env":{"GLOSS_ACTOR":"agent:claude-code"}}}}`)
+	// Issue #158: a hook that sets the actor for its own command only.
+	if c := run("agent:claude-code", true)["agent hook"]; c.Status != Warn || !strings.Contains(c.Msg, "briefing only") {
+		t.Errorf("hook without CLAUDE_ENV_FILE = %+v", c)
+	}
+	write(".claude/settings.json", `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo export GLOSS_ACTOR=agent:claude-code >> \"${CLAUDE_ENV_FILE:-/dev/null}\"; GLOSS_ACTOR=agent:claude-code gloss context"}]}]}}`)
+	write(".mcp.json", `{"mcpServers":{"glossmark":{"command":"gloss","args":["mcp"],"env":{"GLOSS_ACTOR":"agent:claude-code"}}}}`)
 	ws, _ := load.Load(root)
 	res, _ := extract.Build(ws)
 	rollup.Derive(res.Graph, ws.Vocab)

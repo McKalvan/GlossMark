@@ -1,4 +1,5 @@
 // @gloss implements gmi:McpServer scope=file
+// @gloss publishes gm:LinkProposed scope=file
 
 package main
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/ontoedit"
 
+	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/graph"
@@ -126,7 +128,7 @@ func (b *mcpBackend) Impact(props []mcp.Proposal) (any, error) {
 		if on := g.Node(oiri); on != nil {
 			item["target_kind"] = on.Kind
 			if len(rel.RangeKinds) > 0 && on.Kind != "" && !containsStr(rel.RangeKinds, on.Kind) {
-				item["warning"] = fmt.Sprintf("%s usually targets %s; %s is a %s", p.Relation, strings.Join(rel.RangeKinds, "/"), on.CURIE, on.Kind)
+				item["warning"] = check.RangeKindMsg(p.Relation, rel.RangeKinds, on.CURIE, on.Kind)
 			}
 		} else if !marker.IsNewTarget(target) {
 			item["error"] = fmt.Sprintf("concept %s does not exist; use %s:NEW:%s to propose it", target, strings.SplitN(target, ":", 2)[0], lastPart(target))
@@ -205,6 +207,11 @@ func (b *mcpBackend) ProposeConcept(cp mcp.ConceptProposal) (any, error) {
 	}
 	curie := ns + ":" + name
 	rewritten, _ := ontoedit.RewriteNewMarkers(absFiles(p), curie)
+	if rewritten > 0 {
+		if err := carryMarkerIDs(p); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := buildGraph(b.root, true); err != nil {
 		return nil, err
 	}

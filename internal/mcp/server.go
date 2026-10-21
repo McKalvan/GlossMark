@@ -1,4 +1,5 @@
 // @gloss implements gmi:McpServer scope=file
+// @gloss publishes gm:LinkProposed scope=file
 
 // Package mcp serves the graph to agents over the Model Context Protocol
 // (JSON-RPC 2.0 on stdio): lookup_concept, search_concepts, concepts_for_path,
@@ -307,6 +308,7 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 		return slice.Of(g, ws.Root, a.Seeds, slice.Options{Context: a.Context == nil || *a.Context, Follow: fl}, rep.Findings)
 	case "drift":
 		rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: ws.Config.EffectivePolicy()})
+		rollup.AddDeprecatedUse(rep, g, ws.Config.EffectivePolicy(), time.Now())
 		return rep, nil
 	}
 	return nil, fmt.Errorf("unknown tool %q", name)

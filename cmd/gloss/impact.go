@@ -1,4 +1,5 @@
 // @gloss implements gmi:Gate, gmi:AgentsSnippet scope=file
+// @gloss produces gm:Impact scope=file
 
 package main
 
@@ -49,12 +50,12 @@ func cmdImpact(args []string) int {
 		if err != nil {
 			return fail(err)
 		}
-		files = append(files, ch...)
+		files = append(files, attributable(p.WS, ch)...)
 	}
 	if len(files) == 0 {
 		ch, err := changedFiles(p.WS.Root, "HEAD")
 		if err == nil {
-			files = ch
+			files = attributable(p.WS, ch)
 		}
 	}
 	if len(files) == 0 {
@@ -86,6 +87,19 @@ func cmdImpact(args []string) int {
 		fmt.Print(gate.RenderText(im))
 	}
 	return 0
+}
+
+// attributable drops the changed files no concept can own: the tool's own
+// state (.glossmark/), and excluded and generated paths. Listing them would
+// ask for a marker that cannot be written.
+func attributable(ws *load.Workspace, files []string) []string {
+	var out []string
+	for _, f := range files {
+		if !ws.Ignored(f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func uniqStrings(xs []string) []string {
@@ -149,7 +163,8 @@ func briefing(p *pipeline, dir string, max, budget int, changed bool) string {
 	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
 	opt := agents.ContextOptions{Dir: rel, MaxConcepts: max, Budget: budget, Actor: os.Getenv("GLOSS_ACTOR")}
 	if changed {
-		if files, err := changedFiles(p.WS.Root, "HEAD"); err == nil && len(files) > 0 {
+		if files, err := changedFiles(p.WS.Root, "HEAD"); err == nil && len(attributable(p.WS, files)) > 0 {
+			files = attributable(p.WS, files)
 			ts := gate.Touched(p.Graph, p.WS, uniqStrings(files))
 			if len(ts) > 8 {
 				ts = ts[:8]
@@ -261,6 +276,18 @@ func shellWord(s string) string {
 	return s
 }
 
+// hookCommand is the SessionStart hook: it appends `export GLOSS_ACTOR=actor`
+// to $CLAUDE_ENV_FILE, which Claude Code sources before every shell command
+// of the session, so a `gloss build` the agent runs later is attributed to it
+// too, not only the briefing (issue #158). Outside Claude Code the variable
+// is unset and the line goes to /dev/null. Subagents share the session's
+// shell environment, so each sets its own actor on its gloss commands
+// (docs/QUICKSTART.md).
+func hookCommand(actor, bin string) string {
+	a := shellWord(actor)
+	return fmt.Sprintf("echo export GLOSS_ACTOR=%s >> \"${CLAUDE_ENV_FILE:-/dev/null}\"; GLOSS_ACTOR=%s %s context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", shellWord(a), a, shellWord(bin))
+}
+
 // installHooks registers the SessionStart hook and the MCP server for a
 // repository, both running with GLOSS_ACTOR=actor.
 func installHooks(root, actor string, hook, mcp bool) error {
@@ -275,7 +302,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		if hooks == nil {
 			hooks = map[string]any{}
 		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": fmt.Sprintf("GLOSS_ACTOR=%s %s context --dir \"$PWD\" --changed --budget 2000 2>/dev/null || true", actor, shellWord(bin))}}}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": hookCommand(actor, bin)}}}
 		list, _ := hooks["SessionStart"].([]any)
 		present := false
 		for i, it := range list {
@@ -325,7 +352,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		}
 		fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(root, path))
 	}
-	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s; agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of\n", actor)
+	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s (the hook exports it to the session's shell); agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of\n", actor)
 	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
 	return nil
 }

@@ -13,5 +13,6 @@ def inspect(item):
 
 
 # @gloss implements .ReturnNotifier
+# @gloss publishes lib:ItemReturned
 def announce_return(barcode):
     publish("item-returned", barcode)

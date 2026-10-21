@@ -1,4 +1,6 @@
 // @gloss implements gmi:DriftComparator scope=file
+// @gloss produces gm:Drift, gm:Coverage, gm:DecisionRequest scope=file
+// @gloss publishes gm:DriftDetected, gm:DecisionRequested scope=file
 
 package main
 
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
@@ -23,6 +26,7 @@ func cmdDrift(args []string) int {
 	format := fs.String("format", "text", "text | json | markdown")
 	failOn := fs.String("fail-on", "violation,value-drift,gap,dangling,overdue", "comma-separated finding kinds that fail the command")
 	all := fs.Bool("all", false, "also list consistent pairs")
+	ids := fs.Bool("ids", false, "end each finding with its id, the key policy.waivers names (text output; JSON always has it)")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
@@ -36,6 +40,7 @@ func cmdDrift(args []string) int {
 		return fail(err)
 	}
 	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
+	rollup.AddDeprecatedUse(rep, p.Graph, p.WS.Config.EffectivePolicy(), time.Now())
 	switch *format {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
@@ -44,7 +49,7 @@ func cmdDrift(args []string) int {
 	case "markdown":
 		fmt.Print(rollup.RenderMarkdown(rep, *all))
 	default:
-		fmt.Print(rollup.RenderText(rep, *all))
+		fmt.Print(rollup.RenderTextOpts(rep, rollup.TextOptions{All: *all, IDs: *ids}))
 	}
 	if n := len(rep.Failing(kinds)); n > 0 {
 		fmt.Fprintf(os.Stderr, "gloss drift: %s (%s)\n", plural(n, "failing finding"), *failOn)
@@ -70,6 +75,9 @@ func cmdCoverage(args []string) int {
 	pol := p.WS.Config.EffectivePolicy()
 	opts := rollup.Options{Ledger: p.Ledger.Entries, Policy: pol, Now: time.Now()}
 	if *changedOnly {
+		if err := verifyBase(p.WS.Root, *base); err != nil {
+			return fail(err)
+		}
 		changed, err := changedFiles(p.WS.Root, *base)
 		if err != nil {
 			return fail(err)
@@ -94,11 +102,25 @@ func cmdCoverage(args []string) int {
 	switch strings.ToLower(*failUnder) {
 	case "":
 	case "current":
+		if err := verifyBase(p.WS.Root, *base); err != nil {
+			return fail(err)
+		}
+		// The change that adopts GlossMark has nothing to ratchet against:
+		// say so rather than pass without a word.
+		if ok, at := baseHasWorkspace(p.WS, *base); !ok {
+			fmt.Fprintf(os.Stderr, "gloss coverage: base %s has no workspace at %s (no %s); ratchet skipped\n", *base, at, load.ConfigName)
+			break
+		}
 		bg, err := loadBaseGraph(p.WS, *base)
 		if err != nil {
 			return fail(err)
 		}
-		threshold = rollup.Compare(bg, p.WS, rollup.Options{Policy: pol, Now: time.Now()}).Metrics.ConceptCoveragePct
+		bm := rollup.Compare(bg, p.WS, rollup.Options{Policy: pol, Now: time.Now()}).Metrics
+		if bm.ConceptsInScope == 0 {
+			fmt.Fprintf(os.Stderr, "gloss coverage: base %s has no concepts in scope (coverage n/a); ratchet skipped\n", *base)
+			break
+		}
+		threshold = bm.ConceptCoveragePct
 	default:
 		v, err := strconv.ParseFloat(*failUnder, 64)
 		if err != nil {

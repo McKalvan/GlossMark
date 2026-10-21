@@ -14,7 +14,7 @@ realization (1)
       via circ:ReturnPipeline realizes lib:Return
 
 artifact (2)
-  services/circulation/loans/returns.py#announce_return  function  circulation/services/circulation/loans/returns.py:16
+  services/circulation/loans/returns.py#announce_return  function  circulation/services/circulation/loans/returns.py:17
       via circ:ReturnPipeline realizes lib:Return · circ:ReturnNotifier part-of circ:ReturnPipeline · services/circulation/loans/returns.py#announce_return implements circ:ReturnNotifier
   services/circulation/loans/returns.py#check_in  function  circulation/services/circulation/loans/returns.py:5
       via circ:ReturnPipeline realizes lib:Return · services/circulation/loans/returns.py#check_in implements circ:ReturnPipeline

@@ -1,4 +1,5 @@
 // @gloss implements gmi:Extractor scope=file
+// @gloss produces gm:Graph scope=file
 
 // Package extract is pass 1 of the extractor: ontology files, manifests and
 // inline markers become nodes and edges of the canonical graph. Derived edges
@@ -264,6 +265,14 @@ func (ex *extractor) manifests() {
 				ex.g.AddNode(pn)
 			}
 			ex.g.AddEdge(&graph.Edge{S: iri, P: "part-of", O: piri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1, Raw: p}})
+		}
+		// A manifest that names no part-of is part of the nearest manifest
+		// in an enclosing directory: nesting is containment unless part-of
+		// says otherwise, and part-of: [] opts out (ADR 0026).
+		if m.ImplicitPartOf() {
+			if p := ex.ws.EnclosingManifest(m); p != nil {
+				ex.g.AddEdge(&graph.Edge{S: iri, P: "part-of", O: ex.boundaryIRI(p.Boundary, m.Path, 1), Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1, Rule: "nearest-manifest"}})
+			}
 		}
 		if m.ReplacedBy != "" {
 			// The successor is often in another repository: no node is made.

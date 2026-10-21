@@ -1,10 +1,13 @@
 // @gloss implements gmi:ReviewCommands scope=file
+// @gloss publishes gm:LinkAccepted, gm:LinkRejected scope=file
 
 package main
 
 import (
 	"fmt"
+	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +21,7 @@ import (
 func init() {
 	register(command{"accept", "accept proposed links: the one-character diff @gloss? → @gloss plus the ledger entry", cmdAccept})
 	register(command{"reject", "reject a proposed link with a reason (optionally remove the marker line)", cmdReject})
-	register(command{"status", "list proposed, stale and rejected links from the ledger", cmdStatus})
+	register(command{"status", "list proposed, stale and rejected links from the ledger, each proposal with its gate and the reason gloss diff gives", cmdStatus})
 }
 
 func reviewer(root string) string {
@@ -85,6 +88,7 @@ func cmdAccept(args []string) int {
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
 	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
+	force := fs.Bool("force", false, "with --value: confirm even when the bound line does not hold the published value")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
@@ -103,6 +107,16 @@ func cmdAccept(args []string) int {
 			e := p.Ledger.Entry("value:" + c)
 			if node == nil || e == nil || node.ValueFP == "" {
 				return fail(fmt.Errorf("%s has no value-from binding", c))
+			}
+			// Confirming says the line holds the published value. When the
+			// value's literal is nowhere in it, the code and the ontology
+			// disagree, and confirming would hide that until the next edit.
+			if !valueInLine(node.Value, node.LiveValue) {
+				msg := fmt.Sprintf("%s: the bound code %s (%s) does not hold the published value %q; update value: in the ontology to match the code, or change the code", c, node.ValueFrom, node.LiveValue, fmt.Sprint(node.Value))
+				if !*force {
+					return fail(fmt.Errorf("%s; --force confirms the line as is", msg))
+				}
+				fmt.Fprintf(os.Stderr, "gloss accept: %s; confirming anyway (--force)\n", msg)
 			}
 			fmt.Printf("%s value of %s: %s is now the baseline for %v\n", map[bool]string{true: "would confirm", false: "confirm"}[*dry], c, node.LiveValue, node.Value)
 			if *dry {
@@ -223,6 +237,61 @@ func cmdAccept(args []string) int {
 	return 0
 }
 
+// numLiteral matches a number as code or prose writes it: a sign, digit
+// group separators (1_000, or 1,000 in thousands), a fraction, an exponent.
+var numLiteral = regexp.MustCompile(`[-+]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d[\d_]*(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?`)
+
+// valueInLine reports whether a published value appears in the bound code:
+// some number in the value equals a number in the line (a percentage also
+// as a fraction, so 4% matches 0.04; a suffix such as 60L or 30d is not part
+// of the number), or, for a value without numbers, the value's text appears
+// in the line, unquoted and case-insensitive. A value with nothing to
+// compare (none, or a list or map) is not judged.
+func valueInLine(value any, line string) bool {
+	text := strings.TrimSpace(fmt.Sprint(value))
+	if value == nil || text == "" {
+		return true
+	}
+	switch value.(type) {
+	case []any, map[string]any:
+		return true
+	}
+	nums := func(s string) []float64 {
+		var out []float64
+		for _, m := range numLiteral.FindAllStringIndex(s, -1) {
+			if m[0] > 0 && isIdentByte(s[m[0]-1]) {
+				continue // the digits of a name: MAX_2, v1
+			}
+			f, err := strconv.ParseFloat(strings.NewReplacer("_", "", ",", "").Replace(s[m[0]:m[1]]), 64)
+			if err != nil {
+				continue
+			}
+			out = append(out, f)
+			if m[1] < len(s) && s[m[1]] == '%' {
+				out = append(out, f/100)
+			}
+		}
+		return out
+	}
+	want := nums(text)
+	if len(want) == 0 {
+		return strings.Contains(strings.ToLower(line), strings.ToLower(strings.Trim(text, `"'`)))
+	}
+	have := nums(line)
+	for _, w := range want {
+		for _, h := range have {
+			if w == h || math.Abs(w-h) <= 1e-9*math.Max(math.Abs(w), math.Abs(h)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isIdentByte(b byte) bool {
+	return b == '_' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+}
+
 func cmdReject(args []string) int {
 	fs, root := newFlags("reject")
 	reason := fs.String("reason", "", "why the link is wrong (recorded in the ledger)")
@@ -249,6 +318,13 @@ func cmdReject(args []string) int {
 				return fail(err)
 			}
 			fmt.Printf("reject concept %s — %s\n", c, *reason)
+		}
+		if *remove {
+			// The markers that linked to a removed concept went back to
+			// ns:NEW:Name; their entries follow them (ADR 0027).
+			if err := carryMarkerIDs(p); err != nil {
+				return fail(err)
+			}
 		}
 		if err := p.Ledger.Save(); err != nil {
 			return fail(err)
@@ -298,6 +374,40 @@ func removeMarkerLine(p *pipeline, fm extract.FoundMarker) error {
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
+// proposalGate renders the gate of a proposed marker the way gloss diff does:
+// "[SOFT: auto-accept eligible]", or "[HARD: <reasons>]" so a reader can tell
+// a confidence below the threshold from a target outside the allowed set
+// without running diff. It is "" for an id with no marker in the tree (a
+// proposed concept).
+func proposalGate(p *pipeline, pol *model.Policy, id string) string {
+	for _, fm := range p.Res.Markers {
+		if fm.ID != id {
+			continue
+		}
+		cls := gate.SOFT
+		var why []string
+		seen := map[string]bool{}
+		for _, ed := range fm.Edges {
+			c, r := gate.ClassifyLink(p.Graph, p.WS, ed, pol)
+			cls = gate.Max(cls, c)
+			if c != gate.HARD {
+				continue
+			}
+			for _, x := range r {
+				if !seen[x] {
+					seen[x] = true
+					why = append(why, x)
+				}
+			}
+		}
+		if cls == gate.HARD {
+			return "  [HARD: " + strings.Join(why, "; ") + "]"
+		}
+		return "  [" + string(cls) + ": auto-accept eligible]"
+	}
+	return ""
+}
+
 func cmdStatus(args []string) int {
 	fs, root := newFlags("status")
 	if err := parseFlags(fs, args); err != nil {
@@ -316,15 +426,10 @@ func cmdStatus(args []string) int {
 		fmt.Printf("%s (%d)\n", st, len(es))
 		for _, e := range es {
 			g := ""
-			for _, fm := range p.Res.Markers {
-				if fm.ID == e.MarkerID {
-					cls := gate.SOFT
-					for _, ed := range fm.Edges {
-						c, _ := gate.ClassifyLink(p.Graph, p.WS, ed, pol)
-						cls = gate.Max(cls, c)
-					}
-					g = "  [" + string(cls) + "]"
-				}
+			if st == model.StatusProposed {
+				// Only a proposal waits on a gate: a stale link was accepted
+				// and a rejected one decided, so neither gets one (issue #158).
+				g = proposalGate(p, pol, e.MarkerID)
 			}
 			conf := ""
 			if e.Conf > 0 {
