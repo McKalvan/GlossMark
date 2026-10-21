@@ -319,6 +319,8 @@ The two are not directly comparable, because the derived draft had an owner and 
 
 **Map.** `gloss view` on the adopted ontology showed why the core needs areas. With 70 concepts in no `part-of` hierarchy, the business view put them all in one box with 255 edges. Slices and the concept panel were readable; the map was not. The owner accepted grouping the core into seven `capability` areas, with every concept `part-of` one, and the view now opens on seven boxes. The skill now proposes areas in step 5.
 
+In the engineering view, the areas first pulled their parts out of the `app/` and `src/` boxes their code is in. That is fixed in the viewer: ADR 0010, decisions 14 and 15. The `src/` box is still crowded: concepts that belong to `src/` directly are drawn over the area boxes beside them. That is a layout limitation, not a placement one.
+
 Grouping exposed two drift reporting issues to fix in GlossMark:
 - **Untested rolls up.** Because a part realizes its whole, an untested implementation concept (`pfi:Cli`) is reported only as its topmost untested whole ("pf:Pfinance is untested"), so the specific gap disappears from the report.
 - **Overlap is noise for areas.** The overlap finding, meant for a half-finished migration (ADR 0019), fires for every area realized by more than one boundary.

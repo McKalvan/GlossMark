@@ -240,7 +240,7 @@ function desat(s,f){return (parseFloat(s)*f)+'%';}
 function nodeColours(n){
   if(n.type==='boundary')return {fill:C.bFill,stroke:C.bStroke};
   if(n.type==='artifact')return {fill:C.aFill,stroke:C.bStroke};
-  const h=hue(n.branch||n.id),impl=n.tier==='implementation';
+  const w=displacedFrom(n),h=hue(w?w.id:(n.branch||n.id)),impl=n.tier==='implementation';
   return {fill:`hsl(${h} ${impl?desat(C.ns,.45):C.ns} ${C.nl})`,stroke:`hsl(${h} ${impl?desat(C.ss,.55):C.ss} ${C.sl})`};
 }
 const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
@@ -418,12 +418,31 @@ function readHash(){
 function containerOf(n){
   let c=null;
   if(n.type==='boundary')c=byId.get(n.parent);
-  else{const p=byId.get(n.parent);c=(p&&!hiddenByFilter(p)&&p!==n)?p:byId.get(n.boundary);}
+  else{const p=byId.get(n.parent);c=(p&&!hiddenByFilter(p)&&p!==n&&!outgrows(n,p))?p:byId.get(n.boundary);}
   let g=0;const seen=new Set([n.id]);
   while(c&&g++<64&&!seen.has(c.id)){seen.add(c.id);if(!hiddenByFilter(c))return c;c=byId.get(c.parent);}
   // An unplaced concept with no shown whole sits in the group for its placement.
   if(n.type==='concept'&&n.placement&&n.placement!=='housed')return byId.get(GROUP+n.placement)||null;
   return null;
+}
+// outgrows: a part housed in a boundary shown strictly inside its whole's
+// boundary is drawn in that boundary, not in the whole's box, so a domain area
+// that spans app/ and src/ does not pull its parts out of the boxes their code
+// is in. The part takes the whole's colour instead (displacedFrom). A part
+// that is only near a boundary (flow, shared, unlinked) stays in its whole.
+function outgrows(n,p){
+  if(n.type!=='concept'||n.placement!=='housed'||!n.boundary||!p.boundary||n.boundary===p.boundary)return false;
+  const b=byId.get(n.boundary);
+  if(!b||hiddenByFilter(b))return false;
+  let a=byId.get(b.parent),g=0;
+  while(a&&g++<64){if(a.id===p.boundary)return true;a=byId.get(a.parent);}
+  return false;
+}
+// displacedFrom: the part-of whole a concept is not drawn inside, or null.
+function displacedFrom(n){
+  if(n.type!=='concept'||!n.parent||!n._c||n._c.id===n.parent)return null;
+  const p=byId.get(n.parent);
+  return p&&!p.group&&p.type==='concept'?p:null;
 }
 function isContainer(n){return (kidsOf.get(n.id)||[]).length>0;}
 function isVisible(n){
@@ -880,6 +899,8 @@ function renderPanel(){
     row('criticality',n.criticality?esc(critText(n)):'<span class="via">unclassified</span>');
     row('owner',esc(n.owner));
     if(n._c&&!n._c.group)row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
+    const whole=displacedFrom(n);
+    if(whole)row('part of',nodeLink(whole)+'<div class="via">drawn in the boundary its code is in; it shares the colour of '+esc(whole.id)+'</div>');
     else if(n.type!=='boundary'&&!n.ghost)row('in boundary','<span class="via">none: no boundary’s code realizes it</span>');
     if(n.placement)row('placement',(n.placement==='housed'?'':'unplaced: ')+'<b>'+esc(n.placement)+'</b>'+(n.placementReason?'<div class="via">'+esc(n.placementReason)+'</div>':''));
     const sr=S.slice&&S.slice.roles.get(n.id);
