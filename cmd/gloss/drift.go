@@ -1,4 +1,6 @@
 // @gloss implements gmi:DriftComparator scope=file
+// @gloss produces gm:Drift, gm:Coverage, gm:DecisionRequest scope=file
+// @gloss publishes gm:DriftDetected, gm:DecisionRequested scope=file
 
 package main
 

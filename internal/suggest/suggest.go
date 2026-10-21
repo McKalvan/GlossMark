@@ -1,4 +1,5 @@
 // @gloss implements gmi:MarkerSuggester scope=file
+// @gloss produces gm:ProposedLink scope=file
 
 // Package suggest proposes `@gloss?` markers for unmarked declarations by
 // matching their names, docstrings, the tables they touch and the code

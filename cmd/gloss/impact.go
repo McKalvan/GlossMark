@@ -1,4 +1,5 @@
 // @gloss implements gmi:Gate, gmi:AgentsSnippet scope=file
+// @gloss produces gm:Impact scope=file
 
 package main
 

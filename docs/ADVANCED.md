@@ -21,7 +21,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `provisions` | ✓ | | | IaC artifact provisions a resource or boundary; on a resource or system-type it lifts to `realizes` |
 | `configures` | ✓ | | ✓ | a config file, or a page that edits a concept's value at runtime; lifts to the boundary as itself on any kind (and to `realizes` on a resource or system-type), carries the concept's criticality, never places it ([ADR 0012](adr/0012-surfaces.md)) |
 | `deploys` | ✓ | | | CI artifact deploys a system-type or boundary; same lift |
-| `produces`, `consumes` | ✓ | ✓ | ✓ | intended (concept, manifest) or actual (artifact) flow of a concept; lifted to boundaries with `range-lcs` |
+| `produces`, `consumes` | ✓ | ✓ | ✓ | intended (concept, manifest) or actual (artifact) flow of a concept; a concept's lifts to the boundaries implementing it as intent, compared with the manifest but never closing a gap; summarized with `range-lcs`, one lift per subset sharing a subsumer ([ADR 0026](adr/0026-rollup-intent-nesting-inherit.md)) |
 | `publishes`, `subscribes` | ✓ | ✓ | ✓ | same for events |
 | `realizes` | | ✓ | ✓ | implementation concept → core concept; a boundary → what its code stands for |
 | `holds` | | | ✓ | boundary holds a concept's data (an entity's records, a measure's stored values); derived from `represents` |
@@ -54,8 +54,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 | Kind | Meaning | Fails by default |
 | --- | --- | :-: |
-| violation | a boundary's code realizes, holds, produces, consumes, publishes or subscribes something its manifest does not declare | ✓ |
-| gap | a manifest declares something nothing under it implements | ✓ |
+| violation | a boundary's code realizes, holds, produces, consumes, publishes or subscribes something its manifest does not declare, or a concept its code implements intends a flow the manifest neither covers nor refines | ✓ |
+| gap | a manifest declares something no code under it implements (a concept's intended flow does not count) | ✓ |
 | value-drift | the code a published value is bound to (`value-from`, `publishes-value`) changed and the ontology `value` did not | ✓ |
 | dangling | a marker, a manifest relation key or `allowed:` entry, or a relation in the workspace's own ontology files targets a concept that does not exist (in a marker, write `ns:NEW:Name` with `@gloss?` to propose it) | ✓ |
 | overdue | a deprecated boundary whose `retire-by` date has passed still has code under it ([ADR 0019](adr/0019-migration-overlap.md)) | ✓ |

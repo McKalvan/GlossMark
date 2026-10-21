@@ -1,4 +1,6 @@
 // @gloss implements gmi:DriftComparator scope=file
+// @gloss produces gm:Drift, gm:Coverage, gm:DecisionRequest scope=file
+// @gloss publishes gm:DriftDetected, gm:DecisionRequested scope=file
 
 package rollup
 
@@ -48,6 +50,10 @@ type Finding struct {
 	Concept  string   `json:"concept,omitempty"`
 	Declared []string `json:"declared,omitempty"`
 	Derived  []string `json:"derived,omitempty"`
+	// Intended is the set the concepts a boundary's code implements intend
+	// under Relation (their produces, consumes, publishes, subscribes),
+	// kept apart from Derived, which is the code's own (ADR 0026).
+	Intended []string `json:"intended,omitempty"`
 	Via      []string `json:"via,omitempty"`
 	// Lifted lists, for a violation, the uncovered concepts that are only
 	// derived because Concept lifted them (the wholes above a part, the cores
@@ -302,8 +308,8 @@ type comparer struct {
 	r   *Report
 	// realizers maps a core concept to the concepts that realize it (lazy).
 	realizers map[string]map[string]bool
-	// omissions: per boundary IRI, what its code derives under realizes
-	// while it declares nothing, found by its inheriting ancestors.
+	// omissions: per boundary IRI and relation, what its code derives under
+	// it while it declares nothing, found by its inheriting ancestors.
 	omissions map[string]*omission
 }
 
@@ -333,15 +339,14 @@ func (c *comparer) boundaries() {
 					declared = append(declared, e.O)
 				}
 			}
-			// realizes: inherit means "what my nested boundaries declare";
-			// their gaps are theirs to report, so inherited entries only cover.
+			// inherit means "what my nested boundaries declare" (realizes,
+			// holds and the four flows, ADR 0026); their gaps are theirs to
+			// report, so inherited entries only cover.
 			inherited := map[string]bool{}
-			if rel == "realizes" {
-				if m := c.manifestOf(b.CURIE); m != nil && m.InheritsRealizes() {
-					for _, iri := range c.inheritedRealizes(m, map[*model.Manifest]bool{}) {
-						inherited[iri] = true
-						declared = append(declared, iri)
-					}
+			if m := c.manifestOf(b.CURIE); m != nil && m.Inherits(rel) {
+				for _, iri := range c.inheritedSet(m, rel, map[*model.Manifest]bool{}) {
+					inherited[iri] = true
+					declared = append(declared, iri)
 				}
 			}
 			// An explicit empty list (realizes: []) is a claim of none: every
@@ -350,13 +355,22 @@ func (c *comparer) boundaries() {
 			if len(declared) == 0 && !none {
 				continue // no claim, nothing to compare
 			}
+			// What the code derives, and apart from it what the concepts the
+			// code implements intend: intent is compared with the manifest but
+			// never covers a gap (ADR 0026).
 			derivedEdges := map[string][]*graph.Edge{}
+			intendedEdges := map[string][]*graph.Edge{}
 			for _, e := range c.g.Out(b.ID, rel) {
-				if e.Source == graph.SourceDerived {
+				switch {
+				case e.Source != graph.SourceDerived:
+				case e.Prov != nil && e.Prov.Rule == RuleIntended:
+					intendedEdges[e.O] = append(intendedEdges[e.O], e)
+				default:
 					derivedEdges[e.O] = append(derivedEdges[e.O], e)
 				}
 			}
 			derived := sortedKeys(derivedEdges)
+			intended := c.curies(sortedKeys(intendedEdges))
 			declared = uniq(declared)
 			consistent := true
 			var violations []Finding
@@ -395,15 +409,13 @@ func (c *comparer) boundaries() {
 				for _, l := range sortedKeys(liftedBy[d]) {
 					lifted = append(lifted, c.g.Curie(l))
 				}
-				// With realizes: inherit, the omission belongs to the nested
-				// boundary whose code derives the concept: report it there once.
-				if rel == "realizes" {
-					if causes := c.causes(b, es); !causes[b.ID] {
-						for x := range causes {
-							c.omitted(x, b, d, lifted, es)
-						}
-						continue
+				// With inherit, the omission belongs to the nested boundary
+				// whose code derives the concept: report it there once.
+				if causes := c.causes(b, rel, es); !causes[b.ID] {
+					for x := range causes {
+						c.omitted(x, rel, b, d, lifted, es)
 					}
+					continue
 				}
 				proposed := true
 				var via []string
@@ -429,7 +441,40 @@ func (c *comparer) boundaries() {
 				if proposed {
 					msg += " [proposed link]"
 				}
-				violations = append(violations, Finding{Kind: KindViolation, Severity: "error", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(d), Lifted: lifted, Declared: c.curies(declared), Derived: c.curies(derived), Via: via, Proposed: proposed, Path: path, Line: line, Msg: msg})
+				violations = append(violations, Finding{Kind: KindViolation, Severity: "error", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(d), Lifted: lifted, Declared: c.curies(declared), Derived: c.curies(derived), Intended: intended, Via: via, Proposed: proposed, Path: path, Line: line, Msg: msg})
+			}
+			// Intent the manifest does not account for: neither a declared
+			// concept covers it nor does the manifest declare a refinement of
+			// it (a subtype, a part, a concept that realizes it), so a
+			// container may declare publishes: [MotorClaimFiled] where the
+			// concept it implements publishes ClaimFiled (ADR 0026).
+			for _, i := range sortedKeys(intendedEdges) {
+				es := intendedEdges[i]
+				if derivedEdges[i] != nil || c.intentFits(i, declared) {
+					continue
+				}
+				// Under inherit, a nested boundary's intent is its own to
+				// compare, or nobody's when it declares nothing.
+				if causes := c.causes(b, rel, es); !causes[b.ID] {
+					continue
+				}
+				consistent = false
+				f := Finding{Kind: KindViolation, Severity: "error", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(i), Declared: c.curies(declared), Derived: c.curies(derived), Intended: intended, Proposed: true}
+				for _, e := range es {
+					if e.Prov != nil {
+						f.Via = append(f.Via, e.Prov.Via...)
+						f.Proposed = f.Proposed && e.Prov.Proposed
+						if f.Path == "" {
+							f.Path, f.Line = e.Prov.Path, e.Prov.Line
+						}
+					}
+				}
+				f.Via = uniq(f.Via)
+				f.Msg = fmt.Sprintf("%s %s %s by intent (%s), but declares %s {%s}: declare it or a refinement of it, or change the concept", b.CURIE, rel, f.Concept, c.intender(es), rel, strings.Join(f.Declared, ", "))
+				if f.Proposed {
+					f.Msg += " [proposed link]"
+				}
+				c.add(f) // printed whole: it does not share the code's sets line
 			}
 			// The sets are printed once per boundary and relation: on the
 			// first violation in report order; the others name the concept.
@@ -460,7 +505,11 @@ func (c *comparer) boundaries() {
 				}
 				consistent = false
 				msg := fmt.Sprintf("%s declares %s %s but nothing under it %s it: intended capability not implemented, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), verb(rel))
-				if other := c.reachedOtherwise(b.ID, rel, s); other != "" {
+				if es := c.intentFor(s, intendedEdges); es != nil {
+					// Only a concept's intent reaches it: the code that does
+					// is missing, or unmarked (ADR 0026).
+					msg = fmt.Sprintf("%s declares %s %s and %s, but no code under it %s it: mark the code that does, or the declaration is wrong", b.CURIE, rel, c.g.Curie(s), c.intender(es), verb(rel))
+				} else if other := c.reachedOtherwise(b.ID, rel, s); other != "" {
 					msg = fmt.Sprintf("%s declares %s %s but nothing under it %s it; its code %s it instead: declare %s, or change the marker", b.CURIE, rel, c.g.Curie(s), verb(rel), verb(other), other)
 				} else if links := c.unlifted(b.ID, s); len(links) > 0 {
 					// The code links to it, but the links do not lift to rel:
@@ -470,10 +519,10 @@ func (c *comparer) boundaries() {
 						msg += " (" + why + ")"
 					}
 				}
-				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Path: b.File, Line: b.Line, Msg: msg})
+				c.add(Finding{Kind: KindGap, Severity: "warning", Boundary: b.CURIE, Relation: rel, Concept: c.g.Curie(s), Declared: c.curies(declared), Derived: c.curies(derived), Intended: intended, Path: b.File, Line: b.Line, Msg: msg})
 			}
 			if consistent {
-				c.add(Finding{Kind: KindConsistent, Severity: "info", Boundary: b.CURIE, Relation: rel, Declared: c.curies(declared), Derived: c.curies(derived),
+				c.add(Finding{Kind: KindConsistent, Severity: "info", Boundary: b.CURIE, Relation: rel, Declared: c.curies(declared), Derived: c.curies(derived), Intended: intended,
 					Msg: fmt.Sprintf("%s %s %s ⊑ declared {%s}", b.CURIE, rel, c.summary(rel, derived, false), strings.Join(c.curies(declared), ", "))})
 			}
 		}
@@ -540,12 +589,57 @@ func (c *comparer) reachedOtherwise(b, rel, s string) string {
 			continue
 		}
 		for _, e := range c.g.Out(b, other) {
-			if e.Source == graph.SourceDerived && (Covers(c.g, s, e.O) || c.g.Subsumes(s, e.O)) {
+			if e.Source == graph.SourceDerived && !intent(e) && (Covers(c.g, s, e.O) || c.g.Subsumes(s, e.O)) {
 				return other
 			}
 		}
 	}
 	return ""
+}
+
+// intent reports whether a derived edge is a concept's intent, not the code's.
+func intent(e *graph.Edge) bool { return e.Prov != nil && e.Prov.Rule == RuleIntended }
+
+// intentFits reports whether the manifest accounts for intended concept i:
+// a declared concept covers it, or the manifest declares a refinement of it
+// (i covers the declared concept: a subtype, a part, a concept realizing
+// it). A container implementing claim:ClaimFiling, which publishes
+// claim:ClaimFiled, may declare only the claim:MotorClaimFiled it publishes.
+func (c *comparer) intentFits(i string, declared []string) bool {
+	for _, s := range declared {
+		if Covers(c.g, s, i) || Covers(c.g, i, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// intentFor returns the intended edges that reach declared concept s, or nil.
+func (c *comparer) intentFor(s string, intended map[string][]*graph.Edge) []*graph.Edge {
+	var out []*graph.Edge
+	for _, i := range sortedKeys(intended) {
+		if Covers(c.g, s, i) {
+			out = append(out, intended[i]...)
+		}
+	}
+	return out
+}
+
+// intender names the concepts whose own relation an intended edge came
+// from: the last concept its derivation passed through.
+func (c *comparer) intender(es []*graph.Edge) string {
+	var by []string
+	for _, e := range es {
+		if e.Prov != nil && len(e.Prov.Via) >= 2 {
+			by = append(by, e.Prov.Via[len(e.Prov.Via)-1])
+		}
+	}
+	sort.Strings(by)
+	by = uniqStrings(by)
+	if len(by) == 1 {
+		return by[0] + " intends it"
+	}
+	return andList(by) + " intend it"
 }
 
 // roots splits uncovered derived concepts into the ones reported on their
@@ -589,14 +683,15 @@ func (c *comparer) roots(uncovered map[string]bool, derived map[string][]*graph.
 	return roots, liftedBy, own
 }
 
-// causes returns, for an uncovered concept derived at boundary b through
-// edges es, the boundaries the finding belongs to. Walking down from b
-// toward the code, every boundary that declares realizes: inherit passes the
+// causes returns, for an uncovered concept derived under rel at boundary b
+// through edges es, the boundaries the finding belongs to. Walking down from
+// b toward the code, every boundary that declares rel: inherit passes the
 // question to the nested one; the first that does not is the cause. b itself
-// when b does not inherit. A cause that declares realizes reports the
-// concept in its own comparison and is left out; one that declares nothing
-// is where the declaration was omitted (ADR 0010).
-func (c *comparer) causes(b *graph.Node, es []*graph.Edge) map[string]bool {
+// when b does not inherit. A cause that declares rel reports the concept in
+// its own comparison and is left out; one that declares nothing is where the
+// declaration was omitted (ADR 0010, for every inheritable relation since
+// ADR 0026).
+func (c *comparer) causes(b *graph.Node, rel string, es []*graph.Edge) map[string]bool {
 	out := map[string]bool{}
 	for _, e := range es {
 		x := b.ID
@@ -613,7 +708,7 @@ func (c *comparer) causes(b *graph.Node, es []*graph.Edge) map[string]bool {
 					}
 					for i > 0 {
 						bm := c.manifestOf(c.g.Curie(chain[i]))
-						if bm == nil || !bm.InheritsRealizes() {
+						if bm == nil || !bm.Inherits(rel) {
 							break
 						}
 						i--
@@ -625,7 +720,7 @@ func (c *comparer) causes(b *graph.Node, es []*graph.Edge) map[string]bool {
 			}
 		}
 		if x != b.ID {
-			if xm := c.manifestOf(c.g.Curie(x)); xm == nil || len(c.declaredRealizes(xm)) > 0 {
+			if xm := c.manifestOf(c.g.Curie(x)); xm == nil || len(c.declaredRel(xm, rel)) > 0 {
 				continue // x compares the concept itself
 			}
 		}
@@ -634,31 +729,33 @@ func (c *comparer) causes(b *graph.Node, es []*graph.Edge) map[string]bool {
 	return out
 }
 
-// declaredRealizes is what m declares under realizes, inherited entries included.
-func (c *comparer) declaredRealizes(m *model.Manifest) []string {
-	out := append([]string{}, m.DeclaredSets()["realizes"]...)
-	if m.InheritsRealizes() {
-		out = append(out, c.inheritedRealizes(m, map[*model.Manifest]bool{})...)
+// declaredRel is what m declares under rel, inherited entries included.
+func (c *comparer) declaredRel(m *model.Manifest, rel string) []string {
+	out := append([]string{}, m.DeclaredSets()[rel]...)
+	if m.Inherits(rel) {
+		out = append(out, c.inheritedSet(m, rel, map[*model.Manifest]bool{})...)
 	}
 	return out
 }
 
-// omission collects what one boundary's code derives under realizes while
-// it declares nothing, as its inheriting ancestors find it.
+// omission collects what one boundary's code derives under a relation
+// while it declares nothing, as its inheriting ancestors find it.
 type omission struct {
+	boundary, rel     string
 	roots, lifted, at map[string]bool
 	via               []string
 	proposed          bool
 }
 
-func (c *comparer) omitted(x string, at *graph.Node, d string, lifted []string, es []*graph.Edge) {
+func (c *comparer) omitted(x, rel string, at *graph.Node, d string, lifted []string, es []*graph.Edge) {
 	if c.omissions == nil {
 		c.omissions = map[string]*omission{}
 	}
-	o := c.omissions[x]
+	key := x + "|" + rel
+	o := c.omissions[key]
 	if o == nil {
-		o = &omission{roots: map[string]bool{}, lifted: map[string]bool{}, at: map[string]bool{}, proposed: true}
-		c.omissions[x] = o
+		o = &omission{boundary: x, rel: rel, roots: map[string]bool{}, lifted: map[string]bool{}, at: map[string]bool{}, proposed: true}
+		c.omissions[key] = o
 	}
 	o.roots[c.g.Curie(d)] = true
 	for _, l := range lifted {
@@ -678,9 +775,9 @@ func (c *comparer) omitted(x string, at *graph.Node, d string, lifted []string, 
 // flushOmissions reports each omission once, at the boundary that omitted
 // the declaration, naming its manifest and the ancestors that found it.
 func (c *comparer) flushOmissions() {
-	for _, x := range sortedKeys(c.omissions) {
-		o := c.omissions[x]
-		n := c.g.Node(x)
+	for _, k := range sortedKeys(c.omissions) {
+		o := c.omissions[k]
+		n, rel := c.g.Node(o.boundary), o.rel
 		if n == nil {
 			continue
 		}
@@ -695,12 +792,12 @@ func (c *comparer) flushOmissions() {
 		if len(roots)+len(lifted) > 1 {
 			it = "them"
 		}
-		declares := "declares no realizes"
+		declares := "declares no " + rel
 		file := n.File
 		if m := c.manifestOf(n.CURIE); m != nil {
 			file = m.Path
-			if m.InheritsRealizes() {
-				declares = "declares only realizes: inherit, which covers none of " + it
+			if m.Inherits(rel) {
+				declares = "declares only " + rel + ": inherit, which covers none of " + it
 			}
 		}
 		at := sortedKeys(o.at)
@@ -708,11 +805,11 @@ func (c *comparer) flushOmissions() {
 		if len(at) > 1 {
 			verb = "inherit"
 		}
-		msg := fmt.Sprintf("%s realizes %s but %s; %s %s from it: declare %s under realizes in %s: {%s}%s", n.CURIE, countNoun(len(roots)+len(lifted), "concept"), declares, strings.Join(at, ", "), verb, it, file, strings.Join(roots, ", "), liftsTo(lifted))
+		msg := fmt.Sprintf("%s %s %s but %s; %s %s from it: declare %s under %s in %s: {%s}%s", n.CURIE, rel, countNoun(len(roots)+len(lifted), "concept"), declares, strings.Join(at, ", "), verb, it, rel, file, strings.Join(roots, ", "), liftsTo(lifted))
 		if o.proposed {
 			msg += " [proposed link]"
 		}
-		c.add(Finding{Kind: KindViolation, Severity: "error", Boundary: n.CURIE, Relation: "realizes", Concept: strings.Join(roots, ", "), Lifted: lifted, Derived: append(append([]string{}, roots...), lifted...), Via: uniq(o.via), Proposed: o.proposed, Path: file, Line: 1, Msg: msg})
+		c.add(Finding{Kind: KindViolation, Severity: "error", Boundary: n.CURIE, Relation: rel, Concept: strings.Join(roots, ", "), Lifted: lifted, Derived: append(append([]string{}, roots...), lifted...), Via: uniq(o.via), Proposed: o.proposed, Path: file, Line: 1, Msg: msg})
 	}
 }
 
@@ -784,21 +881,21 @@ func (c *comparer) manifestOf(curie string) *model.Manifest {
 	return nil
 }
 
-// inheritedRealizes is the union of what m's nested boundaries declare under
-// realizes (following their own inherit markers), as IRIs.
-func (c *comparer) inheritedRealizes(m *model.Manifest, seen map[*model.Manifest]bool) []string {
+// inheritedSet is the union of what m's nested boundaries declare under rel
+// (following their own inherit markers), as IRIs.
+func (c *comparer) inheritedSet(m *model.Manifest, rel string, seen map[*model.Manifest]bool) []string {
 	if seen[m] {
 		return nil
 	}
 	seen[m] = true
 	set := map[string]bool{}
 	for _, child := range Children(c.ws, m) {
-		for _, t := range child.DeclaredSets()["realizes"] {
+		for _, t := range child.DeclaredSets()[rel] {
 			iri, _ := c.g.Expand(t)
 			set[iri] = true
 		}
-		if child.InheritsRealizes() {
-			for _, iri := range c.inheritedRealizes(child, seen) {
+		if child.Inherits(rel) {
+			for _, iri := range c.inheritedSet(child, rel, seen) {
 				set[iri] = true
 			}
 		}
@@ -817,11 +914,14 @@ func (c *comparer) summarizes(rel string) bool {
 }
 
 // summary renders a derived set for a drift line: "{members}", or, when the
-// relation summarizes, "{LCS}" for a unique least common subsumer (with
-// "(from members)" when from is set, so a violation names what was really
-// derived) and "{members} (no unique subsumer: a, b)" when the members share
-// several incomparable minimal subsumers, so a lift that was tried and
-// declined is visible.
+// relation summarizes, each maximal subset that shares a subsumer replaced
+// by its least common subsumer (ADR 0026): "{LCS}" when the whole set has
+// one, "{cl:Assessment, cl:Claim, cl:Payout}" when only the claim subtypes
+// do. With from set, a violation names what was really derived: "(from
+// members)" for a whole-set lift, "(cl:Claim from a, b; ...)" for a partial
+// one. Members that share several incomparable minimal subsumers stay as
+// they are and the line ends "(no unique subsumer: a, b)", so a lift that
+// was tried and declined is visible.
 func (c *comparer) summary(rel string, derived []string, from bool) string {
 	var concepts []string
 	for _, d := range derived {
@@ -833,16 +933,29 @@ func (c *comparer) summary(rel string, derived []string, from bool) string {
 	if !c.summarizes(rel) || len(concepts) < 2 {
 		return members
 	}
-	lcs, candidates := c.g.Subsumer(concepts)
-	switch {
-	case lcs != "" && from:
-		return "{" + c.g.Curie(lcs) + "} (from " + strings.Join(c.curies(concepts), ", ") + ")"
-	case lcs != "":
-		return "{" + c.g.Curie(lcs) + "}"
-	case len(candidates) > 1:
-		return members + " (no unique subsumer: " + strings.Join(c.curies(candidates), ", ") + ")"
+	groups := c.g.LiftGroups(concepts)
+	var parts, froms, candidates []string
+	for _, gr := range groups {
+		if gr.Subsumer == "" {
+			parts = append(parts, gr.Members...)
+			candidates = append(candidates, gr.Candidates...)
+			continue
+		}
+		parts = append(parts, gr.Subsumer)
+		froms = append(froms, c.g.Curie(gr.Subsumer)+" from "+strings.Join(c.curies(gr.Members), ", "))
 	}
-	return members
+	out := "{" + strings.Join(c.curies(parts), ", ") + "}"
+	switch {
+	case len(groups) == 1 && len(froms) == 1 && from:
+		out += " (from " + strings.Join(c.curies(concepts), ", ") + ")"
+	case len(froms) > 0 && from:
+		sort.Strings(froms)
+		out += " (" + strings.Join(froms, "; ") + ")"
+	}
+	if candidates = uniq(c.curies(candidates)); len(candidates) > 1 {
+		out += " (no unique subsumer: " + strings.Join(candidates, ", ") + ")"
+	}
+	return out
 }
 
 func verb(rel string) string {

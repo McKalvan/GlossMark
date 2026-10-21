@@ -419,7 +419,7 @@
           "type": "boolean"
         },
         "rule": {
-          "description": "Rollup rule or inferrer that produced a derived or inferred edge (for example realization-lift).",
+          "description": "Rollup rule or inferrer that produced a derived or inferred edge (for example realization-lift; intended-lift for a flow a boundary has because a concept its code implements declares it, which drift never counts as code), or nearest-manifest on a declared boundary part-of taken from the enclosing manifest (docs/adr/0026-rollup-intent-nesting-inherit.md).",
           "type": "string"
         },
         "via": {

@@ -1,4 +1,5 @@
 // @gloss implements gmi:ReviewCommands scope=file
+// @gloss publishes gm:LinkAccepted, gm:LinkRejected scope=file
 
 package main
 

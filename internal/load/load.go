@@ -467,6 +467,22 @@ func (ws *Workspace) ManifestFor(rel string) *model.Manifest {
 	return best
 }
 
+// EnclosingManifest returns the nearest manifest in a directory strictly
+// above m's, or nil. A manifest that names no part-of is part of its
+// boundary (ADR 0026).
+func (ws *Workspace) EnclosingManifest(m *model.Manifest) *model.Manifest {
+	var best *model.Manifest
+	for _, o := range ws.Manifests {
+		if o == m || o.Dir == m.Dir || !(o.Dir == "" || strings.HasPrefix(m.Dir, o.Dir+"/")) {
+			continue
+		}
+		if best == nil || len(o.Dir) > len(best.Dir) {
+			best = o
+		}
+	}
+	return best
+}
+
 // Tier returns the tier of a prefix, or "".
 func (ws *Workspace) Tier(prefix string) string {
 	if o, ok := ws.Ontologies[prefix]; ok {
