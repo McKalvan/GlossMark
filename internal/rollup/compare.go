@@ -190,7 +190,7 @@ func Migrating(a, b *graph.Node) bool {
 // intended and ends when the old side is deleted.
 func (c *comparer) overlaps() {
 	for _, rel := range []string{"realizes", "holds"} {
-		sets := Realizers(c.g, rel)
+		sets := OwnRealizers(c.g, rel)
 		names := make([]string, 0, len(sets))
 		for k := range sets {
 			names = append(names, k)
@@ -1171,8 +1171,10 @@ func (c *comparer) untested() {
 		msg := fmt.Sprintf("%s is implemented but nothing tests or verifies it", n.CURIE)
 		if n.Tier == model.TierImpl {
 			// Report at the core level: skip the impl concept when a core concept it
-			// realizes is itself reported as untested.
-			cores := RealizesStar(c.g, n.ID)
+			// realizes is itself reported as untested. What its mechanism wholes
+			// realize counts; the areas a core concept is part of do not, so an
+			// untested domain area never hides an untested part (ADR 0025, 13).
+			cores := realizedByMechanism(c.g, n.ID)
 			skip := false
 			for _, k := range cores {
 				if kn := c.g.Node(k); kn != nil && kn.Kind != "event" && !kn.Imported && c.implemented(k, 0) && !c.tested(k, 0) {

@@ -218,3 +218,48 @@ func TestDanglingDeclaredReferences(t *testing.T) {
 		}
 	}
 }
+
+// TestAreaSpanningBoundaries: a part-of whole whose parts live in two
+// boundaries is decomposed, not implemented twice, so it is no overlap; and an
+// untested implementation concept is reported by name even when a whole above
+// what it realizes is untested too (ADR 0025, section 13).
+func TestAreaSpanningBoundaries(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  zi: { iri: https://x/zi/, tier: implementation }\nprefixes:\n  o: https://x/o/\n")
+	write("ontology/z.gloss.yaml", "concepts:\n"+
+		"  Product: { kind: system-type }\n"+
+		"  Books: { kind: capability, part-of: Product }\n"+
+		"  Shelving: { kind: process, part-of: Books }\n"+
+		"  Lending: { kind: process, part-of: Books }\n")
+	write("ontology/zi.gloss.yaml", "concepts:\n"+
+		"  App: { kind: system-type, realizes: z:Product }\n"+
+		"  Lender: { kind: process, realizes: z:Lending }\n"+
+		"  LendingEngine: { kind: process, realizes: z:Lending }\n"+
+		"  Shelver: { kind: process, realizes: z:Shelving }\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\nrealizes: inherit\n")
+	write("app/.gloss.yaml", "boundary: o:app\nlevel: container\npart-of: o:root\nrealizes: [zi:App, zi:Lender]\n")
+	write("app/main.py", "# @gloss implements zi:App\ndef main(): pass\n")
+	write("app/lend.py", "# @gloss implements zi:Lender\ndef lend(): pass\n")
+	write("lib/.gloss.yaml", "boundary: o:lib\nlevel: container\npart-of: o:root\nrealizes: [zi:Shelver, zi:LendingEngine]\n")
+	write("lib/shelve.py", "# @gloss implements zi:Shelver\ndef shelve(): pass\n")
+	write("lib/engine.py", "# @gloss implements zi:LendingEngine\ndef engine(): pass\n")
+	write("lib/tests/test_shelve.py", "# @gloss verifies zi:Shelver\ndef test_shelve(): pass\n")
+	write("lib/tests/test_engine.py", "# @gloss verifies z:Lending\ndef test_engine(): pass\n")
+	ws, g, _, _ := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+	var overlaps []string
+	for _, f := range findings(rep, rollup.KindOverlap) {
+		overlaps = append(overlaps, f.Concept)
+	}
+	if strings.Join(overlaps, ",") != "z:Lending" {
+		t.Errorf("overlaps %v, want only z:Lending, which both boundaries implement; z:Books and z:Product are only split into parts", overlaps)
+	}
+	var untested []string
+	for _, f := range findings(rep, rollup.KindUntested) {
+		untested = append(untested, f.Concept)
+	}
+	sort.Strings(untested)
+	if strings.Join(untested, ",") != "z:Product,zi:Lender" {
+		t.Errorf("untested %v, want z:Product and zi:Lender (its test of z:Lending is in o:lib, not o:app)", untested)
+	}
+}

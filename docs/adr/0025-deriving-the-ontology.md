@@ -321,9 +321,9 @@ The two are not directly comparable, because the derived draft had an owner and 
 
 In the engineering view, the areas first pulled their parts out of the `app/` and `src/` boxes their code is in. That is fixed in the viewer: ADR 0010, decisions 14 and 15. The `src/` box is still crowded: concepts that belong to `src/` directly are drawn over the area boxes beside them. That is a layout limitation, not a placement one.
 
-Grouping exposed two drift reporting issues to fix in GlossMark:
-- **Untested rolls up.** Because a part realizes its whole, an untested implementation concept (`pfi:Cli`) is reported only as its topmost untested whole ("pf:Pfinance is untested"), so the specific gap disappears from the report.
-- **Overlap is noise for areas.** The overlap finding, meant for a half-finished migration (ADR 0019), fires for every area realized by more than one boundary.
+Grouping exposed two drift reporting issues, both fixed in GlossMark (`TestAreaSpanningBoundaries`):
+- **Untested rolled up.** Because a part realizes its whole, an untested implementation concept (`pfi:Cli`) was reported only as its topmost untested whole ("pf:Pfinance is untested"), and the specific gap disappeared from the report. An untested implementation concept is now held back only for a core concept it realizes itself, or through a mechanism it is part of. The domain areas that core concept is part of no longer count. pfinance's report names all five again.
+- **Overlap was noise for areas.** The overlap finding, meant for a half-finished migration (ADR 0019), fired for every area realized by more than one boundary. Overlap now counts only what a boundary realizes itself, not what is lifted to a whole from a part (ADR 0019, decision 4). pfinance went from four overlaps to the one that is real: `DataStaysLocal`, realized directly by both the local database and the AWS host.
 
 **Adoption.** The owner then answered the packet questions, and the derived ontology was adopted on pfinance ([McKalvan/pfinance#4](https://github.com/McKalvan/pfinance/pull/4)). The result: 71 core and 29 implementation concepts, all proposed; 100 markers; 0 errors, warnings, violations or gaps under the development build and the pinned v0.1.0 release; 5 orphans and 5 untested concepts listed in the PR. Every pfinance test passes, and ruff reports nothing new.
 
