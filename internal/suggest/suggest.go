@@ -47,10 +47,16 @@ type Proposal struct {
 	// Context is evidence that informs the review without choosing the
 	// target, such as the tables the declaration touches.
 	Context string `json:"context,omitempty"`
-	Marker  string `json:"marker"` // the full comment line, indented
-	// AutoAccept: conf reaches the auto-accept threshold in force, so the
-	// gate classes the proposal SOFT unless another rule raises it (set by
-	// gloss suggest, ADR 0024).
+	// Deprecated: the target is a deprecated concept. Note then names its
+	// replacement, and the marker carries the note, so the reviewer
+	// chooses between the name the code still uses and its successor
+	// (ADR 0030).
+	Deprecated bool   `json:"deprecated,omitempty"`
+	Note       string `json:"note,omitempty"`
+	Marker     string `json:"marker"` // the full comment line, indented
+	// AutoAccept: conf reaches the auto-accept threshold in force and the
+	// target is not deprecated, so the gate classes the proposal SOFT
+	// unless another rule raises it (set by gloss suggest, ADR 0024).
 	AutoAccept bool `json:"auto_accept"`
 }
 
@@ -81,6 +87,7 @@ var codeExts = map[string]bool{".py": true, ".ts": true, ".tsx": true, ".js": tr
 const Coverage = `relations: implements, represents, verifies, provisions (Terraform resources), documents (Markdown headings),
 deploys (Kubernetes workloads), presents and hosts (page and layout components), subscribes, consumes and publishes
 (listener annotations and producer or consumer calls); one scope=file or scope=block marker stands for a run.
+targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts.
 files: .py .ts .tsx .js .jsx .mjs .go .rs .java .kt .rb .cs .php .swift .scala .tf .sql .proto .feature .sh .md .yaml
 never proposed: configures, publishes-value, instructs, may-modify, produces; sidecars, JSON, Dockerfiles, CI workflows`
 
@@ -334,8 +341,27 @@ func (r *runner) propose(f *file, d marker.Decl, role string) (Proposal, bool) {
 		basis += "/tie"
 	}
 	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: target, Matched: h.matched(), Basis: basis, Context: context, Conf: confFor(basis)}
+	if h.c.n.Deprecated {
+		p.Deprecated, p.Note = true, deprecatedNote(h.c.n)
+	}
 	p.Marker = markerLine(f.style, d.Indent, p)
 	return p, true
+}
+
+// deprecatedNote tells the reviewer the target is deprecated and what
+// replaced it. A marker note is quoted, so it holds no double quote.
+func deprecatedNote(n *graph.Node) string {
+	if n.ReplacedBy == "" {
+		return n.CURIE + " is deprecated"
+	}
+	return n.CURIE + " is deprecated, replaced-by " + n.ReplacedBy + "; keep it, or link the replacement"
+}
+
+// AutoAccepts reports whether p is an auto-accept candidate under a
+// threshold: conf reaches it and the target is not deprecated, which the
+// gate always classes HARD.
+func (p Proposal) AutoAccepts(threshold float64) bool {
+	return !p.Deprecated && p.Conf >= threshold-1e-9
 }
 
 // choose returns the strongest hit this boundary may use, the relation it
@@ -346,6 +372,10 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 		a, b := hits[i], hits[j]
 		if a.strength() != b.strength() {
 			return a.strength() > b.strength()
+		}
+		// A live concept beats a deprecated one the code names as well.
+		if a.c.n.Deprecated != b.c.n.Deprecated {
+			return !a.c.n.Deprecated
 		}
 		// Infrastructure stands up resources, a deployment runs a system.
 		if pa, pb := kindPreferred(role, a.c.n.Kind), kindPreferred(role, b.c.n.Kind); pa != pb {
@@ -412,6 +442,11 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 			continue
 		}
 		if h.c.realizes[best.c.curie] || best.c.realizes[h.c.curie] {
+			continue
+		}
+		// A deprecated concept and its replacement are one choice, which
+		// the note puts to the reviewer.
+		if h.c.n.ReplacedBy == best.c.curie || best.c.n.ReplacedBy == h.c.curie {
 			continue
 		}
 		tie = true
@@ -739,6 +774,9 @@ func markerLine(style marker.CommentStyle, indent string, p Proposal) string {
 		line += " scope=" + p.Scope
 	}
 	line += fmt.Sprintf(" conf=%.2f", p.Conf)
+	if p.Note != "" {
+		line += fmt.Sprintf(" note=%q", strings.ReplaceAll(p.Note, `"`, "'"))
+	}
 	if tok[1] != "" {
 		line += " " + tok[1]
 	}

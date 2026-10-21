@@ -372,3 +372,37 @@ func TestConfSpreads(t *testing.T) {
 		t.Errorf("%d of 6 threshold steps select the same proposals as the step below", same)
 	}
 }
+
+var libraryLegacy = filepath.Join("testdata", "calibration", "glossmark-examples", "library-legacy")
+
+// TestDeprecatedAndProposedTargets (#157): code that still says a
+// deprecated concept's name is proposed to it, with a note naming its
+// replacement and never as an auto-accept candidate; a proposed concept
+// is no target until accepted (ADR 0030).
+func TestDeprecatedAndProposedTargets(t *testing.T) {
+	_, ps, got := stripped(t, libraryLegacy, map[string]string{
+		"src/main/java/gov/riverbend/circ/model/RegisteredPerson.java": "package gov.riverbend.circ.model;\n\n/** A patron, once called a borrower, as the desk sees them. */\npublic class RegisteredPerson {\n}\n",
+	}, 0.01)
+	const borrower = "src/main/java/gov/riverbend/circ/model/Borrower.java#Borrower"
+	want(t, got, borrower, "represents", "lib:Borrower")
+	if p := got[borrower]; !p.Deprecated || p.AutoAccepts(0) ||
+		p.Note != "lib:Borrower is deprecated, replaced-by lib:Patron; keep it, or link the replacement" ||
+		!strings.Contains(p.Marker, `note="lib:Borrower is deprecated, replaced-by lib:Patron;`) {
+		t.Errorf("deprecated target: %+v", p)
+	}
+	want(t, got, "db/schema/007_legacy_borrowers_view.sql#view.borrowers", "represents", "lib:Borrower")
+	// Named as strongly as its replacement, the live concept wins, and the
+	// pair is one choice, not a tie.
+	if p := got["src/main/java/gov/riverbend/circ/model/RegisteredPerson.java#RegisteredPerson"]; p.Target != "lib:Patron" || p.Deprecated || strings.HasSuffix(p.Basis, "/tie") {
+		t.Errorf("deprecated and replacement both named: %+v", p)
+	}
+	for _, p := range ps {
+		switch p.Target {
+		case "lib:TurnoverRate", "lib:DigitalLending", "lib:ClaimsReturned", "lib:FinePayment":
+			t.Errorf("proposed concept as a target: %s#%s %s %s [%s]", p.Path, p.Symbol, p.Relation, p.Target, p.Matched)
+		}
+		if p.Deprecated != (p.Target == "lib:Borrower") {
+			t.Errorf("deprecated flag: %+v", p)
+		}
+	}
+}
