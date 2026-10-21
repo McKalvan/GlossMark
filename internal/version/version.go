@@ -51,6 +51,9 @@ const LedgerFormat = 1
 // LockFormat is the glossmark.lock format.
 const LockFormat = 1
 
+// EvidenceFormat is the format of the evidence gloss harvest writes (ADR 0025).
+const EvidenceFormat = 1
+
 // String returns the effective tool version: the injected one, else the Go
 // module version (go install ...@v0.2.0), else a development marker.
 func String() string {

@@ -55,7 +55,7 @@ Every source, deterministic or not, produces the same record: one JSON object pe
            "modified":"2025-03-01","hash":"sha256:9e1f..."}}
 ```
 
-- `signal` is one of a closed list: `type-decl`, `function-decl`, `inherits`, `enum-type`, `enum-value`, `table`, `column`, `foreign-key`, `schema-type` (proto, Avro, GraphQL, OpenAPI), `route`, `topic` (queue, event, cron), `test-name`, `guard-message`, `ui-string`, `doc-heading`, `doc-definition`, `glossary-entry`, `rename`, `issue-title`, `acceptance-criterion`.
+- `signal` is one of a closed list: `type-decl`, `field`, `function-decl`, `inherits`, `enum-type`, `enum-value`, `module`, `table`, `column`, `foreign-key`, `schema-type` (proto, Avro, GraphQL, OpenAPI), `route`, `topic` (queue, event, cron), `test-name`, `guard-message`, `ui-string`, `doc-heading`, `doc-definition` (a bold term), `doc-phrase` (a two- or three-word run of prose), `glossary-entry`, `rename`, `reference-term`, `issue-title`, `acceptance-criterion`. `field`, `module` and `doc-phrase` were added by the spike (section 12).
 - `unit` is the application the evidence belongs to (section 7).
 - **Quotes are not committed.** A record keeps a locator and a hash, never the source text, unless the owner opts in (`derive: { commit-quotes: true }` in `glossmark.yaml`). Connector content stays out of the repository by default; concept docs are written by the agent in its own words.
 
@@ -208,11 +208,66 @@ Metrics: concept recall and precision against the gold set (matched by name or a
 
 | Phase | Ships | Done when |
 |---|---|---|
-| D1 | `planned:` in the ontology schema, coverage, drift and the agent surfaces (6.1); evidence schema; `gloss harvest` over repo and git; `--cluster`; the `derive-ontology` skill for the units of one workspace, with interview, packet, record and alignment; `adopt-glossmark` steps 1, 3 and 4 call it | on AgentArena with `docs/ontology/` hidden, recall and precision of core concepts are measured and reported; a re-run after owner decisions changes nothing |
+| D1 | spike built: `gloss harvest` over repo and git, `--cluster`, `--ingest`, the evidence schema (section 12). Still to build: `planned:` in the ontology schema, coverage, drift and the agent surfaces (6.1); the `rule-sentence` and `transition` signals (section 12); the `derive-ontology` skill for the units of one workspace, with interview, packet, record and alignment; `adopt-glossmark` steps 1, 3 and 4 call it | on AgentArena with `docs/ontology/` hidden, recall and precision of core concepts are measured and reported; a re-run after owner decisions changes nothing |
 | D2 | connector and tracker readers through `--ingest`; authority and staleness weighting; `suggest` reads the record | the ablation table in section 10 is filled in |
 | D3 | alignment across sibling repositories; the namespace plan feeds `gloss init`; refresh mode for adopted repositories | `examples/library` derives `lib:` as shared and published, and `circ:` as its extension |
 
 When D1 is built, `gm:` gains the concepts it introduces (evidence, derivation, the derivation record) and `gmi:` the harvester and skill, in the same change, as the self-host test requires.
+
+### 12. Spike: `gloss harvest` on AgentArena
+
+Status: built and tested (experimental). `gloss harvest` and `internal/harvest` implement sections 3 and 4 except `--reference`, the `topic` extractor and first and last seen dates from history; `--cluster` implements the lexical half of phase 3 and the triangulation of section 6. The skill, the derivation record, the interview and alignment are not built.
+
+**Setup.** AgentArena at `3ade8b6`, with `docs/ontology/**` and `CLAUDE.md` hidden (`--exclude`), and the exercise packages' `repo/` and `oracle/` trees excluded because they are other applications' code. There are two answer keys. The first is the owner's glossary (`docs/ontology/glossary.md`: 159 entries, each with a status). The second is the ontology the earlier agent adoption wrote (branch `claude/glossmark-ontology` at `2b6f07f`: 168 `arena:` core and 110 `aa:` implementation concepts); an agent derived it from the same code, so it is not independent. A key counts as recalled when some candidate's key equals the key of its name or an alias. Scoring code is not committed; the method is this paragraph.
+
+**Scale.** 0.8 s; 44 814 observations from 18 signals (36 872 of them prose phrases); 4 300 candidate concepts.
+
+**Recall.**
+
+| Answer key | Recalled |
+|---|---|
+| Owner glossary, all entries | 128 / 159 (81 %); 119 of the 128 are named as the glossary names them |
+| of which implemented | 108 / 125 |
+| of which proposed or design-only | 14 / 27 |
+| Adopted core tier (`arena:`) | 128 / 168 (76 %) |
+| Adopted implementation tier (`aa:`) | 58 / 110 (53 %) |
+
+With only declarations, schemas, tests, routes, UI strings, headings and line-start bold terms (no fields, prose phrases, bold anywhere or backlog titles), glossary recall was 80 / 159 (50 %) from 996 candidates. Those four sources raise recall to 81 % but quadruple the candidates.
+
+**Ranking.** How many glossary entries are among the first K candidates:
+
+| Order | K = 50 | 150 | 300 | 500 | 1 000 |
+|---|---|---|---|---|---|
+| by source families | 25 | 40 | 59 | 77 | 102 |
+| by kinds of naming signal, then families (shipped) | 30 | 56 | 79 | 87 | 111 |
+
+Against the union of both keys, the shipped order's precision is 64 % in the first 50, 45 % in 150 and 35 % in 300. That is a floor: neither key lists every concept a reviewer would keep.
+
+**Findings, and what they change.**
+
+1. **A concept is named in several ways.** Of candidates named one way only, about one in eighty is a glossary entry. Most of these candidates are named only as a prose phrase (2 302, of which 24 are glossary entries), a bold term (580, 10), a heading (225, none) or a type (214, none). The 539 candidates named in two or more ways hold 126 entries of the union key (23 %). So the shipped ranking orders by kinds of naming signal, and the skill should **review** the shortlist (the first about 300 candidates and every one named two ways) and **query** the rest by name when an interview answer or a document points at a term. It should not read 4 300 candidates.
+2. **Prose and fields carry the vocabulary that headings and types miss.** Examples are "record attempt", "hidden tests", "sandbox minutes" and `catch_rate`. A prose phrase proposes a concept only when three documents use it or a code, data or UI name contains it (`minPhraseFiles`); without that gate, phrases swamp the list.
+3. **Constraints and events are sentences, not names.** Most of the core tier's misses are invariants (`KeyNeverPersisted`, `AtomicCredits`, `FailClosedRefund`, `HiddenCountsNeverShown`) and events (`AttemptVoided`, `ExerciseRetired`). D1 adds a `rule-sentence` signal (a doc sentence with *never*, *must*, *only*, *at most*, or a guard message or test name that states a rule) and a `transition` signal (an assignment of a lifecycle value). The agent names the concept; harvesting only finds the sentence.
+4. **Implementation concepts are coined, not found.** The `aa:` misses are names the adopting agent invented (`TranscriptBus`, `SandboxSeam`, `CreditsModule`). That is the ceiling of harvesting and the expected division of labour: phase 5 names mechanisms from modules, seams and types.
+5. **Built versus planned is a hint, not a verdict.** No rule separates the glossary's implemented entries from its proposed ones:
+
+   | Rule for "built" | Implemented entries read as built | Proposed entries read as docs-only |
+   |---|---|---|
+   | any built mention (shipped) | 99 / 108 | 5 / 14 |
+   | strong built mentions only (type, field, table, UI, route, enum) | 84 / 108 | 7 / 14 |
+   | built naming only | 79 / 108 | 7 / 14 |
+
+   The errors are instructive. One is a homonym: the pricing *plan* against `Plan` in a sandbox subject. One is a stemming collision: `NetworkPlane` stems to *plan*. Others are partial builds (`track` and `appeals` fields exist) and statuses the glossary has not caught up with. The shipped rule is the conservative one, because a false `planned` hides a built concept from coverage. A `planned` proposal always goes to the owner (8.1), and the critique checks for stem collisions.
+6. **Scope is a survey decision.** AgentArena holds 264 files of exercise packages, each its own application. Harvested as product code, they would have added hundreds of foreign terms. Phase 1 asks what is product and what is content before harvesting, and passes the answer as `--exclude`.
+7. **Trackers live in repositories too.** `docs/pm/backlog.yaml` is an issue tracker, so the tracker family is not only reached through connectors; `backlog`, `roadmap` and `issues` YAML files are read for `title:`.
+
+Reproduce:
+
+```sh
+gloss harvest --root ../AiArena --exclude 'docs/ontology/**' --exclude CLAUDE.md \
+  --exclude 'exercises/*/repo/**' --exclude 'exercises/*/oracle/**' > evidence.jsonl
+gloss harvest --in evidence.jsonl --cluster --format text
+```
 
 ## Alternatives considered
 

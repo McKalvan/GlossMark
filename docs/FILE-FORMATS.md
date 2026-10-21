@@ -159,6 +159,16 @@ A concept no boundary realizes or represents stays **unplaced**: the viewer draw
 
 Boundaries and artifacts carry no `placement`. The viewer draws a part under its whole when the whole is shown, so only concepts without a shown whole go in a group.
 
+## Evidence (`gloss harvest`, experimental)
+
+`gloss harvest` prints evidence of a repository's vocabulary as JSON lines on stdout, for a derivation to reason over ([ADR 0025](adr/0025-deriving-the-ontology.md)); nothing is written to the repository. The first line is `{"type":"evidence","format":1,"generator":...}`; every other line is one observation:
+
+```json
+{"id":"ev:3f2a91c04b17","unit":"services/circulation","signal":"table","surface":"loans","source":{"family":"data","path":"services/circulation/loans/models.py","line":17},"context":["class:LoanRow"]}
+```
+
+`signal` is one of a closed list and fixes the `family` (`code`, `data`, `behaviour`, `surface`, `doc`, `history`, `vocabulary`, `reference`, `tracker`, `doc-connector`); `context` carries typed hints (`is-a:`, `table:`, `fk:`, `enum:`, `of:`, `alias:`, `renamed-to:`). A record never holds source text: a repository location, or a `uri`, `locator` and `hash` for a source outside it. `gloss harvest --ingest <file>` validates records a connector or tracker reader produced against the same rules (`schemas/evidence.schema.json`) and merges them; `--cluster` prints candidate concepts instead: `{key, name, named_by, category, families, signals, naming, named_as, mentions, units, surfaces, related, evidence}`.
+
 ## Tool-maintained files under `.glossmark/`
 
 - `graph.jsonl` — the canonical graph, one JSON record per line, deterministically sorted so `git diff` is meaningful (see `docs/GRAPH.md`). Its first line carries `"format"`; a newer format is refused, not misread.
