@@ -100,12 +100,38 @@ For each candidate concept, the record states which source families evidence it.
 | Evidence | Reading | What derivation does |
 |---|---|---|
 | docs and code agree | corroborated | propose at high confidence |
-| docs only | intended, not built; or a stale doc | propose as core; it surfaces as an orphan in `gloss drift`; ask if the doc may be stale |
+| docs only | intended, not built; or a stale doc | propose as core with `planned: true` (section 6.1); ask if the doc may be stale |
 | code only, user-visible (UI, route, error) | undocumented domain concept | propose as core; ask for a definition |
 | code only, not user-visible | implementation, or an undocumented rule | propose as implementation, `realizes` the nearest core concept or `internal` |
 | one surface, two meanings | homonym | split; qualify by unit or context; ask |
 | two surfaces, one meaning | synonym | merge; canonical name from the domain source, the rest as `aliases:` |
 | renamed in history | retired name | old name as alias, or a `deprecated` concept with `replaced-by` |
+
+#### 6.1 Planned concepts
+
+A concept the specification describes and nothing implements is real domain knowledge, and an agent about to build the feature should link to it rather than mint a second name. It is also not a defect, so it must not count against coverage. The core tier gains a structural key:
+
+```yaml
+Renewal:
+  kind: process
+  planned: true          # specified, not yet implemented
+  doc: "Extending a loan's due date before it falls due."
+```
+
+- `planned` is allowed on core concepts only; an implementation concept is a mechanism, which exists or does not.
+- It is orthogonal to `proposed`. `proposed` is about review (has the owner accepted the entry?), `planned` is about existence (is there anything behind it?). A derived docs-only concept starts as both.
+- `gloss coverage` leaves planned concepts out of the denominator and `gloss drift` leaves them out of orphans. Drift lists them on a line of their own, and once an artifact `implements`, `represents` or `verifies` one, drift reports *planned concept now implemented: drop `planned`*, which keeps the flag from going stale.
+- Agents see planned concepts in `AGENTS.md`, `gloss context` and `search_concepts`, marked as planned, so the agent that builds the feature finds the owner's name for it.
+- A `planned` concept is to the ontology what a manifest gap is to a boundary: intended capability not yet built. The difference is who intends it: the business (planned) or the architecture (gap).
+
+#### 6.2 Concepts and instances
+
+Enum values and configuration split by what the business does with them:
+
+- **Lifecycle and kind values are concepts.** A state the business reasons about and moves things between (`Overdue`, `Returned`, `Authorised`, `Settled`) or a kind it treats differently (`Book`, `DVD` as kinds of `Item`) becomes a core concept that `is-a` its enum, as the enum importer already does.
+- **Catalogue values are instances.** Values the business configures rather than reasons about (plan names, regions, currencies, feature flags, branch locations) are instances of a concept (`Plan`, `Region`), not concepts. Instances have no file format yet ([PLAN.md](../PLAN.md), deferred with `shapes:`), so derivation records them in the derivation record as `instance-of <concept>` and emits only the concept.
+- **Signals.** Lifecycle: the enum is a `status` or `state` column, it is assigned in several places, it is compared in guards or tests, or it names transitions (`renew`, `return`). Catalogue: the values appear in seeds, fixtures, configuration files, pricing tables, or a localised display-name list, and code mostly looks them up rather than branching on them. The agent decides from these signals; an enum family with mixed signals becomes an interview question.
+- `gloss import --from enums` needs a matching option (`--values instances` for a named enum) so that an imported catalogue enum does not add its values as concepts. That is a follow-up to ADR 0016, decision 10.
 
 ### 7. Several applications
 
@@ -150,7 +176,7 @@ Metrics: concept recall and precision against the gold set (matched by name or a
 
 | Phase | Ships | Done when |
 |---|---|---|
-| D1 | evidence schema; `gloss harvest` over repo and git; `--cluster`; the `derive-ontology` skill for the units of one workspace, with interview, packet, record and alignment; `adopt-glossmark` steps 1, 3 and 4 call it | on AgentArena with `docs/ontology/` hidden, recall and precision of core concepts are measured and reported; a re-run after owner decisions changes nothing |
+| D1 | `planned:` in the ontology schema, coverage, drift and the agent surfaces (6.1); evidence schema; `gloss harvest` over repo and git; `--cluster`; the `derive-ontology` skill for the units of one workspace, with interview, packet, record and alignment; `adopt-glossmark` steps 1, 3 and 4 call it | on AgentArena with `docs/ontology/` hidden, recall and precision of core concepts are measured and reported; a re-run after owner decisions changes nothing |
 | D2 | connector and tracker readers through `--ingest`; authority and staleness weighting; `suggest` reads the record | the ablation table in section 10 is filled in |
 | D3 | alignment across sibling repositories; the namespace plan feeds `gloss init`; refresh mode for adopted repositories | `examples/library` derives `lib:` as shared and published, and `circ:` as its extension |
 
@@ -165,9 +191,9 @@ When D1 is built, `gm:` gains the concepts it introduces (evidence, derivation, 
 
 ## Open questions
 
-1. Does a docs-only concept (specified, never built) belong in the core tier as an orphan, or does it need a `planned` status so coverage does not count it?
-2. Where is the line between a concept and an instance for enum values and configuration (plan names, feature flags, regions)?
-3. Who is "the owner" in the interview when a product has several product managers, or none?
-4. What is a sensible concept budget per core namespace before derivation insists on splitting into bounded contexts?
-5. How does naming work when the docs are in one language and the code in another?
-6. Should the interview be available asynchronously (a review packet answered in the PR) for owners who are not in the session?
+Settled while workshopping: docs-only concepts are `planned` (6.1); lifecycle and kind values are concepts and catalogue values are instances (6.2).
+
+1. Who is "the owner" in the interview when a product has several product managers, or none?
+2. What is a sensible concept budget per core namespace before derivation insists on splitting into bounded contexts?
+3. How does naming work when the docs are in one language and the code in another?
+4. Should the interview be available asynchronously (a review packet answered in the PR) for owners who are not in the session?
