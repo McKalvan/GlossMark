@@ -1304,7 +1304,9 @@ func (c *comparer) untested() {
 				continue
 			}
 			if len(cores) > 0 {
-				msg += " (nor " + c.g.Curie(cores[0]) + ", which it realizes)"
+				// Not skipped: the core concept is tested, but its tests sit
+				// in boundaries that hold none of this concept's code.
+				msg += "; the tests of " + c.g.Curie(cores[0]) + ", which it realizes, sit in boundaries that hold none of its code"
 			}
 		}
 		c.add(Finding{Kind: KindUntested, Severity: "info", Concept: n.CURIE, Path: n.File, Line: n.Line, Msg: msg})
@@ -1349,8 +1351,9 @@ func (c *comparer) tested(id string, depth int) bool {
 	}
 	// An implementation concept is tested when a core concept it realizes is
 	// tested directly, and it is that core concept's only realizer or the test
-	// sits in a boundary holding one of its artifacts: the engine's test of a
-	// core concept does not cover a renderer that realizes it too.
+	// sits in a boundary holding one of its artifacts, directly or through a
+	// nested boundary: the engine's test of a core concept does not cover a
+	// renderer that realizes it too, but a system-level acceptance test does.
 	for _, core := range RealizesStar(c.g, id) {
 		sole := len(c.realizersOf(core)) == 1
 		for _, p := range []string{"tests", "verifies"} {
@@ -1393,12 +1396,36 @@ func (c *comparer) realizersOf(core string) map[string]bool {
 	return c.realizers[core]
 }
 
-// implementedIn reports whether an artifact in boundary b implements concept id.
+// implementedIn reports whether an artifact in boundary b, or in a boundary
+// nested in it, implements concept id, or provisions, configures or deploys
+// it (a system-type's artifacts are often only those).
 func (c *comparer) implementedIn(id, b string) bool {
-	for _, e := range append(c.g.In(id, "implements"), c.g.In(id, "publishes-value")...) {
-		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && a.Boundary == b {
+	rels := append([]string{"implements", "publishes-value"}, InfraRelations...)
+	for _, rel := range rels {
+		for _, e := range c.g.In(id, rel) {
+			if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && c.within(a.Boundary, b) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// within reports whether boundary x is b or sits under it by part-of
+// (declared, or the nearest enclosing manifest's, ADR 0026).
+func (c *comparer) within(x, b string) bool {
+	seen := map[string]bool{}
+	for next := []string{x}; len(next) > 0; {
+		y := next[0]
+		next = next[1:]
+		if y == b {
 			return true
 		}
+		if y == "" || seen[y] {
+			continue
+		}
+		seen[y] = true
+		next = append(next, c.g.Objects(y, "part-of")...)
 	}
 	return false
 }
