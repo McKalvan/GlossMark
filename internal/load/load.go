@@ -295,6 +295,13 @@ var defaultSkipDirs = map[string]bool{".git": true, "node_modules": true, StateD
 
 const maxFileSize = 4 << 20
 
+// SkipDir reports a directory name every walk skips (version control,
+// dependencies, caches, editor state), wherever it sits.
+func SkipDir(name string) bool { return defaultSkipDirs[name] }
+
+// MaxFileSize is the size above which a walk skips a file.
+const MaxFileSize = maxFileSize
+
 func (ws *Workspace) walk() error {
 	var manifests []*model.Manifest
 	var files []string

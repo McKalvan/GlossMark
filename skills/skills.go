@@ -11,11 +11,11 @@ import (
 
 // FS holds every skill directory (adopt-glossmark/SKILL.md, ...).
 //
-//go:embed adopt-glossmark/SKILL.md
+//go:embed adopt-glossmark/SKILL.md derive-ontology/SKILL.md
 var FS embed.FS
 
 // Names lists the shipped skills.
-var Names = []string{"adopt-glossmark"}
+var Names = []string{"adopt-glossmark", "derive-ontology"}
 
 // Installable returns a skill's SKILL.md as it is installed into another
 // repository: without GlossMark's own self-hosting markers, which name the

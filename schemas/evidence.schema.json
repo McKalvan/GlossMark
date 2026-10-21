@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glossmark.dev/schemas/evidence.json",
+  "title": "GlossMark evidence record",
+  "description": "One line of the evidence gloss harvest writes, or a connector or tracker reader produces for gloss harvest --ingest (ADR 0025). Mirrors harvest.Evidence in internal/harvest/evidence.go. The first line of a harvest is a header {type: evidence, format, generator}; every other line is a record. Records never carry source text: a location in the repository, or a URI, locator and hash outside it.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "evidence"
+        },
+        "format": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "generator": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "format"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signal",
+        "surface",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^ev:[0-9a-f]{12}$",
+          "description": "Derived from signal, surface and location when absent."
+        },
+        "unit": {
+          "type": "string",
+          "description": "The application directory the observation belongs to; empty for the repository as a whole."
+        },
+        "signal": {
+          "enum": [
+            "acceptance-criterion",
+            "column",
+            "doc-definition",
+            "doc-heading",
+            "doc-phrase",
+            "enum-type",
+            "enum-value",
+            "field",
+            "foreign-key",
+            "function-decl",
+            "glossary-entry",
+            "guard-message",
+            "inherits",
+            "issue-title",
+            "module",
+            "reference-term",
+            "rename",
+            "route",
+            "rule-sentence",
+            "schema-type",
+            "table",
+            "test-name",
+            "topic",
+            "transition",
+            "type-decl",
+            "ui-string",
+            "value-set"
+          ]
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The term as written: an identifier, a heading, a phrase, a UI string."
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family"
+          ],
+          "properties": {
+            "family": {
+              "enum": [
+                "behaviour",
+                "code",
+                "data",
+                "doc",
+                "doc-connector",
+                "history",
+                "reference",
+                "surface",
+                "tracker",
+                "vocabulary"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rev": {
+              "type": "string"
+            },
+            "uri": {
+              "type": "string"
+            },
+            "locator": {
+              "type": "string"
+            },
+            "modified": {
+              "type": "string"
+            },
+            "hash": {
+              "type": "string"
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "uri"
+              ]
+            }
+          ]
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Typed hints, prefix:value: is-a:, table:, fk:, enum:, of:, in:, attr:, member:, parent:, class:, alias:, renamed-to:, from:."
+        }
+      }
+    }
+  ]
+}

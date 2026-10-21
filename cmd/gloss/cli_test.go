@@ -365,6 +365,28 @@ func TestHookInstallSkillChecksClean(t *testing.T) {
 	}
 }
 
+// Before gloss init there is nothing to hook into, but the skills install:
+// derive-ontology is how an adoption of an existing application starts.
+func TestHookInstallSkillBeforeInit(t *testing.T) {
+	root := t.TempDir()
+	code, out := gloss(t, "hook", "install", "--skill", "--root", root)
+	if code != 0 || !strings.Contains(out, "only the skills were installed") {
+		t.Fatalf("hook install --skill before init: exit %d\n%s", code, out)
+	}
+	for _, name := range []string{"adopt-glossmark", "derive-ontology"} {
+		b, err := os.ReadFile(filepath.Join(root, ".claude", "skills", name, "SKILL.md"))
+		if err != nil || strings.Contains(string(b), "<!-- @gloss") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, ".claude", "settings.json")); err == nil {
+		t.Errorf("a hook was registered without a workspace")
+	}
+	if code, _ := gloss(t, "hook", "install", "--root", root); code == 0 {
+		t.Errorf("hook install without --skill and without a workspace succeeded")
+	}
+}
+
 // Issue #37: the hook names this binary by path when PATH finds another gloss.
 func TestGlossCommandFor(t *testing.T) {
 	dir := t.TempDir()

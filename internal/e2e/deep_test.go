@@ -255,6 +255,38 @@ func TestWholePlacedWithItsMechanism(t *testing.T) {
 	}
 }
 
+// TestUnhousedPartFollowsLiftedRoot: a part with no code of its own follows
+// the root of its part-of tree, and follows it after the root is lifted out of
+// a part's box, not to where the root was before. An area spanning app/ and
+// lib/ lifts a product implemented in app/ to the system; a note in that area
+// with no code belongs with the area, not in app/.
+func TestUnhousedPartFollowsLiftedRoot(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n"+
+		"  Product: { kind: system-type }\n"+
+		"  Area: { kind: capability, part-of: Product }\n"+
+		"  Screen: { kind: capability, part-of: Area }\n"+
+		"  Rule: { kind: constraint, part-of: Area }\n"+
+		"  Note: { kind: entity, part-of: Area }\n")
+	write(".gloss.yaml", "boundary: o:sys\nlevel: system\nrealizes: inherit\n")
+	write("app/.gloss.yaml", "boundary: o:app\nlevel: container\npart-of: o:sys\nrealizes: [z:Product, z:Screen]\n")
+	write("app/main.py", "# @gloss implements z:Product\ndef main(): pass\n\n# @gloss implements z:Screen\ndef screen(): pass\n")
+	write("lib/.gloss.yaml", "boundary: o:lib\nlevel: container\npart-of: o:sys\nrealizes: [z:Rule]\n")
+	write("lib/rule.py", "# @gloss implements z:Rule\ndef rule(): pass\n")
+	for curie, want := range map[string]string{
+		"z:Product": "o:sys", // lifted: its part z:Area sits in o:sys
+		"z:Area":    "o:sys",
+		"z:Screen":  "o:app",
+		"z:Rule":    "o:lib",
+		"z:Note":    "o:sys", // follows the lifted root, not o:app
+	} {
+		if got := placementOf(t, root, curie); got != want {
+			t.Errorf("%s in %q, want %q", curie, got, want)
+		}
+	}
+}
+
 // TestViolationsByCause (#88): the number of violations follows the
 // mistake, not the depth. One marker on a deep part is one finding that
 // lists the wholes it lifts; an omission under realizes: inherit is reported

@@ -72,6 +72,15 @@ Validates `views.yaml` (`model.Views`, `model.View`): named projections with
 `show-published`, `relations`, `lift`, `zoom` and `boundaries`. Unknown keys are
 rejected, as in Go.
 
+### `evidence.schema.json`
+
+Validates one line of `gloss harvest` output or of a file passed to
+`gloss harvest --ingest` (`harvest.Evidence`): the header
+(`type: evidence`), then records with a `signal` from a closed list, the
+`surface` as written and a `source` whose `family` the signal fixes, with
+either a repository `path` or an external `uri`. A test keeps the signal and
+family lists equal to the code's.
+
 ### `graph-record.schema.json`
 
 Validates one line of `.glossmark/graph.jsonl`: a `oneOf` over the context

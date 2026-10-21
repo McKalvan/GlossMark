@@ -4,6 +4,7 @@ package rollup
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
@@ -15,7 +16,29 @@ import (
 // does not count as a second implementation of what its component does.
 // Every boundary in a set is therefore unrelated by part-of to the others.
 func Realizers(g *graph.Graph, rel string) map[string][]string {
-	raw := RealizersRaw(g, rel)
+	return deepest(g, RealizersRaw(g, rel))
+}
+
+// OwnRealizers is Realizers counting only what a boundary realizes itself:
+// an edge lifted from a part to its whole (a step "part-of ...") is left out.
+// A whole whose parts live in two boundaries is decomposed, not implemented
+// twice, so it is no overlap (ADR 0019, as amended by ADR 0025 section 13).
+func OwnRealizers(g *graph.Graph, rel string) map[string][]string {
+	return deepest(g, realizersRaw(g, rel, func(e *graph.Edge) bool {
+		if e.Prov != nil {
+			for _, s := range e.Prov.Steps {
+				if strings.HasPrefix(s, "part-of ") {
+					return false
+				}
+			}
+		}
+		return true
+	}))
+}
+
+// deepest keeps, per concept, the boundaries no other boundary in the set is
+// nested in, as CURIEs.
+func deepest(g *graph.Graph, raw map[string]map[string]bool) map[string][]string {
 	out := map[string][]string{}
 	for c, set := range raw {
 		inner := map[string]bool{}
@@ -41,10 +64,15 @@ func Realizers(g *graph.Graph, rel string) map[string][]string {
 // RealizersRaw maps each concept CURIE to the set of boundary IRIs with a
 // derived rel edge to it, enclosing boundaries included.
 func RealizersRaw(g *graph.Graph, rel string) map[string]map[string]bool {
+	return realizersRaw(g, rel, nil)
+}
+
+// realizersRaw is RealizersRaw over the derived edges keep accepts (all when nil).
+func realizersRaw(g *graph.Graph, rel string, keep func(*graph.Edge) bool) map[string]map[string]bool {
 	out := map[string]map[string]bool{}
 	for _, b := range g.NodesOf(model.NodeBoundary) {
 		for _, e := range g.Out(b.ID, rel) {
-			if e.Source != graph.SourceDerived {
+			if e.Source != graph.SourceDerived || (keep != nil && !keep(e)) {
 				continue
 			}
 			n := g.Node(e.O)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/gate"
+	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/skills"
 )
@@ -164,13 +165,33 @@ func cmdHook(args []string) int {
 	noMCP := fs.Bool("no-mcp", false, "do not register the MCP server in .mcp.json")
 	noHook := fs.Bool("no-hook", false, "do not register the SessionStart hook")
 	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it")
-	skill := fs.Bool("skill", false, "also install the adopt-glossmark Claude Code skill into .claude/skills/")
+	skill := fs.Bool("skill", false, "also install the shipped Claude Code skills (adopt-glossmark, derive-ontology) into .claude/skills/; before gloss init, only the skills")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "install" {
 		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--skill] [--actor agent:name]")
 		return 2
+	}
+	// Before gloss init there is no workspace to hook into, but the skills
+	// are how an adoption starts (derive-ontology runs before init).
+	if *skill {
+		dir := *root
+		if dir == "" {
+			cwd, _ := os.Getwd()
+			if r, err := load.FindRoot(cwd); err == nil {
+				dir = r
+			} else {
+				dir = cwd
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, load.ConfigName)); err != nil {
+			if err := installSkills(dir); err != nil {
+				return fail(err)
+			}
+			fmt.Printf("gloss hook: no %s yet, so only the skills were installed; gloss init installs the hook and the MCP server\n", load.ConfigName)
+			return 0
+		}
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {

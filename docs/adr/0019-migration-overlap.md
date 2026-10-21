@@ -15,6 +15,10 @@ During a strangler migration two boundaries realize the same core process and ho
 
 A `switch:` key naming the feature flag that routes between the two sides (the issue's optional item 4) is not added; `configures` on the flag file already links it, and the viewer change can come later without a format change.
 
+### Amendment: wholes split across boundaries (ADR 0025, section 13)
+
+4. **A part's realization does not count.** For an overlap, a boundary realizes or holds a concept only through its own code: a derived edge lifted from a part to its whole (provenance step `part-of ...`) is left out. A domain area whose parts live in `app/` and `src/` is decomposed, not implemented twice. Before, every such area was an overlap, so pfinance's seven-area core reported four. The PR gate's view of who realizes what (`rollup.Realizers`) still counts parts, so moving a part out of a boundary is still a realization change.
+
 ## Alternatives considered
 
 - **Report overlaps only between boundaries in different repositories.** Rejected: the strangler often starts inside the monolith's repository.

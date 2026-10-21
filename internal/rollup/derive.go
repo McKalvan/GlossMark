@@ -246,14 +246,29 @@ func isAncestorBoundary(g *graph.Graph, anc, b string) bool {
 // ancestors realize (a CsvImporter is-a Importer realizes pf:Importing
 // without repeating the line). Neither is-a ancestors nor c itself are
 // included.
-func RealizesStar(g *graph.Graph, c string) []string { return standsFor(g, c, true) }
+func RealizesStar(g *graph.Graph, c string) []string { return standsFor(g, c, allWholes) }
 
 // realizedBy is RealizesStar without the wholes: what c realizes or is
 // published as, directly or through its is-a ancestors. It is the declared
 // side of coverage, where a part never answers for its whole.
-func realizedBy(g *graph.Graph, c string) []string { return standsFor(g, c, false) }
+func realizedBy(g *graph.Graph, c string) []string { return standsFor(g, c, noWholes) }
 
-func standsFor(g *graph.Graph, c string, wholes bool) []string {
+// realizedByMechanism is realizedBy plus what a mechanism's wholes realize: a
+// part of an implementation concept realizes what that concept realizes, but
+// a core concept reached on the way does not stand for the areas it is part
+// of. It is the set an untested implementation concept is reported under, so
+// an untested domain area never hides an untested part (ADR 0025, section 13).
+func realizedByMechanism(g *graph.Graph, c string) []string {
+	return standsFor(g, c, func(x string) bool { n := g.Node(x); return n != nil && n.Tier == model.TierImpl })
+}
+
+// Which concepts' part-of wholes a realization walk climbs.
+var (
+	allWholes = func(string) bool { return true }
+	noWholes  = func(string) bool { return false }
+)
+
+func standsFor(g *graph.Graph, c string, wholes func(string) bool) []string {
 	paths := standsForPaths(g, c, wholes)
 	out := make([]string, 0, len(paths))
 	for k := range paths {
@@ -271,9 +286,9 @@ type Hop struct{ Rel, To string }
 // shortest chain of hops from c to it: is-a steps up to the ancestor that
 // realizes, part-of steps up to the whole, and the realizes or published-as
 // step itself. Among chains of one length the first by relation and IRI wins.
-func RealizesPaths(g *graph.Graph, c string) map[string][]Hop { return standsForPaths(g, c, true) }
+func RealizesPaths(g *graph.Graph, c string) map[string][]Hop { return standsForPaths(g, c, allWholes) }
 
-func standsForPaths(g *graph.Graph, c string, wholes bool) map[string][]Hop {
+func standsForPaths(g *graph.Graph, c string, wholes func(string) bool) map[string][]Hop {
 	out := map[string][]Hop{}
 	// walked: each concept is expanded once (breadth first, so its path is a
 	// shortest one), and an is-a or part-of cycle ends the walk.
@@ -309,7 +324,7 @@ func standsForPaths(g *graph.Graph, c string, wholes bool) map[string][]Hop {
 			}
 		}
 		// A part of a mechanism realizes the mechanism and what it realizes.
-		if wholes {
+		if wholes(x) {
 			for _, o := range g.Objects(x, "part-of") {
 				if n := g.Node(o); n != nil && n.NodeType == model.NodeConcept && declaredEdge(g, x, "part-of", o) {
 					visit("part-of", o, true)

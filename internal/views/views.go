@@ -553,14 +553,20 @@ func (p *projector) house() {
 			}
 		}
 	}
+	var follow []int // parts with no boundary of their own, following their root
 	for i := range p.nodes {
 		if p.nodes[i].Type == "concept" && p.nodes[i].Boundary == "" {
 			if r := rootOf(i); r != i {
 				p.nodes[i].Boundary = p.nodes[r].Boundary
+				follow = append(follow, i)
 			}
 		}
 	}
 	p.notBelowParts()
+	// The lift may move a root out of a part's box; its followers go with it.
+	for _, i := range follow {
+		p.nodes[i].Boundary = p.nodes[rootOf(i)].Boundary
+	}
 	p.place(strongest)
 }
 

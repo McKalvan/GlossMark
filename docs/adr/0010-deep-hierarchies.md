@@ -37,6 +37,14 @@ The deep-hierarchies lab in glossmark-examples (a product taxonomy seven `is-a` 
 12. In view placement, code implementing a concept whose own `realizes` (or `published-as`) names the target counts as the boundary's own code (ADR 0012 already ranks it so). It beats a manifest that only declares the target, so `cyc:OrderFulfilment` sits in `spw:fulfilment`, whose `engine.py` implements `spk:FulfilmentEngine`, and not in the leaf `spw:scanning` that declares it to cover a deep part.
 13. A `part-of` whole is never placed inside the box of one of its parts; it moves to the nearest boundary enclosing its own box and its parts'.
 
+### Domain areas that span boundaries (pfinance adoption, ADR 0025)
+
+pfinance grouped its core tier into seven `part-of` areas, and some areas, such as its bookkeeping, are realized in both `app/` and `src/`. Each area therefore sits in the system box (13). In the engineering view the viewer drew every part inside its area's box, which pulled the parts out of the `app/` and `src/` boxes that hold their code, and the area boxes overlapped the boundary boxes.
+
+14. A part with no boundary of its own follows the root of its `part-of` tree after the root is placed, including the move in 13, not before it. Before, a note with no code followed its product to `app/` and stayed there when the product moved to the system box.
+15. In the viewer, a part housed in a boundary that is shown strictly inside its whole's boundary is drawn in that boundary, not in the whole's box. It takes the whole's colour, and the concept panel names the whole and says why. A whole whose housed parts all share one boundary is still a box, inside that boundary. A part that is only near a boundary (flow, shared, unlinked) stays in its whole. Views at system zoom are unchanged: every boundary below the system is folded there, so no part is ever deeper than its whole.
+16. Sibling boxes never overlap. The force layout only discourages overlap, and a box with many edges into it pulls its neighbours onto it. After the forces, a deterministic pass pushes overlapping siblings apart along the shorter axis. It uses each item's layout box: an open box's rectangle, title strip included, or a node with its label. A box moves less the more it contains, and a pinned node does not move. Measured in the viewer's layout coordinates with every box open, sibling overlaps went to 0 in every view of pfinance, GlossMark, the library example and AgentArena's adoption. Before, pfinance's engineering view had 71 overlapping pairs and AgentArena's 244. Re-layout time is unchanged (209 ms for AgentArena's 248-node engineering view). Labels can still touch on screen below about 50 % zoom, where the viewer enlarges text to keep it legible.
+
 ## Alternatives considered
 
 - **Admit the default namespace instead of realizers.** Rejected: `default-namespace: spk` admits every `spk:` concept, including unrelated ones, which is not "the implementation of what I declare".
@@ -49,3 +57,4 @@ The deep-hierarchies lab in glossmark-examples (a product taxonomy seven `is-a` 
 - `gloss drift` reports fewer violations for the same mistakes. A waiver that names a concept now listed under another finding's `lifted` matches nothing, and `gloss check` reports it as an unmatched waiver; waive the lifting concept's finding instead.
 - `graph.jsonl` grows: lifted edges carry the full `via` and a `steps` list, inherited levels a `criticality-source`.
 - Supertypes reached only by realization drop out of the orphan list; views may place a whole one box higher.
+- (14, 15) Engineering-style views of a repository whose `part-of` wholes span boundaries draw the parts in their own boundaries. On GlossMark itself one concept moves (`gmi:HtmlViewer`, whose code is in `internal/`, leaves the box of `gmi:ViewProjector`, which spans the CLI and the library); the library example is unchanged.
