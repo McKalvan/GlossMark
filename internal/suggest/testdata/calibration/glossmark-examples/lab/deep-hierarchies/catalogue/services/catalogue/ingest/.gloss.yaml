@@ -1,0 +1,7 @@
+# Ingestion: inherits what feeds declares, plus the scheduler's own process.
+boundary: spw:ingest
+level: component
+label: Catalogue ingestion
+part-of: spw:catalogue
+realizes: [inherit, cyc:CatalogueIngestion]
+owner: catalogue-team

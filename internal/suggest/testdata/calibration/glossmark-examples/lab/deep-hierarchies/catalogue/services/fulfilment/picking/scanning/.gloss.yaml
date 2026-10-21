@@ -1,0 +1,7 @@
+# Scanning: the code implements spk:ScanVerifier, five part-of levels below spk:FulfilmentEngine.
+boundary: spw:scanning
+level: component
+label: Scan verification
+part-of: spw:picking
+realizes: [cyc:OrderFulfilment]
+owner: warehouse-team

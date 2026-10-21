@@ -1,0 +1,9 @@
+# Brightwater Tool Hire, mid-split: invoicing is being strangled out of hirehq
+# into a Go service. A feature flag routes a share of returned hires to it.
+grammar: 1
+owns:
+  hire: { iri: https://onto.brightwater.example/hire/, file: ontology/hire.gloss.yaml, tier: core,           version: 1.0.0, owner: hire-product }
+  hq:   { iri: https://onto.brightwater.example/hq/,   file: ontology/hq.gloss.yaml,   tier: implementation, version: 1.1.0, owner: hirehq-eng }
+  inv:  { iri: https://onto.brightwater.example/inv/,  file: ontology/inv.gloss.yaml,  tier: implementation, version: 0.1.0, owner: invoicing-eng }
+prefixes:
+  bw: https://arch.brightwater.example/boundaries/

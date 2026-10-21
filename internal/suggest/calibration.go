@@ -13,14 +13,23 @@ import "github.com/mckalvan/glossmark/internal/calib"
 var confFor = calib.Shipped.Confs()
 
 // Fit counts a scored batch per basis: the table calib.Shipped is, and
-// what gloss suggest --calibrate writes for a repository.
+// what gloss suggest --calibrate writes for a repository. A proposal with
+// a deprecated target is also counted as held: never auto-accepted, so
+// the threshold derived from the table leaves it out (ADR 0032).
 func Fit(scored []Scored) calib.Table {
 	t := calib.Table{}
 	for _, s := range scored {
 		c := t[s.Basis]
 		c.N++
-		if s.Verdict == Correct {
+		ok := s.Verdict == Correct
+		if ok {
 			c.Correct++
+		}
+		if s.Deprecated {
+			c.Held++
+			if ok {
+				c.HeldCorrect++
+			}
 		}
 		t[s.Basis] = c
 	}

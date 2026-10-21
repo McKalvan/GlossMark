@@ -406,3 +406,79 @@ func TestDeprecatedAndProposedTargets(t *testing.T) {
 		}
 	}
 }
+
+var freight = filepath.Join("testdata", "calibration", "glossmark-examples", "freight-federation")
+
+// TestRoutinesAndSupportingResources (ADR 0032): a SQL function or
+// procedure does work, so it implements the process whose doc names it
+// rather than representing the entity in its name; a Terraform resource
+// that only supports another (a subnet group, a role, an event target, a
+// task definition, a lifecycle rule) is not proposed, and the resource it
+// supports still is.
+func TestRoutinesAndSupportingResources(t *testing.T) {
+	_, ps, got := stripped(t, libraryLegacy, nil, 0.01)
+	want(t, got, "db/procs/sp_renew_loan.sql#function.sp_renew_loan", "implements", ".RenewalHandler")
+	want(t, got, "db/procs/sp_expire_holds.sql#function.sp_expire_holds", "implements", ".HoldExpiryJob")
+	want(t, got, "infra/terraform/storage.tf#resource.aws_s3_bucket.notices", "provisions", ".NoticeArchive")
+	for _, p := range ps {
+		switch p.Symbol {
+		case "resource.aws_db_subnet_group.circ", "resource.aws_cloudwatch_event_target.nightly",
+			"resource.aws_ecs_task_definition.kiosk", "resource.aws_s3_bucket_lifecycle_configuration.notices":
+			t.Errorf("supporting resource proposed: %+v", p)
+		}
+	}
+	for sym, want := range map[string]bool{
+		"resource.aws_iam_role.reminders": true, "resource.aws_db_subnet_group.booking": true, "resource.aws_kms_key.patient_data": true,
+		"resource.aws_db_instance.booking": false, "resource.aws_sqs_queue.reminder_events": false, "module.eks": false, "data.aws_iam_role.x": false,
+	} {
+		if got := supporting(sym); got != want {
+			t.Errorf("supporting(%s) = %v", sym, got)
+		}
+	}
+}
+
+// TestTypesNamedInAProcessDoc (ADR 0032): an event type a process's doc
+// mentions ("ShipmentPickedUp is published") represents the event it is
+// named after, not the process; a type named for an implementation-tier
+// measure is the code that computes it, so it implements the measure.
+func TestTypesNamedInAProcessDoc(t *testing.T) {
+	// dispatch imports frt from its sibling checkout, which SelfEval
+	// resolves from a stripped copy.
+	ws, g := build(t, filepath.Join(freight, "dispatch"))
+	m, err := SelfEval(ws, g, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]Proposal{}
+	for _, s := range m.Scored {
+		got[s.Path+"#"+s.Symbol] = s.Proposal
+	}
+	want(t, got, "src/events/types.ts#ShipmentPickedUp", "represents", "frt:ShipmentPickedUp")
+	if p := got["src/events/types.ts#ShipmentPickedUp"]; p.Basis != "name-exact/type" {
+		t.Errorf("basis %s, want name-exact/type (the process is displaced, not a tie)", p.Basis)
+	}
+	_, _, got = stripped(t, filepath.Join(freight, "shipment-core"), nil, 0.01)
+	want(t, got, "service/src/main/java/com/kestrelfreight/shipment/metrics/OnTimeRateCalculator.java#OnTimeRateCalculator", "implements", ".OnTimeRateCalculator")
+}
+
+// TestEvaluateHoldsDeprecatedBack (ADR 0032): --eval, --calibrate and the
+// threshold derivation count as auto-accepted only what gloss suggest tags
+// auto, so a proposal with a deprecated target at or above the threshold
+// is in the share's denominator and nowhere else.
+func TestEvaluateHoldsDeprecatedBack(t *testing.T) {
+	sc := []Scored{
+		{Proposal: Proposal{Basis: "name-exact/table", Conf: 0.95}, Verdict: Correct},
+		{Proposal: Proposal{Basis: "name-exact/table", Conf: 0.95, Deprecated: true}, Verdict: Wrong},
+		{Proposal: Proposal{Basis: "doc/func", Conf: 0.4}, Verdict: Wrong},
+	}
+	rep := Evaluate("x", sc, nil, calib.AutoAccept{Threshold: 0.9, MinConf: 0.3})
+	if rep.Auto.N != 1 || rep.Auto.Correct != 1 || rep.Kept.N != 3 {
+		t.Errorf("auto %+v kept %+v", rep.Auto, rep.Kept)
+	}
+	if c := Fit(sc)["name-exact/table"]; c != (calib.Count{N: 2, Correct: 1, Held: 1}) {
+		t.Errorf("fit: %+v", c)
+	}
+	if !rep.Own.Met || rep.Own.Precision != 1 || rep.Own.Auto != 1 {
+		t.Errorf("this eval alone: %+v", rep.Own)
+	}
+}

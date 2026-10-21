@@ -1,0 +1,7 @@
+boundary: tally:request-platform
+level: component
+label: Request platform (auth, rate limits, flags, logging)
+part-of: tally:expenses-api
+realizes: [exp:AccessControl]
+default-namespace: xapi
+owner: platform-team

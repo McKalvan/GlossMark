@@ -18,13 +18,29 @@ import (
 )
 
 // Count is what one basis measured: N proposals, Correct of them right.
-type Count struct{ N, Correct int }
+// Held of the N (HeldCorrect of them right) target a deprecated concept:
+// their conf is their basis's like any other, but they are never
+// auto-accepted (ADR 0030), so the auto-accept threshold's precision and
+// count leave them out while its share still counts them (ADR 0032).
+type Count struct{ N, Correct, Held, HeldCorrect int }
+
+func (c *Count) add(o Count) {
+	c.N += o.N
+	c.Correct += o.Correct
+	c.Held += o.Held
+	c.HeldCorrect += o.HeldCorrect
+}
+
+// auto is the part of c that can be auto-accepted.
+func (c Count) auto() Count { return Count{N: c.N - c.Held, Correct: c.Correct - c.HeldCorrect} }
 
 // Table maps a basis (evidence/role, plus /tie) to its count.
 type Table map[string]Count
 
-// MinBasisN is how often a basis must occur to get its own conf; a rarer
-// basis is read from its evidence row (all bases with that evidence).
+// MinBasisN is how often a basis must occur to get its own conf. A rarer
+// basis is read from its role row (all bases with its evidence and role,
+// ties included) when that is seen MinBasisN times and the basis is no
+// tie, else from its evidence row (all bases with that evidence).
 const MinBasisN = 4
 
 // Unmeasured is the conf of evidence the calibration set never saw.
@@ -45,47 +61,100 @@ const Never = 1.01
 // Evidence is the evidence part of a basis.
 func Evidence(basis string) string { return strings.SplitN(basis, "/", 2)[0] }
 
+// Role is the evidence/role part of a basis, without /tie.
+func Role(basis string) string {
+	p := strings.SplitN(basis, "/", 3)
+	if len(p) < 2 {
+		return basis
+	}
+	return p[0] + "/" + p[1]
+}
+
+func tie(basis string) bool { return strings.HasSuffix(basis, "/tie") }
+
 // Smoothed is the Laplace estimate of a precision, to two decimals.
 func Smoothed(correct, n int) float64 {
 	return math.Round(float64(correct+1)/float64(n+2)*100) / 100
 }
 
-// Conf is the conf a basis gets from t: its own row when seen MinBasisN
-// times, else its evidence row, else Unmeasured.
-func (t Table) Conf(basis string) float64 {
-	if c, ok := t[basis]; ok && c.N >= MinBasisN {
-		return Smoothed(c.Correct, c.N)
+// Row names the row of t a basis's conf is read from: the basis itself
+// when seen MinBasisN times; else, for a basis that is no tie, its role
+// row ("name-contains/table/*") when that is seen MinBasisN times; else its
+// evidence row ("name-contains/*"). A table role and a heading role differ
+// more than a basis and its tie do, so a rare basis borrows from its own
+// role first (ADR 0032); a rare tie keeps the evidence row, which is lower.
+func (t Table) Row(basis string) string {
+	if t[basis].N >= MinBasisN {
+		return basis
 	}
-	return t.evidenceConf(Evidence(basis))
+	if !tie(basis) && t.sum(Role(basis)+"/*").N >= MinBasisN {
+		return Role(basis) + "/*"
+	}
+	return Evidence(basis) + "/*"
 }
 
-func (t Table) evidenceConf(ev string) float64 {
-	var sum Count
+// sum adds up the bases a row covers.
+func (t Table) sum(row string) Count {
+	if !strings.HasSuffix(row, "/*") {
+		return t[row]
+	}
+	pre := strings.TrimSuffix(row, "*")
+	var s Count
 	for b, c := range t {
-		if Evidence(b) == ev {
-			sum.N += c.N
-			sum.Correct += c.Correct
+		if strings.HasPrefix(b+"/", pre) {
+			s.add(c)
 		}
 	}
-	if sum.N > 0 {
-		return Smoothed(sum.Correct, sum.N)
+	return s
+}
+
+// Conf is the conf a basis gets from t: the smoothed precision of its row,
+// or Unmeasured when the row was never seen.
+func (t Table) Conf(basis string) float64 {
+	if c := t.sum(t.Row(basis)); c.N > 0 {
+		return Smoothed(c.Correct, c.N)
 	}
 	return Unmeasured
 }
 
-// Confs precomputes Conf for every basis of t and for every evidence row,
-// for lookups in the matcher's inner loop.
+// Confs precomputes Conf for every basis of t and every row, for lookups
+// in the matcher's inner loop.
 func (t Table) Confs() func(string) float64 {
-	by, ev := map[string]float64{}, map[string]float64{}
+	rows := map[string]float64{}
+	row := func(r string) float64 {
+		c, ok := rows[r]
+		if !ok {
+			c = Unmeasured
+			if s := t.sum(r); s.N > 0 {
+				c = Smoothed(s.Correct, s.N)
+			}
+			rows[r] = c
+		}
+		return c
+	}
+	by := map[string]float64{}
+	roleN := map[string]int{}
+	for b, c := range t {
+		roleN[Role(b)] += c.N
+	}
 	for b := range t {
-		by[b] = t.Conf(b)
-		ev[Evidence(b)] = t.evidenceConf(Evidence(b))
+		by[b] = row(t.Row(b))
+	}
+	for r := range roleN {
+		row(r + "/*")
+	}
+	for b := range t {
+		row(Evidence(b) + "/*")
 	}
 	return func(basis string) float64 {
 		if c, ok := by[basis]; ok {
 			return c
 		}
-		if c, ok := ev[Evidence(basis)]; ok {
+		// A basis the table never saw: its role row, else its evidence row.
+		if !tie(basis) && roleN[Role(basis)] >= MinBasisN {
+			return rows[Role(basis)+"/*"]
+		}
+		if c, ok := rows[Evidence(basis)+"/*"]; ok {
 			return c
 		}
 		return Unmeasured
@@ -96,8 +165,7 @@ func (t Table) Confs() func(string) float64 {
 func (t Table) Total() Count {
 	var s Count
 	for _, c := range t {
-		s.N += c.N
-		s.Correct += c.Correct
+		s.add(c)
 	}
 	return s
 }
@@ -146,8 +214,7 @@ func buckets(conf func(string) float64, t Table, minConf float64) []bucket {
 		if by[k] == nil {
 			by[k] = &bucket{conf: v}
 		}
-		by[k].N += c.N
-		by[k].Correct += c.Correct
+		by[k].add(c)
 	}
 	out := make([]bucket, 0, len(by))
 	for _, b := range by {
@@ -158,8 +225,9 @@ func buckets(conf func(string) float64, t Table, minConf float64) []bucket {
 }
 
 // Derive finds the lowest conf at or above minConf whose cumulative
-// precision (correct over all proposals at or above it) meets target on t.
-// conf gives each basis the conf its proposals carry.
+// precision (correct over all proposals at or above it that can be
+// auto-accepted) meets target on t. conf gives each basis the conf its
+// proposals carry.
 func Derive(conf func(string) float64, t Table, target, minConf float64) AutoAccept {
 	a := AutoAccept{Target: target, Threshold: Never, Precision: -1, Best: -1, MinConf: minConf}
 	var cum Count
@@ -168,8 +236,7 @@ func Derive(conf func(string) float64, t Table, target, minConf float64) AutoAcc
 		a.N += b.N
 	}
 	for _, b := range bs {
-		cum.N += b.N
-		cum.Correct += b.Correct
+		cum.add(b.auto())
 		if cum.N == 0 {
 			continue
 		}
@@ -194,8 +261,7 @@ func At(conf func(string) float64, t Table, threshold, minConf float64) AutoAcce
 	for _, b := range buckets(conf, t, minConf) {
 		a.N += b.N
 		if b.conf >= threshold-1e-9 {
-			auto.N += b.N
-			auto.Correct += b.Correct
+			auto.add(b.auto())
 		}
 	}
 	a.Auto = auto.N
@@ -234,7 +300,9 @@ func (a AutoAccept) String() string {
 }
 
 // Read parses a calibration file: tab-separated lines of basis, proposals,
-// correct. Blank lines and # comments are skipped.
+// correct, and optionally the held (deprecated-target) proposals among
+// them and how many of those were correct. Blank lines and # comments are
+// skipped.
 func Read(r io.Reader) (Table, error) {
 	t := Table{}
 	sc := bufio.NewScanner(r)
@@ -246,17 +314,23 @@ func Read(r io.Reader) (Table, error) {
 			continue
 		}
 		f := strings.Split(line, "\t")
-		if len(f) != 3 {
-			return nil, fmt.Errorf("line %d: want 3 tab-separated fields (basis, proposals, correct), got %d", n, len(f))
+		if len(f) != 3 && len(f) != 5 {
+			return nil, fmt.Errorf("line %d: want 3 or 5 tab-separated fields (basis, proposals, correct[, held, held correct]), got %d", n, len(f))
 		}
-		pn, err1 := strconv.Atoi(f[1])
-		pc, err2 := strconv.Atoi(f[2])
-		if err1 != nil || err2 != nil || pn < 0 || pc < 0 || pc > pn {
-			return nil, fmt.Errorf("line %d: proposals and correct must be counts with correct <= proposals", n)
+		var v [4]int
+		for i := range f[1:] {
+			x, err := strconv.Atoi(f[1+i])
+			if err != nil || x < 0 {
+				return nil, fmt.Errorf("line %d: %q is not a count", n, f[1+i])
+			}
+			v[i] = x
+		}
+		r := Count{v[0], v[1], v[2], v[3]}
+		if r.Correct > r.N || r.Held > r.N || r.HeldCorrect > r.Held || r.HeldCorrect > r.Correct {
+			return nil, fmt.Errorf("line %d: want correct <= proposals, held <= proposals and held correct <= both", n)
 		}
 		c := t[f[0]]
-		c.N += pn
-		c.Correct += pc
+		c.add(r)
 		t[f[0]] = c
 	}
 	return t, sc.Err()
@@ -275,9 +349,10 @@ func Write(w io.Writer, t Table, header string) error {
 			sb.WriteString("# " + l + "\n")
 		}
 	}
-	sb.WriteString("# basis\tproposals\tcorrect\n")
+	sb.WriteString("# basis\tproposals\tcorrect\theld (deprecated target)\theld correct\n")
 	for _, k := range keys {
-		fmt.Fprintf(&sb, "%s\t%d\t%d\n", k, t[k].N, t[k].Correct)
+		c := t[k]
+		fmt.Fprintf(&sb, "%s\t%d\t%d\t%d\t%d\n", k, c.N, c.Correct, c.Held, c.HeldCorrect)
 	}
 	_, err := io.WriteString(w, sb.String())
 	return err

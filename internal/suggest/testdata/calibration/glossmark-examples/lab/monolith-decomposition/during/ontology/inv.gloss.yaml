@@ -1,0 +1,8 @@
+# The implementation tier of the invoicing service.
+namespace: inv
+version: 0.1.0
+concepts:
+  InvoiceRun:
+    kind: process
+    realizes: hire:Invoicing
+    doc: "Service.Issue: prices a returned hire by the day and stores the invoice."

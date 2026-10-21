@@ -1,0 +1,7 @@
+# Picking: declares the second level of the core partonomy.
+boundary: spw:picking
+level: component
+label: Picking
+part-of: spw:fulfilment
+realizes: [inherit, cyc:Picking]
+owner: warehouse-team

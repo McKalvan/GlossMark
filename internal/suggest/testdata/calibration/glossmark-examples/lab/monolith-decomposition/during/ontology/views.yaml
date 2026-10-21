@@ -1,0 +1,13 @@
+views:
+  business:
+    include: [hire:*]
+    collapse: { "hq:*": via realizes, "inv:*": via realizes }
+    relations: [produces, consumes, realizes]
+    zoom: system
+  engineering:
+    include: [hire:*, hq:*, inv:*]
+    zoom: container
+  invoicing-migration:
+    doc: "Curated: the old and the new implementation of invoicing, and the facade that routes between them."
+    include: [hire:Invoicing, hire:Invoice, hq:InvoiceGenerator, hq:InvoicingRouter, inv:InvoiceRun]
+    zoom: code

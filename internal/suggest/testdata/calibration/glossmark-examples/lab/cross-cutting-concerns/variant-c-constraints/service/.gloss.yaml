@@ -1,0 +1,7 @@
+boundary: tally:expenses-api
+level: container
+label: Expense claims API
+realizes: [inherit, exp:ClaimSubmission, exp:ClaimApproval, exp:ClaimHistory, exp:ClaimExport]
+holds: [exp:ExpenseClaim]
+default-namespace: xapi
+owner: expenses-team

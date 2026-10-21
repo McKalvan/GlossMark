@@ -1,0 +1,6 @@
+# glossmark.yaml: Spokewise, an online bicycle parts shop (lab: deep hierarchies).
+grammar: 1
+repo-iri: https://onto.spokewise.example/
+owns:
+  cyc: { iri: https://onto.spokewise.example/core/, tier: core,           version: 0.1.0 }   # the catalogue and fulfilment as the business sees them
+  spk: { iri: https://onto.spokewise.example/impl/, tier: implementation, version: 0.1.0 }   # the mechanisms that realize them

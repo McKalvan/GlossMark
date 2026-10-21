@@ -156,7 +156,7 @@ type Report struct {
 	Rows     []BandRow
 	All      BandRow
 	Kept     BandRow // conf >= Rule.MinConf: what gloss suggest outputs
-	Auto     BandRow // conf >= Rule.Threshold
+	Auto     BandRow // auto-accepted under Rule: conf >= Threshold, target not deprecated
 	Labels   int     // labels in the truth set
 	Recalled int     // labels some correct proposal states
 	ByBasis  map[string]*BandRow
@@ -230,7 +230,7 @@ func Evaluate(name string, scored []Scored, labels []Label, rule calib.AutoAccep
 		if s.Conf >= rule.MinConf-1e-9 {
 			rep.Kept.add(s)
 		}
-		if s.Conf >= rule.Threshold-1e-9 {
+		if s.AutoAccepts(rule.Threshold) {
 			rep.Auto.add(s)
 		}
 		b := rep.ByBasis[s.Basis]

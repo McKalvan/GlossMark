@@ -1,0 +1,7 @@
+boundary: bw:hirehq
+level: container
+label: hirehq Django monolith
+realizes: [inherit, hire:Booking]
+holds: [hire:Customer, hire:Equipment, hire:Hire]
+default-namespace: hq
+owner: hirehq-eng

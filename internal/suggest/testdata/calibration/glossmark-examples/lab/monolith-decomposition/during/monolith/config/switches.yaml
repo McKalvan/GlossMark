@@ -1,0 +1,6 @@
+# @gloss configures .InvoicingRouter scope=file
+# django-waffle switches, loaded by `manage.py waffle_switch --create` at deploy.
+switches:
+  invoicing.use_service:
+    active: true
+    note: "Cutover to the invoicing service; flip off to fall back to hirehq.invoicing.generator."

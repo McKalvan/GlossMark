@@ -1,0 +1,18 @@
+# The implementation tier of the hirehq monolith.
+namespace: hq
+version: 1.1.0
+concepts:
+  BookingView:
+    kind: process
+    realizes: hire:Booking
+    doc: "POST /hires: validates availability and opens a hire."
+  InvoiceGenerator:
+    kind: process
+    realizes: hire:Invoicing
+    deprecated: true
+    replaced-by: inv:InvoiceRun
+    doc: "generate_invoice: prices a returned hire by the day and writes the invoice row. Being retired: the invoicing service takes over behind invoicing.use_service."
+  InvoicingRouter:
+    kind: process
+    realizes: hire:Invoicing
+    doc: "issue_invoice: the strangler facade. Sends a returned hire to the invoicing service or to the legacy generator, by feature flag."

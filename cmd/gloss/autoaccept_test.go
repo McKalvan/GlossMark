@@ -160,7 +160,7 @@ func TestSuggestCalibrateWrite(t *testing.T) {
 		t.Fatalf("--calibrate --write: %d", code)
 	}
 	b, err := os.ReadFile(filepath.Join(root, "glossmark.calibration.tsv"))
-	if err != nil || !strings.Contains(string(b), "name-exact/func\t1\t1\n") {
+	if err != nil || !strings.Contains(string(b), "name-exact/func\t1\t1\t0\t0\n") {
 		t.Fatalf("calibration file: %v %q", err, b)
 	}
 	if b, _ := os.ReadFile(filepath.Join(root, "doer.py")); !strings.Contains(string(b), "@gloss implements .Doer") {

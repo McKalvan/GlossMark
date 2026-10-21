@@ -1,0 +1,7 @@
+boundary: bw:invoicing-service
+level: container
+label: Invoicing service (Go)
+realizes: [hire:Invoicing]
+holds: [hire:Invoice]
+default-namespace: inv
+owner: invoicing-eng

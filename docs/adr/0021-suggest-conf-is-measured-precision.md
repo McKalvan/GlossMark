@@ -1,7 +1,7 @@
 <!-- @gloss documents gmi:SuggestCalibration scope=file -->
 # ADR 0021: suggest's conf is the precision its evidence measured
 
-Status: accepted, 2026-10-20. Refs issues #65 (F-CAL-1) and #69 (F-CAL-5). The auto-accept threshold and the Phase 2 gate are revised by [ADR 0024](0024-auto-accept-precision.md).
+Status: accepted, 2026-10-20. Refs issues #65 (F-CAL-1) and #69 (F-CAL-5). The auto-accept threshold and the Phase 2 gate are revised by [ADR 0024](0024-auto-accept-precision.md); the calibration set, the rare-basis fallback and the latest measurement by [ADR 0032](0032-suggest-calibration-set-grows.md).
 
 ## Context
 

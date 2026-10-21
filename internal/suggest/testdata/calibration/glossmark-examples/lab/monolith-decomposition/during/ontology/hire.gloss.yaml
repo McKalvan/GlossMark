@@ -1,0 +1,28 @@
+# The core tier: what the hire desk and finance recognise.
+namespace: hire
+version: 1.0.0
+concepts:
+  Customer:
+    kind: entity
+    doc: "A trade or retail customer with a hire account."
+  Equipment:
+    kind: entity
+    doc: "One hireable item: a breaker, a scaffold tower, a mini digger."
+  Hire:
+    kind: entity
+    doc: "An agreement to hire equipment to a customer for a period."
+  Invoice:
+    kind: entity
+    criticality: high
+    doc: "What the customer owes for a completed hire, with VAT."
+  Booking:
+    kind: process
+    consumes: [Equipment]
+    produces: [Hire]
+    doc: "The hire desk reserves equipment for a customer and opens a hire."
+  Invoicing:
+    kind: process
+    consumes: [Hire]
+    produces: [Invoice]
+    criticality: high
+    doc: "A returned hire is priced by the day and invoiced to the customer."

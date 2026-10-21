@@ -1,0 +1,52 @@
+# ontology/spk.gloss.yaml: the implementation tier.
+# An importer taxonomy five is-a levels deep and a fulfilment-engine partonomy
+# five part-of levels deep. Only the root of each chain says realizes:; the
+# rest inherit it (docs/FILE-FORMATS.md: "a concept inherits realizes through
+# is-a and a part realizes its whole").
+namespace: spk
+version: 0.1.0
+concepts:
+  # Importer taxonomy (is-a), depth in brackets.
+  Importer:
+    kind: process
+    realizes: cyc:CatalogueIngestion
+    criticality: high
+    doc: "Anything that loads supplier data into the catalogue."           # 1
+  SupplierImporter:  { is-a: Importer, doc: "An importer for one supplier's data." }            # 2
+  FeedImporter:      { is-a: SupplierImporter, doc: "An importer that pulls a periodic feed." } # 3
+  XmlFeedImporter:   { is-a: FeedImporter, doc: "A feed importer for XML feeds." }             # 4
+  ShimanoXmlImporter: { is-a: XmlFeedImporter, doc: "The Shimano dealer XML feed, schema v2." } # 5
+  CsvFeedImporter:   { is-a: FeedImporter, doc: "A feed importer for CSV feeds." }             # 4
+  CsvRowParser:      { kind: process, part-of: CsvFeedImporter, doc: "Parses and validates one CSV row." } # part of an is-a leaf
+  IngestScheduler:
+    kind: process
+    realizes: cyc:CatalogueIngestion
+    doc: "Runs every importer on its schedule."
+
+  # Listings: implementation concepts that realize deep core leaves.
+  DerailleurListing:
+    kind: capability
+    realizes: [cyc:ProductListing, cyc:ElectronicRearDerailleur]
+    doc: "The listing page model for electronic rear derailleurs."
+  BrakeListing:
+    kind: capability
+    realizes: [cyc:ProductListing, cyc:HydraulicDiscBrake]
+    doc: "The listing page model for hydraulic disc brakes, with rotor compatibility."
+  LightListing:
+    kind: capability
+    realizes: [cyc:ProductListing, cyc:FrontLight]
+    doc: "The listing page model for front lights, with the dangerous-goods note."
+
+  # Fulfilment engine partonomy (part-of), depth in brackets.
+  FulfilmentEngine:
+    kind: system-type
+    realizes: cyc:OrderFulfilment
+    doc: "The warehouse fulfilment service."                               # 1
+  PickPlanner:  { kind: process, part-of: FulfilmentEngine, doc: "Plans picks for released orders." }  # 2
+  WaveBuilder:  { kind: process, part-of: PickPlanner, doc: "Groups orders into pick waves." }        # 3
+  BinRouter:    { kind: process, part-of: WaveBuilder, doc: "Orders the bins in a wave into a walk." } # 4
+  ScanVerifier: { kind: process, part-of: BinRouter, doc: "Checks a scanned barcode against the bin's expected part." } # 5
+  BinPickHandler:
+    kind: process
+    realizes: cyc:BinPick
+    doc: "Records a bin pick from the handheld scanner."

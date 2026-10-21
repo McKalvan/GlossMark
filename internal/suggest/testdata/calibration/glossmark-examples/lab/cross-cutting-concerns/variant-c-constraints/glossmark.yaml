@@ -1,0 +1,10 @@
+# Variant C: access control is a core constraint that constrains the processes it
+# protects; the mechanisms say which handlers they guard in the ontology (a custom
+# guards relation), not in the handlers; the platform layer is its own boundary;
+# the rate-limit and feature-flag settings are published values bound to config.
+grammar: 1
+repo-iri: https://onto.tallyfern.example/
+owns:
+  exp:  { iri: https://onto.tallyfern.example/expenses/, tier: core,           version: 0.1.0 }
+  xapi: { iri: https://onto.tallyfern.example/xapi/,     tier: implementation, version: 0.1.0 }
+test-paths: ["service/tests/**"]

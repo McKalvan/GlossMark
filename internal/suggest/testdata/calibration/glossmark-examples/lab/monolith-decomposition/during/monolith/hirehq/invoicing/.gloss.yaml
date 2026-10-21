@@ -1,0 +1,7 @@
+boundary: bw:hirehq-invoicing
+level: component
+label: hirehq invoicing module
+realizes: [hire:Invoicing]
+holds: [hire:Invoice]
+default-namespace: hq
+owner: hirehq-eng

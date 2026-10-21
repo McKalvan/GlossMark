@@ -39,4 +39,4 @@ The shipped table stays within the sampling error `TestCalibrationTableIsFitted`
 ## Consequences
 
 - `gloss suggest --write` may now write markers that `gloss check` warns about (GM222, deprecated target). It is a warning, and the note on the marker says why the link was proposed.
-- The calibration harness (`--eval`, `--calibrate`, and the threshold derivation) still counts a deprecated proposal at or above the threshold as auto-accepted, because it reads conf alone. This affects 2 of 923 proposals. Making it count only proposals the CLI tags `auto` is left to the calibration work (#65, #69).
+- The calibration harness (`--eval`, `--calibrate`, and the threshold derivation) still counts a deprecated proposal at or above the threshold as auto-accepted, because it reads conf alone. This affects 2 of 923 proposals. Making it count only proposals the CLI tags `auto` is left to the calibration work (#65, #69). Done in [ADR 0032](0032-suggest-calibration-set-grows.md): the calibration counts hold such proposals back from the threshold's precision and count.
