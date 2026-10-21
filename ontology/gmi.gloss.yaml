@@ -1,8 +1,8 @@
 # ontology/gmi.gloss.yaml (implementation tier): the Go packages and commands that realize gm:.
 namespace: gmi
-version: 0.1.0
+version: 0.1.1
 concepts:
-  GlossCli:           { kind: system-type, realizes: gm:GlossMark }
+  GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
   MarkerGrammar:      { kind: process, realizes: gm:Extraction, doc: "Parsing one marker line and the per-extension comment table." }
   DeclarationAnchor:  { kind: process, realizes: gm:Extraction, doc: "Binding a marker to the declaration that follows it." }
@@ -10,18 +10,18 @@ concepts:
   Extractor:          { kind: process, realizes: gm:Extraction, doc: "Pass 1; markers, manifests and ontologies into the graph." }
   FileFormats:        { kind: resource, internal: true, doc: "The typed shapes of every file GlossMark reads or writes." }
   # The graph and what is derived from it
-  CanonicalGraph:     { kind: resource, realizes: gm:Graph }
+  CanonicalGraph:     { kind: resource, realizes: gm:Graph, doc: "The deterministic graph.jsonl record stream (nodes, then edges, with provenance) and its JSON-LD context." }
   Linter:             { kind: process, realizes: [gm:Lint, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:AllowedList], doc: "Where the tier, seam, own-subject and allowed-list constraints are enforced." }
-  RollupEngine:       { kind: process, realizes: gm:Rollup }
-  DriftComparator:    { kind: process, realizes: [gm:DriftComparison, gm:DeclaredCapability], produces: [gm:Coverage, gm:DecisionRequest], publishes: [gm:DecisionRequested] }
-  Gate:               { kind: process, realizes: gm:Gating }
-  ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale] }
+  RollupEngine:       { kind: process, realizes: gm:Rollup, doc: "Derives boundary-level facts from code-level links: containment, realization lifted to cores, flows lifted to boundaries, implied relationships." }
+  DriftComparator:    { kind: process, realizes: [gm:DriftComparison, gm:DeclaredCapability], produces: [gm:Coverage, gm:DecisionRequest], publishes: [gm:DecisionRequested], doc: "Classifies each declared-versus-derived pair as consistent, a violation or a gap, adds the concept- and link-level findings (orphan, untested, stale and the rest) and computes coverage." }
+  Gate:               { kind: process, realizes: gm:Gating, doc: "Classifies the changes between two graphs as AUTO, SOFT or HARD by the views and criticality they touch, and renders the PR impact." }
+  ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale], doc: "The .glossmark/ledger.jsonl record of each link's review state, reviewer, reason and anchor fingerprint." }
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
   # Outputs
-  ViewProjector:      { kind: process, realizes: gm:Projection }
+  ViewProjector:      { kind: process, realizes: gm:Projection, doc: "Builds the views ontology/views.yaml defines and feature slices from the graph." }
   HtmlViewer:         { kind: process, part-of: ViewProjector, presents: gm:View, doc: "The static page that shows a projection: a UI surface for views, not their mechanism." }
   Publisher:          { kind: process, realizes: gm:Publication, doc: "Per-namespace ontology.jsonld and graph.jsonl for importers." }
-  SqliteExport:       { kind: process, internal: true }
+  SqliteExport:       { kind: process, internal: true, doc: "gloss export --sqlite: the graph as a SQLite database with closure views, for ad-hoc queries." }
   LandscapeAssembler: { kind: process, realizes: gm:Landscape, doc: "Unions sibling repositories' graphs by IRI; realizes the landscape itself, there is no separate federation process yet." }
   ValueBinder:        { kind: process, realizes: gm:ValueBinding, doc: "Resolves value-from and publishes-value to a line of code; the ledger baselines it and the comparator reports drift." }
   DefaultSoftThreshold:
@@ -44,7 +44,7 @@ concepts:
   AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark and derive-ontology Claude Code skills, shipped in the binary." }
   EvidenceHarvester:  { kind: process, realizes: gm:Onboarding, doc: "gloss harvest: evidence of a repository's vocabulary from code, schemas, tests, UI, docs and git, before it has an ontology, and the lexical clusters a derivation starts from (ADR 0025)." }
   # Agents
-  McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed] }
+  McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed], doc: "The MCP server agents call to search concepts, ask what a path or change touches, and propose links and concepts." }
   AgentsSnippet:      { kind: process, realizes: gm:Vocabulary, doc: "The AGENTS.md vocabulary snippet and the session-start briefing." }
   CriticalityStamper:
     kind: process

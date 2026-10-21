@@ -9,3 +9,8 @@ fi
 gloss check
 gloss build -q
 git add .glossmark/graph.jsonl .glossmark/context.jsonld .glossmark/ledger.jsonl 2>/dev/null || true
+# Stale links do not block the commit; a CI that fails on them (drift-fail-on
+# with stale) would, so say so now.
+if ! gloss drift --fail-on stale >/dev/null 2>&1; then
+  echo "gloss: some links are stale (gloss status lists them): check each still holds, then gloss accept --stale <paths>" >&2
+fi

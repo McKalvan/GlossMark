@@ -1,5 +1,3 @@
-// @gloss represents gmi:FileFormats scope=file
-
 package model
 
 import (

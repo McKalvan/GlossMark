@@ -159,7 +159,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	var files []*file
 	for _, rel := range ws.Files {
 		ext := strings.ToLower(filepath.Ext(rel))
-		if !under(rel, paths) || !codeExts[ext] || marked[rel+"#file"] || skipDoc(rel) {
+		if !Under(rel, paths) || !codeExts[ext] || marked[rel+"#file"] || skipDoc(rel) {
 			continue
 		}
 		style, ok := marker.StyleFor(rel, ws.Config.CommentStyles)
@@ -874,12 +874,14 @@ func lastPart(sym string) string {
 	return sym
 }
 
-func under(rel string, paths []string) bool {
+// Under reports whether rel (slash-separated, relative to the root) is one of
+// paths or inside one of them; no paths, "" or "." match everything.
+func Under(rel string, paths []string) bool {
 	if len(paths) == 0 {
 		return true
 	}
 	for _, p := range paths {
-		p = strings.Trim(filepath.ToSlash(p), "/")
+		p = strings.Trim(strings.TrimPrefix(filepath.ToSlash(p), "./"), "/")
 		if p == "" || p == "." || rel == p || strings.HasPrefix(rel, p+"/") {
 			return true
 		}

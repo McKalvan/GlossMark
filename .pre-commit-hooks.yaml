@@ -24,3 +24,10 @@
   language: golang
   pass_filenames: false
   additional_dependencies: ["github.com/mckalvan/glossmark/cmd/gloss@v0.1.0"]
+- id: gloss-stale
+  name: gloss stale links
+  description: Fail while any accepted link is stale; re-confirm with gloss accept --stale <paths>.
+  entry: gloss drift --fail-on stale
+  language: golang
+  pass_filenames: false
+  additional_dependencies: ["github.com/mckalvan/glossmark/cmd/gloss@v0.1.0"]

@@ -4,9 +4,17 @@ on:
   push:
     tags: ["v*"]
 permissions:
-  contents: write
+  contents: read
 jobs:
+  # Every CI gate, the self-hosted GlossMark checks included, passes on the
+  # tagged commit before a binary is built.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: write
   build:
+    needs: ci
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -19,8 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: "1.24", cache: true }
-      - run: go test ./...
+        with: { go-version: stable, cache: true }
       - name: Build
         env: { GOOS: "${{ matrix.goos }}", GOARCH: "${{ matrix.goarch }}", CGO_ENABLED: "0" }
         run: |
@@ -34,6 +41,8 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }

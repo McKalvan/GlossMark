@@ -12,6 +12,12 @@ inputs:
   fail-on:
     description: Gate class that fails the job (HARD | SOFT | none)
     default: HARD
+  drift-fail-on:
+    description: Comma-separated gloss drift finding kinds that fail the job (gloss drift --fail-on; e.g. add stale to require every changed link to be re-confirmed)
+    default: violation,value-drift,dangling,overdue
+  check-graph:
+    description: Fail when the committed .glossmark/graph.jsonl is not what gloss build makes from the tree (gloss build --check)
+    default: "false"
   coverage-fail-under:
     description: Minimum concept coverage percentage, implementation concepts with an artifact and a verifier (0 disables; "current" fails only when the PR lowers the base's coverage)
     default: "0"
@@ -19,7 +25,7 @@ inputs:
     description: Post the impact as a PR comment (needs pull-requests write permission)
     default: "true"
   version:
-    description: gloss release to install. A tag (vX.Y.Z) downloads the release binary; anything else (latest, a commit) is built with go install.
+    description: gloss release to install. A tag (vX.Y.Z) downloads the release binary; source builds the Action's own checkout (uses ./ in the GlossMark repository); anything else (latest, a commit) is built with go install.
     default: v0.1.0
 runs:
   using: composite
@@ -40,8 +46,15 @@ runs:
     - uses: actions/setup-go@v5
       if: steps.binary.outputs.ok != 'true'
       with: { go-version: "1.24" }
+    - name: Install gloss (source)
+      if: inputs.version == 'source'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        go build -trimpath -o "$RUNNER_TEMP/gloss-src/gloss" ./cmd/gloss
+        echo "$RUNNER_TEMP/gloss-src" >> "$GITHUB_PATH"
     - name: Install gloss (go install)
-      if: steps.binary.outputs.ok != 'true'
+      if: steps.binary.outputs.ok != 'true' && inputs.version != 'source'
       shell: bash
       run: |
         V="${{ inputs.version }}"
@@ -51,6 +64,11 @@ runs:
       if: github.event_name == 'pull_request'
       shell: bash
       run: git fetch --no-tags --depth=200 origin ${{ github.base_ref }}
+    - name: gloss build --check
+      if: inputs.check-graph == 'true'
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      run: gloss build --check -q
     - name: gloss check
       shell: bash
       working-directory: ${{ inputs.root }}
@@ -58,7 +76,8 @@ runs:
     - name: gloss drift
       shell: bash
       working-directory: ${{ inputs.root }}
-      run: gloss drift --fail-on violation,value-drift,dangling,overdue | tee "$RUNNER_TEMP/drift.txt"
+      env: { DRIFT_FAIL_ON: "${{ inputs.drift-fail-on }}" }
+      run: gloss drift --fail-on "$DRIFT_FAIL_ON" | tee "$RUNNER_TEMP/drift.txt"
     - name: gloss coverage
       shell: bash
       working-directory: ${{ inputs.root }}

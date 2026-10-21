@@ -207,6 +207,17 @@ A repository with several workspaces runs the Action once per `root:` (a matrix)
 
 The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
 
+The Action's drift step fails on `violation,value-drift,dangling,overdue` by default. `drift-fail-on:` takes any `gloss drift --fail-on` list, and `check-graph: "true"` also fails when the committed `.glossmark/graph.jsonl` is not what `gloss build` makes from the tree (`gloss build --check`). A repository that wants nothing to merge unreviewed fails on stale links too, so a PR that edits a marked file re-confirms its links in the same PR:
+
+```yaml
+      - uses: mckalvan/glossmark@v0.1.0
+        with:
+          check-graph: "true"
+          drift-fail-on: violation,value-drift,gap,dangling,overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
+```
+
+Before pushing, `gloss drift` lists what went stale; check that each link still holds and `gloss accept --stale <paths>` re-confirms them (`-n` shows which first). GlossMark's own CI runs this way ([.github/workflows/ci.yml](../.github/workflows/ci.yml)): it also lets a reviewer clear a HARD gate by labelling the PR `ontology-approved`, so the human decision the gate asks for is recorded on the PR.
+
 Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hooks from `.pre-commit-hooks.yaml` to your `.pre-commit-config.yaml` with `rev: v0.1.0`.
 
 ## Review workflow
