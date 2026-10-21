@@ -49,7 +49,7 @@ func cmdLandscape(args []string) int {
 	// Version state per repository, and who still uses deprecated concepts.
 	entries, imports, outOfRange := landscapeVersions(repos, wss)
 	rep.Findings = append(rep.Findings, outOfRange...)
-	rep.Findings = append(rep.Findings, rollup.DeprecatedUse(g)...)
+	rollup.AddDeprecatedUse(rep, g, ws.Config.EffectivePolicy(), time.Now())
 	// Context-map edges: implied depends-on (consumer → producer) between
 	// boundaries, except between a boundary and one that contains it.
 	var ctx []string

@@ -4,7 +4,9 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +87,7 @@ func cmdAccept(args []string) int {
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
 	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
+	force := fs.Bool("force", false, "with --value: confirm even when the bound line does not hold the published value")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
@@ -103,6 +106,16 @@ func cmdAccept(args []string) int {
 			e := p.Ledger.Entry("value:" + c)
 			if node == nil || e == nil || node.ValueFP == "" {
 				return fail(fmt.Errorf("%s has no value-from binding", c))
+			}
+			// Confirming says the line holds the published value. When the
+			// value's literal is nowhere in it, the code and the ontology
+			// disagree, and confirming would hide that until the next edit.
+			if !valueInLine(node.Value, node.LiveValue) {
+				msg := fmt.Sprintf("%s: the bound code %s (%s) does not hold the published value %q; update value: in the ontology to match the code, or change the code", c, node.ValueFrom, node.LiveValue, fmt.Sprint(node.Value))
+				if !*force {
+					return fail(fmt.Errorf("%s; --force confirms the line as is", msg))
+				}
+				fmt.Fprintf(os.Stderr, "gloss accept: %s; confirming anyway (--force)\n", msg)
 			}
 			fmt.Printf("%s value of %s: %s is now the baseline for %v\n", map[bool]string{true: "would confirm", false: "confirm"}[*dry], c, node.LiveValue, node.Value)
 			if *dry {
@@ -221,6 +234,61 @@ func cmdAccept(args []string) int {
 		fmt.Printf("gloss accept: %s accepted by %s\n", plural(n, "link"), rev)
 	}
 	return 0
+}
+
+// numLiteral matches a number as code or prose writes it: a sign, digit
+// group separators (1_000, or 1,000 in thousands), a fraction, an exponent.
+var numLiteral = regexp.MustCompile(`[-+]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d[\d_]*(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?`)
+
+// valueInLine reports whether a published value appears in the bound code:
+// some number in the value equals a number in the line (a percentage also
+// as a fraction, so 4% matches 0.04; a suffix such as 60L or 30d is not part
+// of the number), or, for a value without numbers, the value's text appears
+// in the line, unquoted and case-insensitive. A value with nothing to
+// compare (none, or a list or map) is not judged.
+func valueInLine(value any, line string) bool {
+	text := strings.TrimSpace(fmt.Sprint(value))
+	if value == nil || text == "" {
+		return true
+	}
+	switch value.(type) {
+	case []any, map[string]any:
+		return true
+	}
+	nums := func(s string) []float64 {
+		var out []float64
+		for _, m := range numLiteral.FindAllStringIndex(s, -1) {
+			if m[0] > 0 && isIdentByte(s[m[0]-1]) {
+				continue // the digits of a name: MAX_2, v1
+			}
+			f, err := strconv.ParseFloat(strings.NewReplacer("_", "", ",", "").Replace(s[m[0]:m[1]]), 64)
+			if err != nil {
+				continue
+			}
+			out = append(out, f)
+			if m[1] < len(s) && s[m[1]] == '%' {
+				out = append(out, f/100)
+			}
+		}
+		return out
+	}
+	want := nums(text)
+	if len(want) == 0 {
+		return strings.Contains(strings.ToLower(line), strings.ToLower(strings.Trim(text, `"'`)))
+	}
+	have := nums(line)
+	for _, w := range want {
+		for _, h := range have {
+			if w == h || math.Abs(w-h) <= 1e-9*math.Max(math.Abs(w), math.Abs(h)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isIdentByte(b byte) bool {
+	return b == '_' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
 }
 
 func cmdReject(args []string) int {

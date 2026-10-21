@@ -30,6 +30,21 @@ var kindGlyph = map[string]string{KindOverlap: "⇉", KindOverdue: "⌛", KindOu
 
 // RenderText renders the report for a terminal.
 func RenderText(r *Report, all bool) string {
+	return RenderTextOpts(r, TextOptions{All: all})
+}
+
+// TextOptions tunes RenderTextOpts.
+type TextOptions struct {
+	// All also lists consistent pairs and overlaps.
+	All bool
+	// IDs ends each finding's line with its id, the key a waiver's finding:
+	// names (gloss drift --ids).
+	IDs bool
+}
+
+// RenderTextOpts renders the report for a terminal.
+func RenderTextOpts(r *Report, opt TextOptions) string {
+	all := opt.All
 	var sb strings.Builder
 	sb.WriteString("Ontology drift\n")
 	for _, k := range kindOrder {
@@ -59,7 +74,11 @@ func RenderText(r *Report, all bool) string {
 			if f.Waived {
 				w = "  (waived: " + f.Waiver + ")"
 			}
-			fmt.Fprintf(&sb, "  %s%s%s\n", f.Msg, loc, w)
+			id := ""
+			if opt.IDs && f.ID != "" {
+				id = "  (id " + f.ID + ")"
+			}
+			fmt.Fprintf(&sb, "  %s%s%s%s\n", f.Msg, loc, w, id)
 		}
 	}
 	if all {
@@ -91,9 +110,12 @@ func RenderText(r *Report, all bool) string {
 			sb.WriteString("\n")
 		}
 	}
+	// File coverage stays out of the trailer: every file added or deleted,
+	// prose included, moves it, so a committed drift output would change
+	// with every commit. gloss coverage and the JSON metrics carry it.
 	m := r.Metrics
-	fmt.Fprintf(&sb, "\nConcepts covered %s (%d/%d with an artifact and a verifier)   Files %.0f%% (%d/%d)   Orphans: %d   Rogue: %d   Violations: %d   Gaps: %d   Stale: %d   Untested: %d   Proposed links: %d   Proposed concepts: %d\n",
-		m.ConceptCoverage("%.0f%%"), m.ConceptsCovered, m.ConceptsInScope, m.CoveragePct, m.CoveredFiles, m.InScopeFiles, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
+	fmt.Fprintf(&sb, "\nConcepts covered %s (%d/%d with an artifact and a verifier)   Orphans: %d   Rogue: %d   Violations: %d   Gaps: %d   Stale: %d   Untested: %d   Proposed links: %d   Proposed concepts: %d\n",
+		m.ConceptCoverage("%.0f%%"), m.ConceptsCovered, m.ConceptsInScope, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
 	return sb.String()
 }
 
@@ -133,7 +155,7 @@ func RenderMarkdown(r *Report, all bool) string {
 		}
 	}
 	m := r.Metrics
-	fmt.Fprintf(&sb, "\nConcepts covered %s · Files %.0f%% · Orphans %d · Rogue %d · Violations %d · Gaps %d · Stale %d · Untested %d · Proposed links %d · Proposed concepts %d\n",
-		m.ConceptCoverage("%.0f%%"), m.CoveragePct, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
+	fmt.Fprintf(&sb, "\nConcepts covered %s · Orphans %d · Rogue %d · Violations %d · Gaps %d · Stale %d · Untested %d · Proposed links %d · Proposed concepts %d\n",
+		m.ConceptCoverage("%.0f%%"), m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
 	return sb.String()
 }
