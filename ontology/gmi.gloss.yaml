@@ -41,7 +41,7 @@ concepts:
   MarkerSuggester:    { kind: process, realizes: gm:Onboarding, doc: "gloss suggest: proposed links for unmarked public surfaces, from names, docstrings, the tables they touch and the code their tests call." }
   SuggestCalibration: { kind: process, realizes: gm:Onboarding, doc: "gloss suggest --eval, --calibrate and the calibration harness: precision and auto-accept rate per confidence band on labelled links, the counts conf is read from, and the auto-accept threshold derived from a precision target." }
   VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
-  AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark Claude Code skill, shipped in the binary." }
+  AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark and derive-ontology Claude Code skills, shipped in the binary." }
   EvidenceHarvester:  { kind: process, realizes: gm:Onboarding, doc: "gloss harvest: evidence of a repository's vocabulary from code, schemas, tests, UI, docs and git, before it has an ontology, and the lexical clusters a derivation starts from (ADR 0025)." }
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed] }

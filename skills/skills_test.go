@@ -21,7 +21,7 @@ func TestInstallableDropsSelfHostMarkers(t *testing.T) {
 				t.Errorf("%s:%d: installed skill keeps a marker: %s", name, i+1, l)
 			}
 		}
-		if !strings.Contains(string(b), "# Adopt GlossMark") || len(b) < len(raw)-80 {
+		if !strings.Contains(string(b), "\nname: "+name+"\n") || len(b) < len(raw)-80 {
 			t.Errorf("%s: installed skill lost its text", name)
 		}
 	}

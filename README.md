@@ -37,7 +37,7 @@ Concepts covered 22% (2/9 with an artifact and a verifier)   Files 83% (15/18)  
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](docs/adr/0025-deriving-the-ontology.md), experimental) |
-| `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`) |
+| `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` and `derive-ontology` (deriving the core and implementation tiers from an existing application, [ADR 0025](docs/adr/0025-deriving-the-ontology.md)), installed by `gloss hook install --skill`, before `gloss init` too |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |

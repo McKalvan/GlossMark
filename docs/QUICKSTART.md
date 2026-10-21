@@ -123,7 +123,7 @@ On an existing codebase, let the tool draft the first pass and review it rather 
 ```sh
 gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public surfaces, from names, docstrings, tables touched and test calls
 git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
-gloss hook install --skill           # installs the adopt-glossmark skill: the whole adoption as a step-by-step agent workflow
+gloss hook install --skill           # installs the adopt-glossmark and derive-ontology skills: the whole adoption, and deriving the ontology from what exists, as agent workflows (works before gloss init)
 ```
 
 Generate the vocabulary agents should see first:

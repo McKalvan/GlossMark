@@ -20,6 +20,8 @@ You are adding GlossMark to this repository: a two-tier ontology (a **core** tie
 
 ## 1. Inventory (read, do not write)
 
+**An existing application with no ontology yet:** use the `derive-ontology` skill instead of steps 1, 3 and 4. It surveys the repository, harvests evidence with `gloss harvest`, drafts both tiers with the domain owner, and hands back here at step 2 with the prefixes to use. The steps below are the short path for a small repository or one whose vocabulary is already written down.
+
 1. Read the README, the docs folder and any glossary, enum file or domain model doc. If the repo already has a vocabulary (a markdown glossary, an `enums.yaml`), plan to import it in step 3 rather than retyping it.
 2. List the top-level source directories and what each does in one line.
 3. Note the 10 to 40 terms a domain expert would recognise (accounts, orders, grading, settlement) and the mechanisms an engineer would name (handlers, pipelines, queues, pages).
