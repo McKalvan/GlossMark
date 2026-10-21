@@ -869,8 +869,11 @@ func verb(rel string) string {
 	return rel
 }
 
-// hasArtifacts reports whether any artifact links to c, or to a concept that
-// realizes* c or is-a* c.
+// reachedByArtifact reports whether code is built for a concept: an artifact
+// links to it other than to document, instruct or remit it, or to a concept
+// that realizes it, is published as it, is below it in is-a or part of it,
+// or that produces, publishes, consumes or subscribes to it in the ontology
+// (the orphan rule, ADR 0028).
 func (c *comparer) reachedByArtifact(id string) (bool, string) {
 	return c.reached(id, map[string]bool{})
 }
@@ -898,8 +901,11 @@ func (c *comparer) reached(id string, seen map[string]bool) (bool, string) {
 			}
 		}
 	}
-	// Through intended relations: a concept produced or published by a reached concept is reached.
-	for _, p := range []string{"produces", "publishes"} {
+	// Through intended relations: a concept a reached concept produces,
+	// publishes, consumes or subscribes to is reached. The ontology form
+	// says what a marker on the same code would, and an inline subscribes
+	// already counts, so the listener's concept declaring it counts too.
+	for _, p := range []string{"produces", "publishes", "consumes", "subscribes"} {
 		for _, e := range c.g.In(id, p) {
 			if e.Source != graph.SourceDeclared {
 				continue
@@ -966,7 +972,7 @@ func (c *comparer) orphans() {
 		if n.ValueFrom != "" {
 			continue // value-from binds it to a line of code
 		}
-		what := "no artifact links to it"
+		what := "no code links to it (a documents or instructs link does not count)"
 		if n.Tier == model.TierImpl {
 			what = "implementation concept has no artifacts"
 			for _, r := range c.g.Objects(n.ID, "realizes") {

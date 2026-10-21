@@ -214,7 +214,7 @@ func proposeFromNew(p *pipeline, actor string, tmpl ontoedit.ConceptSpec) int {
 		return fail(fmt.Errorf("--doc, --kind, --realizes, --is-a, --aliases and --internal apply to one concept but %d ns:NEW:Name targets were found; propose them one at a time with gloss propose concept <ns:Name> ...", len(done)))
 	}
 	done = map[string]bool{}
-	n := 0
+	n, incomplete := 0, 0
 	for _, d := range rep.Decisions {
 		if d.Kind != "new-concept" || done[d.Concept] {
 			continue
@@ -247,14 +247,19 @@ func proposeFromNew(p *pipeline, actor string, tmpl ontoedit.ConceptSpec) int {
 		if spec.Doc == "" {
 			fmt.Printf("  no doc yet: add doc: \"...\" to the entry (one sentence: what it is, not why the link was written)\n")
 		}
+		if p.WS.Tier(ns) == model.TierImpl && len(spec.Realizes)+len(spec.IsA) == 0 && !spec.Internal {
+			incomplete++
+		}
 		n++
 	}
 	if n == 0 {
 		fmt.Println("gloss propose: no ns:NEW:Name markers found")
 		return 0
 	}
-	if len(tmpl.Realizes)+len(tmpl.IsA) == 0 && !tmpl.Internal {
-		fmt.Printf("gloss propose: %s; implementation concepts still need realizes: or internal: true before acceptance\n", plural(n, "concept"))
+	// Only an implementation concept needs to stand for something (GM320);
+	// a core concept is complete as proposed.
+	if incomplete > 0 {
+		fmt.Printf("gloss propose: %s; %s still %s realizes: or internal: true before acceptance\n", plural(n, "concept"), plural(incomplete, "implementation concept"), map[bool]string{true: "needs", false: "need"}[incomplete == 1])
 	} else {
 		fmt.Printf("gloss propose: %s\n", plural(n, "concept"))
 	}

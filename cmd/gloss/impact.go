@@ -49,12 +49,12 @@ func cmdImpact(args []string) int {
 		if err != nil {
 			return fail(err)
 		}
-		files = append(files, ch...)
+		files = append(files, attributable(p.WS, ch)...)
 	}
 	if len(files) == 0 {
 		ch, err := changedFiles(p.WS.Root, "HEAD")
 		if err == nil {
-			files = ch
+			files = attributable(p.WS, ch)
 		}
 	}
 	if len(files) == 0 {
@@ -86,6 +86,19 @@ func cmdImpact(args []string) int {
 		fmt.Print(gate.RenderText(im))
 	}
 	return 0
+}
+
+// attributable drops the changed files no concept can own: the tool's own
+// state (.glossmark/), and excluded and generated paths. Listing them would
+// ask for a marker that cannot be written.
+func attributable(ws *load.Workspace, files []string) []string {
+	var out []string
+	for _, f := range files {
+		if !ws.Ignored(f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func uniqStrings(xs []string) []string {
@@ -149,7 +162,8 @@ func briefing(p *pipeline, dir string, max, budget int, changed bool) string {
 	rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
 	opt := agents.ContextOptions{Dir: rel, MaxConcepts: max, Budget: budget, Actor: os.Getenv("GLOSS_ACTOR")}
 	if changed {
-		if files, err := changedFiles(p.WS.Root, "HEAD"); err == nil && len(files) > 0 {
+		if files, err := changedFiles(p.WS.Root, "HEAD"); err == nil && len(attributable(p.WS, files)) > 0 {
+			files = attributable(p.WS, files)
 			ts := gate.Touched(p.Graph, p.WS, uniqStrings(files))
 			if len(ts) > 8 {
 				ts = ts[:8]

@@ -65,7 +65,8 @@ type Config struct {
 	Views   string   `yaml:"views,omitempty" json:"views,omitempty"`
 	Policy  *Policy  `yaml:"policy,omitempty" json:"policy,omitempty"`
 	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
-	// CommentStyles maps a file extension (".foo") to its comment tokens,
+	// CommentStyles maps a file extension (".foo"), a file name
+	// ("crontab") or a path glob ("**/cron.d/*") to its comment tokens,
 	// extending the builtin table.
 	CommentStyles map[string][]string `yaml:"comment-styles,omitempty" json:"comment-styles,omitempty"`
 	// SourceURL links paths in the viewer to a code host:
