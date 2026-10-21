@@ -106,7 +106,7 @@ func cmdSuggest(args []string) int {
 	}
 	auto := 0
 	for i := range ps {
-		ps[i].AutoAccept = ps[i].Conf >= rule.Threshold-1e-9
+		ps[i].AutoAccept = ps[i].AutoAccepts(rule.Threshold)
 		if ps[i].AutoAccept {
 			auto++
 		}
@@ -143,6 +143,9 @@ func cmdSuggest(args []string) int {
 			ctx := ""
 			if s.Context != "" {
 				ctx = "  (" + s.Context + ")"
+			}
+			if s.Note != "" {
+				ctx += "  (" + s.Note + ")"
 			}
 			tag := "review"
 			if s.AutoAccept {
