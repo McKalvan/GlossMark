@@ -82,7 +82,11 @@ func newMatcher(ws *load.Workspace, g *graph.Graph, extraStop []string) *matcher
 		m.stop[strings.ToLower(w)] = true
 	}
 	for _, n := range g.NodesOf(model.NodeConcept) {
-		if n.Deprecated || n.Imported && n.Tier == model.TierImpl && n.Published == "" {
+		// A proposed concept awaits review, its names and aliases with it,
+		// and is no target until accepted. A deprecated one stays a target:
+		// brownfield code still says its name, and the proposal names the
+		// replacement for the reviewer (ADR 0030).
+		if n.Proposed || n.Imported && n.Tier == model.TierImpl && n.Published == "" {
 			continue
 		}
 		name := n.CURIE[strings.Index(n.CURIE, ":")+1:]
