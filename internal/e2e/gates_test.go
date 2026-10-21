@@ -244,3 +244,20 @@ func TestUntestedNamesWhyCoreTestMisses(t *testing.T) {
 		t.Errorf("untested = %+v, want i:SlotSearch naming i:ApiService", u)
 	}
 }
+
+// TestUntestedNorUntestedEvent: an impl concept realizing an untested
+// event (events are never reported themselves) keeps the "nor" suffix.
+func TestUntestedNorUntestedEvent(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Booked: { kind: event }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Emitter: { kind: process, realizes: z:Booked }\n")
+	write(".gloss.yaml", "boundary: o:svc\nlevel: container\ndefault-namespace: i\nrealizes: [i:Emitter]\n")
+	write("emit.go", "package svc\n\n// @gloss implements .Emitter\nfunc Emit() {}\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	u := findings(rep, rollup.KindUntested)
+	if len(u) != 1 || !strings.HasSuffix(u[0].Msg, "nothing tests or verifies it (nor z:Booked, which it realizes)") {
+		t.Errorf("untested = %+v, want the nor suffix", u)
+	}
+}

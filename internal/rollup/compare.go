@@ -1304,10 +1304,11 @@ func (c *comparer) untested() {
 				continue
 			}
 			if len(cores) > 0 {
-				// Not skipped: the core concept counts as tested, either by
-				// tests of its own in boundaries that hold none of this
-				// concept's code, or only through another realizer's tests.
-				msg += "; " + c.whyCoreTestMisses(n.ID, cores[0])
+				// Not skipped: the core concept is an event (never reported
+				// itself), or it counts as tested by tests of its own in
+				// boundaries that hold none of this concept's code, or only
+				// through another realizer's tests.
+				msg += c.whyCoreTestMisses(n.ID, cores[0])
 			}
 		}
 		c.add(Finding{Kind: KindUntested, Severity: "info", Concept: n.CURIE, Path: n.File, Line: n.Line, Msg: msg})
@@ -1397,13 +1398,16 @@ func (c *comparer) realizersOf(core string) map[string]bool {
 	return c.realizers[core]
 }
 
-// whyCoreTestMisses says why a tested core concept's tests do not cover
-// impl, one of its realizers.
+// whyCoreTestMisses is the untested line's suffix for impl: why the core
+// concept it realizes does not lend it a test.
 func (c *comparer) whyCoreTestMisses(impl, core string) string {
+	if !c.tested(core, 0) {
+		return " (nor " + c.g.Curie(core) + ", which it realizes)"
+	}
 	for _, p := range []string{"tests", "verifies"} {
 		for _, e := range c.g.In(core, p) {
 			if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
-				return "the tests of " + c.g.Curie(core) + ", which it realizes, sit in boundaries that hold none of its code"
+				return "; the tests of " + c.g.Curie(core) + ", which it realizes, sit in boundaries that hold none of its code"
 			}
 		}
 	}
@@ -1415,9 +1419,13 @@ func (c *comparer) whyCoreTestMisses(impl, core string) string {
 	}
 	sort.Strings(via)
 	if len(via) == 0 {
-		return c.g.Curie(core) + ", which it realizes, counts as tested only through its subtypes"
+		return "; " + c.g.Curie(core) + ", which it realizes, counts as tested only through its subtypes"
 	}
-	return c.g.Curie(core) + ", which it realizes, counts as tested only because " + strings.Join(via, ", ") + " is tested"
+	verb := " is tested"
+	if len(via) > 1 {
+		verb = " are tested"
+	}
+	return "; " + c.g.Curie(core) + ", which it realizes, counts as tested only because " + strings.Join(via, ", ") + verb
 }
 
 // implementedIn reports whether an artifact in boundary b, or in a boundary
