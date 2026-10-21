@@ -1,4 +1,5 @@
 // @gloss implements gmi:ViewProjector scope=file
+// @gloss produces gm:View scope=file
 
 package main
 

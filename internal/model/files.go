@@ -508,18 +508,33 @@ type Manifest struct {
 	// Empty records the declared relations written as an explicit empty
 	// list (realizes: []): "this boundary does none of it", which gloss
 	// drift compares, unlike a relation that is not written (ADR 0012).
+	// part-of: [] is recorded too: the boundary is part of nothing, not of
+	// the manifest in an enclosing directory (ADR 0026).
 	Empty map[string]bool `yaml:"-" json:"-"`
 }
 
 // DeclaresNone reports whether the manifest wrote rel as an explicit empty
 // list, such as realizes: [] on a boundary that is only a surface.
 func (m *Manifest) DeclaresNone(rel string) bool {
-	return m != nil && m.Empty[rel] && len(m.DeclaredSets()[rel]) == 0 && !(rel == "realizes" && m.InheritsRealizes())
+	return m != nil && m.Empty[rel] && len(m.DeclaredSets()[rel]) == 0 && !m.Inherits(rel)
 }
 
-// InheritMarker in a manifest's realizes: list means "what my nested
-// boundaries declare"; the manifest may list additions beside it.
+// InheritMarker in a manifest's realizes:, holds:, produces:, consumes:,
+// publishes: or subscribes: list means "what my nested boundaries declare
+// under it"; the manifest may list additions beside it (ADR 0026).
 const InheritMarker = "inherit"
+
+// InheritableRelations are the declared relations that take the inherit
+// marker. presents, hosts and configures describe a surface of the
+// boundary itself, so they do not.
+var InheritableRelations = []string{"realizes", "holds", "produces", "consumes", "publishes", "subscribes"}
+
+// ImplicitPartOf reports whether the manifest takes the boundary of the
+// nearest manifest in an enclosing directory as its part-of: it names no
+// part-of and does not write the part-of: [] that opts out (ADR 0026).
+func (m *Manifest) ImplicitPartOf() bool {
+	return m != nil && len(m.PartOf) == 0 && !m.Empty["part-of"]
+}
 
 // DerivedMarker in a manifest's allowed: list means "the derived set";
 // the other entries are added to it instead of replacing it.
@@ -536,8 +551,15 @@ func (m *Manifest) ExtendsDerivedAllowed() bool {
 }
 
 // InheritsRealizes reports whether the manifest wrote realizes: inherit.
-func (m *Manifest) InheritsRealizes() bool {
-	for _, r := range m.Realizes {
+func (m *Manifest) InheritsRealizes() bool { return m.Inherits("realizes") }
+
+// Inherits reports whether the manifest wrote inherit in rel's list. Only
+// the InheritableRelations take it.
+func (m *Manifest) Inherits(rel string) bool {
+	if m == nil || !inheritable(rel) {
+		return false
+	}
+	for _, r := range m.lists()[rel] {
 		if r == InheritMarker {
 			return true
 		}
@@ -545,17 +567,35 @@ func (m *Manifest) InheritsRealizes() bool {
 	return false
 }
 
-// DeclaredSets returns the manifest's declared intent relations (without
-// the inherit marker).
-func (m *Manifest) DeclaredSets() map[string]StringList {
-	var realizes StringList
-	for _, r := range m.Realizes {
-		if r != InheritMarker {
-			realizes = append(realizes, r)
+func inheritable(rel string) bool {
+	for _, r := range InheritableRelations {
+		if r == rel {
+			return true
 		}
 	}
+	return false
+}
+
+// DeclaredSets returns the manifest's declared intent relations (without
+// the inherit marker on the relations that take it).
+func (m *Manifest) DeclaredSets() map[string]StringList {
+	out := m.lists()
+	for _, rel := range InheritableRelations {
+		var kept StringList
+		for _, r := range out[rel] {
+			if r != InheritMarker {
+				kept = append(kept, r)
+			}
+		}
+		out[rel] = kept
+	}
+	return out
+}
+
+// lists returns the declared relation lists as written.
+func (m *Manifest) lists() map[string]StringList {
 	return map[string]StringList{
-		"realizes":   realizes,
+		"realizes":   m.Realizes,
 		"produces":   m.Produces,
 		"consumes":   m.Consumes,
 		"publishes":  m.Publishes,
@@ -611,7 +651,7 @@ func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
 		mn := doc.Content[0]
 		for i := 0; i+1 < len(mn.Content); i += 2 {
 			k, v := mn.Content[i].Value, mn.Content[i+1]
-			if _, ok := declared[k]; ok && v.Kind == yaml.SequenceNode && len(v.Content) == 0 {
+			if _, ok := declared[k]; (ok || k == "part-of") && v.Kind == yaml.SequenceNode && len(v.Content) == 0 {
 				if m.Empty == nil {
 					m.Empty = map[string]bool{}
 				}

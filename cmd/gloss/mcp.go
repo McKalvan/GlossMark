@@ -1,4 +1,5 @@
 // @gloss implements gmi:McpServer scope=file
+// @gloss publishes gm:LinkProposed scope=file
 
 package main
 

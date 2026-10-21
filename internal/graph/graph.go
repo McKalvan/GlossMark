@@ -482,6 +482,131 @@ func (g *Graph) Subsumer(ids []string) (string, []string) {
 	return "", out
 }
 
+// LiftGroup is one part of a partial taxonomic lift: Members summarized by
+// Subsumer, or, when Subsumer is "", members left as they are. Candidates
+// names, for members left as they are, the incomparable minimal subsumers
+// that made the lift ambiguous.
+type LiftGroup struct {
+	Subsumer   string
+	Members    []string
+	Candidates []string
+}
+
+// LiftGroups splits a set of concepts for lift: range-lcs (ADR 0026). Each
+// maximal subset of two or more members that share a common subsumer (the
+// members below some concept, not contained in a larger such subset) is
+// lifted to its unique least common subsumer. A subset whose members share
+// several incomparable minimal subsumers, or that overlaps another maximal
+// subset, is not lifted and carries the subsumers in Candidates. Every other
+// member is its own group. A set with one common subsumer is one group, as
+// Subsumer gives it. Groups are sorted by what they print as.
+func (g *Graph) LiftGroups(ids []string) []LiftGroup {
+	ids = uniqueSorted(ids)
+	// below: for each concept above some member, the members it subsumes.
+	below := map[string][]string{}
+	for _, id := range ids {
+		for _, a := range append([]string{id}, g.Ancestors(id)...) {
+			below[a] = append(below[a], id)
+		}
+	}
+	sets := map[string][]string{}
+	for _, ms := range below {
+		if len(ms) >= 2 {
+			sort.Strings(ms)
+			sets[strings.Join(ms, "\x00")] = ms
+		}
+	}
+	subset := func(a, b []string) bool { // a ⊂ b, strictly
+		if len(a) >= len(b) {
+			return false
+		}
+		bs := map[string]bool{}
+		for _, x := range b {
+			bs[x] = true
+		}
+		for _, x := range a {
+			if !bs[x] {
+				return false
+			}
+		}
+		return true
+	}
+	keys := make([]string, 0, len(sets))
+	for k := range sets {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var maximal [][]string
+	for _, k := range keys {
+		ok := true
+		for _, o := range sets {
+			if subset(sets[k], o) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			maximal = append(maximal, sets[k])
+		}
+	}
+	// A member in two maximal subsets could be lifted either way: neither is.
+	count := map[string]int{}
+	for _, ms := range maximal {
+		for _, m := range ms {
+			count[m]++
+		}
+	}
+	var out []LiftGroup
+	grouped := map[string]bool{}
+	var ambiguous []string
+	var candidates []string
+	for _, ms := range maximal {
+		overlaps := false
+		for _, m := range ms {
+			overlaps = overlaps || count[m] > 1
+		}
+		lcs, cands := g.Subsumer(ms)
+		if overlaps || lcs == "" {
+			ambiguous = append(ambiguous, ms...)
+			if overlaps {
+				cands = g.CommonSubsumers(ms)
+			}
+			candidates = append(candidates, cands...)
+			continue
+		}
+		out = append(out, LiftGroup{Subsumer: lcs, Members: ms})
+		for _, m := range ms {
+			grouped[m] = true
+		}
+	}
+	ambiguous = uniqueSorted(ambiguous)
+	candidates = uniqueSorted(candidates)
+	for _, m := range ambiguous {
+		grouped[m] = true
+		var cs []string
+		for _, c := range candidates {
+			if g.Subsumes(c, m) {
+				cs = append(cs, c)
+			}
+		}
+		out = append(out, LiftGroup{Members: []string{m}, Candidates: cs})
+	}
+	for _, id := range ids {
+		if !grouped[id] {
+			out = append(out, LiftGroup{Members: []string{id}})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].key() < out[j].key() })
+	return out
+}
+
+func (l LiftGroup) key() string {
+	if l.Subsumer != "" {
+		return l.Subsumer
+	}
+	return l.Members[0]
+}
+
 // CommonSubsumers returns the most specific concepts that is-a* every input,
 // sorted; nil when they share no ancestor.
 func (g *Graph) CommonSubsumers(ids []string) []string {

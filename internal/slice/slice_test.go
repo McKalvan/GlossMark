@@ -173,7 +173,7 @@ func TestLibrarySlices(t *testing.T) {
 	})
 	t.Run("path seed", func(t *testing.T) {
 		s := of(t, g, ctxOn, "services/circulation/loans/returns.py")
-		if strings.Join(s.Seeds, ",") != "circ:ReturnNotifier,circ:ReturnPipeline" {
+		if strings.Join(s.Seeds, ",") != "circ:ReturnNotifier,circ:ReturnPipeline,lib:ItemReturned" {
 			t.Errorf("path seeds = %v", s.Seeds)
 		}
 	})

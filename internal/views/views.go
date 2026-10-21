@@ -1,4 +1,5 @@
 // @gloss implements gmi:ViewProjector scope=file
+// @gloss produces gm:View scope=file
 
 // Package views projects the one graph into what a given observer sees: a
 // declared view over tier × zoom, with implementation folded into what it
@@ -984,45 +985,46 @@ func (p *projector) edges() {
 			if len(ids) < 2 {
 				continue
 			}
-			sort.Strings(ids)
-			lcs, candidates := p.g.Subsumer(ids)
-			if lcs == "" {
-				if len(candidates) > 1 {
-					// Lift tried and declined: say so on the edges it would have replaced.
-					var names []string
-					for _, c := range candidates {
-						names = append(names, p.g.Curie(c))
-					}
-					for _, o := range ids {
-						if a, ok := aggs[key.s+"|"+key.p+"|"+p.g.Curie(o)]; ok {
+			// Each maximal subset that shares a subsumer is lifted on its
+			// own, so claim subtypes fold into Claim beside an Assessment
+			// that shares nothing with them (ADR 0026).
+			for _, gr := range p.g.LiftGroups(ids) {
+				if gr.Subsumer == "" {
+					if len(gr.Candidates) > 1 {
+						// Lift tried and declined: say so on the edge it would have replaced.
+						var names []string
+						for _, c := range gr.Candidates {
+							names = append(names, p.g.Curie(c))
+						}
+						if a, ok := aggs[key.s+"|"+key.p+"|"+p.g.Curie(gr.Members[0])]; ok {
 							a.e.NoUniqueSubsumer = names
 						}
 					}
+					continue
 				}
-				continue
-			}
-			if !p.included[lcs] {
-				continue // the summary is not in this view: keep the members
-			}
-			var via []string
-			allProposed := true
-			srcs := map[string]bool{}
-			for _, o := range ids {
-				oc := p.g.Curie(o)
-				k := key.s + "|" + key.p + "|" + oc
-				if a, ok := aggs[k]; ok {
-					via = append(via, oc)
-					dropped[k] = true
-					for s := range a.src {
-						srcs[s] = true
-					}
-					if !a.all {
-						allProposed = false
+				if !p.included[gr.Subsumer] {
+					continue // the summary is not in this view: keep the members
+				}
+				var via []string
+				allProposed := true
+				srcs := map[string]bool{}
+				for _, o := range gr.Members {
+					oc := p.g.Curie(o)
+					k := key.s + "|" + key.p + "|" + oc
+					if a, ok := aggs[k]; ok {
+						via = append(via, oc)
+						dropped[k] = true
+						for s := range a.src {
+							srcs[s] = true
+						}
+						if !a.all {
+							allProposed = false
+						}
 					}
 				}
+				lc := p.g.Curie(gr.Subsumer)
+				lifted[key.s+"|"+key.p+"|"+lc] = PEdge{S: key.s, P: key.p, O: lc, Source: mixed(srcs), Lifted: true, Via: uniq(via), Count: len(via), Proposed: allProposed}
 			}
-			lc := p.g.Curie(lcs)
-			lifted[key.s+"|"+key.p+"|"+lc] = PEdge{S: key.s, P: key.p, O: lc, Source: mixed(srcs), Lifted: true, Via: uniq(via), Count: len(via), Proposed: allProposed}
 		}
 	}
 	// A purely derived edge on a boundary that a visible descendant boundary

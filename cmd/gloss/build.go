@@ -1,4 +1,5 @@
 // @gloss implements gmi:Extractor scope=file
+// @gloss produces gm:Graph scope=file
 
 package main
 

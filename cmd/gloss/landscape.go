@@ -1,4 +1,5 @@
 // @gloss implements gmi:LandscapeAssembler scope=file
+// @gloss produces gm:Landscape scope=file
 
 package main
 

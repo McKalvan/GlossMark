@@ -1,4 +1,5 @@
 // @gloss implements gmi:MarkerSuggester scope=file
+// @gloss produces gm:ProposedLink scope=file
 
 package main
 

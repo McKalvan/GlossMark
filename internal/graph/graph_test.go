@@ -71,6 +71,57 @@ func TestSubsumer(t *testing.T) {
 	}
 }
 
+// TestLiftGroups (ADR 0026): a partial lift folds each maximal subset that
+// shares a subsumer, leaves the rest, and declines a subset whose members
+// could be lifted two ways.
+func TestLiftGroups(t *testing.T) {
+	g := testGraph()
+	id := func(c string) string { s, _ := g.Expand("lib:" + c); return s }
+	for _, c := range []string{"Claim", "MotorClaim", "FloodClaim", "Assessment", "Payout", "X", "Y", "A", "B", "C"} {
+		g.AddNode(&Node{NodeType: model.NodeConcept, ID: id(c), CURIE: "lib:" + c, NS: "lib"})
+	}
+	for _, e := range [][2]string{{"MotorClaim", "Claim"}, {"FloodClaim", "Claim"}, {"A", "X"}, {"B", "X"}, {"B", "Y"}, {"C", "Y"}} {
+		g.AddEdge(&Edge{S: id(e[0]), P: "is-a", O: id(e[1]), Source: SourceDeclared})
+	}
+	render := func(cs ...string) string {
+		var ids []string
+		for _, c := range cs {
+			ids = append(ids, id(c))
+		}
+		var out []string
+		for _, gr := range g.LiftGroups(ids) {
+			var ms []string
+			for _, m := range gr.Members {
+				ms = append(ms, strings.TrimPrefix(g.Curie(m), "lib:"))
+			}
+			s := strings.Join(ms, "+")
+			if gr.Subsumer != "" {
+				s = strings.TrimPrefix(g.Curie(gr.Subsumer), "lib:") + "<" + s
+			}
+			for _, c := range gr.Candidates {
+				s += "?" + strings.TrimPrefix(g.Curie(c), "lib:")
+			}
+			out = append(out, s)
+		}
+		return strings.Join(out, " ")
+	}
+	for in, want := range map[string]string{
+		// The issue's set: no single subsumer, so the claims fold on their own.
+		"Claim MotorClaim FloodClaim Assessment Payout": "Assessment Claim<Claim+FloodClaim+MotorClaim Payout",
+		"MotorClaim FloodClaim Assessment":              "Assessment Claim<FloodClaim+MotorClaim",
+		// A whole-set subsumer is one group, as before.
+		"Book DVD Laptop": "Item<Book+DVD+Laptop",
+		// B could join X or Y: neither subset is lifted.
+		"A B C":        "A?X B?X?Y C?Y",
+		"A B C Payout": "A?X B?X?Y C?Y Payout",
+		"Payout":       "Payout",
+	} {
+		if got := render(strings.Fields(in)...); got != want {
+			t.Errorf("LiftGroups(%s) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	g := testGraph()
 	var buf bytes.Buffer
