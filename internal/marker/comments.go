@@ -5,6 +5,8 @@ package marker
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/mckalvan/glossmark/internal/model"
 )
 
 // CommentStyle lists the line-comment tokens and block-comment pairs for a file type.
@@ -23,6 +25,8 @@ var (
 	xml   = CommentStyle{Block: [][2]string{{"<!--", "-->"}}}
 	md    = CommentStyle{Block: [][2]string{{"<!--", "-->"}}, Fences: true}
 	semi  = CommentStyle{Line: []string{";"}}
+	// slashLine is // without block comments (Prisma has none).
+	slashLine = CommentStyle{Line: []string{"//"}}
 	// Sidecar files (foo.json.gloss) are plain marker lists; '#' comments are allowed.
 	sidecar = CommentStyle{Line: []string{"#", ""}}
 )
@@ -42,21 +46,35 @@ var byExt = map[string]CommentStyle{
 	".sql": dash, ".lua": dash, ".hs": dash, ".elm": dash, ".ada": dash, ".psql": dash, ".ddl": dash,
 	".md": md, ".mdx": md, ".html": xml, ".htm": xml, ".xml": xml, ".svg": xml, ".vue": xml, ".xsl": xml, ".xhtml": xml,
 	".lisp": semi, ".clj": semi, ".cljs": semi, ".edn": semi, ".el": semi, ".scm": semi, ".rkt": semi, ".asm": semi, ".s": semi,
-	".graphql": hash, ".graphqls": hash, ".gql": hash,
+	".graphql": hash, ".graphqls": hash, ".gql": hash, ".prisma": slashLine,
 	".gloss": sidecar,
 }
 
-// StyleFor returns the comment style for a path, honouring overrides
-// (extension → tokens) from glossmark.yaml. ok is false for unknown or
-// comment-less types (JSON needs a sidecar).
+// StyleFor returns the comment style for a path, honouring the
+// comment-styles overrides from glossmark.yaml. An override key is an
+// extension (".foo"), an exact file name ("crontab"), or a glob over the
+// repository-relative path ("**/cron.d/*", any key with '/', '*', '?' or
+// '['). The most specific override wins: a file name, then a glob (the
+// longest matching pattern), then an extension; overrides win over the
+// builtin table. ok is false for unknown or comment-less types (JSON needs a
+// sidecar).
 func StyleFor(path string, overrides map[string][]string) (CommentStyle, bool) {
 	base := filepath.Base(path)
 	ext := strings.ToLower(filepath.Ext(base))
-	if overrides != nil {
-		if toks, ok := overrides[ext]; ok {
+	if len(overrides) > 0 {
+		if toks, ok := overrides[base]; ok && !isGlobKey(base) {
 			return styleFromTokens(toks), true
 		}
-		if toks, ok := overrides[base]; ok {
+		best := ""
+		for k := range overrides {
+			if isGlobKey(k) && model.MatchGlob(k, filepath.ToSlash(path)) && (len(k) > len(best) || len(k) == len(best) && k < best) {
+				best = k
+			}
+		}
+		if best != "" {
+			return styleFromTokens(overrides[best]), true
+		}
+		if toks, ok := overrides[ext]; ok && ext != "" {
 			return styleFromTokens(toks), true
 		}
 	}
@@ -70,6 +88,12 @@ func StyleFor(path string, overrides map[string][]string) (CommentStyle, bool) {
 		return s, true
 	}
 	return CommentStyle{}, false
+}
+
+// isGlobKey reports a comment-styles key that is a path glob rather than an
+// extension or a file name.
+func isGlobKey(k string) bool {
+	return strings.ContainsAny(k, "/*?[")
 }
 
 func styleFromTokens(toks []string) CommentStyle {

@@ -241,7 +241,8 @@ func (c *checker) concepts() {
 }
 
 // standsFor reports whether an implementation concept, or a concept it is-a
-// or is part of (transitively), realizes, is published as, presents or hosts
+// or is part of (transitively, part-of on the part or has-part on the
+// whole), realizes, is published as, presents or hosts
 // something, is internal, or is a core concept. That is what GM320 asks of
 // every implementation concept. Two concepts that are part of each other and
 // realize nothing are not excused by the edge between them.
@@ -271,6 +272,14 @@ func standsFor(g *graph.Graph, id string) bool {
 					seen[e.O] = true
 					queue = append(queue, e.O)
 				}
+			}
+		}
+		// has-part on the whole is part-of on the part, written from the
+		// other end: the part stands for what its whole stands for.
+		for _, e := range g.In(x, "has-part") {
+			if e.Source != graph.SourceDerived && !seen[e.S] {
+				seen[e.S] = true
+				queue = append(queue, e.S)
 			}
 		}
 	}
@@ -589,7 +598,7 @@ func (c *checker) edges() {
 		}
 		// Soft range kinds for inline links.
 		if e.Source == graph.SourceInline && len(rel.RangeKinds) > 0 && on.NodeType == model.NodeConcept && on.Kind != "" && !contains(rel.RangeKinds, on.Kind) {
-			c.add(path, line, "warning", "GM221", fmt.Sprintf("%s usually targets a %s; %s is a %s", e.P, strings.Join(rel.RangeKinds, "/"), on.CURIE, on.Kind))
+			c.add(path, line, "warning", "GM221", RangeKindMsg(e.P, rel.RangeKinds, on.CURIE, on.Kind))
 		}
 		// A manifest relation that cannot lift for the concept's kind is
 		// a gap waiting to happen; say why (often an upstream retype).
@@ -636,7 +645,11 @@ func (c *checker) edges() {
 			}
 			if e.P == "has-part" && on.NodeType == model.NodeConcept && !c.ws.Owned[on.NS] {
 				// has-part is the inverse of part-of: on part-of sn, whose subject would be imported.
-				c.add(path, line, "error", "GM400", fmt.Sprintf("%s has-part %s makes imported %s the subject of a part-of statement; extend, never mutate (own-subject rule). Write %s part-of %s instead", sn.CURIE, on.CURIE, on.CURIE, on.CURIE, sn.CURIE))
+				// The inverse, on.CURIE part-of sn.CURIE, is the same statement
+				// about an imported subject (GM401), so it is no way out: offer
+				// what extends instead, a concept of this namespace, or the edge
+				// proposed to the owner.
+				c.add(path, line, "error", "GM400", fmt.Sprintf("%s has-part %s makes imported %s the subject of a part-of statement; extend, never mutate (own-subject rule). Declare a %s: concept that is-a %s and part-of %s, or ask %s:'s owner to add the edge", sn.CURIE, on.CURIE, on.CURIE, sn.NS, on.CURIE, sn.CURIE, on.NS))
 			}
 		}
 		// Tier direction on realizes / published-as.
@@ -686,6 +699,7 @@ func (c *checker) waivers() {
 		}
 	}
 	rep := rollup.Compare(c.g, c.ws, rollup.Options{Policy: pol})
+	rollup.AddDeprecatedUse(rep, c.g, pol, time.Now())
 	for _, w := range rollup.UnmatchedWaivers(rep, pol) {
 		if dead[w.Finding+"|"+w.Owner] {
 			continue // already reported as invalid or expired
@@ -890,6 +904,27 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// RangeKindMsg is the GM221 message: relation rel names a concept of a kind
+// outside its usual range. When the other starter relation is the likely
+// intent (implements on an entity, represents on a process), it says so.
+func RangeKindMsg(rel string, kinds []string, curie, kind string) string {
+	msg := fmt.Sprintf("%s usually targets a %s; %s is %s %s", rel, strings.Join(kinds, "/"), curie, article(kind), kind)
+	switch {
+	case rel == "implements" && (kind == "entity" || kind == "resource"):
+		msg += "; code that is its data shape represents it"
+	case rel == "represents" && (kind == "process" || kind == "capability"):
+		msg += "; code that does it implements it"
+	}
+	return msg
+}
+
+func article(word string) string {
+	if word != "" && strings.ContainsRune("aeiou", rune(word[0])) {
+		return "an"
+	}
+	return "a"
 }
 
 func isPascal(s string) bool {

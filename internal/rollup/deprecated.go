@@ -5,6 +5,7 @@ package rollup
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
@@ -51,4 +52,23 @@ func DeprecatedUse(g *graph.Graph) []Finding {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// AddDeprecatedUse appends the deprecated-use findings to a drift report,
+// with the policy's waivers applied, so gloss drift names code still on a
+// deprecated concept as gloss check (GM222) and gloss landscape do. The
+// kind does not fail by default: a deprecation is a migration under way,
+// and overdue is the finding that enforces its deadline.
+func AddDeprecatedUse(r *Report, g *graph.Graph, pol *model.Policy, now time.Time) {
+	fs := DeprecatedUse(g)
+	if len(fs) == 0 {
+		return
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	at := len(r.Findings)
+	r.Findings = append(r.Findings, fs...)
+	c := &comparer{g: g, opt: Options{Policy: pol, Now: now}, r: &Report{Findings: r.Findings[at:]}}
+	c.waive()
 }

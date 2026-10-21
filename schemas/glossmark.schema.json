@@ -65,7 +65,7 @@
       }
     },
     "comment-styles": {
-      "description": "Extends the builtin comment-token table. Keys are a lower-case file extension including the dot (\".foo\") or an exact file basename (\"Dockerfile\"); values are the comment tokens that may open an @gloss marker in such files.",
+      "description": "Extends the builtin comment-token table. Keys are a lower-case file extension including the dot (\".foo\"), an exact file basename (\"crontab\"), or a glob over the repository-relative path (\"**/cron.d/*\"; any key containing /, *, ? or [). The most specific key wins: a basename, then the longest matching glob, then an extension. Values are the comment tokens that may open an @gloss marker in such files: a line token (\"#\") or a block pair separated by a space (\"<%-- --%>\").",
       "type": "object",
       "additionalProperties": {
         "type": "array",
