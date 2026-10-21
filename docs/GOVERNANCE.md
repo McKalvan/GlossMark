@@ -94,7 +94,10 @@ printed as a diff of the ontology files (`--write` applies it):
   engineering setting and is proposed only on the other rules);
 - every published concept: it crosses the seam into the business view;
 - every concept whose only verifiers are security tests (paths or names with
-  auth, permission, csrf, crypto, pii, token and the like).
+  a word such as auth, authorization, permission, csrf, crypto, pii or token,
+  matched as a whole word of the name, so `test_auth_flow` counts and
+  `TestPayoutAuthorizedNotifies` does not: `authorized` alone is a domain
+  state).
 
 Each is `high`. A declared level is the review: a concept that declares one,
 or inherits one from a concept that declares it, is left alone, so lowering a

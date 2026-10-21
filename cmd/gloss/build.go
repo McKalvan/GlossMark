@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mckalvan/glossmark/internal/extract"
@@ -169,9 +170,14 @@ func hasErrors(diags []marker.Diagnostic) bool {
 	return false
 }
 
+// relOrAbs names a path for output: relative to root when it is inside it,
+// else absolute, never a climb of ../ out of the workspace.
 func relOrAbs(root, path string) string {
-	if r, err := filepath.Rel(root, path); err == nil {
+	if r, err := filepath.Rel(root, path); err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 		return r
+	}
+	if a, err := filepath.Abs(path); err == nil {
+		return a
 	}
 	return path
 }
