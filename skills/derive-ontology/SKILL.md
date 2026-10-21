@@ -105,6 +105,7 @@ For each shortlisted candidate decide, and write down why:
   - `is-a` from `inherits` and enum families;
   - `part-of` from foreign keys and composition;
   - `produces`, `consumes`, `publishes` from what processes do to entities and events.
+- **Areas.** A flat core of more than about 20 concepts is unreadable on the map: `gloss view` draws a concept inside its `part-of` whole and nowhere else. Group the core into 4 to 8 areas the business would name (accounts, bookkeeping, investing, housing, rules), each a `capability` that is `part-of` the system, and make every other core concept `part-of` exactly one. A concept that already has a whole (`Subcategory` part of `Category`) keeps it. Name areas so they cannot collide with a concept when stemmed (`AccountKeeping`, not `Accounts` beside `Account`). Ask the owner to confirm the grouping; it is one question, and it decides how everyone will read the map.
 - **Implementation tier.** Name mechanisms after modules, seams and types; coined names are fine here. Each one `realizes` a core concept or is `internal`. Harvesting cannot find these names; on the measured repository it recalled about half of a hand-made implementation tier.
 
 ## 6. Triangulate

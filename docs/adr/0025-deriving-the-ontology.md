@@ -317,6 +317,12 @@ It was not fixed: a rule worded without a rule word ("`amount > 0` is money flow
 
 The two are not directly comparable, because the derived draft had an owner and a critic. But that is the point of the design.
 
+**Map.** `gloss view` on the adopted ontology showed why the core needs areas. With 70 concepts in no `part-of` hierarchy, the business view put them all in one box with 255 edges. Slices and the concept panel were readable; the map was not. The owner accepted grouping the core into seven `capability` areas, with every concept `part-of` one, and the view now opens on seven boxes. The skill now proposes areas in step 5.
+
+Grouping exposed two drift reporting issues to fix in GlossMark:
+- **Untested rolls up.** Because a part realizes its whole, an untested implementation concept (`pfi:Cli`) is reported only as its topmost untested whole ("pf:Pfinance is untested"), so the specific gap disappears from the report.
+- **Overlap is noise for areas.** The overlap finding, meant for a half-finished migration (ADR 0019), fires for every area realized by more than one boundary.
+
 **Adoption.** The owner then answered the packet questions, and the derived ontology was adopted on pfinance ([McKalvan/pfinance#4](https://github.com/McKalvan/pfinance/pull/4)). The result: 71 core and 29 implementation concepts, all proposed; 100 markers; 0 errors, warnings, violations or gaps under the development build and the pinned v0.1.0 release; 5 orphans and 5 untested concepts listed in the PR. Every pfinance test passes, and ruff reports nothing new.
 
 ## Alternatives considered
