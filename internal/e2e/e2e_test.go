@@ -1418,6 +1418,83 @@ func TestOneDiagnosticPerKey(t *testing.T) {
 	}
 }
 
+// TestDeclaredRelation: GM200 on an ontology key shows the relations: syntax
+// and on an inline marker lists only inline relations; a declared relation
+// is checked by domain and range, and its inverse is metadata that adds no
+// edge (issue #161, E19).
+func TestDeclaredRelation(t *testing.T) {
+	run := func(onto string) (*graph.Graph, map[string][]string) {
+		root := t.TempDir()
+		write := func(rel, content string) {
+			p := filepath.Join(root, rel)
+			os.MkdirAll(filepath.Dir(p), 0o755)
+			os.WriteFile(p, []byte(content), 0o644)
+		}
+		write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+		write("ontology/z.gloss.yaml", onto)
+		write(".gloss.yaml", "boundary: o:b\nlevel: container\ndefault-namespace: z\n")
+		write("app.py", "# @gloss escalates-to z:Claim\ndef go(): pass\n")
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := extract.Build(ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rollup.Derive(res.Graph, ws.Vocab)
+		msgs := map[string][]string{}
+		for _, d := range check.Run(ws, res.Graph) {
+			msgs[d.Code] = append(msgs[d.Code], d.Path+": "+d.Msg)
+		}
+		return res.Graph, msgs
+	}
+	concepts := "concepts:\n  Claim: { kind: entity }\n  Review: { kind: process }\n  Appeal:\n    kind: process\n    escalates-to: Review\n    audited-by: Review\n"
+
+	_, msgs := run(concepts)
+	var onto, inline string
+	for _, m := range msgs["GM200"] {
+		switch {
+		case strings.HasPrefix(m, "ontology/") && strings.Contains(m, `"escalates-to"`):
+			onto = m
+		case strings.HasPrefix(m, "app.py"):
+			inline = m
+		}
+	}
+	if !strings.Contains(onto, `relations: { escalates-to: { doc: "..." } }`) || strings.Contains(onto, "implements") {
+		t.Errorf("ontology GM200 should show the relations: syntax and list only ontology relations; got %q", onto)
+	}
+	if !strings.Contains(inline, "an inline marker takes one of") || strings.Contains(inline, "relations:") || strings.Contains(inline, "is-a") {
+		t.Errorf("inline GM200 should list only inline relations; got %q", inline)
+	}
+
+	g, msgs := run(concepts + "relations:\n  escalates-to: { inverse: escalated-from, transitive: true, doc: \"Hands a case up.\" }\n  audited-by: { range: [boundary] }\n")
+	for _, m := range msgs["GM200"] {
+		if strings.HasPrefix(m, "ontology/") {
+			t.Errorf("declared relation still unknown: %s", m)
+		}
+	}
+	var ranges []string
+	for _, m := range msgs["GM220"] {
+		if strings.HasPrefix(m, "ontology/") {
+			ranges = append(ranges, m)
+		}
+	}
+	if len(ranges) != 1 || !strings.Contains(ranges[0], "audited-by") {
+		t.Errorf("ontology GM220 = %v, want one for audited-by's range", ranges)
+	}
+	if !strings.Contains(strings.Join(msgs["GM201"], "\n"), `"escalates-to"`) {
+		t.Errorf("a declared relation in an inline marker should be GM201; got %v", msgs["GM201"])
+	}
+	appeal, review := g.NodeByCurie("z:Appeal"), g.NodeByCurie("z:Review")
+	if len(g.Out(appeal.ID, "escalates-to")) != 1 {
+		t.Errorf("want the declared escalates-to edge")
+	}
+	if len(g.Out(review.ID, "escalated-from")) != 0 {
+		t.Errorf("a declared inverse is metadata and must not add an edge")
+	}
+}
+
 // TestDerivedAllowed: a manifest without allowed: gets a derived set (default
 // namespace, declared concepts, descendants, realized cores, nested
 // boundaries); a link outside it is GM503 in check and HARD in the gate. A

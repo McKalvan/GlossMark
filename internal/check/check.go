@@ -489,6 +489,35 @@ func runRemedy(nested bool) string {
 	return "one marker with scope=file at the top of the file, or one on the shared entry point, says the same with one edge (scope=block would cover only the next declaration); for a cross-cutting mechanism, declare guards: on its concept in the ontology instead (ADR 0015)"
 }
 
+// unknownRelation is GM200's message. It lists the relations valid where the
+// edge was written. On a concept it shows how to declare the relation, since a
+// declared relation is usable only in ontology files; an inline marker cannot
+// use one (#161).
+func unknownRelation(v *model.Vocabulary, p, source string, sn *graph.Node) string {
+	where := func(r *model.Relation) bool { return true }
+	advice := ""
+	switch {
+	case source == graph.SourceInline:
+		where = func(r *model.Relation) bool { return r.Inline }
+		advice = "an inline marker takes one of"
+	case sn != nil && sn.NodeType == model.NodeConcept:
+		where = func(r *model.Relation) bool { return r.Ontology }
+		advice = fmt.Sprintf("declare it in an ontology file (relations: { %s: { doc: \"...\" } }, see docs/FILE-FORMATS.md) or use one of", p)
+	case sn != nil && sn.NodeType == model.NodeBoundary:
+		where = func(r *model.Relation) bool { return r.Manifest }
+		advice = "a manifest takes one of"
+	default:
+		advice = "declare it under relations: in an ontology file or use one of"
+	}
+	var names []string
+	for _, n := range v.Names() {
+		if where(v.Get(n)) {
+			names = append(names, n)
+		}
+	}
+	return fmt.Sprintf("unknown relation %q; %s: %s", p, advice, strings.Join(names, ", "))
+}
+
 // minRun is the shortest run of identical markers GM131 reports.
 const minRun = 3
 
@@ -504,7 +533,7 @@ func (c *checker) edges() {
 		sn := c.g.Node(e.S)
 		rel := c.ws.Vocab.Get(e.P)
 		if rel == nil {
-			c.add(path, line, "error", "GM200", fmt.Sprintf("unknown relation %q; declare it under relations: in an ontology file or use one of: %s", e.P, strings.Join(c.ws.Vocab.Names(), ", ")))
+			c.add(path, line, "error", "GM200", unknownRelation(c.ws.Vocab, e.P, e.Source, sn))
 			continue
 		}
 		// Where may the relation be written?

@@ -40,6 +40,22 @@ def check_in():
 
 The declaration detector skips the decorator stack, including multi-line arguments, and anchors to `check_in`. The stack is part of the anchor's fingerprint, so deleting or changing a decorator such as `@requires_role("approver")` stales the link and shows in `gloss diff` as `decorators changed` ([ADR 0014](adr/0014-decorator-stack-in-fingerprint.md)). Formatters leave the comment there. Inside a block comment or a docstring is fine as long as the text is a comment; a marker inside a string literal is ignored. The scanner reads line by line, so a heredoc or a multi-line string is not a string to it: a line in a bash heredoc that starts with `#` is a comment of the script, and `# @gloss ...` there is a marker of the script (see [GRAMMAR.md](GRAMMAR.md#rules)). Assemble such a line instead (`printf '# @%s ...' gloss`).
 
+## Agent files
+
+Claude Code agent and skill files (`.claude/agents/*.md`, `SKILL.md`) need their YAML frontmatter on line 1. Put the markers right below it, with `scope=file`:
+
+```markdown
+---
+name: cataloging-assistant
+description: Suggests subject headings for new acquisitions.
+---
+<!-- @gloss instructs circ:SubjectSuggester scope=file -->
+<!-- @gloss may-modify circ:Catalog*, circ:Subject*, lib:Book scope=file -->
+# Cataloging assistant
+```
+
+Without `scope=file` a marker below the frontmatter binds to the next heading (`# Cataloging assistant`), not to the file. `CLAUDE.md` and `AGENTS.md` have no frontmatter, so their markers go on line 1, still with `scope=file`. A new or changed `instructs` or `may-modify` link is HARD in `gloss diff`.
+
 ## Core or implementation target?
 
 Target the implementation concept when the artifact is a mechanism (`implements circ:CheckoutHandler`), and the core concept directly when the artifact *is* the domain thing (`represents lib:Loan` on the loans table, `verifies lib:Checkout` on the test of the business rule). The implementation concept's `realizes:` line carries the link to core; you do not repeat it in the marker.

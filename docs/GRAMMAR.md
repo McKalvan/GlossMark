@@ -81,9 +81,15 @@ apiVersion: apps/v1
 kind: Deployment
 ```
 ```markdown
+---
+name: cataloging-assistant
+description: Suggests subject headings for new acquisitions.
+---
 <!-- @gloss instructs circ:SubjectSuggester scope=file -->
 <!-- @gloss may-modify circ:Catalog*, circ:Subject*, lib:Book scope=file -->
+# Cataloging assistant
 ```
+An agent or skill file whose YAML frontmatter must stay on line 1 takes its markers below the frontmatter, with an explicit `scope=file`; without it a marker binds to the next heading.
 ```sql
 -- @gloss represents lib:Loan
 CREATE TABLE loans (id uuid PRIMARY KEY, item_id uuid, patron_id uuid REFERENCES patrons, due_on date);
