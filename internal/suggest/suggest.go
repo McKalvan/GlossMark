@@ -73,14 +73,14 @@ const DefaultMinConf = calib.DefaultMinConf
 // relations those files carry.
 var codeExts = map[string]bool{".py": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".go": true, ".rs": true,
 	".java": true, ".kt": true, ".rb": true, ".cs": true, ".php": true, ".swift": true, ".scala": true, ".tf": true, ".sql": true,
-	".proto": true, ".feature": true, ".sh": true, ".bash": true, ".md": true, ".yaml": true, ".yml": true}
+	".proto": true, ".prisma": true, ".feature": true, ".sh": true, ".bash": true, ".md": true, ".yaml": true, ".yml": true}
 
 // Coverage says which relations and file types suggest proposes, for gloss
 // suggest -h and MARKING.md; everything else is written by hand.
 const Coverage = `relations: implements, represents, verifies, provisions (Terraform resources), documents (Markdown headings),
 deploys (Kubernetes workloads), presents and hosts (page and layout components), subscribes, consumes and publishes
 (listener annotations and producer or consumer calls); one scope=file or scope=block marker stands for a run.
-files: .py .ts .tsx .js .jsx .mjs .go .rs .java .kt .rb .cs .php .swift .scala .tf .sql .proto .feature .sh .md .yaml
+files: .py .ts .tsx .js .jsx .mjs .go .rs .java .kt .rb .cs .php .swift .scala .tf .sql .proto .prisma .feature .sh .md .yaml
 never proposed: configures, publishes-value, instructs, may-modify, produces; sidecars, JSON, Dockerfiles, CI workflows`
 
 type runner struct {
@@ -163,7 +163,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		}
 		f := &file{rel: rel, lines: lines, style: style, m: ws.ManifestFor(rel), test: ws.IsTestPath(rel), phase: 1}
 		switch {
-		case ext == ".sql" || ext == ".proto":
+		case ext == ".sql" || ext == ".proto" || ext == ".prisma":
 			f.phase = 0
 		case f.test:
 			f.phase = 2

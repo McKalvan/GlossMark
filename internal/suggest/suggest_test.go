@@ -152,3 +152,34 @@ func TestMinConfIsTheFloor(t *testing.T) {
 		prev = len(ps)
 	}
 }
+
+// TestSuggestPrismaNotGenerated: a Prisma model is proposed to represent
+// the entity it names, like a SQL table, and nothing is proposed in a file
+// its manifest declares generated: (the migrations Prisma writes from the
+// schema), even with no comment-styles entry (issue #156).
+func TestSuggestPrismaNotGenerated(t *testing.T) {
+	root := t.TempDir()
+	copyStripped(t, filepath.Join("..", "..", "examples", "library", "circulation"), root)
+	svc := filepath.Join(root, "services", "circulation")
+	os.MkdirAll(filepath.Join(svc, "prisma"), 0o755)
+	os.MkdirAll(filepath.Join(svc, "gen"), 0o755) // generated: ["gen/**"]
+	os.WriteFile(filepath.Join(svc, "prisma", "schema.prisma"), []byte("generator client {\n  provider = \"prisma-client-js\"\n}\n\nmodel Book {\n  id    String @id\n  title String\n}\n"), 0o644)
+	os.WriteFile(filepath.Join(svc, "gen", "migration.sql"), []byte("CREATE TABLE books (\n  id uuid PRIMARY KEY\n);\n"), 0o644)
+	ws, g := build(t, root)
+	ps, _, err := Run(ws, g, nil, Options{MinConf: 0.1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prisma *Proposal
+	for i, p := range ps {
+		if strings.HasPrefix(p.Path, "services/circulation/gen/") {
+			t.Errorf("proposal in a generated file: %+v", p)
+		}
+		if p.Path == "services/circulation/prisma/schema.prisma" {
+			prisma = &ps[i]
+		}
+	}
+	if prisma == nil || prisma.Symbol != "Book" || prisma.Relation != "represents" || prisma.Target != "lib:Book" || !strings.HasPrefix(prisma.Marker, "// @gloss? ") {
+		t.Errorf("schema.prisma: %+v", prisma)
+	}
+}
