@@ -213,6 +213,18 @@ func mapInit(args []string) int {
 		base = "https://onto.example.com/"
 	}
 	s := &mapping.Set{Name: name, ID: strings.TrimSuffix(base, "/") + "/mappings/" + name, Version: "0.1.0", License: *license, CurieMap: map[string]string{}}
+	// Declare every namespace a row can name, so hand-written rows are valid
+	// SSSOM for other tools too.
+	for pre, d := range p.WS.Config.Owns {
+		if d.IRI != "" {
+			s.CurieMap[pre] = d.IRI
+		}
+	}
+	for pre, d := range p.WS.Config.Imports {
+		if d.IRI != "" {
+			s.CurieMap[pre] = d.IRI
+		}
+	}
 	if *owner != "" {
 		s.Creators = []string{"team:" + strings.TrimPrefix(*owner, "team:")}
 		s.CurieMap["team"] = "urn:gloss:actor:team:"

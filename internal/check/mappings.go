@@ -28,10 +28,16 @@ import (
 //	GM711 an accepted mapping to a proposed concept
 func (c *checker) mappings() {
 	type key struct{ s, p, o string }
-	pos := map[key][]int{} // lines of positive rows per pair (across sets)
+	type at struct {
+		path string
+		line int
+	}
+	pos := map[key]at{} // first positive row per pair (across sets)
 	neg := map[key]bool{}
 	exact := map[string]map[string][]string{} // concept → other namespace → counterparts
+	exactAt := map[[2]string]at{}             // concept, counterpart → row
 	for _, s := range c.ws.MappingSets {
+		inSet := map[key][]int{} // lines of positive rows per pair in this set
 		for _, r := range s.Rows {
 			res := s.Resolve(r, c.ws.Prefixes)
 			for _, u := range res.Unresolved {
@@ -61,7 +67,10 @@ func (c *checker) mappings() {
 				neg[k] = true
 				continue
 			}
-			pos[k] = append(pos[k], r.Line)
+			if _, ok := pos[k]; !ok {
+				pos[k] = at{s.Path, r.Line}
+			}
+			inSet[k] = append(inSet[k], r.Line)
 			if r.Reviewed() {
 				for _, n := range []*graph.Node{sn, on} {
 					if n != nil && n.Proposed {
@@ -82,20 +91,23 @@ func (c *checker) mappings() {
 					}
 					ns := c.prefixOf(b)
 					exact[a][ns] = append(exact[a][ns], b)
+					if _, ok := exactAt[[2]string{a, b}]; !ok {
+						exactAt[[2]string{a, b}] = at{s.Path, r.Line}
+					}
 				}
 				add(sc, oc)
 				add(oc, sc)
 			}
 		}
-		for k, lines := range pos {
+		for k, lines := range inSet {
 			if len(lines) > 1 {
 				c.add(s.Path, lines[1], "warning", "GM704", fmt.Sprintf("%s %s %s is asserted %d times; keep one row", k.s, k.p, k.o, len(lines)))
 			}
 		}
 	}
-	for k, lines := range pos {
+	for k, first := range pos {
 		if neg[k] {
-			c.add(c.setPathFor(k.s, k.p, k.o), lines[0], "error", "GM704", fmt.Sprintf("%s %s %s is asserted and negated (predicate_modifier: Not); the negation stands, delete one row", k.s, k.p, k.o))
+			c.add(first.path, first.line, "error", "GM704", fmt.Sprintf("%s %s %s is asserted and negated (predicate_modifier: Not); the negation stands, delete one row", k.s, k.p, k.o))
 		}
 	}
 	concepts := make([]string, 0, len(exact))
@@ -107,7 +119,8 @@ func (c *checker) mappings() {
 		for ns, bs := range exact[a] {
 			bs = uniqStrings(bs)
 			if len(bs) > 1 {
-				c.add(c.setPathFor(a, "", ""), 1, "warning", "GM707", fmt.Sprintf("%s exactly matches %d concepts of %s: (%s); an exact match is one to one, use closeMatch or broadMatch for the others", a, len(bs), ns, strings.Join(bs, ", ")))
+				second := exactAt[[2]string{a, bs[1]}]
+				c.add(second.path, second.line, "warning", "GM707", fmt.Sprintf("%s exactly matches %d concepts of %s: (%s); an exact match is one to one, use closeMatch or broadMatch for the others", a, len(bs), ns, strings.Join(bs, ", ")))
 			}
 		}
 	}
@@ -144,24 +157,6 @@ func (c *checker) endpoint(s *mapping.Set, r *mapping.Row, iri string, n *graph.
 		}
 		c.add(s.Path, r.Line, "warning", "GM710", fmt.Sprintf("%s is deprecated; re-point the mapping to %s (gloss map repoint %s %s %s)", curie, succ, r.Get("subject_id"), r.Get("predicate_id"), r.Get("object_id")))
 	}
-}
-
-// setPathFor finds the set file holding a pair, for reporting.
-func (c *checker) setPathFor(subject, predicate, object string) string {
-	for _, s := range c.ws.MappingSets {
-		for _, r := range s.Rows {
-			res := s.Resolve(r, c.ws.Prefixes)
-			if c.g.Curie(res.Subject) == subject || c.g.Curie(res.Object) == subject {
-				if predicate == "" || (res.Predicate.CURIE == predicate && c.g.Curie(res.Object) == object) {
-					return s.Path
-				}
-			}
-		}
-	}
-	if len(c.ws.MappingSets) > 0 {
-		return c.ws.MappingSets[0].Path
-	}
-	return ""
 }
 
 func uniqStrings(xs []string) []string {
