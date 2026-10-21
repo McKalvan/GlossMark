@@ -9,8 +9,16 @@
       "@id": "gm:attaches-to",
       "@type": "@id"
     },
+    "broad-match": {
+      "@id": "gm:broad-match",
+      "@type": "@id"
+    },
     "calls": {
       "@id": "gm:calls",
+      "@type": "@id"
+    },
+    "close-match": {
+      "@id": "gm:close-match",
       "@type": "@id"
     },
     "configures": {
@@ -83,6 +91,10 @@
       "@id": "gm:may-modify",
       "@type": "@id"
     },
+    "narrow-match": {
+      "@id": "gm:narrow-match",
+      "@type": "@id"
+    },
     "node": {
       "@id": "gm:nodeType",
       "@type": "@vocab"
@@ -132,6 +144,10 @@
     },
     "realizes": {
       "@id": "gm:realizes",
+      "@type": "@id"
+    },
+    "related-match": {
+      "@id": "gm:related-match",
       "@type": "@id"
     },
     "replaced-by": {
