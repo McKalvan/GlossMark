@@ -67,6 +67,18 @@ Ranges accept `1.2.3`, `^1.2`, `~1.2.3`, `1.x`, `>=1.2 <2.0` and `*`. A resolved
 
 Without the vendored copy (a lock from an earlier release, or a deleted copy) the lock is a tripwire: `gloss check` reports (GM107) when the resolved version differs from the lock, when the content changed under the same version number, or when the lock is stale. See [ADR 0002](adr/0002-lock-pins-imports.md).
 
+## Mapping sets
+
+An SSSOM mapping set carries its own semver in `mapping_set_version` ([ADR 0025](adr/0025-mapping-sets.md)). `gloss diff` requires the bump the review decisions in the change imply:
+
+| Bump | Change |
+| --- | --- |
+| MAJOR | an accepted mapping removed, or rejected |
+| MINOR | an accepted mapping added, or a proposal accepted |
+| none | proposals added or removed (nothing relies on them yet) |
+
+A missing or undersized bump is HARD. Each accepted row also records `subject_source_version` and `object_source_version` for readers of the file, but staleness follows the concepts' fingerprints, not those numbers: a namespace release that leaves a mapped concept untouched stales nothing.
+
 ## Diagnostics
 
 | Code | Meaning |

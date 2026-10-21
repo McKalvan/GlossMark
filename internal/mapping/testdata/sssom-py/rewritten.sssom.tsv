@@ -1,0 +1,23 @@
+# creator_id:
+# - team:farm-ops
+# curie_map:
+#   agent: 'urn:gloss:actor:agent:'
+#   farm: https://onto.acme.dev/farm/
+#   human: 'urn:gloss:actor:human:'
+#   owl: http://www.w3.org/2002/07/owl#
+#   rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns#
+#   rdfs: http://www.w3.org/2000/01/rdf-schema#
+#   semapv: https://w3id.org/semapv/vocab/
+#   skos: http://www.w3.org/2004/02/skos/core#
+#   sssom: https://w3id.org/sssom/
+#   team: 'urn:gloss:actor:team:'
+#   zoo: https://onto.acme.dev/zoo/
+# license: https://creativecommons.org/publicdomain/zero/1.0/
+# mapping_date: '2026-10-21'
+# mapping_set_id: https://onto.acme.dev/mappings/zoo-farm
+# mapping_set_version: 0.1.0
+subject_id	predicate_id	predicate_modifier	object_id	mapping_justification	author_id	reviewer_id	subject_source_version	object_source_version	mapping_tool	review_date	confidence	comment
+farm:Colt	skos:closeMatch	Not	zoo:Foal	semapv:UnspecifiedMatching	agent:claude-code	human:bob	0.3.1	1.0.1		2026-10-21		"a colt is male;	a foal is any young horse"
+farm:Equine	skos:exactMatch		zoo:Horse	semapv:UnspecifiedMatching	agent:claude-code	human:bob	0.3.1	1.0.1		2026-10-21	0.9	"same animal, see ""doc"""
+farm:FoalBirth	skos:closeMatch		zoo:Foal	semapv:LexicalMatching	agent:claude-code				gloss map suggest		0.5	name-overlap/kind-mismatch/tie: names share foal
+farm:FoalBirth	skos:closeMatch		zoo:FoalBorn	semapv:LexicalMatching	agent:claude-code				gloss map suggest		0.5	name-overlap/tie: names share foal

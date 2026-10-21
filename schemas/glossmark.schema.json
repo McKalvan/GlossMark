@@ -83,6 +83,21 @@
         "$ref": "#/$defs/glob"
       }
     },
+    "mappings": {
+      "description": "SSSOM/TSV mapping sets this repository keeps, keyed by set name (ADR 0025). Each row maps two concepts of different namespaces; the set's owner reviews them.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/mappingDecl"
+      }
+    },
+    "mapping-lift": {
+      "description": "In a landscape, let accepted broadMatch and narrowMatch mappings act as is-a for taxonomic lift (any member repository may turn it on). Exact matches always join concepts into one equivalence class.",
+      "type": "boolean",
+      "default": false
+    },
     "suggest": {
       "description": "The repository's defaults for gloss suggest, and the precision auto-accept must meet (ADR 0024). Command-line flags override them.",
       "type": "object",
@@ -181,6 +196,28 @@
         "owner": {
           "description": "Team or actor that owns the namespace.",
           "type": "string"
+        }
+      }
+    },
+    "mappingDecl": {
+      "description": "A mapping set (model.MappingDecl); null or {} takes every default.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "description": "Repo-relative SSSOM/TSV file (metadata in a leading # block, or in a sibling .sssom.yml).",
+          "type": "string",
+          "default": "mappings/<name>.sssom.tsv"
+        },
+        "owner": {
+          "description": "Team that owns the set and approves its mappings.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "repo: one side of every row is a namespace this repository owns, written as subject_id. landscape: a registry set, neither side need be owned.",
+          "type": "string",
+          "enum": ["repo", "landscape"],
+          "default": "repo"
         }
       }
     },

@@ -33,7 +33,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `guards` (`applies-to`) | | ✓ | | a cross-cutting mechanism (authentication, a rate limit, a flag) applies to concepts and the code implementing them; `impact` and `context` show it on both ends, `diff` reviews guarded code at the guard's level, no criticality flows ([ADR 0015](adr/0015-guards.md)) |
 | `constrains` | | ✓ | | a rule applies to a concept; `impact` lists the constrained code, `context` names it |
 | `reverses`, `attaches-to` | | ✓ | | domain relations between concepts; declare your own under `relations:` |
-| `depends-on`, `calls`, `derived-from`, `same-as` | | | | derived or reserved (imports, SCIP, SSSOM) |
+| `depends-on`, `calls`, `derived-from` | | | | derived or reserved (imports, SCIP) |
+| `same-as`, `broad-match`, `narrow-match`, `close-match`, `related-match` | | | | from SSSOM mapping sets only (`gloss map`, [ADR 0025](adr/0025-mapping-sets.md)); never written in markers or ontology files |
 
 ## Scopes
 

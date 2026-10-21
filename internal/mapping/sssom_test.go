@@ -132,7 +132,7 @@ func TestSSSOMProblems(t *testing.T) {
 		{"modifier", "# mapping_set_id: x\n# license: y\nsubject_id\tpredicate_id\tpredicate_modifier\tobject_id\tmapping_justification\na:A\tskos:exactMatch\tNo\tb:B\tsemapv:ManualMappingCuration\n", "predicate_modifier must be Not"},
 		{"confidence", "# mapping_set_id: x\n# license: y\nsubject_id\tpredicate_id\tobject_id\tmapping_justification\tconfidence\na:A\tskos:exactMatch\tb:B\tsemapv:ManualMappingCuration\t1.5\n", "confidence must be a number"},
 		{"review date", "# mapping_set_id: x\n# license: y\nsubject_id\tpredicate_id\tobject_id\tmapping_justification\treview_date\na:A\tskos:exactMatch\tb:B\tsemapv:ManualMappingCuration\t2026-01-01\n", "review_date requires reviewer_id"},
-		{"justification", "# mapping_set_id: x\n# license: y\nsubject_id\tpredicate_id\tobject_id\tmapping_justification\na:A\tskos:exactMatch\tb:B\tby hand\n", "not a semapv term"},
+		{"justification", "# mapping_set_id: x\n# license: y\nsubject_id\tpredicate_id\tobject_id\tmapping_justification\na:A\tskos:exactMatch\tb:B\tby hand\n", "not one of the semapv terms"},
 	}
 	for _, c := range cases {
 		s, err := Load(write(t, dir, strings.ReplaceAll(c.name, " ", "-")+".sssom.tsv", c.body))
@@ -155,6 +155,47 @@ func TestMultiEscapes(t *testing.T) {
 	for _, vs := range [][]string{{"a"}, {"a", "b"}, {"a|b", `c\d`}, {`\`, "|"}} {
 		if got := SplitMulti(JoinMulti(vs)); !reflect.DeepEqual(got, vs) {
 			t.Errorf("SplitMulti(JoinMulti(%q)) = %q", vs, got)
+		}
+	}
+}
+
+// testdata/sssom-py holds a set gloss map wrote and the same set after
+// sssom-py 0.4.21 parsed, validated and re-wrote it (moving mapping_date to
+// the set level, reordering the metadata, writing 0.5 for 0.50). Both read
+// to the same mappings, so the two tools interoperate in both directions.
+func TestSSSOMPyRoundTrip(t *testing.T) {
+	ours, err := Load(filepath.Join("testdata", "sssom-py", "glossmark.sssom.tsv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := Load(filepath.Join("testdata", "sssom-py", "rewritten.sssom.tsv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []*Set{ours, theirs} {
+		if len(s.Problems) > 0 {
+			t.Errorf("problems: %v", codes(s))
+		}
+	}
+	if ours.ID != theirs.ID || ours.Version != theirs.Version || !reflect.DeepEqual(ours.Creators, theirs.Creators) || len(ours.Rows) != len(theirs.Rows) {
+		t.Fatalf("sets differ:\n%+v\n%+v", ours, theirs)
+	}
+	for i := range ours.Rows {
+		a, b := ours.Rows[i], theirs.Rows[i]
+		if a.Confidence() != b.Confidence() {
+			t.Errorf("row %d: confidence %v vs %v", i, a.Confidence(), b.Confidence())
+		}
+		ac, bc := map[string]string{}, map[string]string{}
+		for k, v := range a.Cells {
+			ac[k] = v
+		}
+		for k, v := range b.Cells {
+			bc[k] = v
+		}
+		delete(ac, "confidence")
+		delete(bc, "confidence")
+		if !reflect.DeepEqual(ac, bc) {
+			t.Errorf("row %d differs:\n%v\n%v", i, ac, bc)
 		}
 	}
 }

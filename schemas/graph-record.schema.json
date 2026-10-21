@@ -97,7 +97,8 @@
             "boundary",
             "artifact",
             "namespace",
-            "actor"
+            "actor",
+            "mapping-set"
           ]
         },
         "id": {
@@ -161,11 +162,11 @@
           "type": "boolean"
         },
         "version": {
-          "description": "Namespace: version string.",
+          "description": "Namespace: version string; mapping set: its mapping_set_version.",
           "type": "string"
         },
         "owner": {
-          "description": "Namespace or boundary: owning team or actor.",
+          "description": "Namespace, boundary or mapping set: owning team or actor (a mapping set's owner approves its mappings).",
           "type": "string"
         },
         "criticality": {
@@ -349,13 +350,14 @@
           "$ref": "#/$defs/iri"
         },
         "source": {
-          "description": "Where the edge came from: declared (ontology files and manifests), inline (@gloss markers), derived (rollup rules) or inferred (inferrers such as test paths).",
+          "description": "Where the edge came from: declared (ontology files and manifests), inline (@gloss markers), derived (rollup rules), inferred (inferrers such as test paths) or mapping (SSSOM mapping sets, ADR 0025: same-as, broad-match, narrow-match, close-match, related-match, and is-a lifted from broad and narrow matches under mapping-lift).",
           "type": "string",
           "enum": [
             "declared",
             "inline",
             "derived",
-            "inferred"
+            "inferred",
+            "mapping"
           ]
         },
         "prov": {
@@ -443,6 +445,19 @@
         "alias": {
           "description": "The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).",
           "type": "string"
+        },
+        "set": {
+          "description": "Mapping edge: the mapping set (its name under mappings: in glossmark.yaml) the row is in.",
+          "type": "string"
+        },
+        "review": {
+          "description": "Mapping edge: its review state from the ledger (ADR 0025).",
+          "type": "string",
+          "enum": [
+            "proposed",
+            "accepted",
+            "stale"
+          ]
         }
       }
     }

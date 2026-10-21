@@ -8,7 +8,7 @@ id: https://glossmark.dev/schemas/graph.linkml.yaml
 name: glossmark-graph
 title: GlossMark graph metamodel
 description: >-
-  Five node types (concept, boundary, artifact, namespace, actor) joined by
+  Six node types (concept, boundary, artifact, namespace, actor, mapping-set) joined by
   typed, provenance-carrying edges. Concepts live in tiered namespaces;
   boundaries are architectural containers declared by manifests; artifacts
   are files or declarations bound by @gloss markers.
@@ -47,7 +47,7 @@ enums:
       critical:
         description: A mistake moves money, breaks the law or stops the business.
   NodeType:
-    description: The five node types of the metamodel (model.NodeType).
+    description: The node types of the metamodel (model.NodeType).
     permissible_values:
       concept:
         description: An ontology concept.
@@ -59,6 +59,8 @@ enums:
         description: An ontology namespace (one *.gloss.yaml file).
       actor:
         description: A human or agent that placed markers or owns a boundary.
+      mapping-set:
+        description: An SSSOM mapping set declared under mappings in glossmark.yaml (ADR 0025).
 
   Tier:
     description: Ontology tiers (model.TierCore, model.TierImpl).
@@ -109,6 +111,18 @@ enums:
         description: Rollup rules.
       inferred:
         description: Inferrers (for example test paths defaulting to verifies).
+      mapping:
+        description: SSSOM mapping sets (ADR 0025), and is-a lifted from broad and narrow matches under mapping-lift.
+
+  ReviewState:
+    description: Review state of a mapping edge, from the ledger (ADR 0025).
+    permissible_values:
+      proposed:
+        description: No reviewer_id yet.
+      accepted:
+        description: Reviewed, and neither endpoint changed since.
+      stale:
+        description: Reviewed, but an endpoint's definition changed since the review.
 
   RelationType:
     description: >-
@@ -373,6 +387,11 @@ slots:
     description: The original target text as written (.Local, circ:NEW:X, circ:*).
   alias:
     description: The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).
+  set:
+    description: Mapping edge, and mapping-set node's name, the set under mappings in glossmark.yaml.
+  review:
+    description: Mapping edge review state from the ledger.
+    range: ReviewState
 
 # ---------------------------------------------------------------------------
 # Classes
@@ -487,6 +506,20 @@ classes:
       kind:
         description: Actor kind, the part before the colon in human:alice or agent:claude.
 
+  MappingSet:
+    is_a: Node
+    description: An SSSOM mapping set (ADR 0025); curie is its name, kind its scope (repo or landscape), file its TSV path.
+    slots:
+      - version
+      - owner
+    slot_usage:
+      node:
+        equals_string: mapping-set
+      version:
+        description: The set's mapping_set_version.
+      owner:
+        description: Team that owns the set and approves its mappings.
+
   Anchor:
     description: Where a marker binds in a file (marker.Anchor).
     slots:
@@ -537,3 +570,5 @@ classes:
       - steps
       - raw
       - alias
+      - set
+      - review

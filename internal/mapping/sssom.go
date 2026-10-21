@@ -299,8 +299,8 @@ func (s *Set) parseBody(text string, first int) {
 		}
 		if r.Get("mapping_justification") == "" {
 			s.problem(r.Line, "error", "GM700", "row needs mapping_justification (semapv:ManualMappingCuration, semapv:LexicalMatching, ...)")
-		} else if !strings.HasPrefix(r.Get("mapping_justification"), "semapv:") {
-			s.problem(r.Line, "warning", "GM700", fmt.Sprintf("mapping_justification %q is not a semapv term", r.Get("mapping_justification")))
+		} else if j := r.Get("mapping_justification"); !SemapvJustifications[j] {
+			s.problem(r.Line, "warning", "GM700", fmt.Sprintf("mapping_justification %q is not one of the semapv terms SSSOM accepts (semapv:ManualMappingCuration, semapv:LexicalMatching, semapv:UnspecifiedMatching, ...); SSSOM validators reject the file", j))
 		}
 		if m := r.Get("predicate_modifier"); m != "" && m != "Not" {
 			s.problem(r.Line, "error", "GM700", fmt.Sprintf("predicate_modifier must be Not, got %q", m))

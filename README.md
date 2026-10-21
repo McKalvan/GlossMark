@@ -31,7 +31,7 @@ Concepts covered 22% (2/9 with an artifact and a verifier)   Files 83% (15/18)  
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `init`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
+| `cmd/gloss` | The CLI: `init`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `map`, `agents`, `mcp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
@@ -39,6 +39,7 @@ Concepts covered 22% (2/9 with an artifact and a verifier)   Files 83% (15/18)  
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` (installed by `gloss hook install --skill`) |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
+| `internal/mapping` | SSSOM/TSV mapping sets between namespaces: reader and writer, concept fingerprints, calibrated `gloss map suggest` ([ADR 0025](docs/adr/0025-mapping-sets.md)) |
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
@@ -100,4 +101,4 @@ Not every subsystem carries the same risk. `criticality: low | medium | high | c
 
 ## Status
 
-Phase 1 (POC) and most of Phase 2 (MVP) of the roadmap are built; see [docs/PLAN.md](docs/PLAN.md) for what is deferred (tree-sitter anchoring, remote import fetch, SSSOM mappings, SCIP join, SHACL instance validation, plugin SDK).
+Phase 1 (POC) and most of Phase 2 (MVP) of the roadmap are built; see [docs/PLAN.md](docs/PLAN.md) for what is deferred (tree-sitter anchoring, remote import fetch, SCIP join, SHACL instance validation, plugin SDK).

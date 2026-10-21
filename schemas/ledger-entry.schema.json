@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://glossmark.dev/schemas/ledger-entry.json",
   "title": "GlossMark ledger entry",
-  "description": "One line of .glossmark/ledger.jsonl: provenance and review state for one inline @gloss marker. Mirrors model.LedgerEntry in internal/model/files.go (JSON tags, snake_case). The first line is a header {type: ledger, format, generator}; every other line is an entry.",
+  "description": "One line of .glossmark/ledger.jsonl: provenance and review state for one inline @gloss marker, or for one SSSOM mapping (marker_id mapping:<subject>|<predicate>|<object>, ADR 0025). Mirrors model.LedgerEntry in internal/model/files.go (JSON tags, snake_case). The first line is a header {type: ledger, format, generator}; every other line is an entry.",
   "oneOf": [
     {
       "type": "object",
@@ -37,7 +37,7 @@
       ],
       "properties": {
         "marker_id": {
-          "description": "Stable marker id: the id= key when given, else a content hash of the form m-<10 hex>.",
+          "description": "Stable marker id: the id= key when given, else a content hash of the form m-<10 hex>; for a mapping, mapping:<subject CURIE>|<predicate CURIE>|<object CURIE>.",
           "type": "string",
           "minLength": 1
         },
@@ -47,12 +47,12 @@
           "minLength": 1
         },
         "relation": {
-          "description": "The marker's relation name.",
+          "description": "The marker's relation name; for a mapping, its predicate CURIE (skos:exactMatch).",
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]*$"
+          "pattern": "^([a-z][a-z0-9-]*|[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z][A-Za-z0-9_]*)$"
         },
         "targets": {
-          "description": "Target texts as written in the marker (.Local, lib:Book, circ:NEW:DamageCheck, circ:*).",
+          "description": "Target texts as written in the marker (.Local, lib:Book, circ:NEW:DamageCheck, circ:*); for a mapping, its subject and object CURIEs.",
           "type": "array",
           "items": {
             "type": "string",
@@ -95,8 +95,16 @@
           "type": "string"
         },
         "reviewed_at": {
+          "description": "When the entry was reviewed: RFC 3339, or a mapping row's review_date (YYYY-MM-DD).",
           "type": "string",
-          "format": "date-time"
+          "anyOf": [
+            {
+              "format": "date-time"
+            },
+            {
+              "format": "date"
+            }
+          ]
         },
         "anchor_fingerprint": {
           "description": "Fingerprint of the anchored signature (or file) at review time; a mismatch marks the entry stale.",
@@ -127,6 +135,24 @@
         "live": {
           "description": "For a value:<curie> entry: the bound code line when last accepted.",
           "type": "string"
+        },
+        "set": {
+          "description": "Mapping: the mapping set (its name under mappings: in glossmark.yaml) holding the row.",
+          "type": "string"
+        },
+        "negative": {
+          "description": "Mapping: the row is a negation (predicate_modifier: Not).",
+          "type": "boolean"
+        },
+        "subject_fingerprint": {
+          "description": "Mapping: fingerprint of the subject concept's definition (kind, label, doc, declared is-a, published-as, deprecation) at review time; a mismatch marks the mapping stale.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]+$"
+        },
+        "object_fingerprint": {
+          "description": "Mapping: the object concept's fingerprint at review time.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]+$"
         }
       }
     }

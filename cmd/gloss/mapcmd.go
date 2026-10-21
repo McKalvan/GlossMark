@@ -279,7 +279,7 @@ func declareSet(cfgPath, name, file, owner, scope string) error {
 func mapPropose(args []string) int {
 	fs, root := newFlags("map propose")
 	setName := fs.String("set", "", "mapping set to add the row to (default: the only set that can hold it)")
-	just := fs.String("justification", "", "manual, lexical, llm, agent, structural, ... or a semapv: term (default llm for agents, manual for people)")
+	just := fs.String("justification", "", "manual, lexical, llm (semapv:UnspecifiedMatching), review, structural, background, ... or a semapv term SSSOM accepts (default llm for agents, manual for people)")
 	conf := fs.Float64("conf", -1, "confidence in [0,1]")
 	comment := fs.String("comment", "", "why the concepts match")
 	force := fs.Bool("force", false, "propose a pair that was rejected (removes the negation row)")
@@ -385,6 +385,9 @@ func proposeMapping(p *pipeline, req MappingRequest) (*MappingResult, error) {
 	}
 	if full, ok := mapping.Justifications[j]; ok {
 		j = full
+	}
+	if !mapping.SemapvJustifications[j] {
+		return nil, fmt.Errorf("justification %q: use manual, lexical, llm, review, logical, structural, background, composite, instance, unspecified, or one of the semapv terms SSSOM accepts", req.Justification)
 	}
 	r := &mapping.Row{Cells: map[string]string{}}
 	r.Set("subject_id", subj)

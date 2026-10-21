@@ -256,8 +256,8 @@ func TestMapMCP(t *testing.T) {
 	if res.Subject != "farm:Equine" || !res.Swapped || res.Gate != "HARD" || !strings.Contains(res.Next, "gloss map accept") {
 		t.Errorf("propose_mapping = %+v", res)
 	}
-	if f := setFile(t, root); !strings.Contains(f, "semapv:LLMBasedMatching") || !strings.Contains(f, "agent:claude-code") {
-		t.Errorf("an agent proposal is not attributed as LLM-based:\n%s", f)
+	if f := setFile(t, root); !strings.Contains(f, "semapv:UnspecifiedMatching") || !strings.Contains(f, "agent:claude-code") {
+		t.Errorf("an agent proposal is not attributed to the agent:\n%s", f)
 	}
 	if _, errText := mcpCall(t, root, "propose_mapping", map[string]any{"subject": "farm:Equine", "predicate": "exact", "object": "zoo:Pegasus"}); errText == "" {
 		t.Errorf("propose_mapping to a missing concept succeeded")

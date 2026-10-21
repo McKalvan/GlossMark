@@ -147,10 +147,25 @@ gloss coverage --fail-under 80   # headline: concepts with an artifact and a ver
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
-gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift, import versions, deprecated concepts still in use
+gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift, import versions, deprecated concepts still in use, mappings
+gloss map status                 # SSSOM mappings to other teams' concepts: proposed, accepted, stale, rejected (next section)
 gloss mcp                        # MCP server on stdio for agents
 gloss doctor                     # one line per setup check with its fix: gloss on PATH (and that it is GlossMark), GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
 ```
+
+### Another team calls it something else
+
+When an imported namespace already has the concept under another name (`acq:Receipt` for your `circ:Intake`), record a mapping instead of renaming either:
+
+```sh
+gloss map init circ-acq --owner library-services     # mappings/circ-acq.sssom.tsv, declared in glossmark.yaml
+gloss map suggest                                    # lexical candidates with calibrated confidence; --write adds them as proposals
+gloss map propose circ:Intake exact acq:Receipt --comment "same step, two names"
+gloss map accept circ:Intake exact acq:Receipt       # the set owner reviews it (reviewer_id, review_date)
+gloss map reject circ:Copy close acq:Item --reason "an item may be a box of copies"
+```
+
+An accepted exact match makes the two one concept in `gloss landscape`: context-map edges and cross-repo drift join across it, and `search_concepts` and the briefing show the counterpart. When either concept's definition later changes, `gloss diff` shows a `mapping-affected` row naming the set's owner, and the mapping is stale until someone runs `gloss map accept` again. `gloss lock --update` lists the mappings an import update affects. Agents propose with the MCP tool `propose_mapping`; `propose_concept` warns when the new concept duplicates one another namespace already has. See [ADR 0025](adr/0025-mapping-sets.md).
 
 ### Who wrote a link, and what was decided
 

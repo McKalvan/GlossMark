@@ -67,9 +67,21 @@ var ShortNames = map[string]string{
 	"narrow": "skos:narrowMatch", "narrowMatch": "skos:narrowMatch", "related": "skos:relatedMatch", "relatedMatch": "skos:relatedMatch",
 }
 
-// Justifications maps CLI shorthands to semapv terms.
+// SemapvJustifications are the mapping_justification values the SSSOM
+// schema accepts; validators such as sssom-py reject any other.
+var SemapvJustifications = map[string]bool{
+	"semapv:MappingReview": true, "semapv:ManualMappingCuration": true, "semapv:LogicalReasoning": true, "semapv:LexicalMatching": true,
+	"semapv:CompositeMatching": true, "semapv:UnspecifiedMatching": true, "semapv:SemanticSimilarityThresholdMatching": true,
+	"semapv:LexicalSimilarityThresholdMatching": true, "semapv:MappingChaining": true, "semapv:MappingInversion": true,
+	"semapv:StructuralMatching": true, "semapv:InstanceBasedMatching": true, "semapv:BackgroundKnowledgeBasedMatching": true,
+}
+
+// Justifications maps CLI shorthands to semapv terms. SSSOM has no term for
+// a language model's judgement, so llm and agent are UnspecifiedMatching;
+// author_id (agent:...) records who proposed it.
 var Justifications = map[string]string{
-	"manual": "semapv:ManualMappingCuration", "lexical": "semapv:LexicalMatching", "llm": "semapv:LLMBasedMatching",
-	"agent": "semapv:AgentBasedMatching", "review": "semapv:MappingReview", "unspecified": "semapv:UnspecifiedMatching",
-	"logical": "semapv:LogicalReasoning", "structural": "semapv:StructuralMatching",
+	"manual": "semapv:ManualMappingCuration", "lexical": "semapv:LexicalMatching", "llm": "semapv:UnspecifiedMatching",
+	"agent": "semapv:UnspecifiedMatching", "review": "semapv:MappingReview", "unspecified": "semapv:UnspecifiedMatching",
+	"logical": "semapv:LogicalReasoning", "structural": "semapv:StructuralMatching", "background": "semapv:BackgroundKnowledgeBasedMatching",
+	"composite": "semapv:CompositeMatching", "instance": "semapv:InstanceBasedMatching",
 }
