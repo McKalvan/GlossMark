@@ -600,8 +600,9 @@ function layout(all){
       for(let a=0;a<n;a++){if(S.pinned.has(items[a].id))continue;const fx=F[a*2],fy=F[a*2+1],m=Math.hypot(fx,fy)||1,s=Math.min(m,temp)/m;P[a].x+=fx*s;P[a].y+=fy*s;}
       temp=Math.max(1.5,temp*0.95);
     }
+    separate(items,P);
     let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
-    items.forEach((it,j)=>{const p=P[j],hw=it._open?it._w/2:it._hw,top=it._open?it._h/2:it._h/2+4,bot=it._open?it._h/2:it._h/2+18;
+    items.forEach((it,j)=>{const p=P[j],hw=it._open?it._w/2:it._hw,top=it._open?it._h/2+TITLE/2:it._h/2+4,bot=it._open?it._h/2-TITLE/2:it._h/2+18;
       x0=Math.min(x0,p.x-hw);x1=Math.max(x1,p.x+hw);y0=Math.min(y0,p.y-top);y1=Math.max(y1,p.y+bot);});
     const cx=(x0+x1)/2,cy=(y0+y1)/2;
     items.forEach((it,j)=>{it._lx=P[j].x-cx;it._ly=P[j].y-cy;});
@@ -612,6 +613,35 @@ function layout(all){
   place('',{x:0,y:0});
   // Hidden descendants start at their container, so opening it blooms from there.
   VN.forEach(n=>{if(!n._open&&n._kids){const p=S.pos.get(n.id);descendants(n,[]).forEach((k,i)=>{if(!k._vis)S.pos.set(k.id,{x:p.x+((hash(k.id)%7)-3)*2,y:p.y+((hash(k.id+'y')%7)-3)*2});});}});
+}
+// separate: the forces only discourage overlap, and many edges into a box pull
+// its neighbours onto it; this pass removes what is left. Siblings whose layout
+// boxes (an open box's rectangle, a node with its label) overlap are pushed
+// apart along the shorter axis, a box moving less the more it holds and a
+// pinned node not at all. Moving a box moves its contents, which are placed
+// relative to it. Deterministic, so a layout is reproducible.
+function separate(items,P){
+  const n=items.length;if(n<2)return;
+  // Each item's layout box as offsets from its point. An open box's title
+  // strip sits above its members, so its rectangle is centred TITLE/2 above.
+  const L=new Float64Array(n),R=new Float64Array(n),T=new Float64Array(n),B=new Float64Array(n);
+  items.forEach((it,j)=>{if(it._open){L[j]=R[j]=it._w/2;T[j]=it._h/2+TITLE/2;B[j]=it._h/2-TITLE/2;}else{L[j]=R[j]=it._hw;T[j]=it._h/2+4;B[j]=it._h/2+18;}});
+  const mass=items.map(it=>S.pinned.has(it.id)?Infinity:it._open?1+descendants(it,[]).length:1);
+  const GAP=8,passes=n>300?60:300;
+  for(let pass=0;pass<passes;pass++){
+    let moved=false;
+    for(let a=0;a<n;a++){const pa=P[a];
+      for(let b=a+1;b<n;b++){const pb=P[b];
+        const ox=Math.min(pa.x+R[a],pb.x+R[b])-Math.max(pa.x-L[a],pb.x-L[b])+GAP;if(ox<=0)continue;
+        const oy=Math.min(pa.y+B[a],pb.y+B[b])-Math.max(pa.y-T[a],pb.y-T[b])+GAP;if(oy<=0)continue;
+        const ma=mass[a],mb=mass[b];if(ma===Infinity&&mb===Infinity)continue;
+        const wa=ma===Infinity?0:mb===Infinity?1:mb/(ma+mb),wb=1-wa;
+        if(ox<oy){const s=(pa.x<pb.x||(pa.x===pb.x&&a<b))?-1:1;pa.x+=s*ox*wa;pb.x-=s*ox*wb;}
+        else{const s=(pa.y<pb.y||(pa.y===pb.y&&a<b))?-1:1;pa.y+=s*oy*wa;pb.y-=s*oy*wb;}
+        moved=true;
+      }}
+    if(!moved)break;
+  }
 }
 // rectOf: an open boundary is the box around its visible members (recomputed
 // from live positions, so dragging a member stretches it); a closed one is its label box.
@@ -1154,6 +1184,8 @@ window.glossViewer={
   focus(id){setFocus(id);},
   containerOf(id){const n=byId.get(id);return n&&n._c?n._c.id:null;},
   rect(id){const n=byId.get(id);if(!n||!n._vis||!n._open)return null;RC=new Map();return rectOf(n);},
+  box(id){const n=byId.get(id);if(!n||!n._vis)return null;if(n._open){RC=new Map();const r=rectOf(n);return {x0:r.x,y0:r.y,x1:r.x+r.w,y1:r.y+r.h,open:true};}
+    const p=S.pos.get(n.id);return p?{x0:p.x-n._hw,x1:p.x+n._hw,y0:p.y-n._h/2-4,y1:p.y+n._h/2+18,open:false}:null;},
   edges(){return VE.filter(e=>!e.contain).map(e=>({s:e.s.id,p:e.p,o:e.o.id}));},
   select(id){const n=byId.get(id);if(!n)return false;reveal(n);return true;},
   panel(){return $('panel').innerText;},
