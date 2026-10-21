@@ -1304,9 +1304,10 @@ func (c *comparer) untested() {
 				continue
 			}
 			if len(cores) > 0 {
-				// Not skipped: the core concept is tested, but its tests sit
-				// in boundaries that hold none of this concept's code.
-				msg += "; the tests of " + c.g.Curie(cores[0]) + ", which it realizes, sit in boundaries that hold none of its code"
+				// Not skipped: the core concept counts as tested, either by
+				// tests of its own in boundaries that hold none of this
+				// concept's code, or only through another realizer's tests.
+				msg += "; " + c.whyCoreTestMisses(n.ID, cores[0])
 			}
 		}
 		c.add(Finding{Kind: KindUntested, Severity: "info", Concept: n.CURIE, Path: n.File, Line: n.Line, Msg: msg})
@@ -1394,6 +1395,29 @@ func (c *comparer) realizersOf(core string) map[string]bool {
 		}
 	}
 	return c.realizers[core]
+}
+
+// whyCoreTestMisses says why a tested core concept's tests do not cover
+// impl, one of its realizers.
+func (c *comparer) whyCoreTestMisses(impl, core string) string {
+	for _, p := range []string{"tests", "verifies"} {
+		for _, e := range c.g.In(core, p) {
+			if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact {
+				return "the tests of " + c.g.Curie(core) + ", which it realizes, sit in boundaries that hold none of its code"
+			}
+		}
+	}
+	var via []string
+	for r := range c.realizersOf(core) {
+		if r != impl && c.tested(r, 0) {
+			via = append(via, c.g.Curie(r))
+		}
+	}
+	sort.Strings(via)
+	if len(via) == 0 {
+		return c.g.Curie(core) + ", which it realizes, counts as tested only through its subtypes"
+	}
+	return c.g.Curie(core) + ", which it realizes, counts as tested only because " + strings.Join(via, ", ") + " is tested"
 }
 
 // implementedIn reports whether an artifact in boundary b, or in a boundary

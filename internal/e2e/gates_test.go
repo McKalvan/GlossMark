@@ -224,3 +224,23 @@ func TestCoreTestCreditContainment(t *testing.T) {
 		t.Errorf("coverage %d of %d, want 4 of 5", m.ConceptsCovered, m.ConceptsInScope)
 	}
 }
+
+// TestUntestedNamesWhyCoreTestMisses: when a core concept counts as tested
+// only because another realizer is verified, the untested line says so
+// instead of pointing at tests the core concept does not have.
+func TestUntestedNamesWhyCoreTestMisses(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Availability: { kind: capability }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  ApiService: { kind: system-type, realizes: z:Availability }\n  SlotSearch: { kind: capability, realizes: z:Availability }\n")
+	write(".gloss.yaml", "boundary: o:api\nlevel: container\ndefault-namespace: i\nrealizes: [i:ApiService, i:SlotSearch]\n")
+	write("slots.go", "package api\n\n// @gloss implements .SlotSearch\nfunc FindSlots() {}\n")
+	write("deploy.yaml", "# @gloss deploys .ApiService scope=file\nreplicas: 1\n")
+	write("api_test.go", "// @gloss verifies .ApiService scope=file\npackage api\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	u := findings(rep, rollup.KindUntested)
+	if len(u) != 1 || u[0].Concept != "i:SlotSearch" || !strings.Contains(u[0].Msg, "z:Availability, which it realizes, counts as tested only because i:ApiService is tested") {
+		t.Errorf("untested = %+v, want i:SlotSearch naming i:ApiService", u)
+	}
+}
