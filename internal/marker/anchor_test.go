@@ -64,3 +64,48 @@ func TestDecoratorStackFingerprint(t *testing.T) {
 		t.Errorf("Declarations = %+v, want fingerprint %s", ds, guarded.Fingerprint)
 	}
 }
+
+// TestAnchorLanguages: declarations the anchorer recognizes, with the line
+// range it gives them (issue #156): Kotlin functions with modifiers and
+// backtick names, Kotlin classes with a multi-line primary constructor,
+// Perl subs and packages, SQL functions with a dollar-quoted body, and
+// Prisma models.
+func TestAnchorLanguages(t *testing.T) {
+	cases := []struct {
+		name, path, src string
+		symbol, kind    string
+		start, end      int
+	}{
+		{"kotlin suspend fun", "a.kt", "// @gloss implements .Claim\nsuspend fun fileClaim(req: Req): Resp {\n    return x\n}\n", "fileClaim", "function", 2, 4},
+		{"kotlin inline generic extension", "a.kt", "// @gloss implements .Claim\ninline fun <reified T> List<T>.only(): T {\n    return first()\n}\n", "only", "function", 2, 4},
+		{"kotlin operator expression body", "a.kt", "// @gloss implements .Money\noperator fun Money.plus(o: Money) = Money(a + o.a)\n\nfun other() {}\n", "plus", "function", 2, 2},
+		{"kotlin member modifiers", "a.kt", "// @gloss implements .Claim\n    private override suspend fun handle(e: Event) {\n    }\n", "handle", "function", 2, 3},
+		{"kotlin backtick test name", "a.kt", "// @gloss verifies .Fraud\n@Test\nfun `early claim plus prior claims scores high`() {\n    assert(x)\n}\n", "early claim plus prior claims scores high", "function", 3, 5},
+		{"kotlin data class constructor", "a.kt", "// @gloss represents .MotorClaim\ndata class MotorClaim(\n    val id: String,\n    val amount: Long,\n)\n\nclass Next {\n}\n", "MotorClaim", "type", 2, 5},
+		{"kotlin class constructor and body", "a.kt", "// @gloss implements .Withdrawal\nclass WithdrawalService(\n    private val repo: Repo,\n    private val clock: Clock,\n) : Service {\n    fun run() {\n    }\n}\n", "WithdrawalService", "class", 2, 8},
+		{"kotlin one-line class", "a.kt", "// @gloss represents .Id\ndata class Id(val v: String)\n\nclass Next {\n}\n", "Id", "type", 2, 2},
+		{"java brace on next line", "A.java", "// @gloss implements .A\npublic void run(int a,\n    int b)\n{\n    go();\n}\n", "run", "method", 2, 6},
+		{"perl sub", "batch.pl", "# @gloss implements .Lost\nsub mark_lost {\n    my ($id) = @_;\n    return 1;\n}\n", "mark_lost", "function", 2, 5},
+		{"perl package", "Overdue.pm", "# @gloss implements .Overdue\npackage Library::Overdue;\nuse strict;\n\nsub run {\n}\n\npackage Library::Other;\n", "Library::Overdue", "package", 2, 6},
+		{"perl package block", "Overdue.pm", "# @gloss implements .Overdue\npackage Library::Overdue {\n    sub run {}\n}\n1;\n", "Library::Overdue", "package", 2, 4},
+		{"sql function", "f.sql", "-- @gloss implements .HoldExpiry\nCREATE OR REPLACE FUNCTION sp_expire_holds() RETURNS void AS $$\nDECLARE\n    n int;\nBEGIN\n    UPDATE holds SET state = 'expired; really';\n    -- done; next\nEND;\n$$ LANGUAGE plpgsql;\n\nCREATE TABLE t (id int);\n", "function.sp_expire_holds", "sql", 2, 9},
+		{"sql procedure tagged quote", "f.sql", "-- @gloss implements .Fines\nCREATE PROCEDURE sp_assess_fines()\nLANGUAGE plpgsql\nAS $body$\nBEGIN\n    PERFORM 1;\nEND;\n$body$;\n", "procedure.sp_assess_fines", "sql", 2, 8},
+		{"sql table", "f.sql", "-- @gloss represents .Loan\nCREATE TABLE loans (\n  id uuid -- the key; unique\n);\n", "table.loans", "sql", 2, 4},
+		{"prisma model", "schema.prisma", "// @gloss represents .Driver\nmodel Driver {\n  id String @id\n  @@map(\"drivers\")\n}\n", "Driver", "model", 2, 5},
+		{"prisma enum", "schema.prisma", "// @gloss represents .Level\nenum ServiceLevel {\n  STANDARD\n}\n", "ServiceLevel", "type", 2, 4},
+	}
+	for _, c := range cases {
+		style, ok := StyleFor(c.path, nil)
+		if !ok {
+			t.Fatalf("%s: no comment style for %s", c.name, c.path)
+		}
+		found, _, lines := Scan(strings.NewReader(c.src), style)
+		if len(found) != 1 {
+			t.Fatalf("%s: %d markers", c.name, len(found))
+		}
+		a := Resolve(c.path, found[0], lines, style)
+		if a.Scope != "symbol" || a.Symbol != c.symbol || a.Kind != c.kind || a.StartLine != c.start || a.EndLine != c.end {
+			t.Errorf("%s: got %s %q (%s) lines %d-%d, want symbol %q (%s) lines %d-%d", c.name, a.Scope, a.Symbol, a.Kind, a.StartLine, a.EndLine, c.symbol, c.kind, c.start, c.end)
+		}
+	}
+}
