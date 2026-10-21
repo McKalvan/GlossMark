@@ -378,3 +378,37 @@ func categorize(families map[string]int) string {
 		return CodeOnlyInternal
 	}
 }
+
+// About returns the observations that name or mention a term: the query a
+// derivation makes for a candidate outside its shortlist, or for the
+// sentences and state changes behind a constraint or an event.
+func About(ev []Evidence, term string) []Evidence {
+	key := Key(term)
+	if key == "" {
+		key = strings.Join(Tokens(term), " ")
+	}
+	want := strings.Split(key, " ")
+	if key == "" {
+		return nil
+	}
+	var out []Evidence
+	for _, e := range ev {
+		texts := []string{e.Surface}
+		for _, c := range e.Context {
+			if to, ok := strings.CutPrefix(c, "renamed-to:"); ok {
+				texts = append(texts, to)
+			}
+		}
+	match:
+		for _, s := range texts {
+			toks := Tokens(s)
+			for i := range toks {
+				if runAt(toks, i, want) {
+					out = append(out, e)
+					break match
+				}
+			}
+		}
+	}
+	return out
+}

@@ -55,7 +55,7 @@ Every source, deterministic or not, produces the same record: one JSON object pe
            "modified":"2025-03-01","hash":"sha256:9e1f..."}}
 ```
 
-- `signal` is one of a closed list: `type-decl`, `field`, `function-decl`, `inherits`, `enum-type`, `enum-value`, `module`, `table`, `column`, `foreign-key`, `schema-type` (proto, Avro, GraphQL, OpenAPI), `route`, `topic` (queue, event, cron), `test-name`, `guard-message`, `ui-string`, `doc-heading`, `doc-definition` (a bold term), `doc-phrase` (a two- or three-word run of prose), `glossary-entry`, `rename`, `reference-term`, `issue-title`, `acceptance-criterion`. `field`, `module` and `doc-phrase` were added by the spike (section 12).
+- `signal` is one of a closed list: `type-decl`, `field`, `function-decl`, `inherits`, `enum-type`, `enum-value`, `module`, `table`, `column`, `foreign-key`, `schema-type` (proto, Avro, GraphQL, OpenAPI), `route`, `topic` (queue, event, cron), `test-name`, `guard-message`, `ui-string`, `doc-heading`, `doc-definition` (a bold term), `doc-phrase` (a two- or three-word run of prose), `rule-sentence` (a sentence that states a rule), `transition` (an assignment of a lifecycle value), `glossary-entry`, `rename`, `reference-term`, `issue-title`, `acceptance-criterion`. `field`, `module`, `doc-phrase`, `rule-sentence` and `transition` were added by the spike (section 12).
 - `unit` is the application the evidence belongs to (section 7).
 - **Quotes are not committed.** A record keeps a locator and a hash, never the source text, unless the owner opts in (`derive: { commit-quotes: true }` in `glossmark.yaml`). Connector content stays out of the repository by default; concept docs are written by the agent in its own words.
 
@@ -208,7 +208,7 @@ Metrics: concept recall and precision against the gold set (matched by name or a
 
 | Phase | Ships | Done when |
 |---|---|---|
-| D1 | spike built: `gloss harvest` over repo and git, `--cluster`, `--ingest`, the evidence schema (section 12). Still to build: `planned:` in the ontology schema, coverage, drift and the agent surfaces (6.1); the `rule-sentence` and `transition` signals (section 12); the `derive-ontology` skill for the units of one workspace, with interview, packet, record and alignment; `adopt-glossmark` steps 1, 3 and 4 call it | on AgentArena with `docs/ontology/` hidden, recall and precision of core concepts are measured and reported; a re-run after owner decisions changes nothing |
+| D1 | spike built: `gloss harvest` over repo and git, `--cluster`, `--ingest`, `--about`, the `rule-sentence` and `transition` signals, the evidence schema (section 12). Still to build: `planned:` in the ontology schema, coverage, drift and the agent surfaces (6.1); the `derive-ontology` skill for the units of one workspace, with interview, packet, record and alignment; `adopt-glossmark` steps 1, 3 and 4 call it | on AgentArena with `docs/ontology/` hidden, recall and precision of core concepts are measured and reported; a re-run after owner decisions changes nothing |
 | D2 | connector and tracker readers through `--ingest`; authority and staleness weighting; `suggest` reads the record | the ablation table in section 10 is filled in |
 | D3 | alignment across sibling repositories; the namespace plan feeds `gloss init`; refresh mode for adopted repositories | `examples/library` derives `lib:` as shared and published, and `circ:` as its extension |
 
@@ -247,7 +247,7 @@ Against the union of both keys, the shipped order's precision is 64 % in the fir
 
 1. **A concept is named in several ways.** Of candidates named one way only, about one in eighty is a glossary entry. Most of these candidates are named only as a prose phrase (2 302, of which 24 are glossary entries), a bold term (580, 10), a heading (225, none) or a type (214, none). The 539 candidates named in two or more ways hold 126 entries of the union key (23 %). So the shipped ranking orders by kinds of naming signal, and the skill should **review** the shortlist (the first about 300 candidates and every one named two ways) and **query** the rest by name when an interview answer or a document points at a term. It should not read 4 300 candidates.
 2. **Prose and fields carry the vocabulary that headings and types miss.** Examples are "record attempt", "hidden tests", "sandbox minutes" and `catch_rate`. A prose phrase proposes a concept only when three documents use it or a code, data or UI name contains it (`minPhraseFiles`); without that gate, phrases swamp the list.
-3. **Constraints and events are sentences, not names.** Most of the core tier's misses are invariants (`KeyNeverPersisted`, `AtomicCredits`, `FailClosedRefund`, `HiddenCountsNeverShown`) and events (`AttemptVoided`, `ExerciseRetired`). D1 adds a `rule-sentence` signal (a doc sentence with *never*, *must*, *only*, *at most*, or a guard message or test name that states a rule) and a `transition` signal (an assignment of a lifecycle value). The agent names the concept; harvesting only finds the sentence.
+3. **Constraints and events are sentences, not names.** Most of the core tier's misses are invariants (`KeyNeverPersisted`, `AtomicCredits`, `FailClosedRefund`, `HiddenCountsNeverShown`) and events (`AttemptVoided`, `ExerciseRetired`). Two signals now find them (measured below): `rule-sentence` and `transition`. The agent names the concept; harvesting only finds the sentence or the state change.
 4. **Implementation concepts are coined, not found.** The `aa:` misses are names the adopting agent invented (`TranscriptBus`, `SandboxSeam`, `CreditsModule`). That is the ceiling of harvesting and the expected division of labour: phase 5 names mechanisms from modules, seams and types.
 5. **Built versus planned is a hint, not a verdict.** No rule separates the glossary's implemented entries from its proposed ones:
 
@@ -261,12 +261,26 @@ Against the union of both keys, the shipped order's precision is 64 % in the fir
 6. **Scope is a survey decision.** AgentArena holds 264 files of exercise packages, each its own application. Harvested as product code, they would have added hundreds of foreign terms. Phase 1 asks what is product and what is content before harvesting, and passes the answer as `--exclude`.
 7. **Trackers live in repositories too.** `docs/pm/backlog.yaml` is an issue tracker, so the tracker family is not only reached through connectors; `backlog`, `roadmap` and `issues` YAML files are read for `title:`.
 
+**Rules and events.** `rule-sentence` is a sentence with *never*, *must*, *cannot*, *at most*, *at least*, *always*, *forbidden*, *fail closed* and similar words. It is read from Markdown paragraphs, from each table cell, and from the docstrings of functions and types. `transition` is an assignment of a lifecycle value: `x.state = State.VOIDED`, `state="submitted"` in a call, or `SET status = 'graded'`. It records the attribute (`attr:`), the object or type (`of:`) and the enclosing function (`in:`). Both are mention-only: they never propose a concept. They are read with `--about <term>`, which prints every observation that names or mentions a term; that is also how the skill queries candidates outside its shortlist.
+
+The rule answer key is AgentArena's 47 invariants (`docs/ontology/invariants.md`, hidden): the bold statement of each. An invariant counts as found when one harvested sentence contains a share of its words (stems, generic words dropped):
+
+| Evidence | Invariants with ≥ 50 % of their words in one sentence | ≥ 75 % |
+|---|---|---|
+| guard messages and test names (before) | 20 / 47 | 4 / 47 |
+| plus rule sentences | 44 / 47 | 21 / 47 |
+
+Of the 21 at 75 %, 16 come from other documents that restate the rule (README, `design.md`, `agent-operating-model.md`), 1 from a docstring and 4 from test names. 862 rule sentences were harvested, too many to read, which is why they are queried by subject. The three below 50 % are I-08 (egress allowlist), I-43 (file access confinement) and I-46 (exercise validity).
+
+Events gain less. Of the adopted core tier's 9 events, enum values already name a state for 7; the 29 harvested transitions cover 2 of those and no new one. What transitions add is the lifecycle with its producers: `create` → reading, `_start_live` → provisioned, `prompt` → active, `submit` → submitted, `_grade` → graded, `_abort_playtest` → failed. That is the state machine events are named from, and where each is published. Their limits: voiding is written `SessionPatch(state=to)` with `to` a variable, which no lexical rule sees, and outcome fields (`FileDiff.status`, `MutationResult.status`, judge statuses) look like transitions but are results, not lifecycles; the agent tells them apart by the `of:` type.
+
 Reproduce:
 
 ```sh
 gloss harvest --root ../AiArena --exclude 'docs/ontology/**' --exclude CLAUDE.md \
   --exclude 'exercises/*/repo/**' --exclude 'exercises/*/oracle/**' > evidence.jsonl
 gloss harvest --in evidence.jsonl --cluster --format text
+gloss harvest --in evidence.jsonl --about "attempt credit" --format text
 ```
 
 ## Alternatives considered

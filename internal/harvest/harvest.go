@@ -203,10 +203,17 @@ func (h *harvester) file(rel string, lines []string, style marker.CommentStyle, 
 	case !codeExt[ext] && ext != ".proto":
 		return
 	}
-	for _, d := range marker.Declarations(rel, lines, style) {
+	decls := marker.Declarations(rel, lines, style)
+	for _, d := range decls {
 		h.decl(rel, lines, d, test)
+		// A variable's doc can be the docstring of the function after it.
+		if !test && (typeKinds[d.Kind] || d.Kind == "function" || d.Kind == "method") {
+			for _, s := range ruleSentences(d.Doc) {
+				h.add("rule-sentence", s, rel, d.Line)
+			}
+		}
 	}
-	h.lineSignals(rel, lines, test, ext)
+	h.lineSignals(rel, lines, test, ext, decls)
 }
 
 func aliasContext(aliases []string) []string {
@@ -422,7 +429,7 @@ var (
 var uiExt = map[string]bool{".tsx": true, ".jsx": true, ".vue": true, ".svelte": true, ".html": true}
 
 // lineSignals are the signals read line by line rather than from declarations.
-func (h *harvester) lineSignals(rel string, lines []string, test bool, ext string) {
+func (h *harvester) lineSignals(rel string, lines []string, test bool, ext string, decls []marker.Decl) {
 	for i, ln := range lines {
 		n := i + 1
 		if test {
@@ -453,6 +460,16 @@ func (h *harvester) lineSignals(rel string, lines []string, test bool, ext strin
 				h.add("guard-message", m[1], rel, n)
 				break
 			}
+		}
+		if v, attr, of := transition(ln); v != "" {
+			ctx := []string{"attr:" + attr}
+			if of != "" {
+				ctx = append(ctx, "of:"+of)
+			}
+			if fn := enclosing(decls, n); fn != "" {
+				ctx = append(ctx, "in:"+fn)
+			}
+			h.add("transition", v, rel, n, ctx...)
 		}
 		if m := opRename.FindStringSubmatch(ln); m != nil {
 			h.add("rename", m[1], rel, n, "renamed-to:"+m[2])
@@ -523,7 +540,8 @@ var (
 )
 
 // markdown reads headings, bold terms (a definition list, a table's row
-// labels) and the phrases of prose, outside fenced code.
+// labels), the phrases of prose and the sentences that state rules, outside
+// fenced code.
 func (h *harvester) markdown(rel string, lines []string) {
 	inFence := false
 	seen := map[string]bool{}
@@ -554,6 +572,7 @@ func (h *harvester) markdown(rel string, lines []string) {
 			}
 		}
 	}
+	h.ruleParagraphs(rel, markdownParagraphs(lines))
 }
 
 // phrases returns the two- and three-word runs of a line of prose that

@@ -52,6 +52,13 @@ func TestHarvestCommand(t *testing.T) {
 	if code, _ := gloss(t, "harvest", "--in", saved, "--ingest", bad); code != 1 {
 		t.Errorf("a record whose family contradicts its signal was ingested (exit %d)", code)
 	}
+	code, about := gloss(t, "harvest", "--in", saved, "--about", "loan period", "--format", "text")
+	if code != 0 || !strings.Contains(about, "services/circulation/loans/models.py:25  loan_period_days  [of:Renewal]") || strings.Contains(about, "Hold") {
+		t.Errorf("about exit %d:\n%s", code, about)
+	}
+	if code, _ := gloss(t, "harvest", "--in", saved, "--about", "hold", "--cluster"); code != 1 {
+		t.Errorf("--about with --cluster: exit %d", code)
+	}
 	if code, _ := gloss(t, "harvest", "--in", saved, "--format", "text"); code != 1 {
 		t.Errorf("--format text without --cluster: exit %d", code)
 	}

@@ -60,6 +60,11 @@ func TestHarvestSignals(t *testing.T) {
 		"doc-phrase reading list":                         "",
 		"glossary-entry Patron":                           "",
 		"issue-title Fines for late returns":              "",
+		"rule-sentence A patron must never hold more than five items at once.": "",
+		"rule-sentence A hold expires after seven days and cannot be renewed.": "",
+		"rule-sentence An overdue loan cannot be renewed by the patron.":       "services/circulation",
+		"transition overdue":  "services/circulation",
+		"transition RETURNED": "services/circulation",
 	}
 	for k, unit := range want {
 		e, ok := got[k]
@@ -73,6 +78,21 @@ func TestHarvestSignals(t *testing.T) {
 	}
 	if e := got["column patron_id"]; e.Source.Path != "services/circulation/loans/models.py" || e.Source.Line != 19 || e.Context[0] != "table:loans" {
 		t.Errorf("patron_id = %+v", e)
+	}
+	if e := got["transition overdue"]; strings.Join(e.Context, " ") != "attr:status of:LoanPatch in:mark_overdue" {
+		t.Errorf("overdue transition context %v", e.Context)
+	}
+	if e := got["transition RETURNED"]; strings.Join(e.Context, " ") != "attr:status of:loan in:return_loan" {
+		t.Errorf("returned transition context %v", e.Context)
+	}
+	rules := 0
+	for _, e := range ev {
+		if e.Signal == "rule-sentence" {
+			rules++
+		}
+	}
+	if rules != 3 {
+		t.Errorf("%d rule sentences, want 3 (one per rule, none for a sentence without a rule word)", rules)
 	}
 	for _, k := range []string{"doc-heading Not a heading inside a fence", "function-decl _private_helper", "field local_counter", "field id", "function-decl test_overdue_loan_cannot_be_renewed"} {
 		if _, ok := got[k]; ok {
@@ -258,5 +278,32 @@ func TestSchemaMatchesSignals(t *testing.T) {
 	sort.Strings(wf)
 	if strings.Join(rec.Source.Properties.Family.Enum, ",") != strings.Join(wf, ",") {
 		t.Errorf("schema families %v, code %v", rec.Source.Properties.Family.Enum, wf)
+	}
+}
+
+func TestSentencesAndTransitions(t *testing.T) {
+	got := sentences("Keys are encrypted, e.g. with Fernet v1.2 at rest. The API never returns a key! Is it? 3 retries at most.")
+	want := []string{"Keys are encrypted, e.g. with Fernet v1.2 at rest.", "The API never returns a key!", "Is it?", "3 retries at most."}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("sentences = %q", got)
+	}
+	if rs := ruleSentences("The API never returns a key. Keys are stored. A session holds at most one turn."); len(rs) != 2 {
+		t.Errorf("ruleSentences = %q", rs)
+	}
+	cases := []struct{ line, value, attr, of string }{
+		{`        row.state = SessionState.VOIDED`, "VOIDED", "state", "row"},
+		{`    s.Status = StatusClosed`, "StatusClosed", "Status", "s"},
+		{`        self._update(row.id, SessionPatch(state="submitted", submitted_at=now))`, "submitted", "state", "SessionPatch"},
+		{`UPDATE sessions SET state = 'graded' WHERE id = 1;`, "graded", "state", ""},
+		{`    item.status = "deleted"`, "deleted", "status", "item"},
+		{`        self.status = status`, "", "", ""},
+		{`    row.state = None`, "", "", ""},
+		{`    if row.state == "reading":`, "", "", ""},
+	}
+	for _, c := range cases {
+		v, a, o := transition(c.line)
+		if v != c.value || (v != "" && (strings.ToLower(a) != strings.ToLower(c.attr) || o != c.of)) {
+			t.Errorf("transition(%q) = %q %q %q, want %q %q %q", c.line, v, a, o, c.value, c.attr, c.of)
+		}
 	}
 }

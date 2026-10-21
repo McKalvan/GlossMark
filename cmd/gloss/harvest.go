@@ -37,7 +37,8 @@ func cmdHarvest(args []string) int {
 	in := fs.String("in", "", "read evidence from this file instead of harvesting")
 	noGit := fs.Bool("no-git", false, "skip rename evidence from the git history")
 	cluster := fs.Bool("cluster", false, "print candidate concepts instead of evidence")
-	format := fs.String("format", "jsonl", "jsonl | text (text: a summary of --cluster)")
+	about := fs.String("about", "", "print only the evidence that names or mentions this term (a candidate, an alias, a constraint's subject)")
+	format := fs.String("format", "jsonl", "jsonl | text (text: a summary of --cluster, or one line per observation with --about)")
 	top := fs.Int("top", 60, "text: how many candidates to list")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
@@ -69,9 +70,29 @@ func cmdHarvest(args []string) int {
 	w := bufio.NewWriter(os.Stdout)
 	defer w.Flush()
 	enc := json.NewEncoder(w)
+	if *about != "" {
+		if *cluster {
+			return fail(fmt.Errorf("--about and --cluster: use one"))
+		}
+		ev = harvest.About(ev, *about)
+		if *format == "text" {
+			for _, e := range ev {
+				loc := e.Source.Path
+				if loc == "" {
+					loc = e.Source.URI
+				}
+				fmt.Fprintf(w, "%-15s %s:%d  %s", e.Signal, loc, e.Source.Line, e.Surface)
+				if len(e.Context) > 0 {
+					fmt.Fprintf(w, "  [%s]", strings.Join(e.Context, " "))
+				}
+				fmt.Fprintln(w)
+			}
+			return 0
+		}
+	}
 	if !*cluster {
 		if *format == "text" {
-			return fail(fmt.Errorf("--format text needs --cluster"))
+			return fail(fmt.Errorf("--format text needs --cluster or --about"))
 		}
 		_ = enc.Encode(map[string]any{"type": "evidence", "format": version.EvidenceFormat, "generator": version.Generator()})
 		for _, e := range ev {
