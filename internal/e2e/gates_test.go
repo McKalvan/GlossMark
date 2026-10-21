@@ -179,3 +179,85 @@ func TestCoreTestCredit(t *testing.T) {
 		t.Errorf("with a test in o:documents: coverage %d of %d, want 3", m.ConceptsCovered, m.ConceptsInScope)
 	}
 }
+
+// TestCoreTestCreditContainment: a test of a core concept in a boundary
+// that encloses the realizer's boundary covers it (a system-level
+// acceptance test), and so does a test beside the files that configure or
+// deploy a system-type. A test in a sibling boundary still does not, and
+// the untested line says where the core concept's tests are instead.
+func TestCoreTestCreditContainment(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Invoicing: { kind: process }\n  Checkout: { kind: process }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n"+
+		"  BillingEngine: { kind: process, realizes: z:Invoicing }\n"+
+		"  InvoiceDocument: { kind: process, realizes: z:Invoicing }\n"+
+		"  DeskCheckout: { kind: process, realizes: z:Checkout }\n"+
+		"  KioskCheckout: { kind: process, realizes: z:Checkout }\n"+
+		"  BillingService: { kind: system-type, realizes: z:Invoicing }\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
+	write("billing/.gloss.yaml", "boundary: o:billing\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:BillingEngine, i:BillingService]\n")
+	write("documents/.gloss.yaml", "boundary: o:documents\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:InvoiceDocument]\n")
+	// desk/ names no part-of: nesting makes it part of o:root (ADR 0026).
+	write("desk/.gloss.yaml", "boundary: o:desk\nlevel: container\ndefault-namespace: i\nrealizes: [i:DeskCheckout]\n")
+	write("kiosk/.gloss.yaml", "boundary: o:kiosk\nlevel: container\npart-of: o:root\ndefault-namespace: i\nrealizes: [i:KioskCheckout]\n")
+	write("billing/engine.py", "# @gloss implements .BillingEngine\ndef bill(): pass\n")
+	write("billing/deploy.yaml", "# @gloss configures .BillingService scope=file\nreplicas: 2\n")
+	write("billing/test_engine.py", "# @gloss verifies z:Invoicing\ndef test_bill(): pass\n")
+	write("documents/pdf.py", "# @gloss implements .InvoiceDocument\ndef render(): pass\n")
+	write("desk/checkout.py", "# @gloss implements .DeskCheckout\ndef checkout(): pass\n")
+	write("kiosk/checkout.py", "# @gloss implements .KioskCheckout\ndef checkout(): pass\n")
+	// A system-level acceptance test at the root.
+	write("features/checkout.feature", "# @gloss verifies z:Checkout\nFeature: Checkout\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	u := findings(rep, rollup.KindUntested)
+	if c := concepts(u); len(c) != 1 || !has(c, "i:InvoiceDocument") {
+		t.Errorf("untested = %v, want i:InvoiceDocument only", c)
+	}
+	for _, f := range u {
+		if f.Concept == "i:InvoiceDocument" && !strings.Contains(f.Msg, "the tests of z:Invoicing, which it realizes, sit in boundaries that hold none of its code") {
+			t.Errorf("untested message %q should say where z:Invoicing's tests are", f.Msg)
+		}
+	}
+	if m := rep.Metrics; m.ConceptsCovered != 4 || m.ConceptsInScope != 5 {
+		t.Errorf("coverage %d of %d, want 4 of 5", m.ConceptsCovered, m.ConceptsInScope)
+	}
+}
+
+// TestUntestedNamesWhyCoreTestMisses: when a core concept counts as tested
+// only because another realizer is verified, the untested line says so
+// instead of pointing at tests the core concept does not have.
+func TestUntestedNamesWhyCoreTestMisses(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Availability: { kind: capability }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  ApiService: { kind: system-type, realizes: z:Availability }\n  SlotSearch: { kind: capability, realizes: z:Availability }\n")
+	write(".gloss.yaml", "boundary: o:api\nlevel: container\ndefault-namespace: i\nrealizes: [i:ApiService, i:SlotSearch]\n")
+	write("slots.go", "package api\n\n// @gloss implements .SlotSearch\nfunc FindSlots() {}\n")
+	write("deploy.yaml", "# @gloss deploys .ApiService scope=file\nreplicas: 1\n")
+	write("api_test.go", "// @gloss verifies .ApiService scope=file\npackage api\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	u := findings(rep, rollup.KindUntested)
+	if len(u) != 1 || u[0].Concept != "i:SlotSearch" || !strings.Contains(u[0].Msg, "z:Availability, which it realizes, counts as tested only because i:ApiService is tested") {
+		t.Errorf("untested = %+v, want i:SlotSearch naming i:ApiService", u)
+	}
+}
+
+// TestUntestedNorUntestedEvent: an impl concept realizing an untested
+// event (events are never reported themselves) keeps the "nor" suffix.
+func TestUntestedNorUntestedEvent(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Booked: { kind: event }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Emitter: { kind: process, realizes: z:Booked }\n")
+	write(".gloss.yaml", "boundary: o:svc\nlevel: container\ndefault-namespace: i\nrealizes: [i:Emitter]\n")
+	write("emit.go", "package svc\n\n// @gloss implements .Emitter\nfunc Emit() {}\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	u := findings(rep, rollup.KindUntested)
+	if len(u) != 1 || !strings.HasSuffix(u[0].Msg, "nothing tests or verifies it (nor z:Booked, which it realizes)") {
+		t.Errorf("untested = %+v, want the nor suffix", u)
+	}
+}
