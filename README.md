@@ -52,11 +52,11 @@ Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue:
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0   # Linux/macOS binary into ~/.local/bin
-go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0                                          # with a Go toolchain
+curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.2.0   # Linux/macOS binary into ~/.local/bin
+go install github.com/mckalvan/glossmark/cmd/gloss@v0.2.0                                          # with a Go toolchain
 ```
 
-Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.1.0` downloads the same binary.
+Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.2.0` downloads the same binary.
 
 ## Try it
 
@@ -99,7 +99,7 @@ Not every subsystem carries the same risk. `criticality: low | medium | high | c
 
 ## Versions
 
-`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.1.0`), pre-commit (`rev: v0.1.0`), `install.sh v0.1.0` or `go install ...@v0.1.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
+`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.2.0`), pre-commit (`rev: v0.2.0`), `install.sh v0.2.0` or `go install ...@v0.2.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Status
 

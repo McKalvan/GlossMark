@@ -172,7 +172,7 @@ func (d *doctor) binary() {
 	p, err := d.env.LookPath("gloss")
 	if err != nil {
 		d.add("gloss on PATH", Fail, "not found; the SessionStart hook and the MCP server run `gloss` by name and fail silently without it",
-			"curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh, or go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0, then add the directory to PATH")
+			"curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh, or go install github.com/mckalvan/glossmark/cmd/gloss@v0.2.0, then add the directory to PATH")
 		return
 	}
 	// The hook and the MCP server run whatever `gloss` PATH finds, so ask it
@@ -375,11 +375,11 @@ func (d *doctor) pins() {
 	}
 	switch {
 	case len(found) == 0 && gitRoot != "":
-		d.add("CI pins", Warn, "no GitHub workflow at the git root ("+gitRoot+") or in this workspace references GlossMark for this workspace", "add the Action pinned to a release to a workflow at the git root, with root: set to this workspace: uses: mckalvan/glossmark@v0.1.0")
+		d.add("CI pins", Warn, "no GitHub workflow at the git root ("+gitRoot+") or in this workspace references GlossMark for this workspace", "add the Action pinned to a release to a workflow at the git root, with root: set to this workspace: uses: mckalvan/glossmark@v0.2.0")
 	case len(found) == 0:
-		d.add("CI pins", Warn, "no GitHub workflow or pre-commit config references GlossMark", "add the Action (docs/QUICKSTART.md, section 7) pinned to a release: uses: mckalvan/glossmark@v0.1.0")
+		d.add("CI pins", Warn, "no GitHub workflow or pre-commit config references GlossMark", "add the Action (docs/QUICKSTART.md, section 7) pinned to a release: uses: mckalvan/glossmark@v0.2.0")
 	case len(unpinned) > 0:
-		d.add("CI pins", Fail, strings.Join(unpinned, "; ")+": an unpinned ref builds from source on every run and changes under you", "pin a release tag, e.g. @v0.1.0 / rev: v0.1.0")
+		d.add("CI pins", Fail, strings.Join(unpinned, "; ")+": an unpinned ref builds from source on every run and changes under you", "pin a release tag, e.g. @v0.2.0 / rev: v0.2.0")
 	default:
 		sort.Strings(found)
 		d.add("CI pins", OK, "release pinned in "+strings.Join(uniq(found), ", "), "")

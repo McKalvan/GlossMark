@@ -3,7 +3,7 @@
 # Install: ln -s ../../hooks/pre-commit .git/hooks/pre-commit   (or use .pre-commit-hooks.yaml)
 set -e
 if ! command -v gloss >/dev/null 2>&1; then
-  echo "gloss: not installed (curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh, or go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0)" >&2
+  echo "gloss: not installed (curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh, or go install github.com/mckalvan/glossmark/cmd/gloss@v0.2.0)" >&2
   exit 0
 fi
 gloss check
