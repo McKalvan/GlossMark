@@ -24,7 +24,7 @@ concepts:
   Rollup:          { kind: process, consumes: [Graph], doc: "Deriving higher-level facts (containment, realization, lifting) from code-level links." }
   DriftComparison: { kind: process, consumes: [Graph], produces: [Drift], publishes: [DriftDetected], doc: "Comparing what manifests declare with what rollup derives." }
   Gating:          { kind: process, consumes: [Graph], produces: [Impact], doc: "Classifying a change as AUTO, SOFT or HARD by the views it touches." }
-  Review:          { kind: process, consumes: [ProposedLink], publishes: [LinkAccepted, LinkRejected], doc: "A person deciding whether a proposed link or concept holds: accept it, reject it with a reason, or re-confirm a stale one." }
+  Review:          { kind: process, consumes: [ProposedLink], publishes: [LinkAccepted, LinkRejected], doc: "Deciding whether a proposed link or concept holds: accept it, reject it with a reason, or re-confirm a stale one. HARD decisions are a person's; the rest may be an agent's." }
   Projection:      { kind: process, consumes: [Graph], produces: [View], doc: "Selecting and arranging part of the graph for one observer, by tier, zoom or feature." }
   Publication:     { kind: process, consumes: [Namespace], doc: "Exposing a namespace's published concepts to importing repositories." }
   Vocabulary:      { kind: capability, doc: "The concepts and relations served to coding agents while they write, as an AGENTS.md snippet or over MCP." }
