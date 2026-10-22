@@ -134,6 +134,50 @@ func TestDecoratorFingerprintMigrates(t *testing.T) {
 	}
 }
 
+// TestSidecarLedgerMigrates: a ledger v0.1.0 wrote for JSON sidecars, which
+// anchored to the sidecar itself, stays accepted after the upgrade; a range
+// marker's entry moves to its new id with its history; a value edit then
+// stales it (#171). The ids and fingerprints are what v0.1.0 recorded.
+func TestSidecarLedgerMigrates(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  circ: { iri: https://x/circ/, tier: core }\n")
+	write("ontology/circ.gloss.yaml", "concepts:\n  KioskGateway: { kind: system-type }\n  ReturnEventBus: { kind: resource }\n")
+	write("config/app.json", "{\n  \"bus\": \"kafka\",\n  \"port\": 9092\n}\n")
+	write("config/app.json.gloss", "@gloss configures circ:ReturnEventBus scope=range note=\"/bus\"\n")
+	write("config/kiosk.json", "{\n  \"kiosk\": true\n}\n")
+	write("config/kiosk.json.gloss", "@gloss configures circ:KioskGateway\n")
+	lg, _ := ledger.Open(filepath.Join(t.TempDir(), "ledger.jsonl"))
+	created := "2026-01-01T00:00:00Z"
+	for id, v := range map[string][2]string{
+		"m-eba08697d2": {"circ:ReturnEventBus", "sha256:85bf90082cc3bcec"},
+		"m-6876d99980": {"circ:KioskGateway", "sha256:ab79c0031467433e"},
+	} {
+		lg.Entries[id] = &model.LedgerEntry{MarkerID: id, Relation: "configures", Targets: []string{v[0]}, Status: model.StatusAccepted,
+			AnchorFingerprint: v[1], ReviewedBy: "human:ann", Created: created}
+	}
+	_, g, res, _ := build(t, root)
+	lg.Sync(g, res.Markers, "human:test", time.Now())
+	bus := ""
+	for _, fm := range res.Markers {
+		if fm.Path == "config/app.json.gloss" {
+			bus = fm.ID
+		}
+	}
+	if e := lg.Entries["m-6876d99980"]; e == nil || e.Status != model.StatusAccepted {
+		t.Errorf("file-scope sidecar link after upgrade: %+v, want accepted", e)
+	}
+	e := lg.Entries[bus]
+	if _, old := lg.Entries["m-eba08697d2"]; old || e == nil || e.Status != model.StatusAccepted || e.ReviewedBy != "human:ann" || e.Created != created || !reflect.DeepEqual(e.PreviousIDs, []string{"m-eba08697d2"}) {
+		t.Errorf("range sidecar link after upgrade: %+v, want the v0.1.0 entry accepted under %s", e, bus)
+	}
+	write("config/app.json", "{\n  \"bus\": \"rabbit\",\n  \"port\": 9092\n}\n")
+	_, g, res, _ = build(t, root)
+	lg.Sync(g, res.Markers, "human:test", time.Now())
+	if e := lg.Entries[bus]; e.Status != model.StatusStale {
+		t.Errorf("value edited: %s, want stale", e.Status)
+	}
+}
+
 // TestRepeatedMarkerRemedy: GM131 suggests what spans the run. Above a run
 // of top-level functions that is scope=file, since scope=block covers one
 // function; above methods it is the enclosing class. Applying the advice

@@ -384,6 +384,9 @@ func (c *comparer) boundaries() {
 				if rel == "realizes" && c.eventOnly(d) {
 					continue // events are compared through publishes/subscribes, not realizes
 				}
+				if rel == "holds" && c.flowShape(b.ID, d) {
+					continue // a payload type is the shape of the boundary's flow, not stored data
+				}
 				covered := false
 				for _, s := range declared {
 					if Covers(c.g, s, d) {
@@ -1072,6 +1075,25 @@ func (c *comparer) eventOnly(id string) bool {
 		}
 	}
 	return true
+}
+
+// flowShape reports whether an event-only concept is one boundary b
+// publishes, subscribes, produces or consumes: code that represents it there
+// is the flow's payload, so its derived holds needs no holds: entry (#172).
+// It still covers a declared one, so an event log can be declared. The flow
+// is the code's or the manifest's; a concept's intent alone does not count.
+func (c *comparer) flowShape(b, id string) bool {
+	if !c.eventOnly(id) {
+		return false
+	}
+	for _, rel := range LiftedRelations {
+		for _, e := range c.g.Out(b, rel) {
+			if e.O == id && !intent(e) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (c *comparer) orphans() {

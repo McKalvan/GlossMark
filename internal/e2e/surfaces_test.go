@@ -87,6 +87,23 @@ func TestRepresentsAnyKindHolds(t *testing.T) {
 	if v := findings(rep, rollup.KindViolation); len(v) != 1 || v[0].Concept != "wh:Recount" || v[0].Relation != "holds" {
 		t.Errorf("violations = %+v, want holds wh:Recount", v)
 	}
+	// The payload type of an event the boundary publishes is the flow's
+	// shape, not stored data: no holds violation (#172).
+	write("sql/events.sql", "-- @gloss represents wh:Recount\nCREATE TABLE recounts (id int);\n-- @gloss publishes wh:Recount\nCREATE FUNCTION emit() RETURNS void AS $$ $$;\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
+		t.Errorf("violations with publishes = %+v, want none", v)
+	}
+	// Declared, it is still held: an event log.
+	write("sql/.gloss.yaml", "boundary: whb:db\nlevel: container\nholds: [wh:Count, wh:CountVariance, wh:Recount]\n")
+	ws, g, _, lg = build(t, root)
+	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	for _, k := range []string{rollup.KindGap, rollup.KindViolation} {
+		if fs := findings(rep, k); len(fs) != 0 {
+			t.Errorf("event log declared, %s: %+v", k, fs)
+		}
+	}
 }
 
 // harbor writes the shared core of the surfaces fixtures: an order service
