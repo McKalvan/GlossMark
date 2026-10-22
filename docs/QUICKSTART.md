@@ -207,9 +207,32 @@ A repository with several workspaces runs the Action once per `root:` (a matrix)
 
 The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
 
+The Action's drift step fails on `violation,value-drift,dangling,overdue` by default. `drift-fail-on:` takes any `gloss drift --fail-on` list, and `check-graph: "true"` also fails when the committed `.glossmark/graph.jsonl` is not what `gloss build` makes from the tree (`gloss build --check`). A repository that wants nothing to merge unreviewed fails on stale links too, so a PR that edits a marked file re-confirms its links in the same PR:
+
+```yaml
+      - uses: mckalvan/glossmark@v0.1.0
+        with:
+          check-graph: "true"
+          drift-fail-on: violation,value-drift,gap,dangling,overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
+```
+
+Before pushing, `gloss drift` lists what went stale; check that each link still holds and `gloss accept --stale <paths>` re-confirms them (`-n` shows which first). GlossMark's own CI runs this way ([.github/workflows/ci.yml](../.github/workflows/ci.yml)): it also lets a reviewer clear a HARD gate by labelling the PR `ontology-approved`, so the human decision the gate asks for is recorded on the PR.
+
 Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hooks from `.pre-commit-hooks.yaml` to your `.pre-commit-config.yaml` with `rev: v0.1.0`.
 
 ## Review workflow
+
+`gloss review` (experimental, [ADR 0033](adr/0033-review-sessions.md)) puts everything that waits on a reviewer in one queue: proposed and stale links, proposed concepts, drifted values and drift findings. Each item carries its context (the marker's lines, what changed in the file since the last review, the target concepts' docs) and its actions with their gates. On a terminal it is interactive: the queue beside the selected item's context, history and concept docs; `a` accepts or re-confirms, `r` rejects (asks a reason), `w` waives a finding, `p` proposes a `ns:NEW:` concept, `e` edits a concept's doc, `y`/`d` take or dismiss an agent's recommendation, `n` writes a link, `o` opens `$EDITOR` at the line, `v` opens the HTML viewer in a browser on the item's concept (`viewer.html#slice=<curie>`; over SSH it prints the URL), `u` undoes, `f` and `/` filter, `tab` opens the read-only graph browser (enter follows an edge, `h` goes back), `?` lists the keys. Headless, for scripts and agents:
+
+```sh
+gloss review --format json                     # the queue (--kind stale-link --path internal/)
+gloss review show m-1a2b3c4d5e --format text   # one item: context, history, concepts, gates
+echo '{"id":"m-1a2b3c4d5e","action":"reconfirm"}' | gloss review apply
+gloss review undo                              # reverts the last decision, files and ledger alike
+gloss review node gmi:ReviewEngine             # read-only: a node and its edges in and out (a path works too)
+```
+
+An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc; an agent's doc edit becomes a `recommendation` item a person `apply`s or `dismiss`es. Over MCP the same engine serves `review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc` and the read-only `browse_node`, as the server's `GLOSS_ACTOR`.
 
 - Humans review novelty and hierarchy; everything else flows through policy.
 - **AUTO**: fingerprint-only changes, derived edges. Cleared by the engine.

@@ -31,9 +31,12 @@ Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue:
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `init`, `harvest`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
+| `cmd/gloss` | The CLI: `init`, `harvest`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `review`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
+| `internal/review` | `gloss review` (experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): the review queue, decisions by gate authority, agent recommendations and an undo journal |
+| `internal/tui` | The interactive terminal for `gloss review`, hand-rolled on `golang.org/x/term` |
+| `internal/browse` | The read-only graph browser: `gloss review node`, the terminal's Browse tab, `browse_node` |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](docs/adr/0025-deriving-the-ontology.md), experimental) |
@@ -71,7 +74,7 @@ cd ..
 
 ## For agents
 
-`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius), `slice_of` (everything relevant to one feature, like `gloss slice`) and `drift`. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius), `slice_of` (everything relevant to one feature, like `gloss slice`), `drift`, and the review tools (`review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc`, and the read-only `browse_node`; experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): an agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## GlossMark on GlossMark
 
@@ -84,7 +87,7 @@ go build -o gloss ./cmd/gloss
 ./gloss view      # .glossmark/viewer.html
 ```
 
-The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger records them as accepted without a reviewer until a human reviews them. Most markers here are `scope=file`, and a file-scope link goes stale whenever its file's code or prose changes ([ADR 0006](docs/adr/0006-file-fingerprint-excludes-markers.md)). So `gloss drift` lists stale links for the files a change touched: check that each link still holds, then `gloss accept <id>` re-confirms it. The self-host test does not fail on stale, because stale here means "review this", not "wrong".
+The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger records them as accepted without a reviewer until a human reviews them. Most markers here are `scope=file`, and a file-scope link goes stale whenever its file's code or prose changes ([ADR 0006](docs/adr/0006-file-fingerprint-excludes-markers.md)). So `gloss drift` lists stale links for the files a change touched: check that each link still holds, then `gloss accept --stale <paths>` (or `gloss accept <id>`) re-confirms them. CI holds this repository to the strictest gate the tool offers ([.github/workflows/ci.yml](.github/workflows/ci.yml)): the committed graph must match the tree (`gloss build --check`); `gloss drift` fails on every finding kind but `overlap` (the command line and the library it calls realize the same concepts by design, [ADR 0019](docs/adr/0019-migration-overlap.md)), stale links included; concept coverage must stay at 100%; and every concept must carry a doc. The workflow runs the Action from this checkout (`uses: ./`, `version: source`), so every PR also exercises `action.yml` and posts its own impact comment; a HARD change needs a reviewer to label the PR `ontology-approved`.
 
 ## Design in one paragraph
 

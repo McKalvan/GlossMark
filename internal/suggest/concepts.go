@@ -98,7 +98,7 @@ func Concepts(ws *load.Workspace, g *graph.Graph, paths []string) []ConceptPropo
 	tables := map[string]string{} // lower-case table name → member id
 	for _, rel := range ws.Files {
 		ext := strings.ToLower(filepath.Ext(rel))
-		if !under(rel, paths) || !codeExts[ext] || ext == ".md" || ext == ".yaml" || ext == ".yml" || ws.IsTestPath(rel) {
+		if !Under(rel, paths) || !codeExts[ext] || ext == ".md" || ext == ".yaml" || ext == ".yml" || ws.IsTestPath(rel) {
 			continue
 		}
 		style, ok := marker.StyleFor(rel, ws.Config.CommentStyles)

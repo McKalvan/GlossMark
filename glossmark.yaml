@@ -2,8 +2,8 @@
 # gm:  is the core tier, what a comment-native code ontology is about, independent of this tool.
 # gmi: is the implementation tier, the Go packages and commands that realize it.
 owns:
-  gm:  { iri: https://github.com/mckalvan/glossmark/ontology/gm/,  file: ontology/gm.gloss.yaml,  tier: core,           version: 0.1.0, owner: glossmark }
-  gmi: { iri: https://github.com/mckalvan/glossmark/ontology/gmi/, file: ontology/gmi.gloss.yaml, tier: implementation, version: 0.1.0, owner: glossmark }
+  gm:  { iri: https://github.com/mckalvan/glossmark/ontology/gm/,  file: ontology/gm.gloss.yaml,  tier: core,           version: 0.1.1, owner: glossmark }
+  gmi: { iri: https://github.com/mckalvan/glossmark/ontology/gmi/, file: ontology/gmi.gloss.yaml, tier: implementation, version: 0.2.0, owner: glossmark }
 prefixes:
   arch: https://github.com/mckalvan/glossmark/boundaries/
 source-url: https://github.com/mckalvan/glossmark/blob/main/{path}#L{line}   # the viewer links paths here

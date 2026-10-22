@@ -16,6 +16,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/suggest"
 )
 
 func init() {
@@ -85,6 +86,7 @@ func cmdAccept(args []string) int {
 	fs, root := newFlags("accept")
 	all := fs.Bool("all", false, "accept every proposed link")
 	byPolicy := fs.Bool("policy", false, "accept every proposed link the policy classifies SOFT")
+	stale := fs.Bool("stale", false, "re-confirm every stale link (its current anchor becomes the baseline); path arguments limit it to those files or directories")
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
 	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
@@ -92,8 +94,12 @@ func cmdAccept(args []string) int {
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
-	if fs.NArg() == 0 && !*all && !*byPolicy {
-		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy | --concept <ns:Name>... | --value <ns:Name>...")
+	if fs.NArg() == 0 && !*all && !*byPolicy && !*stale {
+		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy | --stale [path]... | --concept <ns:Name>... | --value <ns:Name>...")
+		return 2
+	}
+	if *stale && (*all || *byPolicy || *concept || *value) {
+		fmt.Fprintln(os.Stderr, "gloss accept: --stale re-confirms stale links only; it does not combine with --all, --policy, --concept or --value")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -149,7 +155,18 @@ func cmdAccept(args []string) int {
 	}
 	pol := p.WS.Config.EffectivePolicy()
 	var targets []extract.FoundMarker
-	if fs.NArg() > 0 {
+	if *stale {
+		// The ledger was synced in memory, so stale is the state the tree is in now.
+		for _, fm := range p.Res.Markers {
+			if e := p.Ledger.Entry(fm.ID); e != nil && e.Status == model.StatusStale && suggest.Under(fm.Path, fs.Args()) {
+				targets = append(targets, fm)
+			}
+		}
+		if len(targets) == 0 {
+			fmt.Println("gloss accept: no stale links to re-confirm")
+			return 0
+		}
+	} else if fs.NArg() > 0 {
 		targets, err = selectMarkers(p, fs.Args())
 		if err != nil {
 			return fail(err)
@@ -232,7 +249,11 @@ func cmdAccept(args []string) int {
 		if err := p.Ledger.Save(); err != nil {
 			return fail(err)
 		}
-		fmt.Printf("gloss accept: %s accepted by %s\n", plural(n, "link"), rev)
+		verb := "accepted"
+		if *stale {
+			verb = "re-confirmed"
+		}
+		fmt.Printf("gloss accept: %s %s by %s\n", plural(n, "link"), verb, rev)
 	}
 	return 0
 }

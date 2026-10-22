@@ -8,6 +8,7 @@ package graph
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -785,6 +786,29 @@ func (g *Graph) PartOfChain(id string) []string {
 		out = append(out, next)
 		cur = next
 	}
+}
+
+// Matches reports whether a graph.jsonl holds the same records g writes. The
+// header line names the generator, so a graph committed by one release and
+// checked by another still matches when every record does.
+func (g *Graph) Matches(committed []byte) (bool, error) {
+	var buf bytes.Buffer
+	if err := g.WriteJSONL(&buf); err != nil {
+		return false, err
+	}
+	return bytes.Equal(jsonlBody(committed), jsonlBody(buf.Bytes())), nil
+}
+
+// jsonlBody returns a graph.jsonl without its header line.
+func jsonlBody(b []byte) []byte {
+	b = bytes.TrimSpace(b)
+	if bytes.HasPrefix(b, []byte(`{"type":"context"`)) {
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			return b[i+1:]
+		}
+		return nil
+	}
+	return b
 }
 
 // WriteJSONL writes the header, nodes and edges deterministically.

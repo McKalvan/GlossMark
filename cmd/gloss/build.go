@@ -102,16 +102,39 @@ func cmdBuild(args []string) int {
 	out := fs.String("o", "", "output path (default .glossmark/graph.jsonl under the root)")
 	quiet := fs.Bool("q", false, "print only diagnostics")
 	noLedger := fs.Bool("no-ledger", false, "do not update .glossmark/ledger.jsonl")
+	check := fs.Bool("check", false, "write nothing; fail when the graph on disk differs from the tree (CI: the committed graph is current)")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
-	p, err := buildGraph(*root, !*noLedger)
+	p, err := buildGraph(*root, !*noLedger && !*check)
 	if err != nil {
 		return fail(err)
 	}
 	path := *out
 	if path == "" {
 		path = p.WS.StatePath("graph.jsonl")
+	}
+	if *check {
+		printDiags(p.Diags)
+		committed, err := os.ReadFile(path)
+		if err != nil {
+			return fail(fmt.Errorf("%s: %w; run gloss build and commit it", relOrAbs(p.WS.Root, path), err))
+		}
+		same, err := p.Graph.Matches(committed)
+		if err != nil {
+			return fail(err)
+		}
+		if !same {
+			fmt.Fprintf(os.Stderr, "gloss build: %s is stale: rebuilding from the tree gives a different graph; run gloss build and commit it\n", relOrAbs(p.WS.Root, path))
+			return 1
+		}
+		if !*quiet {
+			fmt.Printf("gloss build: %s matches the tree\n", relOrAbs(p.WS.Root, path))
+		}
+		if hasErrors(p.Diags) {
+			return 1
+		}
+		return 0
 	}
 	if err := writeGraph(p.Graph, path); err != nil {
 		return fail(err)

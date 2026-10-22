@@ -1,7 +1,7 @@
 # ontology/gm.gloss.yaml (core tier): what a comment-native code ontology is about.
 # Nothing here names a Go package, a file or a command; that is gmi:'s job.
 namespace: gm
-version: 0.1.0
+version: 0.1.1
 doc: The concepts GlossMark exists to manage, independent of how the tool is built.
 concepts:
   # Things
@@ -19,23 +19,23 @@ concepts:
   Graph:           { kind: resource, doc: "The canonical graph of artifacts, concepts, boundaries and the edges between them." }
   Ledger:          { kind: resource, doc: "The review state and provenance of every link." }
   # Processes
-  Extraction:      { kind: process, consumes: [Link, Artifact], produces: [Graph] }
+  Extraction:      { kind: process, consumes: [Link, Artifact], produces: [Graph], doc: "Reading markers, manifests and ontology files out of a repository into the graph." }
   Lint:            { kind: process, consumes: [Graph], doc: "Syntax, references, domain and range, tiers, allowed lists." }
   Rollup:          { kind: process, consumes: [Graph], doc: "Deriving higher-level facts (containment, realization, lifting) from code-level links." }
   DriftComparison: { kind: process, consumes: [Graph], produces: [Drift], publishes: [DriftDetected], doc: "Comparing what manifests declare with what rollup derives." }
   Gating:          { kind: process, consumes: [Graph], produces: [Impact], doc: "Classifying a change as AUTO, SOFT or HARD by the views it touches." }
-  Review:          { kind: process, consumes: [ProposedLink], publishes: [LinkAccepted, LinkRejected] }
-  Projection:      { kind: process, consumes: [Graph], produces: [View] }
+  Review:          { kind: process, consumes: [ProposedLink], publishes: [LinkAccepted, LinkRejected], doc: "Deciding whether a proposed link or concept holds: accept it, reject it with a reason, or re-confirm a stale one. HARD decisions are a person's; the rest may be an agent's." }
+  Projection:      { kind: process, consumes: [Graph], produces: [View], doc: "Selecting and arranging part of the graph for one observer, by tier, zoom or feature." }
   Publication:     { kind: process, consumes: [Namespace], doc: "Exposing a namespace's published concepts to importing repositories." }
   Vocabulary:      { kind: capability, doc: "The concepts and relations served to coding agents while they write, as an AGENTS.md snippet or over MCP." }
   Onboarding:      { kind: process, produces: [ProposedLink], doc: "Bringing a repository under GlossMark: scaffolding it, importing the vocabulary it already keeps, and drafting its first links for review." }
   # Events
-  LinkProposed:    { kind: event }
-  LinkAccepted:    { kind: event }
-  LinkRejected:    { kind: event }
+  LinkProposed:    { kind: event, doc: "An agent or a tool proposed a link that awaits review." }
+  LinkAccepted:    { kind: event, doc: "A reviewer accepted a proposed link, or re-confirmed a stale one." }
+  LinkRejected:    { kind: event, doc: "A reviewer rejected a proposed link, with a reason." }
   LinkStale:       { kind: event, doc: "An accepted link whose anchor changed underneath it." }
-  DecisionRequested: { kind: event }
-  DriftDetected:   { kind: event }
+  DecisionRequested: { kind: event, doc: "A link named a concept that does not exist yet, and the namespace owner is asked to define it or refuse it." }
+  DriftDetected:   { kind: event, doc: "A boundary's code was found to derive something its manifest does not declare, or not to derive something it does." }
   # Measures
   Drift:           { kind: measure, doc: "Disagreement between what a boundary declares and what its code derives." }
   Coverage:        { kind: measure, doc: "The share of implementation concepts with at least one artifact and one verifier; the share of files with an accepted link is secondary." }
@@ -49,7 +49,7 @@ concepts:
   AllowedList:     { kind: constraint, constrains: [Boundary], doc: "Inline links inside a boundary may only target the concepts its manifest allows, written or derived from what it declares; stepping outside is HARD." }
   ValueBinding:    { kind: constraint, constrains: [Concept], doc: "A published value follows the code it is bound to; a change to that code alone is drift." }
   # The system
-  GlossMark:       { kind: system-type, produces: [Graph, View, Drift, Impact, Landscape] }
+  GlossMark:       { kind: system-type, produces: [Graph, View, Drift, Impact, Landscape], doc: "A comment-native code ontology: links written in comments, compiled into one graph that is checked, compared, gated and projected." }
   Criticality:
     kind: measure
     doc: "How much review a concept or boundary deserves (low, medium, high or critical); a change that touches it inherits the gate its level demands."

@@ -257,14 +257,12 @@ func (d *doctor) graph() {
 		d.add("graph", Fail, rel+" does not exist", "gloss build, then commit .glossmark/")
 		return
 	}
-	var buf bytes.Buffer
-	if err := d.g.WriteJSONL(&buf); err != nil {
+	same, err := d.g.Matches(committed)
+	if err != nil {
 		d.add("graph", Fail, "cannot rebuild the graph: "+err.Error(), "")
 		return
 	}
-	// The header line names the generator; a graph committed by one release
-	// and checked by another is still current when every record matches.
-	if !bytes.Equal(graphBody(committed), graphBody(buf.Bytes())) {
+	if !same {
 		d.add("graph", Fail, rel+" is stale: rebuilding from the tree gives a different graph", "gloss build (the pre-commit hook keeps it current: ln -s ../../hooks/pre-commit .git/hooks/pre-commit)")
 		return
 	}
@@ -445,18 +443,6 @@ func mentionsRoot(text, rel string) bool {
 
 func pathChar(c byte) bool {
 	return c == '-' || c == '_' || c == '.' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
-}
-
-// graphBody returns a graph.jsonl without its header line.
-func graphBody(b []byte) []byte {
-	b = bytes.TrimSpace(b)
-	if bytes.HasPrefix(b, []byte(`{"type":"context"`)) {
-		if i := bytes.IndexByte(b, '\n'); i >= 0 {
-			return b[i+1:]
-		}
-		return nil
-	}
-	return b
 }
 
 func tracked(root, rel string) bool {

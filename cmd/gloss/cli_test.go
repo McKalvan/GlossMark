@@ -211,6 +211,71 @@ func TestAcceptFileScopeAndReconfirm(t *testing.T) {
 	}
 }
 
+// build --check writes nothing and fails once the tree has moved past the
+// graph on disk.
+func TestBuildCheck(t *testing.T) {
+	root := tiny(t, map[string]string{"doer.py": "# @gloss implements .Doer\ndef doer(): pass\n"})
+	if code, _ := gloss(t, "build", "--check", "-q", "--root", root); code != 1 {
+		t.Fatalf("build --check with no graph: exit %d, want 1", code)
+	}
+	gloss(t, "build", "-q", "--root", root)
+	ledger := filepath.Join(root, ".glossmark", "ledger.jsonl")
+	before, _ := os.ReadFile(ledger)
+	if code, out := gloss(t, "build", "--check", "--root", root); code != 0 || !strings.Contains(out, "matches the tree") {
+		t.Fatalf("build --check after build: exit %d\n%s", code, out)
+	}
+	os.WriteFile(filepath.Join(root, "other.py"), []byte("# @gloss implements .Doer\ndef other(): pass\n"), 0o644)
+	if code, _ := gloss(t, "build", "--check", "-q", "--root", root); code != 1 {
+		t.Errorf("build --check after a new marker: exit %d, want 1", code)
+	}
+	if after, _ := os.ReadFile(ledger); string(after) != string(before) {
+		t.Errorf("build --check wrote the ledger")
+	}
+}
+
+// accept --stale re-confirms every stale link, or only those under the paths it
+// is given, and leaves proposals alone.
+func TestAcceptStale(t *testing.T) {
+	root := tiny(t, map[string]string{
+		"a/doer.py":  "# @gloss implements .Doer scope=file\ndef doer(): pass\n",
+		"b/other.py": "# @gloss implements .Doer scope=file\ndef other(): pass\n",
+		"c/maybe.py": "# @gloss? implements .Doer conf=0.9\ndef maybe(): pass\n",
+	})
+	gloss(t, "build", "-q", "--root", root)
+	os.WriteFile(filepath.Join(root, "a/doer.py"), []byte("# @gloss implements .Doer scope=file\ndef doer(): return 1\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "b/other.py"), []byte("# @gloss implements .Doer scope=file\ndef other(): return 1\n"), 0o644)
+	gloss(t, "build", "-q", "--root", root)
+	if st := append(ledgerStatus(t, root, "a/doer.py"), ledgerStatus(t, root, "b/other.py")...); len(st) != 2 || st[0] != "stale" || st[1] != "stale" {
+		t.Fatalf("after edits: %v, want [stale stale]", st)
+	}
+	if code, out := gloss(t, "accept", "--stale", "-n", "--root", root); code != 0 || !strings.Contains(out, "would re-confirm a/doer.py:1") || !strings.Contains(out, "would re-confirm b/other.py:1") {
+		t.Fatalf("accept --stale -n: exit %d\n%s", code, out)
+	}
+	if st := ledgerStatus(t, root, "a/doer.py"); st[0] != "stale" {
+		t.Fatalf("dry run changed the ledger: %v", st)
+	}
+	if code, out := gloss(t, "accept", "--stale", "./a", "--root", root); code != 0 || !strings.Contains(out, "1 link re-confirmed") {
+		t.Fatalf("accept --stale ./a: exit %d\n%s", code, out)
+	}
+	gloss(t, "build", "-q", "--root", root)
+	if a, b := ledgerStatus(t, root, "a/doer.py"), ledgerStatus(t, root, "b/other.py"); a[0] != "accepted" || b[0] != "stale" {
+		t.Fatalf("after accept --stale ./a: a %v, b %v; want accepted, stale", a, b)
+	}
+	if code, _ := gloss(t, "accept", "--stale", "--root", root); code != 0 {
+		t.Fatalf("accept --stale: exit %d", code)
+	}
+	gloss(t, "build", "-q", "--root", root)
+	if b, c := ledgerStatus(t, root, "b/other.py"), ledgerStatus(t, root, "c/maybe.py"); b[0] != "accepted" || c[0] != "proposed" {
+		t.Fatalf("after accept --stale: b %v, c %v; want accepted, proposed", b, c)
+	}
+	if code, out := gloss(t, "accept", "--stale", "--root", root); code != 0 || !strings.Contains(out, "no stale links") {
+		t.Errorf("accept --stale with nothing stale: exit %d\n%s", code, out)
+	}
+	if code, _ := gloss(t, "accept", "--stale", "--all", "--root", root); code != 2 {
+		t.Errorf("accept --stale --all: exit %d, want 2", code)
+	}
+}
+
 // The review loop end to end: status lists a proposal, reject records it with
 // its reason and status moves it to rejected, and accept on another proposal
 // leaves nothing proposed.
