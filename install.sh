@@ -3,12 +3,12 @@
 # Install a released gloss binary (Linux or macOS, amd64 or arm64).
 #
 #   curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh              # latest release
-#   curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.1.0  # pinned
+#   curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.2.0  # pinned
 #
 # Installs into $GLOSS_INSTALL_DIR (default ~/.local/bin) and verifies the
 # sha256 the release workflow attaches. Windows: download gloss_<version>_windows_amd64.exe
 # from the release page. Repositories with a Go toolchain can instead run
-#   go install github.com/mckalvan/glossmark/cmd/gloss@v0.1.0
+#   go install github.com/mckalvan/glossmark/cmd/gloss@v0.2.0
 set -eu
 
 REPO="mckalvan/glossmark"
