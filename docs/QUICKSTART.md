@@ -222,16 +222,17 @@ Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hoo
 
 ## Review workflow
 
-`gloss review` (experimental, [ADR 0033](adr/0033-review-sessions.md)) puts everything that waits on a reviewer in one queue: proposed and stale links, proposed concepts, drifted values and drift findings. Each item carries its context (the marker's lines, what changed in the file since the last review, the target concepts' docs) and its actions with their gates. On a terminal it is interactive: the queue beside the selected item's context, history and concept docs; `a` accepts or re-confirms, `r` rejects (asks a reason), `w` waives a finding, `p` proposes a `ns:NEW:` concept, `e` edits a concept's doc, `y`/`d` take or dismiss an agent's recommendation, `n` writes a link, `o` opens `$EDITOR` at the line, `u` undoes, `f` and `/` filter, `?` lists the keys. Headless, for scripts and agents:
+`gloss review` (experimental, [ADR 0033](adr/0033-review-sessions.md)) puts everything that waits on a reviewer in one queue: proposed and stale links, proposed concepts, drifted values and drift findings. Each item carries its context (the marker's lines, what changed in the file since the last review, the target concepts' docs) and its actions with their gates. On a terminal it is interactive: the queue beside the selected item's context, history and concept docs; `a` accepts or re-confirms, `r` rejects (asks a reason), `w` waives a finding, `p` proposes a `ns:NEW:` concept, `e` edits a concept's doc, `y`/`d` take or dismiss an agent's recommendation, `n` writes a link, `o` opens `$EDITOR` at the line, `u` undoes, `f` and `/` filter, `tab` opens the read-only graph browser (enter follows an edge, `h` goes back), `?` lists the keys. Headless, for scripts and agents:
 
 ```sh
 gloss review --format json                     # the queue (--kind stale-link --path internal/)
 gloss review show m-1a2b3c4d5e --format text   # one item: context, history, concepts, gates
 echo '{"id":"m-1a2b3c4d5e","action":"reconfirm"}' | gloss review apply
 gloss review undo                              # reverts the last decision, files and ledger alike
+gloss review node gmi:ReviewEngine             # read-only: a node and its edges in and out (a path works too)
 ```
 
-An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc; an agent's doc edit becomes a `recommendation` item a person `apply`s or `dismiss`es. Over MCP the same engine serves `review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link` and `edit_concept_doc`, as the server's `GLOSS_ACTOR`.
+An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc; an agent's doc edit becomes a `recommendation` item a person `apply`s or `dismiss`es. Over MCP the same engine serves `review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc` and the read-only `browse_node`, as the server's `GLOSS_ACTOR`.
 
 - Humans review novelty and hierarchy; everything else flows through policy.
 - **AUTO**: fingerprint-only changes, derived edges. Cleared by the engine.

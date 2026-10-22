@@ -87,6 +87,8 @@ func (a *App) Render(w, h int) string {
 		for _, l := range helpLines(body) {
 			rows = append(rows, a.renderLine(l, w, ""))
 		}
+	} else if a.tab == 1 {
+		rows = append(rows, a.browseRows(w, body)...)
 	} else {
 		rows = append(rows, a.body(w, body)...)
 	}
@@ -117,13 +119,21 @@ func (a *App) header() line {
 }
 
 func (a *App) filterLine() line {
+	if a.browse != nil {
+		if a.tab == 1 {
+			return styled(stDim, " queue ").add(stBold, "[browse]").add(stDim, "  read-only · enter follows · h back · i index · o open · tab queue")
+		}
+	}
 	k := "all"
 	if a.kind != "" {
 		k = shortKind(a.kind)
 	}
-	l := styled(stDim, fmt.Sprintf(" queue %d/%d  f kind: %s", len(a.visible), len(a.items), k))
+	l := styled(stBold, " [queue]").add(stDim, fmt.Sprintf(" %d/%d  f kind: %s", len(a.visible), len(a.items), k))
 	if a.text != "" {
 		l = l.add(stDim, "  / "+a.text)
+	}
+	if a.browse != nil {
+		l = l.add(stDim, "  tab browse")
 	}
 	return l.add(stDim, "  ? help")
 }
@@ -304,6 +314,7 @@ var helpText = []string{
 	"  n             write a link (above a line of a file)",
 	"  o, enter      open the file in $EDITOR at the item's line",
 	"  u             undo the last decision (files, ledger and graph)",
+	"  tab           the read-only graph browser: enter follows an edge, h goes back, i the index",
 	"  R             reload           q, ctrl-c   quit",
 	"",
 	"Gates: AUTO and SOFT actions are open to agents; HARD ones (\"human\") are a person's decision.",

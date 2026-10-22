@@ -209,6 +209,9 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 	if res, handled, err := s.callReview(name, args); handled {
 		return res, err
 	}
+	if res, handled, err := s.callBrowse(name, args); handled {
+		return res, err
+	}
 	ws, g, lg, err := s.backend.Current()
 	if err != nil {
 		return nil, err

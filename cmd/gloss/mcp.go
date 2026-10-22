@@ -26,7 +26,7 @@ import (
 )
 
 func init() {
-	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, slice_of, drift, and the review tools review_queue, review_item, review_decide, review_undo, write_link, edit_concept_doc)", cmdMCP})
+	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, slice_of, drift, and the review tools review_queue, review_item, review_decide, review_undo, write_link, edit_concept_doc, browse_node)", cmdMCP})
 }
 
 type mcpBackend struct {

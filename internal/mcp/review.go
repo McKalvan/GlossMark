@@ -42,7 +42,7 @@ var reviewTools = []tool{
 // toolList is every tool this backend serves.
 func (s *Server) toolList() []tool {
 	if _, ok := s.backend.(Reviewer); ok {
-		return append(append([]tool{}, tools...), reviewTools...)
+		return append(append(append([]tool{}, tools...), reviewTools...), browseTools...)
 	}
 	return tools
 }

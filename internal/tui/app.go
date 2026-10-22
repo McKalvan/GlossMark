@@ -32,6 +32,8 @@ type Options struct {
 	Actor   string
 	NoColor bool
 	Now     func() time.Time
+	// Browser, when set, adds the read-only Browse tab (tab switches).
+	Browser Browser
 }
 
 // Effect is what the caller must do after an Update.
@@ -80,8 +82,10 @@ type App struct {
 	status   string
 	statusOK bool
 	help     bool
+	tab      int // 0 the queue, 1 the graph browser
 
-	w, h int
+	browse *browseState
+	w, h   int
 }
 
 // New returns an App over a review engine; call Reload before the first frame.
@@ -89,7 +93,11 @@ func New(eng Engine, opt Options) *App {
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}
-	return &App{eng: eng, opt: opt}
+	a := &App{eng: eng, opt: opt}
+	if opt.Browser != nil {
+		a.browse = &browseState{}
+	}
+	return a
 }
 
 // kindFilters are the values f cycles through.
@@ -191,6 +199,16 @@ func (a *App) Update(k Key) Effect {
 	if a.help {
 		a.help = false
 		return Effect{}
+	}
+	if k.Name == "tab" && a.browse != nil {
+		a.tab = 1 - a.tab
+		if a.tab == 1 {
+			a.enterBrowse()
+		}
+		return Effect{}
+	}
+	if a.tab == 1 {
+		return a.updateBrowse(k)
 	}
 	switch k.String() {
 	case "q":

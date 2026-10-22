@@ -36,6 +36,7 @@ Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue:
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/review` | `gloss review` (experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): the review queue, decisions by gate authority, agent recommendations and an undo journal |
 | `internal/tui` | The interactive terminal for `gloss review`, hand-rolled on `golang.org/x/term` |
+| `internal/browse` | The read-only graph browser: `gloss review node`, the terminal's Browse tab, `browse_node` |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](docs/adr/0025-deriving-the-ontology.md), experimental) |
@@ -73,7 +74,7 @@ cd ..
 
 ## For agents
 
-`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius), `slice_of` (everything relevant to one feature, like `gloss slice`), `drift`, and the review tools (`review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc`; experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): an agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius), `slice_of` (everything relevant to one feature, like `gloss slice`), `drift`, and the review tools (`review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc`, and the read-only `browse_node`; experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): an agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## GlossMark on GlossMark
 

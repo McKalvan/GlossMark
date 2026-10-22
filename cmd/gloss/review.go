@@ -28,6 +28,7 @@ const reviewUsage = `usage:
   gloss review show <id> [--format text] one item with its context, history and concepts
   gloss review apply [file|-]           apply decisions, one JSON object per line; prints one result per line
   gloss review undo [--force]           revert the last decision
+  gloss review node [ref] [--format json] read-only: a node (CURIE, path, path#symbol) and its edges, or the index
 Decisions: {"id":"m-…","action":"accept|reconfirm|reject|confirm|waive|propose","reason":"…","remove":true,"owner":"…","expires":"YYYY-MM-DD","recommend":true}
            {"action":"write-link","path":"…","line":12,"relation":"implements","target":"ns:Name"}
            {"action":"edit-doc","curie":"ns:Name","doc":"…"}
@@ -149,6 +150,8 @@ func cmdReview(args []string) int {
 			in = f
 		}
 		return applyDecisions(e, in, os.Stdout)
+	case "node":
+		return reviewNode(e, fs.Args(), *format)
 	case "undo":
 		msg, err := e.Undo(*force)
 		if err != nil {
@@ -265,7 +268,7 @@ func isTerminal() bool {
 
 // interactiveReview runs the terminal UI (internal/tui).
 func interactiveReview(e *review.Engine) int {
-	if err := tui.Run(e, tui.Options{Actor: e.Actor}); err != nil {
+	if err := tui.Run(e, tui.Options{Actor: e.Actor, Browser: browser{e}}); err != nil {
 		return fail(err)
 	}
 	return 0
