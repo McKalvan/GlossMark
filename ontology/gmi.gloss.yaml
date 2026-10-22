@@ -18,6 +18,7 @@ concepts:
   ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale], doc: "The .glossmark/ledger.jsonl record of each link's review state, reviewer, reason and anchor fingerprint." }
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
   ReviewEngine:       { kind: process, realizes: gm:Review, doc: "gloss review (experimental, ADR 0033): the queue of everything that waits on a reviewer with the context each item needs, decisions by the gate's authority, recommendations, and an undo journal; headless as JSON and MCP." }
+  ReviewTerminal:     { kind: process, part-of: ReviewEngine, doc: "The full-screen terminal for gloss review: the queue beside an item's context, history and concepts, one key per decision, prompts for what it needs, undo." }
   # Outputs
   ViewProjector:      { kind: process, realizes: gm:Projection, doc: "Builds the views ontology/views.yaml defines and feature slices from the graph." }
   HtmlViewer:         { kind: process, part-of: ViewProjector, presents: gm:View, doc: "The static page that shows a projection: a UI surface for views, not their mechanism." }

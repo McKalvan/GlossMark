@@ -15,6 +15,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/review"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/tui"
 )
 
 func init() {
@@ -262,13 +263,10 @@ func isTerminal() bool {
 	return true
 }
 
-// interactiveReview is replaced by the terminal UI; until then a terminal
-// gets the text queue.
-var interactiveReview = func(e *review.Engine) int {
-	items, err := e.Queue()
-	if err != nil {
+// interactiveReview runs the terminal UI (internal/tui).
+func interactiveReview(e *review.Engine) int {
+	if err := tui.Run(e, tui.Options{Actor: e.Actor}); err != nil {
 		return fail(err)
 	}
-	printQueue(os.Stdout, items)
 	return 0
 }

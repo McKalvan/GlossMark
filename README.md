@@ -35,6 +35,7 @@ Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue:
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/review` | `gloss review` (experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): the review queue, decisions by gate authority, agent recommendations and an undo journal |
+| `internal/tui` | The interactive terminal for `gloss review`, hand-rolled on `golang.org/x/term` |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](docs/adr/0025-deriving-the-ontology.md), experimental) |
