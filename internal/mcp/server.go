@@ -3,7 +3,8 @@
 
 // Package mcp serves the graph to agents over the Model Context Protocol
 // (JSON-RPC 2.0 on stdio): lookup_concept, search_concepts, concepts_for_path,
-// propose_link, impact_of, propose_concept, context, slice_of and drift.
+// propose_link, impact_of, propose_concept, context, slice_of and drift, and,
+// for a backend that serves review sessions, the review tools (review.go).
 package mcp
 
 import (
@@ -183,7 +184,7 @@ func (s *Server) handle(req request) (any, *rpcError) {
 	case "ping":
 		return map[string]any{}, nil
 	case "tools/list":
-		return map[string]any{"tools": tools}, nil
+		return map[string]any{"tools": s.toolList()}, nil
 	case "tools/call":
 		var p struct {
 			Name      string          `json:"name"`
@@ -205,6 +206,9 @@ func (s *Server) handle(req request) (any, *rpcError) {
 }
 
 func (s *Server) call(name string, args json.RawMessage) (any, error) {
+	if res, handled, err := s.callReview(name, args); handled {
+		return res, err
+	}
 	ws, g, lg, err := s.backend.Current()
 	if err != nil {
 		return nil, err

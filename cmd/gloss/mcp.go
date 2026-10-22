@@ -20,19 +20,37 @@ import (
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/mcp"
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/review"
 	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/internal/version"
 )
 
 func init() {
-	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, slice_of, drift)", cmdMCP})
+	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, slice_of, drift, and the review tools review_queue, review_item, review_decide, review_undo, write_link, edit_concept_doc)", cmdMCP})
 }
 
 type mcpBackend struct {
-	root string
-	mu   sync.Mutex
-	p    *pipeline
-	at   time.Time
+	root   string
+	mu     sync.Mutex
+	p      *pipeline
+	at     time.Time
+	engine *review.Engine
+}
+
+// ReviewEngine serves the review tools (ADR 0033). A decision changes the
+// tree, so the cached build is dropped for the next tool.
+func (b *mcpBackend) ReviewEngine() (*review.Engine, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.p = nil
+	if b.engine == nil {
+		e, err := newEngine(b.root)
+		if err != nil {
+			return nil, err
+		}
+		b.engine = e
+	}
+	return b.engine, nil
 }
 
 func (b *mcpBackend) Current() (*load.Workspace, *graph.Graph, map[string]*model.LedgerEntry, error) {

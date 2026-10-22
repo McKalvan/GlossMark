@@ -12,10 +12,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/mckalvan/glossmark/internal/extract"
+	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -29,10 +31,14 @@ const (
 	KindProposedConcept = "proposed-concept"
 	KindValueDrift      = "value-drift"
 	KindFinding         = "finding"
+	// KindRecommendation is a recommendation with no other item to sit on:
+	// an edit an agent may not make (a concept's doc), or one whose item no
+	// longer waits on review.
+	KindRecommendation = "recommendation"
 )
 
 // Kinds lists the item kinds in queue order.
-var Kinds = []string{KindProposedLink, KindStaleLink, KindProposedConcept, KindValueDrift, KindFinding}
+var Kinds = []string{KindRecommendation, KindProposedLink, KindStaleLink, KindProposedConcept, KindValueDrift, KindFinding}
 
 // Action names. Item actions act on a queue item; edit actions (write-link,
 // edit-doc) name what they change in their own fields.
@@ -45,6 +51,8 @@ const (
 	ActPropose   = "propose"   // a rogue ns:NEW: target becomes a proposed concept
 	ActWriteLink = "write-link"
 	ActEditDoc   = "edit-doc"
+	ActApply     = "apply"   // a recommended edit, as recommended
+	ActDismiss   = "dismiss" // a recommendation, without deciding its item
 	ActUndo      = "undo"
 )
 
@@ -202,13 +210,23 @@ func (e *Engine) Queue() ([]Item, error) {
 	if err != nil {
 		return nil, err
 	}
+	seen := map[string]bool{}
 	for i := range items {
+		seen[items[i].ID] = true
 		if r, ok := recs[items[i].ID]; ok {
 			r.Outdated = r.Basis != items[i].Basis
 			items[i].Recommendation = &r
+			items[i].Actions = append(items[i].Actions, action(ActDismiss, gate.AUTO, nil))
 		}
 	}
-	return items, nil
+	var extra []Item
+	for id, r := range recs {
+		if !seen[id] {
+			extra = append(extra, recommendationItem(st, r))
+		}
+	}
+	sort.Slice(extra, func(i, j int) bool { return extra[i].ID < extra[j].ID })
+	return append(extra, items...), nil
 }
 
 // Find returns the queue item with this id.
@@ -270,7 +288,11 @@ func (e *Engine) decide(d Decision) (msg, undo string, recommended bool, err err
 	}
 	if d.Recommend {
 		if it == nil {
-			return "", "", false, fmt.Errorf("%s: only a queue item takes a recommendation; propose the edit as a link (write-link) or a concept instead", d.Action)
+			if d.Action != ActEditDoc {
+				return "", "", false, fmt.Errorf("%s: an agent writes a link as a proposal; only a queue item or a doc edit takes a recommendation", d.Action)
+			}
+			it = &Item{ID: editDocID(d.Curie), Basis: docBasis(st, d.Curie)}
+			d.ID = it.ID
 		}
 		if err := e.recommend(st, it, d); err != nil {
 			return "", "", false, err
@@ -330,6 +352,14 @@ func (e *Engine) execute(st *State, it *Item, d Decision) (string, error) {
 		return writeLink(st, d)
 	case ActEditDoc:
 		return editDoc(st, d)
+	case ActDismiss:
+		return "dismissed the recommendation on " + it.ID, dropRecommendation(st.WS, it.ID)
+	case ActApply:
+		rd := it.Recommendation.Decision
+		if rd.Action != ActEditDoc {
+			return "", fmt.Errorf("%s: apply takes a recommended edit; take the recommended %s on its item", it.ID, rd.Action)
+		}
+		return editDoc(st, rd)
 	}
 	switch it.Kind {
 	case KindProposedLink, KindStaleLink:

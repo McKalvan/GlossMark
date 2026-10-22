@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mckalvan/glossmark/internal/mcp"
 	"github.com/mckalvan/glossmark/internal/review"
 )
 
@@ -20,6 +21,8 @@ func reviewTree(t *testing.T) (string, *review.Engine) {
 	// The undo journal lives under the user cache directory outside git.
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
+	// Decisions run as a person unless a test says otherwise.
+	t.Setenv("GLOSS_ACTOR", "human:test")
 	root := tiny(t, map[string]string{
 		"soft.py":  "# @gloss? implements .Doer conf=0.95\ndef soft(): pass\n",
 		"stale.py": "# @gloss implements .Doer scope=file\ndef stale(): pass\n",
@@ -243,4 +246,123 @@ func mustQueue(t *testing.T, e *review.Engine) []review.Item {
 		t.Fatal(err)
 	}
 	return items
+}
+
+// mcpTool calls one MCP tool through the server and returns its structured
+// content, or the error text with isError.
+func mcpTool(t *testing.T, root, name string, args any) (json.RawMessage, string) {
+	t.Helper()
+	a, _ := json.Marshal(args)
+	req := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + name + `","arguments":` + string(a) + `}}` + "\n"
+	var buf strings.Builder
+	if err := mcp.New(&mcpBackend{root: root}, strings.NewReader(req), &buf, "test").Serve(); err != nil {
+		t.Fatal(err)
+	}
+	var resp struct {
+		Result struct {
+			IsError           bool                    `json:"isError"`
+			Content           []struct{ Text string } `json:"content"`
+			StructuredContent json.RawMessage         `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(buf.String()), &resp); err != nil {
+		t.Fatalf("%v: %s", err, buf.String())
+	}
+	if resp.Result.IsError {
+		return nil, resp.Result.Content[0].Text
+	}
+	return resp.Result.StructuredContent, ""
+}
+
+// The review tools over MCP, as an agent: list, reconfirm, refuse a HARD
+// accept, recommend, recommend a doc edit, undo.
+func TestReviewMCP(t *testing.T) {
+	root, _ := reviewTree(t)
+	t.Setenv("GLOSS_ACTOR", "agent:test")
+	var list struct {
+		Tools []struct{ Name string } `json:"tools"`
+	}
+	var buf strings.Builder
+	mcp.New(&mcpBackend{root: root}, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`+"\n"), &buf, "test").Serve()
+	var lr struct{ Result json.RawMessage }
+	json.Unmarshal([]byte(buf.String()), &lr)
+	json.Unmarshal(lr.Result, &list)
+	names := map[string]bool{}
+	for _, tl := range list.Tools {
+		names[tl.Name] = true
+	}
+	for _, n := range []string{"review_queue", "review_item", "review_decide", "review_undo", "write_link", "edit_concept_doc", "lookup_concept"} {
+		if !names[n] {
+			t.Errorf("tools/list lacks %s", n)
+		}
+	}
+	raw, errText := mcpTool(t, root, "review_queue", map[string]any{"kind": []string{"stale-link", "proposed-link"}})
+	var q struct {
+		Actor string        `json:"actor"`
+		Items []review.Item `json:"items"`
+	}
+	if errText != "" || json.Unmarshal(raw, &q) != nil || q.Actor != "agent:test" || len(q.Items) != 3 {
+		t.Fatalf("review_queue: %s %s", errText, raw)
+	}
+	var staleID, rogueID string
+	for _, it := range q.Items {
+		switch it.Path {
+		case "stale.py":
+			staleID = it.ID
+		case "rogue.py":
+			rogueID = it.ID
+		}
+	}
+	if raw, errText := mcpTool(t, root, "review_item", map[string]any{"id": staleID}); errText != "" || !strings.Contains(string(raw), `"concepts"`) {
+		t.Errorf("review_item: %s %s", errText, raw)
+	}
+	if _, errText := mcpTool(t, root, "review_decide", map[string]any{"id": staleID, "action": "reconfirm"}); errText != "" {
+		t.Fatalf("reconfirm: %s", errText)
+	}
+	if _, errText := mcpTool(t, root, "review_decide", map[string]any{"id": rogueID, "action": "accept"}); !strings.Contains(errText, "HARD") {
+		t.Errorf("agent accept of a HARD proposal: %q", errText)
+	}
+	if raw, errText := mcpTool(t, root, "review_decide", map[string]any{"id": rogueID, "action": "reject", "reason": "no such concept", "recommend": true}); errText != "" || !strings.Contains(string(raw), `"recommended": true`) && !strings.Contains(string(raw), `"recommended":true`) {
+		t.Errorf("recommend: %s %s", errText, raw)
+	}
+	if _, errText := mcpTool(t, root, "edit_concept_doc", map[string]any{"curie": "i:Doer", "doc": "Does it.", "reason": "it had none"}); errText != "" {
+		t.Fatalf("edit_concept_doc: %s", errText)
+	}
+	raw, _ = mcpTool(t, root, "review_queue", map[string]any{"kind": []string{"recommendation"}})
+	if !strings.Contains(string(raw), `"edit:doc:i:Doer"`) {
+		t.Errorf("recommended doc edit not queued: %s", raw)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "ontology/i.gloss.yaml")); strings.Contains(string(b), "Does it.") {
+		t.Error("an agent's doc edit was applied")
+	}
+	if raw, errText := mcpTool(t, root, "review_undo", map[string]any{}); errText != "" || !strings.Contains(string(raw), "undid") {
+		t.Errorf("review_undo: %s %s", errText, raw)
+	}
+}
+
+// A person applies a recommended doc edit, and dismisses a recommendation.
+func TestReviewApplyRecommendation(t *testing.T) {
+	root, e := reviewTree(t)
+	e.Actor = "agent:test"
+	if r := e.Decide(review.Decision{Action: review.ActEditDoc, Curie: "i:Doer", Doc: "Does it.", Recommend: true}); !r.OK {
+		t.Fatalf("recommend doc: %+v", r)
+	}
+	soft := itemByPath(t, e, review.KindProposedLink, "soft.py")
+	e.Decide(review.Decision{ID: soft.ID, Action: review.ActAccept, Recommend: true})
+	if r := e.Decide(review.Decision{ID: "edit:doc:i:Doer", Action: review.ActApply}); r.OK {
+		t.Errorf("an agent applied a doc edit: %+v", r)
+	}
+	e.Actor = "human:test"
+	if r := e.Decide(review.Decision{ID: "edit:doc:i:Doer", Action: review.ActApply}); !r.OK {
+		t.Fatalf("apply: %+v", r)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "ontology/i.gloss.yaml")); !strings.Contains(string(b), `doc: "Does it."`) {
+		t.Errorf("doc not applied:\n%s", b)
+	}
+	if r := e.Decide(review.Decision{ID: soft.ID, Action: review.ActDismiss}); !r.OK {
+		t.Fatalf("dismiss: %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".glossmark", review.RecommendationsFile)); !os.IsNotExist(err) {
+		t.Errorf("recommendations file left behind: %v", err)
+	}
 }

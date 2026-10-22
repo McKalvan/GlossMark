@@ -117,7 +117,7 @@ func cmdReview(args []string) int {
 		if err != nil {
 			return fail(err)
 		}
-		items = filterItems(items, splitList(*kinds), splitList(*paths))
+		items = review.Filter(items, splitList(*kinds), splitList(*paths))
 		if *format == "json" {
 			return printJSON(items)
 		}
@@ -191,30 +191,6 @@ func applyDecisions(e *review.Engine, in io.Reader, out io.Writer) int {
 		return 1
 	}
 	return 0
-}
-
-func filterItems(items []review.Item, kinds, paths []string) []review.Item {
-	var out []review.Item
-	for _, it := range items {
-		if len(kinds) > 0 && !containsStr(kinds, it.Kind) && !containsStr(kinds, it.Finding) {
-			continue
-		}
-		if len(paths) > 0 && (it.Path == "" || !underAny(it.Path, paths)) {
-			continue
-		}
-		out = append(out, it)
-	}
-	return out
-}
-
-func underAny(path string, dirs []string) bool {
-	for _, d := range dirs {
-		d = strings.Trim(strings.TrimPrefix(d, "./"), "/")
-		if d == "" || d == "." || path == d || strings.HasPrefix(path, d+"/") {
-			return true
-		}
-	}
-	return false
 }
 
 func printQueue(w io.Writer, items []review.Item) {

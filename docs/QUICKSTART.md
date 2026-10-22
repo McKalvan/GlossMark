@@ -231,7 +231,7 @@ echo '{"id":"m-1a2b3c4d5e","action":"reconfirm"}' | gloss review apply
 gloss review undo                              # reverts the last decision, files and ledger alike
 ```
 
-An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc. The same engine backs the MCP review tools and the interactive terminal.
+An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc; an agent's doc edit becomes a `recommendation` item a person `apply`s or `dismiss`es. Over MCP the same engine serves `review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link` and `edit_concept_doc`, as the server's `GLOSS_ACTOR`.
 
 - Humans review novelty and hierarchy; everything else flows through policy.
 - **AUTO**: fingerprint-only changes, derived edges. Cleared by the engine.

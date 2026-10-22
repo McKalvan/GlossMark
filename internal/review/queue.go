@@ -168,3 +168,73 @@ func basis(parts ...string) string {
 	h := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(h[:8])
 }
+
+// editDocID is the item id of a recommended doc edit.
+func editDocID(curie string) string { return "edit:doc:" + curie }
+
+func docBasis(st *State, curie string) string {
+	if n := st.Graph.NodeByCurie(curie); n != nil {
+		return basis(n.Doc)
+	}
+	return ""
+}
+
+// recommendationItem is a recommendation without an item of its own: a
+// recommended doc edit, which a person applies or dismisses, or one whose
+// item was decided or went away, which only dismiss clears.
+func recommendationItem(st *State, r Recommendation) Item {
+	it := Item{ID: r.Item, Kind: KindRecommendation, Actor: r.By, Since: r.At}
+	rc := r
+	it.Recommendation = &rc
+	d := r.Decision
+	if d.Action == ActEditDoc && r.Item == editDocID(d.Curie) {
+		it.Concept = d.Curie
+		it.Basis = docBasis(st, d.Curie)
+		rc.Outdated = rc.Basis != it.Basis
+		if n := st.Graph.NodeByCurie(d.Curie); n != nil {
+			it.Path, it.Line = n.File, n.Line
+		}
+		it.Summary = fmt.Sprintf("%s recommends a doc for %s: %q", r.By, d.Curie, d.Doc)
+		it.Actions = []Action{action(ActApply, gate.HARD, []string{"a concept's definition is a human decision"}), action(ActDismiss, gate.AUTO, nil)}
+	} else {
+		it.Summary = fmt.Sprintf("%s recommended %s on %s, which no longer waits on review", r.By, d.Action, r.Item)
+		it.Actions = []Action{action(ActDismiss, gate.AUTO, nil)}
+	}
+	it.Gate = it.Actions[0].Gate
+	return it
+}
+
+// Filter keeps the items of the given kinds (an item kind or a finding kind)
+// under the given files or directories; empty lists keep everything.
+func Filter(items []Item, kinds, paths []string) []Item {
+	var out []Item
+	for _, it := range items {
+		if len(kinds) > 0 && !contains(kinds, it.Kind) && !contains(kinds, it.Finding) {
+			continue
+		}
+		if len(paths) > 0 && (it.Path == "" || !under(it.Path, paths)) {
+			continue
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+func contains(xs []string, x string) bool {
+	for _, y := range xs {
+		if x != "" && y == x {
+			return true
+		}
+	}
+	return false
+}
+
+func under(path string, dirs []string) bool {
+	for _, d := range dirs {
+		d = strings.Trim(strings.TrimPrefix(d, "./"), "/")
+		if d == "" || d == "." || path == d || strings.HasPrefix(path, d+"/") {
+			return true
+		}
+	}
+	return false
+}
