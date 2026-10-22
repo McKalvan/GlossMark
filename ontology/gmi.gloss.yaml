@@ -1,6 +1,6 @@
 # ontology/gmi.gloss.yaml (implementation tier): the Go packages and commands that realize gm:.
 namespace: gmi
-version: 0.1.1
+version: 0.2.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -17,6 +17,7 @@ concepts:
   Gate:               { kind: process, realizes: gm:Gating, doc: "Classifies the changes between two graphs as AUTO, SOFT or HARD by the views and criticality they touch, and renders the PR impact." }
   ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale], doc: "The .glossmark/ledger.jsonl record of each link's review state, reviewer, reason and anchor fingerprint." }
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
+  ReviewEngine:       { kind: process, realizes: gm:Review, doc: "gloss review (experimental, ADR 0033): the queue of everything that waits on a reviewer with the context each item needs, decisions by the gate's authority, recommendations, and an undo journal; headless as JSON and MCP." }
   # Outputs
   ViewProjector:      { kind: process, realizes: gm:Projection, doc: "Builds the views ontology/views.yaml defines and feature slices from the graph." }
   HtmlViewer:         { kind: process, part-of: ViewProjector, presents: gm:View, doc: "The static page that shows a projection: a UI surface for views, not their mechanism." }

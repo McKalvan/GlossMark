@@ -222,6 +222,17 @@ Pre-commit: `ln -s ../../hooks/pre-commit .git/hooks/pre-commit`, or add the hoo
 
 ## Review workflow
 
+`gloss review` (experimental, [ADR 0033](adr/0033-review-sessions.md)) puts everything that waits on a reviewer in one queue: proposed and stale links, proposed concepts, drifted values and drift findings. Each item carries its context (the marker's lines, what changed in the file since the last review, the target concepts' docs) and its actions with their gates. Headless, for scripts and agents:
+
+```sh
+gloss review --format json                     # the queue (--kind stale-link --path internal/)
+gloss review show m-1a2b3c4d5e --format text   # one item: context, history, concepts, gates
+echo '{"id":"m-1a2b3c4d5e","action":"reconfirm"}' | gloss review apply
+gloss review undo                              # reverts the last decision, files and ledger alike
+```
+
+An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc. The same engine backs the MCP review tools and the interactive terminal.
+
 - Humans review novelty and hierarchy; everything else flows through policy.
 - **AUTO**: fingerprint-only changes, derived edges. Cleared by the engine.
 - **SOFT**: a link to an existing concept, valid, inside `allowed`, at or above the auto-accept threshold derived from `suggest.auto-accept-precision`, altering only the engineering view. Cleared by the engine; audit a sample later.
