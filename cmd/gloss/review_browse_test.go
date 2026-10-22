@@ -4,8 +4,12 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mckalvan/glossmark/internal/browse"
 )
@@ -32,5 +36,38 @@ func TestReviewNode(t *testing.T) {
 	}
 	if after := ledgerStatus(t, root, "status"); strings.Join(after, ",") != strings.Join(before, ",") {
 		t.Errorf("browsing changed the ledger: %v → %v", before, after)
+	}
+}
+
+// v builds the viewer and hands the browser a deep link to the slice.
+func TestViewerOpener(t *testing.T) {
+	root, e := reviewTree(t)
+	got := filepath.Join(t.TempDir(), "url")
+	script := filepath.Join(t.TempDir(), "browser")
+	os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s' \"$1\" > "+got+"\n"), 0o755)
+	t.Setenv("BROWSER", script)
+	msg, err := viewerOpener(e)("i:Doer")
+	if err != nil || !strings.Contains(msg, "i:Doer") {
+		t.Fatalf("open: %q %v", msg, err)
+	}
+	var b []byte
+	for i := 0; i < 50 && len(b) == 0; i++ {
+		time.Sleep(20 * time.Millisecond)
+		b, _ = os.ReadFile(got)
+	}
+	want := "file://" + filepath.ToSlash(filepath.Join(root, ".glossmark", "viewer.html")) + "#slice=i:Doer"
+	if string(b) != want {
+		t.Errorf("browser got %q, want %q", b, want)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".glossmark", "viewer.html")); err != nil {
+		t.Errorf("viewer not built: %v", err)
+	}
+	t.Setenv("BROWSER", "")
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	if runtime.GOOS == "linux" {
+		if msg, _ := viewerOpener(e)(""); !strings.Contains(msg, "no browser here, open file://") {
+			t.Errorf("headless: %q", msg)
+		}
 	}
 }

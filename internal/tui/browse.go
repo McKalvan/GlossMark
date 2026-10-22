@@ -135,6 +135,12 @@ func (a *App) updateBrowse(k Key) Effect {
 		}
 	case "i":
 		a.browseTo("", true)
+	case "v":
+		seed := ""
+		if b.node != nil && (b.node.Type == "concept" || b.node.Type == "boundary") {
+			seed = b.node.Ref
+		}
+		a.openViewer(seed)
 	case "o":
 		if nb := b.selected(); nb != nil && nb.Path != "" {
 			return Effect{Open: &Location{Path: nb.Path, Line: nb.Line}}

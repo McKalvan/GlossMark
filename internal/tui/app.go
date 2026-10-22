@@ -34,6 +34,10 @@ type Options struct {
 	Now     func() time.Time
 	// Browser, when set, adds the read-only Browse tab (tab switches).
 	Browser Browser
+	// OpenViewer, when set, builds the HTML viewer and opens it focused on
+	// a concept or boundary ("" for the whole graph); v calls it. It
+	// returns what to tell the user: where the page opened, or how to.
+	OpenViewer func(curie string) (string, error)
 }
 
 // Effect is what the caller must do after an Update.
@@ -262,6 +266,16 @@ func (a *App) Update(k Key) Effect {
 		a.report(msg, err)
 	case "n":
 		a.newLink()
+	case "v":
+		seed := ""
+		if it := a.Selected(); it != nil {
+			if c, _ := a.conceptOf(it); c != "" && !strings.Contains(c, ":NEW:") {
+				seed = c
+			} else {
+				seed = it.Boundary
+			}
+		}
+		a.openViewer(seed)
 	default:
 		return a.itemKey(k)
 	}
@@ -378,6 +392,20 @@ func (a *App) newLink() {
 		a.decide(review.Decision{Action: review.ActWriteLink, Path: v["path"], Line: n, Relation: v["relation"], Target: v["target"], Accepted: !review.IsAgent(a.opt.Actor)})
 	}, field{key: "path", label: "file", value: path, required: true}, field{key: "line", label: "above line (0: top of file)", value: line},
 		field{key: "relation", label: "relation", value: "implements", required: true}, field{key: "target", label: "concept (ns:Name, .Local or ns:NEW:Name)", required: true})
+}
+
+// openViewer asks the caller to open the HTML viewer on a seed.
+func (a *App) openViewer(seed string) {
+	if a.opt.OpenViewer == nil {
+		a.setStatus(false, "no viewer here: run gloss view")
+		return
+	}
+	msg, err := a.opt.OpenViewer(seed)
+	if err != nil {
+		a.setStatus(false, err.Error())
+		return
+	}
+	a.setStatus(true, msg)
 }
 
 func (a *App) decide(d review.Decision) {

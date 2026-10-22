@@ -292,8 +292,8 @@ func (a *App) footer() line {
 		}
 		return plain(" ").add(stBold, f.title+": ").add("", fl.label+": ").add(stReverse, fl.value+" ").add(stDim, "  enter ok, esc cancel")
 	}
-	if a.tab == 1 {
-		return styled(stDim, " enter follow  h back  i index  o open  tab queue  ? help  q quit")
+	if a.tab == 1 && a.status == "" {
+		return styled(stDim, " enter follow  h back  i index  o open  v viewer  tab queue  ? help  q quit")
 	}
 	if a.status != "" {
 		st := stGreen
@@ -303,7 +303,7 @@ func (a *App) footer() line {
 		return styled(st, " "+a.status)
 	}
 	if it := a.Selected(); it != nil {
-		return styled(stDim, " "+hints(it)+"  o open  n link  u undo  q quit")
+		return styled(stDim, " "+hints(it)+"  o open  n link  v viewer  u undo  q quit")
 	}
 	return styled(stDim, " n link  u undo  R reload  q quit")
 }
@@ -319,6 +319,7 @@ var helpText = []string{
 	"  e             edit the doc of the item's concept",
 	"  y / d         take / dismiss the recommendation on the item",
 	"  n             write a link (above a line of a file)",
+	"  v             open the HTML viewer in a browser, focused on the item's concept",
 	"  o, enter      open the file in $EDITOR at the item's line",
 	"  u             undo the last decision (files, ledger and graph)",
 	"  tab           the read-only graph browser: enter follows an edge, h goes back, i the index",

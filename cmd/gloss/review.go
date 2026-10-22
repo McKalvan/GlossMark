@@ -268,7 +268,7 @@ func isTerminal() bool {
 
 // interactiveReview runs the terminal UI (internal/tui).
 func interactiveReview(e *review.Engine) int {
-	if err := tui.Run(e, tui.Options{Actor: e.Actor, Browser: browser{e}}); err != nil {
+	if err := tui.Run(e, tui.Options{Actor: e.Actor, Browser: browser{e}, OpenViewer: viewerOpener(e)}); err != nil {
 		return fail(err)
 	}
 	return 0
