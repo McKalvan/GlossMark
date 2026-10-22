@@ -38,7 +38,7 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version: stable, cache: true }
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: actionlint
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
