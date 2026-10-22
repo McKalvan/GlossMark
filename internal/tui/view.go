@@ -105,7 +105,11 @@ func (a *App) header() line {
 	var parts []string
 	for _, k := range review.Kinds {
 		if n := counts[k]; n > 0 {
-			parts = append(parts, fmt.Sprintf("%d %s", n, shortKind(k)))
+			s := shortKind(k)
+			if n > 1 && k == review.KindFinding {
+				s += "s"
+			}
+			parts = append(parts, fmt.Sprintf("%d %s", n, s))
 		}
 	}
 	if len(parts) == 0 {
@@ -287,6 +291,9 @@ func (a *App) footer() line {
 			return plain(" ").add(stBold, f.title+": ").add("", fl.label+" ["+v+"] ").add(stDim, " enter ok, esc cancel")
 		}
 		return plain(" ").add(stBold, f.title+": ").add("", fl.label+": ").add(stReverse, fl.value+" ").add(stDim, "  enter ok, esc cancel")
+	}
+	if a.tab == 1 {
+		return styled(stDim, " enter follow  h back  i index  o open  tab queue  ? help  q quit")
 	}
 	if a.status != "" {
 		st := stGreen

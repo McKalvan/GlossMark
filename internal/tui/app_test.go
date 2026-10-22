@@ -69,6 +69,9 @@ func TestDecideFromKeys(t *testing.T) {
 	f := &fakeEngine{items: queue()}
 	a := newApp(f)
 	a.Update(R('a')) // reconfirm the stale link
+	if a.Selected().ID != "m-1" {
+		t.Fatalf("the fake keeps every item, so the cursor stays: %s", a.Selected().ID)
+	}
 	a.Update(R('j'))
 	a.Update(R('r')) // reject the proposal: reason, then remove?
 	typeKeys(a, "wrong concept")
@@ -175,6 +178,10 @@ func TestFiltersAndUndo(t *testing.T) {
 	if a.statusOK || !strings.Contains(a.status, "HARD") {
 		t.Errorf("a refused decision shows its error: %q", a.status)
 	}
+	a.Update(R('j'))
+	if a.status != "" {
+		t.Errorf("the next key clears the status: %q", a.status)
+	}
 	if eff := a.Update(N("enter")); eff.Open != nil {
 		t.Error("a finding without a path has nothing to open")
 	}
@@ -188,5 +195,23 @@ func TestDecode(t *testing.T) {
 	}
 	if want := "j up k enter backspace pgdn ctrl-c é esc"; strings.Join(names, " ") != want {
 		t.Errorf("Decode: %q, want %q", strings.Join(names, " "), want)
+	}
+}
+
+// Deciding an item that leaves the queue moves the cursor to the next one,
+// not back to the top.
+func TestCursorMovesOn(t *testing.T) {
+	f := &fakeEngine{items: queue()}
+	a := newApp(f)
+	a.Update(R('j'))
+	f.items = append(f.items[:1:1], f.items[2:]...) // m-2 decided
+	a.Reload()
+	if it := a.Selected(); it == nil || it.ID != "finding:untested:i:Doer" {
+		t.Errorf("cursor after the item left: %+v", it)
+	}
+	f.items = f.items[:1] // the last one decided too
+	a.Reload()
+	if it := a.Selected(); it == nil || it.ID != "m-1" {
+		t.Errorf("cursor clamps to the list: %+v", it)
 	}
 }

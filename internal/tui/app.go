@@ -118,6 +118,7 @@ func (a *App) Reload() {
 }
 
 func (a *App) refilter(keep string) {
+	prev := a.cur
 	a.visible = a.visible[:0]
 	for i, it := range a.items {
 		if a.kind != "" && it.Kind != a.kind {
@@ -128,7 +129,9 @@ func (a *App) refilter(keep string) {
 		}
 		a.visible = append(a.visible, i)
 	}
-	a.cur = 0
+	// The same item when it is still listed; otherwise the one that took
+	// its place, so deciding an item moves on to the next.
+	a.cur = prev
 	for vi, i := range a.visible {
 		if a.items[i].ID == keep {
 			a.cur = vi
@@ -196,6 +199,8 @@ func (a *App) Update(k Key) Effect {
 		a.updateForm(k)
 		return Effect{}
 	}
+	// A status message answers the last key; the next one clears it.
+	a.status = ""
 	if a.help {
 		a.help = false
 		return Effect{}

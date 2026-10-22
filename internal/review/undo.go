@@ -178,7 +178,11 @@ func (e *Engine) Undo(force bool) (string, error) {
 		return "", err
 	}
 	e.Invalidate()
-	return fmt.Sprintf("undid %s (%d files restored)", je.Desc, len(je.Files)), nil
+	files := "files"
+	if len(je.Files) == 1 {
+		files = "file"
+	}
+	return fmt.Sprintf("undid %s (%d %s restored)", je.Desc, len(je.Files), files), nil
 }
 
 // UndoDepth is how many decisions the journal can walk back.
