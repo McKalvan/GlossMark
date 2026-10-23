@@ -28,7 +28,8 @@ type Anchor struct {
 	Fingerprint string   `json:"fingerprint,omitempty"` // sha256: prefix of decorators + signature (symbol/block) or of the whole file (file)
 	// Legacy is the fingerprint as an earlier release computed it, so a
 	// ledger written by one migrates instead of going stale: every line of
-	// the file before ADR 0006, the signature line alone before ADR 0014.
+	// the file before ADR 0006, the signature line alone before ADR 0014, the
+	// sidecar itself for a sidecar marker before #116.
 	Legacy string `json:"-"`
 }
 

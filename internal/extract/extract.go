@@ -41,7 +41,10 @@ type FoundMarker struct {
 	Marker *marker.Marker
 	Anchor marker.Anchor
 	ID     string
-	Edges  []*graph.Edge
+	// LegacyID is the id an earlier release gave the marker, so its ledger
+	// entry moves instead of being orphaned: a JSON-sidecar range before #116.
+	LegacyID string
+	Edges    []*graph.Edge
 }
 
 // Build runs pass 1 over a loaded workspace.
@@ -355,13 +358,16 @@ func (ex *extractor) sidecarAnchor(rel, target string, tsrc []byte, mk *marker.M
 	}
 	switch a.Scope {
 	case "symbol", "file":
-		return marker.FileAnchor(strings.Split(strings.TrimSuffix(string(tsrc), "\n"), "\n"))
+		fa := marker.FileAnchor(strings.Split(strings.TrimSuffix(string(tsrc), "\n"), "\n"))
+		fa.Legacy = sidecarLegacy(a)
+		return fa
 	case "range":
 		if !json.Valid(tsrc) {
 			return a
 		}
 		ptr := mk.Keys["note"]
 		if pa, ok := marker.PointerAnchor(tsrc, ptr, a.Scope); ok {
+			pa.Legacy = sidecarLegacy(a)
 			return pa
 		}
 		if !strings.HasPrefix(ptr, "/") {
@@ -371,6 +377,15 @@ func (ex *extractor) sidecarAnchor(rel, target string, tsrc []byte, mk *marker.M
 		}
 	}
 	return a
+}
+
+// sidecarLegacy is the fingerprint v0.1.0 stored for a sidecar marker: the
+// sidecar's own anchor, as that release computed it (#171).
+func sidecarLegacy(a marker.Anchor) string {
+	if a.Legacy != "" {
+		return a.Legacy
+	}
+	return a.Fingerprint
 }
 
 func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.Anchor, lines []string, m *model.Manifest, boundary string) {
@@ -405,6 +420,9 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.A
 		id = MarkerID(target, mk.Relation, mk.Targets, anchor.Symbol, anchor.Scope)
 	}
 	fm := FoundMarker{Path: rel, Marker: mk, Anchor: anchor, ID: id}
+	if mk.Keys["id"] == "" && anchor.Kind == "json-pointer" {
+		fm.LegacyID = MarkerID(target, mk.Relation, mk.Targets, "", anchor.Scope)
+	}
 	// Two markers with one id state one link twice; review commands act on
 	// the id, so both lines are kept in Markers and accepted together.
 	if at, dup := ex.ids[id]; dup {

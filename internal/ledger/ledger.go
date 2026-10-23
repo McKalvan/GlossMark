@@ -230,6 +230,7 @@ func (l *Ledger) Save() error {
 //	? re-added            → proposed
 //	fingerprint changed   → stale (accepted links only)
 //	fingerprint restored  → stays stale until re-accepted (gloss accept <id>)
+//	legacy id or fingerprint (an earlier release's) → migrated, status kept
 //	marker gone           → removed, unless rejected (the decision stays)
 //
 // A review command that rewrites a marker's target moves its entry to the
@@ -239,6 +240,9 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 	seen := map[string]bool{}
 	for _, fm := range markers {
 		seen[fm.ID] = true
+		if _, ok := l.Entries[fm.ID]; !ok && fm.LegacyID != "" {
+			l.Rename(fm.LegacyID, fm.ID)
+		}
 		e, ok := l.Entries[fm.ID]
 		if !ok {
 			by := actor
