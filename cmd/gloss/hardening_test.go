@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -146,5 +147,20 @@ func TestWalkSkipsWhatItCannotScan(t *testing.T) {
 	}
 	if g, _ := os.ReadFile(filepath.Join(root, ".glossmark", "graph.jsonl")); strings.Contains(string(g), "out.py") {
 		t.Error("a file outside the repository was scanned")
+	}
+}
+
+// TestBlankedFingerprintIsStale: clearing an accepted row's
+// anchor_fingerprint by hand does not clear its stale state.
+func TestBlankedFingerprintIsStale(t *testing.T) {
+	root := tiny(t, map[string]string{"a.py": "# @gloss implements .Doer\ndef a(): pass\n"})
+	gloss(t, "build", "-q", "--root", root)
+	lp := filepath.Join(root, ".glossmark", "ledger.jsonl")
+	b, _ := os.ReadFile(lp)
+	os.WriteFile(lp, []byte(regexp.MustCompile(`"anchor_fingerprint":"[^"]*"`).ReplaceAllString(string(b), `"anchor_fingerprint":""`)), 0o644)
+	os.WriteFile(filepath.Join(root, "a.py"), []byte("# @gloss implements .Doer\ndef a(x): pass\n"), 0o644)
+	gloss(t, "build", "-q", "--root", root)
+	if b, _ := os.ReadFile(lp); !strings.Contains(string(b), `"status":"stale"`) {
+		t.Fatalf("a blanked fingerprint hid a signature change:\n%s", b)
 	}
 }

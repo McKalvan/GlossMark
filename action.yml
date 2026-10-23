@@ -63,7 +63,8 @@ runs:
     - name: Fetch base
       if: github.event_name == 'pull_request'
       shell: bash
-      run: git fetch --no-tags --depth=200 origin ${{ github.base_ref }}
+      env: { BASE_REF: "${{ github.base_ref }}" }
+      run: git fetch --no-tags --depth=200 origin "$BASE_REF"
     - name: gloss build --check
       if: inputs.check-graph == 'true'
       shell: bash
@@ -81,16 +82,20 @@ runs:
     - name: gloss coverage
       shell: bash
       working-directory: ${{ inputs.root }}
-      run: gloss coverage --fail-under ${{ inputs.coverage-fail-under }}
+      env: { FAIL_UNDER: "${{ inputs.coverage-fail-under }}" }
+      run: gloss coverage --fail-under "$FAIL_UNDER"
     - name: gloss diff
       id: diff
       if: github.event_name == 'pull_request'
       shell: bash
       working-directory: ${{ inputs.root }}
+      # Inputs and the base branch name reach the shell as variables, never as
+      # script text: a branch named $(...) would otherwise run.
+      env: { BASE: "${{ inputs.base }}", BASE_REF: "${{ github.base_ref }}", FAIL_ON: "${{ inputs.fail-on }}" }
       run: |
-        BASE="${{ inputs.base }}"; [ -z "$BASE" ] && BASE="origin/${{ github.base_ref }}"
+        [ -z "$BASE" ] && BASE="origin/$BASE_REF"
         set +e
-        gloss diff --base "$BASE" --format markdown --fail-on ${{ inputs.fail-on }} -o "$RUNNER_TEMP/impact.md"
+        gloss diff --base "$BASE" --format markdown --fail-on "$FAIL_ON" -o "$RUNNER_TEMP/impact.md"
         echo "exit=$?" >> "$GITHUB_OUTPUT"
     - name: Comment on PR
       if: github.event_name == 'pull_request' && inputs.comment == 'true'
@@ -116,5 +121,6 @@ runs:
     - name: Gate
       if: github.event_name == 'pull_request'
       shell: bash
+      env: { DIFF_EXIT: "${{ steps.diff.outputs.exit }}", FAIL_ON: "${{ inputs.fail-on }}" }
       run: |
-        if [ "${{ steps.diff.outputs.exit }}" != "0" ]; then echo "::error::gloss diff: ${{ inputs.fail-on }} changes need a human decision"; exit 1; fi
+        if [ "$DIFF_EXIT" != "0" ]; then echo "::error::gloss diff: $FAIL_ON changes need a human decision"; exit 1; fi

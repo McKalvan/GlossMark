@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/graph"
@@ -19,7 +21,6 @@ import (
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
-	"github.com/mckalvan/glossmark/internal/version"
 )
 
 func init() {
@@ -87,8 +88,8 @@ func cmdDiff(args []string) int {
 	return 0
 }
 
-// loadBaseGraph obtains the graph at a git ref: the committed graph.jsonl when
-// present, otherwise an extraction of the ref's tree in a temp directory.
+// loadBaseGraph obtains the graph at a git ref by extracting the ref's tree
+// in a temp directory.
 func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 	prefix, err := gitOut(ws.Root, "rev-parse", "--show-prefix")
 	if err != nil {
@@ -101,15 +102,11 @@ func loadBaseGraph(ws *load.Workspace, ref string) (*graph.Graph, error) {
 	if err := verifyBase(ws.Root, ref); err != nil {
 		return nil, err
 	}
-	if out, err := gitOut(ws.Root, "show", ref+":"+prefix+load.StateDir+"/graph.jsonl"); err == nil {
-		// A graph another release committed may fingerprint anchors
-		// differently (ADR 0006, ADR 0014); re-extracting the base with this
-		// release keeps an upgrade from reading as a change to every link.
-		g, err := graph.ReadJSONL(strings.NewReader(out))
-		if err == nil && g.Generator == version.Generator() {
-			return g, nil
-		}
-	}
+	// The base is always extracted from its tree, never read from the
+	// graph.jsonl it committed: a committed graph is repository content, and
+	// one that already held a link the tree did not would make the PR that
+	// adds the code look like no change. Extracting with this release also
+	// keeps an upgrade from reading as a change to every link (ADR 0006).
 	// An empty tree (an orphan or --allow-empty base) has nothing to extract.
 	if ls, err := gitOut(ws.Root, "ls-tree", "-r", "--name-only", ref); err == nil && strings.TrimSpace(ls) == "" {
 		return graph.New(ws.Prefixes), nil
@@ -171,11 +168,23 @@ func baseViews(ws *load.Workspace, ref string) *model.Views {
 	if err != nil {
 		return nil
 	}
-	out, err := gitOut(ws.Root, "show", ref+":"+strings.TrimSpace(prefix)+ws.Config.Views)
+	prefix = strings.TrimSpace(prefix)
+	// The base's own views: path, so a change that moves the views file
+	// (views: in glossmark.yaml) is still compared with what the base held.
+	path := "ontology/views.yaml"
+	if cfg, err := gitOut(ws.Root, "show", ref+":"+prefix+load.ConfigName); err == nil {
+		var c struct {
+			Views string `yaml:"views"`
+		}
+		if yaml.Unmarshal([]byte(cfg), &c) == nil && c.Views != "" {
+			path = c.Views
+		}
+	}
+	out, err := gitOut(ws.Root, "show", ref+":"+prefix+path)
 	if err != nil {
 		return nil
 	}
-	v, _, err := model.ParseViews(ws.Config.Views, []byte(out))
+	v, _, err := model.ParseViews(path, []byte(out))
 	if err != nil {
 		return nil
 	}
@@ -244,7 +253,7 @@ func changedFiles(root, ref string) ([]string, error) {
 	if err := verifyBase(root, ref); err != nil {
 		return nil, err
 	}
-	out, err := gitOut(root, "diff", "--name-only", "--relative", ref, "--")
+	out, err := gitOut(root, "diff", "--name-only", "--no-renames", "--relative", ref, "--")
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ package gate
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -346,7 +347,16 @@ func inlineEdges(g *graph.Graph) map[string]*graph.Edge {
 		if e.Source != graph.SourceInline || e.Prov == nil {
 			continue
 		}
-		out[e.Prov.ID+"|"+e.P+"|"+e.O] = e
+		k := e.Prov.ID + "|" + e.P + "|" + e.O
+		if o, dup := out[k]; dup {
+			// A reused id= (GM132): key the copies by artifact as well, so a
+			// marker borrowing another's id is a link of its own, not a
+			// fingerprint change of the original.
+			delete(out, k)
+			out[k+"|"+o.S] = o
+			k += "|" + e.S
+		}
+		out[k] = e
 	}
 	return out
 }
@@ -403,7 +413,7 @@ func (c *classifier) ontology() {
 		}
 		if b.Proposed && !h.Proposed {
 			c.add(Change{Gate: AUTO, Kind: "concept-accepted", Glyph: "+", Subject: h.CURIE, Path: h.File, Line: h.Line, Reasons: []string{"proposal accepted"}, Msg: fmt.Sprintf("concept %s accepted", h.CURIE)})
-			continue
+			// Accepting is AUTO; what else changed with it is classified below.
 		}
 		var diffs []string
 		bump := "PATCH"
@@ -888,7 +898,7 @@ func (c *classifier) links() {
 			} else if b.Prov.Fingerprint != e.Prov.Fingerprint {
 				if removed, added, ok := decoratorChange(c.base.Node(b.S), c.head.Node(e.S)); ok {
 					c.add(Change{Gate: AUTO, Kind: "decorators-changed", Glyph: "~", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, MarkerID: e.Prov.ID,
-						Reasons: []string{"decorator stack changed on an unchanged signature"}, Msg: fmt.Sprintf("%s %s decorators changed%s", e.P, c.head.Curie(e.O), decoratorDetail(removed, added))})
+						Reasons: []string{"decorator stack changed"}, Msg: fmt.Sprintf("%s %s decorators changed%s", e.P, c.head.Curie(e.O), decoratorDetail(removed, added))})
 				} else {
 					c.add(Change{Gate: AUTO, Kind: "fingerprint-changed", Glyph: "~", Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, MarkerID: e.Prov.ID,
 						Reasons: []string{"fingerprint-only change on an unchanged concept"}, Msg: fmt.Sprintf("%s %s anchor signature changed", e.P, c.head.Curie(e.O))})
@@ -932,10 +942,11 @@ func (c *classifier) links() {
 }
 
 // decoratorChange reports the decorators removed from and added to an
-// artifact whose signature line is unchanged (ADR 0014). ok is false when
-// the signature changed too, or neither artifact has an anchor.
+// artifact (ADR 0014), whether or not its signature changed with them: a
+// one-character signature edit must not hide a dropped auth decorator. ok is
+// false when the decorators are the same or an artifact has no anchor.
 func decoratorChange(base, head *graph.Node) (removed, added []string, ok bool) {
-	if base == nil || head == nil || base.Anchor == nil || head.Anchor == nil || base.Anchor.Signature != head.Anchor.Signature {
+	if base == nil || head == nil || base.Anchor == nil || head.Anchor == nil {
 		return nil, nil, false
 	}
 	if slices.Equal(base.Anchor.Decorators, head.Anchor.Decorators) {
@@ -1122,7 +1133,12 @@ func (c *classifier) paths() {
 	bookkeeping := map[string]bool{"link-accepted": true, "concept-accepted": true, "stale": true, "fingerprint-changed": true}
 	for i := range c.im.Changes {
 		ch := &c.im.Changes[i]
-		seen[ch.Path] = true
+		// Bookkeeping (a stale row, a re-anchored marker) does not explain a
+		// file's change: a ledger row naming glossmark.yaml would otherwise
+		// hide an edit to its policy from the hard-path rule.
+		if !bookkeeping[ch.Kind] {
+			seen[ch.Path] = true
+		}
 		if ch.Gate != HARD && ch.Path != "" && !bookkeeping[ch.Kind] && model.MatchAnyGlob(c.opt.Policy.HardPaths, ch.Path) {
 			ch.Gate = HARD
 			ch.Reasons = append(ch.Reasons, "edit to ontology/ or manifests (hard-paths)")
@@ -1165,6 +1181,21 @@ func (c *classifier) viewsImpact() {
 		for _, name := range gone {
 			c.im.Views = append(c.im.Views, &views.Delta{View: name, Removed: true})
 			c.im.ViewsChanged = append(c.im.ViewsChanged, name+" (removed)")
+			c.add(Change{Gate: HARD, Kind: "view-removed", Glyph: "-", Subject: name, Path: c.ws.Config.Views,
+				Reasons: []string{"a view is what a reviewer reads; removing one is a decision"}, Msg: fmt.Sprintf("view %s removed", name)})
+		}
+		// The projections above use the head's definitions on both sides, so
+		// an edited definition shows up only here.
+		var edited []string
+		for name, b := range c.opt.BaseViews.Views {
+			if h, ok := c.ws.Views.Views[name]; ok && !reflect.DeepEqual(b, h) {
+				edited = append(edited, name)
+			}
+		}
+		sort.Strings(edited)
+		for _, name := range edited {
+			c.add(Change{Gate: HARD, Kind: "view-changed", Glyph: "!", Subject: name, Path: c.ws.Config.Views,
+				Reasons: []string{"the definition of a view changed"}, Msg: fmt.Sprintf("view %s redefined", name)})
 		}
 	}
 	// A change that alters a core-only view is HARD; one that alters only engineering views is SOFT at most.

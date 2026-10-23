@@ -283,7 +283,10 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			case !fm.Marker.Proposed && e.Status == model.StatusAccepted && e.AnchorFingerprint != "" && e.AnchorFingerprint == fm.Anchor.Legacy:
 				// Recorded before marker lines left the file fingerprint (ADR 0006).
 				e.AnchorFingerprint = fm.Anchor.Fingerprint
-			case !fm.Marker.Proposed && e.Status == model.StatusAccepted && e.AnchorFingerprint != "" && e.AnchorFingerprint != fm.Anchor.Fingerprint:
+			case !fm.Marker.Proposed && e.Status == model.StatusAccepted && e.AnchorFingerprint != fm.Anchor.Fingerprint:
+				// An accepted row always records the anchor it was accepted on;
+				// one without it (blanked by hand) cannot show the code is
+				// unchanged, so it is re-confirmed rather than refilled.
 				e.Status = model.StatusStale
 			case e.Status == model.StatusRejected && !fm.Marker.Proposed:
 				// A rejected link re-asserted without ? is a human decision.
