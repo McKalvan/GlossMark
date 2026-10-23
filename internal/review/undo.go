@@ -145,6 +145,11 @@ func (e *Engine) Undo(force bool) (string, error) {
 	if err := json.Unmarshal(b, &je); err != nil {
 		return "", fmt.Errorf("undo journal %s: %w", name, err)
 	}
+	// An agent walks back only its own decisions; a person's decision, HARD
+	// ones included, is theirs to undo.
+	if IsAgent(e.Actor) && je.Actor != e.Actor {
+		return "", fmt.Errorf("cannot undo %q: %s made it, and an agent undoes only its own decisions", je.Desc, orUnknown(je.Actor))
+	}
 	var changed []string
 	for _, f := range je.Files {
 		cur, err := os.ReadFile(filepath.Join(e.Root, filepath.FromSlash(f.Path)))
@@ -227,6 +232,13 @@ func journalDir(root string) (string, error) {
 	}
 	abs, _ := filepath.Abs(root)
 	return filepath.Join(cache, "glossmark", "undo", hash([]byte(abs))[:16]), nil
+}
+
+func orUnknown(actor string) string {
+	if actor == "" {
+		return "an unknown actor"
+	}
+	return actor
 }
 
 func hash(b []byte) string {

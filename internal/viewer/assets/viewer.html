@@ -194,7 +194,8 @@ try{
 }
 const details=(data.concepts&&typeof data.concepts==='object')?data.concepts:{};
 const findings=Array.isArray(data.findings)?data.findings:[];
-const srcURL=typeof data.sourceUrl==='string'?data.sourceUrl:'';
+/* Only an http(s) template links: a javascript: or data: source-url from the repository would run on click. */
+const srcURL=typeof data.sourceUrl==='string'&&/^https?:\/\//i.test(data.sourceUrl)?data.sourceUrl:'';
 /* A path:line, linked to the code host when glossmark.yaml sets source-url. */
 function srcLink(path,line){
   const txt=esc(path)+(line?':'+esc(line):'');

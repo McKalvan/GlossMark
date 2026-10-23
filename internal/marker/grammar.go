@@ -34,8 +34,10 @@ var keyPat = regexp.MustCompile(`([a-z]+)=("([^"]*)"|[^\s]+)`)
 // loosePat finds anything that looks like an attempted marker, for diagnostics.
 var loosePat = regexp.MustCompile(`@gloss\b`)
 
-// spdxPat matches the SPDX-style header sugar: `Gloss-Implements: impl:X`
-var spdxPat = regexp.MustCompile(`Gloss-([A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*):\s*(` + targetPat + `(?:\s*,\s*` + targetPat + `)*)\s*$`)
+// spdxPat matches the SPDX-style header sugar: `Gloss-Implements: impl:X`,
+// at the start of the comment (after block-comment stars), so prose that
+// mentions the form mid-sentence is not a link.
+var spdxPat = regexp.MustCompile(`^[\s*]*Gloss-([A-Z][A-Za-z]*(?:-[A-Z][A-Za-z]*)*):\s*(` + targetPat + `(?:\s*,\s*` + targetPat + `)*)\s*$`)
 
 // Marker is one parsed `@gloss` line.
 type Marker struct {
@@ -150,7 +152,7 @@ func ParseLine(text string, lineNo, col0 int) (*Marker, []Diagnostic) {
 	}
 	if c, ok := mk.Keys["conf"]; ok {
 		f, err := strconv.ParseFloat(c, 64)
-		if err != nil || f < 0 || f > 1 {
+		if err != nil || !(f >= 0 && f <= 1) { // NaN fails both
 			diags = append(diags, Diagnostic{Line: lineNo, Col: mk.Col, Severity: "warning", Code: "GM006",
 				Msg: fmt.Sprintf("conf must be a number in [0,1], got %q", c)})
 			delete(mk.Keys, "conf")

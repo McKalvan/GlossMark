@@ -494,7 +494,12 @@ func symbolLine(symbol string) *regexp.Regexp {
 // @gloss implements gmi:ValueBinder
 func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, line int) {
 	rel := filepath.ToSlash(vf.Path)
-	b, err := os.ReadFile(ex.ws.Abs(rel))
+	abs, err := ex.ws.Within(rel)
+	if err != nil {
+		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from %v", n.CURIE, err))
+		return
+	}
+	b, err := os.ReadFile(abs)
 	if err != nil {
 		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from %s does not exist", n.CURIE, rel))
 		return

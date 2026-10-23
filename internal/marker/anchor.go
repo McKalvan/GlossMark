@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // Anchor is where a marker binds in a file, stored three ways in the design:
@@ -347,6 +348,27 @@ func yamlDocAnchor(lines []string, j int) (Anchor, bool) {
 // or adding a marker does not stale the file's links, and the block that
 // gloss agents --write regenerates between gloss:begin and gloss:end.
 func fileAnchor(lines []string) Anchor {
+	// Every marker that falls back to file scope asks for the same file's
+	// anchor; hashing it once per marker made a file of N markers O(N²).
+	if len(lines) == 0 {
+		return hashFile(lines)
+	}
+	fileMemo.Lock()
+	defer fileMemo.Unlock()
+	if fileMemo.first != &lines[0] || fileMemo.n != len(lines) {
+		fileMemo.first, fileMemo.n, fileMemo.a = &lines[0], len(lines), hashFile(lines)
+	}
+	return fileMemo.a
+}
+
+var fileMemo struct {
+	sync.Mutex
+	first *string
+	n     int
+	a     Anchor
+}
+
+func hashFile(lines []string) Anchor {
 	h, legacy := sha256.New(), sha256.New()
 	generated := false
 	for _, l := range lines {

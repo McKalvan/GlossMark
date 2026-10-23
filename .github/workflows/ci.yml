@@ -75,6 +75,21 @@ jobs:
           check-graph: "true"
           drift-fail-on: violation,value-drift,gap,dangling,overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
           coverage-fail-under: "100"
-          fail-on: ${{ contains(github.event.pull_request.labels.*.name, 'ontology-approved') && 'none' || 'HARD' }}
+          # The label approves the commits a reviewer saw: a push (synchronize)
+          # is gated again, and approval-reset takes the label off.
+          fail-on: ${{ contains(github.event.pull_request.labels.*.name, 'ontology-approved') && github.event.action != 'synchronize' && 'none' || 'HARD' }}
           # A fork's token cannot comment; its PRs still get the gate.
           comment: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+  # A push after ontology-approved invalidates it: the label is removed, so a
+  # reviewer re-applies it to the new commits (the labeled event re-runs the gate).
+  approval-reset:
+    if: github.event_name == 'pull_request' && github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'ontology-approved') && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.removeLabel({ ...context.repo, issue_number: context.payload.pull_request.number, name: 'ontology-approved' });
