@@ -170,6 +170,15 @@ func TestDoctorWaivers(t *testing.T) {
 	if c := at("2025-01-01"); c.Status != OK {
 		t.Errorf("waivers far from expiry = %+v", c)
 	}
+	// A malformed date waives nothing (GM610); doctor says so (#175).
+	os.WriteFile(filepath.Join(root, "glossmark.yaml"), []byte("owns:\n  z: { iri: https://x/z/, tier: core }\npolicy:\n  waivers:\n    - { finding: z:A, owner: a, expires: next-week }\n    - { finding: z:C, owner: a, expires: 2027-06-30 }\n"), 0o644)
+	if ws, err = load.Load(root); err != nil {
+		t.Fatal(err)
+	}
+	res, _ = extract.Build(ws)
+	if c := at("2025-01-01"); c.Status != Warn || !strings.HasPrefix(c.Msg, `z:A (expires "next-week" is not a YYYY-MM-DD date)`) || !strings.Contains(c.Msg, "GM610") {
+		t.Errorf("malformed waiver = %+v", c)
+	}
 }
 
 // TestDoctorAutoAccept (ADR 0024): doctor reports the auto-accept rule in
@@ -242,6 +251,38 @@ func TestDoctorCIAtGitRoot(t *testing.T) {
 	if c := pins("showcase/clinic-booking-v2"); c.Status != Warn || !strings.Contains(c.Msg, "git root") {
 		t.Errorf("uncovered workspace: %+v", c)
 	}
+}
+
+// TestDoctorCIShaAndComputedMatrix: a full commit sha is a pin, and a
+// workflow whose root: comes from a matrix it computes with fromJSON covers
+// the workspace, noted as not checked (#175).
+func TestDoctorCIShaAndComputedMatrix(t *testing.T) {
+	top := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(top, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("ff/dispatch/glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ff/dispatch/ontology/z.gloss.yaml", "concepts: {}\n")
+	write(".github/workflows/showcase.yml", "jobs:\n  g:\n    strategy:\n      matrix:\n        include: ${{ fromJSON(needs.matrix.outputs.workspaces) }}\n    steps:\n      - uses: mckalvan/glossmark@0123456789abcdef0123456789abcdef01234567\n        with:\n          root: ${{ matrix.root }}\n")
+	if out, err := exec.Command("git", "-C", top, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	ws, err := load.Load(filepath.Join(top, "ff/dispatch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, _ := extract.Build(ws)
+	for _, c := range Run(ws, res.Graph, nil, Env{LookPath: func(string) (string, error) { return "", errors.New("no") }}) {
+		if c.Name == "CI pins" {
+			if c.Status != OK || !strings.Contains(c.Msg, "showcase.yml (root: from a computed matrix") {
+				t.Errorf("CI pins = %+v", c)
+			}
+			return
+		}
+	}
+	t.Fatal("no CI pins check")
 }
 
 func TestMentionsRoot(t *testing.T) {

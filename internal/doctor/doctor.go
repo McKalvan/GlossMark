@@ -104,11 +104,12 @@ func (d *doctor) waivers() {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	var expired, soon []string
+	var invalid, expired, soon []string
 	for _, w := range ws {
 		exp, err := time.Parse(rollup.WaiverDate, w.Expires)
 		if err != nil {
-			continue // gloss check reports it (GM610)
+			invalid = append(invalid, fmt.Sprintf("%s (expires %q is not a YYYY-MM-DD date)", w.Finding, w.Expires))
+			continue
 		}
 		switch {
 		case rollup.WaiverExpired(exp, now):
@@ -118,6 +119,8 @@ func (d *doctor) waivers() {
 		}
 	}
 	switch {
+	case len(invalid) > 0:
+		d.add("waivers", Warn, strings.Join(append(append(invalid, expired...), soon...), ", ")+"; a waiver without a valid date waives nothing (GM610)", "write expires: as YYYY-MM-DD in "+load.ConfigName)
 	case len(expired) > 0:
 		d.add("waivers", Warn, strings.Join(append(expired, soon...), ", "), "fix the finding, renew the date or remove the waiver in "+load.ConfigName)
 	case len(soon) > 0:
@@ -333,7 +336,17 @@ func (d *doctor) lock() {
 var (
 	usesRe = regexp.MustCompile(`(?im)^\s*-?\s*uses:\s*["']?mckalvan/glossmark@([^\s"'#]+)`)
 	revRe  = regexp.MustCompile(`(?is)repo:\s*https://github\.com/mckalvan/glossmark[^\n]*\n\s*rev:\s*["']?([^\s"'#]+)`)
+	shaRe  = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	// A root: taken from a matrix the workflow computes (include: ${{
+	// fromJSON(...) }}) names no workspace in the file; it may be this one.
+	matrixRootRe = regexp.MustCompile(`(?i)root:\s*["']?\$\{\{\s*matrix\.`)
+	fromJSONRe   = regexp.MustCompile(`(?i)matrix:[^\n]*\n?[^\n]*\$\{\{\s*fromjson\(`)
 )
+
+// pinned reports whether a ref is a release tag or a full commit sha.
+func pinned(ref string) bool {
+	return strings.HasPrefix(ref, "v") || shaRe.MatchString(ref)
+}
 
 // GitRoot returns the top level of the git repository holding dir, or "".
 func GitRoot(dir string) string {
@@ -355,13 +368,20 @@ func (d *doctor) pins() {
 			if err != nil {
 				continue
 			}
+			computed := false
 			if wsRel != "" && !mentionsRoot(string(b), wsRel) {
-				continue
+				if computed = matrixRootRe.Match(b) && fromJSONRe.Match(b); !computed {
+					continue
+				}
 			}
 			for _, m := range usesRe.FindAllStringSubmatch(string(b), -1) {
 				rel, _ := filepath.Rel(d.ws.Root, f)
-				found = append(found, filepath.ToSlash(rel))
-				if !strings.HasPrefix(m[1], "v") {
+				if computed {
+					found = append(found, filepath.ToSlash(rel)+" (root: from a computed matrix, not checked against this workspace)")
+				} else {
+					found = append(found, filepath.ToSlash(rel))
+				}
+				if !pinned(m[1]) {
 					unpinned = append(unpinned, fmt.Sprintf("%s uses @%s", filepath.ToSlash(rel), m[1]))
 				}
 			}
@@ -370,7 +390,7 @@ func (d *doctor) pins() {
 			if m := revRe.FindStringSubmatch(strings.ToLower(string(b))); m != nil {
 				rel, _ := filepath.Rel(d.ws.Root, filepath.Join(base, ".pre-commit-config.yaml"))
 				found = append(found, filepath.ToSlash(rel))
-				if !strings.HasPrefix(m[1], "v") {
+				if !pinned(m[1]) {
 					unpinned = append(unpinned, filepath.ToSlash(rel)+" rev: "+m[1])
 				}
 			}
@@ -393,7 +413,7 @@ func (d *doctor) pins() {
 	case len(found) == 0:
 		d.add("CI pins", Warn, "no GitHub workflow or pre-commit config references GlossMark", "add the Action (docs/QUICKSTART.md, section 7) pinned to a release: uses: mckalvan/glossmark@v0.2.0")
 	case len(unpinned) > 0:
-		d.add("CI pins", Fail, strings.Join(unpinned, "; ")+": an unpinned ref builds from source on every run and changes under you", "pin a release tag, e.g. @v0.2.0 / rev: v0.2.0")
+		d.add("CI pins", Fail, strings.Join(unpinned, "; ")+": an unpinned ref builds from source on every run and changes under you", "pin a release tag or a full commit sha, e.g. @v0.2.0 / rev: v0.2.0")
 	default:
 		sort.Strings(found)
 		d.add("CI pins", OK, "release pinned in "+strings.Join(uniq(found), ", "), "")

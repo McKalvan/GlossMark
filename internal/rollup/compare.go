@@ -484,7 +484,7 @@ func (c *comparer) boundaries() {
 			sort.SliceStable(violations, func(i, j int) bool { return violations[i].Concept < violations[j].Concept })
 			for i, f := range violations {
 				if i > 0 {
-					f.Msg = fmt.Sprintf("%s %s %s%s, which its declared %s does not cover (sets on %s %s)", f.Boundary, rel, f.Concept, liftsTo(f.Lifted), rel, f.Boundary, violations[0].Concept)
+					f.Msg = fmt.Sprintf("%s %s %s%s, which its declared %s does not cover (declared and derived sets: see the %s line)", f.Boundary, rel, f.Concept, liftsTo(f.Lifted), rel, violations[0].Concept)
 					if f.Proposed {
 						f.Msg += " [proposed link]"
 					}
