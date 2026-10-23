@@ -93,26 +93,40 @@ func TestUnloadedOntologyFileWarns(t *testing.T) {
 	}
 }
 
-// TestOrphanCountsSubscribers: a concept the ontology says a reached
-// concept subscribes to or consumes is not an orphan, as an inline
-// subscribes on its code would make it; a documents link alone still is
-// (issue #160, FF12).
-func TestOrphanCountsSubscribers(t *testing.T) {
+// TestOrphanIgnoresIntent: a concept the ontology says a reached concept
+// subscribes to or consumes is still an orphan, as the manifest's gap on it
+// says no code subscribes to it; a marker on the code reaches it and closes
+// the gap, and a documents link alone never does (issues #160 FF12, #173).
+func TestOrphanIgnoresIntent(t *testing.T) {
 	root, write := workspace(t)
 	write("glossmark.yaml", "owns:\n  frt: { iri: https://x/frt/, tier: core }\n  sc: { iri: https://x/sc/, tier: implementation }\n")
 	write("ontology/frt.gloss.yaml", "concepts:\n  ShipmentPickedUp: { kind: event }\n  ShipmentDelivered: { kind: event }\n  Manifest: { kind: entity }\n  Tracking: { kind: process }\n")
 	write("ontology/sc.gloss.yaml", "concepts:\n  StatusProjector: { kind: process, realizes: frt:Tracking, subscribes: [frt:ShipmentPickedUp], consumes: [frt:Manifest] }\n")
-	write(".gloss.yaml", "boundary: o:sc\nlevel: container\n")
+	write(".gloss.yaml", "boundary: o:sc\nlevel: container\nsubscribes: [frt:ShipmentPickedUp]\n")
 	write("listener.py", "# @gloss implements sc:StatusProjector\ndef on_event(): pass\n")
 	write("docs/events.md", "<!-- @gloss documents frt:ShipmentDelivered scope=file -->\n# Events\n")
-	ws, g, _, lg := build(t, root)
-	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	report := func() *rollup.Report {
+		ws, g, _, lg := build(t, root)
+		return rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	}
+	rep := report()
+	if got := strings.Join(concepts(findings(rep, rollup.KindOrphan)), ","); got != "frt:Manifest,frt:ShipmentDelivered,frt:ShipmentPickedUp" {
+		t.Errorf("intent only: orphans = %s, want frt:Manifest, frt:ShipmentDelivered and frt:ShipmentPickedUp", got)
+	}
+	if gaps := findings(rep, rollup.KindGap); len(gaps) != 1 || gaps[0].Concept != "frt:ShipmentPickedUp" || !strings.Contains(gaps[0].Msg, "intends it, but no code under it subscribes to it") {
+		t.Errorf("intent only: gaps = %+v, want the intent gap on frt:ShipmentPickedUp", gaps)
+	}
+	write("listener.py", "# @gloss implements sc:StatusProjector\n# @gloss subscribes frt:ShipmentPickedUp\ndef on_event(): pass\n\n\n# @gloss consumes frt:Manifest\ndef load(): pass\n")
+	rep = report()
 	orphans := findings(rep, rollup.KindOrphan)
 	if got := strings.Join(concepts(orphans), ","); got != "frt:ShipmentDelivered" {
 		t.Errorf("orphans = %s, want only frt:ShipmentDelivered", got)
 	}
 	if len(orphans) == 1 && !strings.Contains(orphans[0].Msg, "documents or instructs link does not count") {
 		t.Errorf("orphan message = %q", orphans[0].Msg)
+	}
+	if gaps := findings(rep, rollup.KindGap); len(gaps) != 0 {
+		t.Errorf("gaps = %+v, want none once code subscribes", gaps)
 	}
 }
 

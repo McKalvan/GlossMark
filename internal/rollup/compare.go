@@ -987,9 +987,9 @@ func verb(rel string) string {
 
 // reachedByArtifact reports whether code is built for a concept: an artifact
 // links to it other than to document, instruct or remit it, or to a concept
-// that realizes it, is published as it, is below it in is-a or part of it,
-// or that produces, publishes, consumes or subscribes to it in the ontology
-// (the orphan rule, ADR 0028).
+// that realizes it, is published as it, is below it in is-a or part of it
+// (the orphan rule, ADR 0028). A flow a reached concept declares in the
+// ontology is intent and does not reach (ADR 0026).
 func (c *comparer) reachedByArtifact(id string) (bool, string) {
 	return c.reached(id, map[string]bool{})
 }
@@ -1008,22 +1008,6 @@ func (c *comparer) reached(id string, seen map[string]bool) (bool, string) {
 	for _, p := range []string{"realizes", "published-as"} {
 		for _, e := range c.g.In(id, p) {
 			if e.Source == graph.SourceDerived {
-				continue
-			}
-			if n := c.g.Node(e.S); n != nil && n.NodeType == model.NodeConcept {
-				if ok, rel := c.reached(e.S, seen); ok {
-					return true, rel
-				}
-			}
-		}
-	}
-	// Through intended relations: a concept a reached concept produces,
-	// publishes, consumes or subscribes to is reached. The ontology form
-	// says what a marker on the same code would, and an inline subscribes
-	// already counts, so the listener's concept declaring it counts too.
-	for _, p := range []string{"produces", "publishes", "consumes", "subscribes"} {
-		for _, e := range c.g.In(id, p) {
-			if e.Source != graph.SourceDeclared {
 				continue
 			}
 			if n := c.g.Node(e.S); n != nil && n.NodeType == model.NodeConcept {
@@ -1303,13 +1287,18 @@ func (c *comparer) untested() {
 		if n.Imported || InternalExempt(n) {
 			continue
 		}
-		if !c.implemented(n.ID, 0) || n.Kind == "event" {
+		implemented := c.implemented(n.ID, 0) && n.Kind != "event"
+		reached, _ := c.reachedByArtifact(n.ID)
+		if !implemented && !(reached && c.inCoverage(n)) {
 			continue
 		}
 		if c.tested(n.ID, 0) {
 			continue
 		}
 		msg := fmt.Sprintf("%s is implemented but nothing tests or verifies it", n.CURIE)
+		if !implemented {
+			msg = fmt.Sprintf("%s has code but nothing tests or verifies it", n.CURIE)
+		}
 		if n.Tier == model.TierImpl {
 			// Report at the core level: skip the impl concept when a core concept it
 			// realizes is itself reported as untested. What its mechanism wholes
@@ -1584,10 +1573,7 @@ func (c *comparer) metrics() {
 	// server-rendered page, a CLI, a BFF marked implements hp:X), which are
 	// mechanisms just the same (ADR 0013).
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || InternalExempt(n) || n.Deprecated || n.Proposed {
-			continue
-		}
-		if n.Tier != model.TierImpl && !c.implementedDirectly(n.ID) {
+		if !c.inCoverage(n) {
 			continue
 		}
 		m.ConceptsInScope++
@@ -1615,6 +1601,17 @@ func (c *comparer) metrics() {
 	if m.InScopeFiles > 0 {
 		m.CoveragePct = 100 * float64(m.CoveredFiles) / float64(m.InScopeFiles)
 	}
+}
+
+// inCoverage reports whether a concept is in the concept-coverage
+// denominator. untested reports every such concept code reaches that
+// nothing verifies, so each uncovered one is an orphan, untested, or held
+// back for the core concept it realizes, which is reported instead.
+func (c *comparer) inCoverage(n *graph.Node) bool {
+	if n.Imported || InternalExempt(n) || n.Deprecated || n.Proposed {
+		return false
+	}
+	return n.Tier == model.TierImpl || c.implementedDirectly(n.ID)
 }
 
 // implementedDirectly reports whether an artifact's marker implements the
