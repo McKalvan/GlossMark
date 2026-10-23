@@ -1482,14 +1482,19 @@ func (c *comparer) stale() {
 			}
 			cur := strings.TrimPrefix(id, "value:")
 			live, bound := "", e.Path
+			hint := "or confirm with gloss accept --value"
 			if n := c.g.NodeByCurie(cur); n != nil {
 				live = n.LiveValue
 				if n.ValueFrom != "" {
 					bound = n.ValueFrom
 				}
+				// The same check gloss accept --value refuses on.
+				if !model.ValueInLine(n.Value, n.LiveValue) {
+					hint = "or confirm the line as is with gloss accept --value --force"
+				}
 			}
 			c.add(Finding{ID: KindValueDrift + ":" + cur, Kind: KindValueDrift, Severity: "error", Path: e.Path, Concept: cur,
-				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, or confirm with gloss accept --value %s", cur, e.Value, bound, e.Live, live, cur)})
+				Msg: fmt.Sprintf("published value drifted: %s publishes %q, bound to %s, which changed from %q to %q; update value: in the ontology, %s %s", cur, e.Value, bound, e.Live, live, hint, cur)})
 			continue
 		}
 		if e.Status != model.StatusStale {

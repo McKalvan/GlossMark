@@ -5,9 +5,11 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -391,6 +393,61 @@ func (l *ValueFromList) UnmarshalYAML(n *yaml.Node) error {
 	}
 	*l = ValueFromList{v}
 	return nil
+}
+
+// numLiteral matches a number as code or prose writes it: a sign, digit
+// group separators (1_000, or 1,000 in thousands), a fraction, an exponent.
+var numLiteral = regexp.MustCompile(`[-+]?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d[\d_]*(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?`)
+
+// ValueInLine reports whether a published value appears in the bound code:
+// some number in the value equals a number in the line (a percentage also
+// as a fraction, so 4% matches 0.04; a suffix such as 60L or 30d is not part
+// of the number), or, for a value without numbers, the value's text appears
+// in the line, unquoted and case-insensitive. A value with nothing to
+// compare (none, or a list or map) is not judged.
+func ValueInLine(value any, line string) bool {
+	text := strings.TrimSpace(fmt.Sprint(value))
+	if value == nil || text == "" {
+		return true
+	}
+	switch value.(type) {
+	case []any, map[string]any:
+		return true
+	}
+	nums := func(s string) []float64 {
+		var out []float64
+		for _, m := range numLiteral.FindAllStringIndex(s, -1) {
+			if m[0] > 0 && isIdentByte(s[m[0]-1]) {
+				continue // the digits of a name: MAX_2, v1
+			}
+			f, err := strconv.ParseFloat(strings.NewReplacer("_", "", ",", "").Replace(s[m[0]:m[1]]), 64)
+			if err != nil {
+				continue
+			}
+			out = append(out, f)
+			if m[1] < len(s) && s[m[1]] == '%' {
+				out = append(out, f/100)
+			}
+		}
+		return out
+	}
+	want := nums(text)
+	if len(want) == 0 {
+		return strings.Contains(strings.ToLower(line), strings.ToLower(strings.Trim(text, `"'`)))
+	}
+	have := nums(line)
+	for _, w := range want {
+		for _, h := range have {
+			if w == h || math.Abs(w-h) <= 1e-9*math.Max(math.Abs(w), math.Abs(h)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isIdentByte(b byte) bool {
+	return b == '_' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
 }
 
 // RelationNames returns the concept's generic relation keys, sorted.
