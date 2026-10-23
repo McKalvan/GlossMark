@@ -327,6 +327,16 @@ Grouping exposed two drift reporting issues, both fixed in GlossMark (`TestAreaS
 
 **Adoption.** The owner then answered the packet questions, and the derived ontology was adopted on pfinance ([McKalvan/pfinance#4](https://github.com/McKalvan/pfinance/pull/4)). The result: 71 core and 29 implementation concepts, all proposed; 100 markers; 0 errors, warnings, violations or gaps under the development build and the pinned v0.1.0 release; 5 orphans and 5 untested concepts listed in the PR. Every pfinance test passes, and ruff reports nothing new.
 
+**Run in Cursor: the owner was never asked.** On a repository adopted from Cursor, the agent went straight from the code to tier files and asked the owner nothing about the domain. Two things in the skills allowed it. `adopt-glossmark` offered a "short path" that drafts the core from code with no interview. And `derive-ontology` asked its owner questions in step 1 (survey) and step 8 (interview) "with the ask-the-user tool when you have one". Cursor has no such tool, so the agent read that as leave to answer for the owner and keep going. A third problem was that the questions it did have (excludes, authoritative docs, owner, language) were scoping questions. Nothing asked what the owner most wants to decide: which processes are core, how fine-grained the model should be, and who reads the map.
+
+The skills now:
+- do the legwork first: a lay-of-the-land sketch of candidate processes and concepts from a first harvest;
+- hold a **domain interview** before any drafting (step 3): purpose, core processes, core concepts, granularity, views, criticality;
+- hold a **draft review** before any tier file is written (step 10);
+- at both checkpoints, end the turn and wait. Without an ask tool they ask in chat as numbered multiple choice. They never answer their own questions, and they write no ontology file before the interview.
+
+The interview's answers go into the derivation record as a `brief` line, so a re-run asks only what changed. The views answer becomes `ontology/views.yaml`. `adopt-glossmark` keeps its short path only for a repository whose owner keeps the vocabulary written down, and runs a shorter version of the same interview. `gloss hook install --cursor` writes an always-applied Cursor rule (Cursor has no SessionStart hook) that carries the briefing command, the actor and the same stop-and-wait rule. It also writes `.cursor/mcp.json`. `TestSkillsStopForTheOwner` keeps the checkpoints in both skills.
+
 ## Alternatives considered
 
 - **A pure skill, with agents reading everything directly.** Fastest to ship, but not reproducible, not calibratable and expensive to re-run; a second run would not see the same evidence.

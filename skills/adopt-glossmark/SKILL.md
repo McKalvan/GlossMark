@@ -11,6 +11,7 @@ You are adding GlossMark to this repository: a two-tier ontology (a **core** tie
 
 ## 0. Ground rules
 
+- **The core tier is the owner's domain.** You never decide it alone. Before any core concept is written, the person who owns the domain has told you what the business does, its core processes and concepts, how fine-grained to model and which views they want (step 1). Ask, then **end your turn and wait**: with an ask-the-user tool if you have one, otherwise as numbered questions with lettered choices in chat, your recommendation first. Never answer your own questions or assume the recommended option to keep moving. Only if the owner tells you outright to go on without them do you continue, and you say so in the PR.
 - Use the **starter five** relations only, unless a step below says otherwise: `implements` (the code that does the work), `represents` (a data shape: model, table, schema), `verifies` (tests), `documents` (docs), `instructs` (agent files). Add `scope=file` when a whole file is about one concept.
 - Every marker you write is a **proposal**: `@gloss?` with `conf=`. Never write a bare `@gloss`; a human removes the `?`.
 - One marker per **public surface** (the handler, the pipeline entry point, the model, the table, the test file), never one per helper. `gloss check` flags runs of three identical markers (GM131) and a symbol marker that repeats a file marker (GM130).
@@ -20,11 +21,12 @@ You are adding GlossMark to this repository: a two-tier ontology (a **core** tie
 
 ## 1. Inventory (read, do not write)
 
-**An existing application with no ontology yet:** use the `derive-ontology` skill instead of steps 1, 3 and 4. It surveys the repository, harvests evidence with `gloss harvest`, drafts both tiers with the domain owner, and hands back here at step 2 with the prefixes to use. The steps below are the short path for a small repository or one whose vocabulary is already written down.
+**An existing application with no ontology yet:** use the `derive-ontology` skill instead of steps 1, 3 and 4. That is the default. It scouts the repository, harvests evidence with `gloss harvest`, interviews the domain owner on processes, concepts, granularity and views, drafts both tiers, reviews the draft with them, and hands back here at step 2 with the prefixes to use. The steps below are the short path, only for a small repository whose vocabulary the owner already keeps written down (a glossary, an enum file); its interview is shorter, not skipped.
 
 1. Read the README, the docs folder and any glossary, enum file or domain model doc. If the repo already has a vocabulary (a markdown glossary, an `enums.yaml`), plan to import it in step 3 rather than retyping it.
 2. List the top-level source directories and what each does in one line.
-3. Note the 10 to 40 terms a domain expert would recognise (accounts, orders, grading, settlement) and the mechanisms an engineer would name (handlers, pipelines, queues, pages).
+3. Note the 10 to 40 terms a domain expert would recognise (accounts, orders, grading, settlement), the processes the business runs, and the mechanisms an engineer would name (handlers, pipelines, queues, pages).
+4. **Interview the owner (checkpoint: stop and wait).** Show what you found in a few lines, then ask, multiple choice with your recommendation first: is the written vocabulary current and authoritative; which processes are core; which terms are core and which are wrong or technical; how fine-grained to model (main entities only, plus lifecycle states and rules, or everything the code distinguishes); which views they want (a business overview, an engineering view, one per core process); where a mistake costs money, trust or compliance (`criticality`); and the prefixes for `gloss init`. End your turn until they answer. If the answers show the vocabulary is thin or stale, switch to `derive-ontology`.
 
 ## 2. Scaffold
 
@@ -46,7 +48,7 @@ concepts:
   CashFlowAnalysis: { kind: process, doc: "Income minus spending per period." }
 ```
 
-Litmus test: if a domain expert would nod at the term, it is core; if only an engineer would, it is implementation. Core never mentions implementation names. Mark `criticality: high` or `critical` only where a mistake costs money, trust or compliance, and say why in a comment.
+Write only what the owner confirmed in step 1, at the granularity they chose, and show them the list before you go on to step 4. Litmus test: if a domain expert would nod at the term, it is core; if only an engineer would, it is implementation. Core never mentions implementation names. Mark `criticality: high` or `critical` only where the owner said a mistake costs money, trust or compliance, and say why in a comment. Edit `ontology/views.yaml` to the views the owner chose.
 
 If the repo has a glossary, import it instead: `gloss import --from markdown-glossary docs/glossary.md --namespace <core>` (and `--from enums` for enum files), then edit.
 
@@ -84,4 +86,4 @@ Violations and gaps must be zero, or each one explained in the PR description. O
 
 ## 8. One PR
 
-Commit the ontology, manifests, markers, `.glossmark/graph.jsonl`, `.glossmark/ledger.jsonl`, the CI job and the hook config in one PR. The description lists: the core concepts and why each is core; any `NEW:` proposals and proposed concepts; the drift summary; and what is deliberately left unmarked. The diff comment will show counts per boundary because the base has no graph; that is expected.
+Commit the ontology, manifests, markers, `.glossmark/graph.jsonl`, `.glossmark/ledger.jsonl`, the CI job and the hook config in one PR. The description lists: what the owner decided in the interview (processes, granularity, views) and anything they left to you; the core concepts and why each is core; any `NEW:` proposals and proposed concepts; the drift summary; and what is deliberately left unmarked. The diff comment will show counts per boundary because the base has no graph; that is expected.
