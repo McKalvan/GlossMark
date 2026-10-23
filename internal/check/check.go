@@ -169,7 +169,8 @@ func (c *checker) concepts() {
 		} else if !contains(model.ConceptKinds, n.Kind) {
 			c.add(n.File, n.Line, "error", "GM301", fmt.Sprintf("%s: unknown kind %q; allowed: %s", n.CURIE, n.Kind, strings.Join(model.ConceptKinds, ", ")))
 		}
-		if !isPascal(strings.TrimPrefix(n.CURIE, n.NS+":")) {
+		// A prefixed key (frt:X in dsp's file) is GM401's, not a name to case.
+		if local := strings.TrimPrefix(n.CURIE, n.NS+":"); !strings.Contains(local, ":") && !isPascal(local) {
 			c.add(n.File, n.Line, "warning", "GM302", fmt.Sprintf("%s: concept names are PascalCase", n.CURIE))
 		}
 		if n.CriticalityFrom == "declared" && !model.ValidCriticality(n.Criticality) {

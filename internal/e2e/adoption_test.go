@@ -62,6 +62,42 @@ func TestHasPartCompletesTheParts(t *testing.T) {
 	}
 }
 
+// TestForeignKeyIsOwnSubject: a frt: key in dsp's file is the own-subject
+// rule's (GM401), not a casing warning on dsp:frt:... (issue #175).
+func TestForeignKeyIsOwnSubject(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  dsp: { iri: https://x/dsp/, tier: implementation }\nimports:\n  frt: { iri: https://x/frt/, source: ./upstream, tier: core }\n")
+	write("upstream/frt.gloss.yaml", "namespace: frt\nconcepts:\n  Pickup: { kind: process }\n")
+	write("ontology/dsp.gloss.yaml", "concepts:\n  frt:ExpressPickup: { is-a: frt:Pickup }\n")
+	codes := codesOf(t, root)
+	if gm := codes["GM302"]; len(gm) != 0 {
+		t.Errorf("GM302 = %v, want none", gm)
+	}
+	if gm := codes["GM401"]; len(gm) != 1 || !strings.Contains(gm[0], ": frt:ExpressPickup: concept defined in namespace dsp:") {
+		t.Errorf("GM401 = %v, want frt:ExpressPickup in dsp:", gm)
+	}
+}
+
+// TestGroupedViolationPointsAtSets: the second violation of one boundary and
+// relation points at the line that prints the sets, as a reference rather
+// than part of the claim (issue #175).
+func TestGroupedViolationPointsAtSets(t *testing.T) {
+	root, write := workspace(t)
+	write("glossmark.yaml", "owns:\n  frt: { iri: https://x/frt/, tier: core }\n")
+	write("ontology/frt.gloss.yaml", "concepts:\n  ShipmentBooked: { kind: entity }\n  ShipmentPickedUp: { kind: entity }\n  Route: { kind: entity }\n")
+	write(".gloss.yaml", "boundary: o:planner\nlevel: container\nholds: [frt:Route]\n")
+	write("a.py", "# @gloss represents frt:ShipmentBooked\nclass A: pass\n# @gloss represents frt:ShipmentPickedUp\nclass B: pass\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	vs := findings(rep, rollup.KindViolation)
+	if len(vs) != 2 || vs[0].Concept != "frt:ShipmentBooked" {
+		t.Fatalf("violations = %+v", vs)
+	}
+	if want := "o:planner holds frt:ShipmentPickedUp, which its declared holds does not cover (declared and derived sets: see the frt:ShipmentBooked line)"; vs[1].Msg != want {
+		t.Errorf("second violation = %q, want %q", vs[1].Msg, want)
+	}
+}
+
 // TestUnloadedOntologyFileWarns: an ontology file under ontology/ that no
 // owns: or imports: entry loads warns GM402 with the namespace it declares;
 // loaded and vendored files do not (issue #160, FF19).
