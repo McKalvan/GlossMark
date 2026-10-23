@@ -42,6 +42,15 @@ Reviewing meant three commands and a lot of copying. `gloss status` listed the p
 7. **The graph browser is read-only.** `gloss review node <ref>` (and the Browse tab, and the MCP tool `browse_node`) shows any node (concept, boundary or artifact) with its edges in and out, grouped by relation, and the drift findings on it. It lives in its own package, `internal/browse`, and changes nothing.
 8. **The terminal UI uses no framework.** It is hand-rolled on `golang.org/x/term` (raw mode and size) and ANSI escapes, and it draws on the alternate screen. The state machine (`internal/tui`) is separate from terminal I/O, so tests drive it with keystrokes and compare rendered frames.
 
+9. **A shipped skill drives the headless mode** ([#183](https://github.com/McKalvan/GlossMark/issues/183)). `review-glossmark` is installed by `gloss hook install --skill` with the other two:
+   - It reads each item with `show` before deciding it.
+   - It takes only the actions marked `agent_may`, and gives each a reason.
+   - It records a recommendation on every HARD item.
+   - It asks the owner about the HARD items in one stop-and-wait checkpoint, grouped by pattern.
+   - It never applies the owner's answers itself: they go into a decisions file the owner applies as themselves, or onto the terminal UI as updated recommendations.
+
+   `adopt-glossmark` hands proposal triage after `gloss suggest` to it.
+
 ## Walking it back
 
 The feature is experimental and additive:

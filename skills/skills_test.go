@@ -34,7 +34,15 @@ func TestInstallableDropsSelfHostMarkers(t *testing.T) {
 func TestSkillsStopForTheOwner(t *testing.T) {
 	for _, name := range Names {
 		b, _ := FS.ReadFile(name + "/SKILL.md")
-		for _, want := range []string{"end your turn", "Never answer your own questions", "granularity", "views"} {
+		for _, want := range []string{"end your turn", "Never answer your own questions"} {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s: no %q", name, want)
+			}
+		}
+	}
+	for _, name := range []string{"adopt-glossmark", "derive-ontology"} {
+		b, _ := FS.ReadFile(name + "/SKILL.md")
+		for _, want := range []string{"granularity", "views"} {
 			if !strings.Contains(string(b), want) {
 				t.Errorf("%s: no %q", name, want)
 			}
@@ -44,6 +52,30 @@ func TestSkillsStopForTheOwner(t *testing.T) {
 	for _, want := range []string{"## 3. Domain interview (checkpoint: stop and wait)", "## 10. Draft review (checkpoint: stop and wait)", "No ontology file before the interview"} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("derive-ontology: no %q", want)
+		}
+	}
+}
+
+// TestReviewSkillKeepsHardDecisionsHuman: the review skill takes only the
+// actions the queue marks agent_may, recommends on HARD ones, and hands the
+// owner's answers back for the owner to apply rather than applying them under
+// a human actor (issue #183).
+func TestReviewSkillKeepsHardDecisionsHuman(t *testing.T) {
+	b, err := FS.ReadFile("review-glossmark/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"`agent_may`",
+		`"recommend": true`,
+		"no setting `GLOSS_ACTOR` to a human's name",
+		"you still do not apply them",
+		"gloss review show",
+		"gloss review undo",
+		"## 4. Walk the owner through it (checkpoint: stop and wait)",
+	} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("review-glossmark: no %q", want)
 		}
 	}
 }

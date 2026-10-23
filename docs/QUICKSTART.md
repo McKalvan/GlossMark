@@ -123,7 +123,7 @@ On an existing codebase, let the tool draft the first pass and review it rather 
 ```sh
 gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public surfaces, from names, docstrings, tables touched and test calls
 git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
-gloss hook install --skill           # installs the adopt-glossmark and derive-ontology skills: the whole adoption, and deriving the ontology from what exists, as agent workflows (works before gloss init)
+gloss hook install --skill           # installs the adopt-glossmark, derive-ontology and review-glossmark skills: the whole adoption, deriving the ontology from what exists, and working the review queue, as agent workflows (works before gloss init)
 gloss hook install --skill --cursor  # the same for Cursor: an always-applied rule in .cursor/rules/glossmark.mdc that points at the skills
 ```
 
@@ -235,7 +235,7 @@ gloss review undo                              # reverts the last decision, file
 gloss review node gmi:ReviewEngine             # read-only: a node and its edges in and out (a path works too)
 ```
 
-An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc; an agent's doc edit becomes a `recommendation` item a person `apply`s or `dismiss`es. Over MCP the same engine serves `review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc` and the read-only `browse_node`, as the server's `GLOSS_ACTOR`.
+An actor named `agent:…` takes AUTO and SOFT actions (re-confirm a stale link, accept or reject a SOFT proposal, write a `@gloss?` link, propose a concept for a `ns:NEW:` marker); on a HARD one it adds `"recommend": true` and the verdict waits in `.glossmark/recommendations.jsonl` for a person. `waive` adds a `policy.waivers` entry, `write-link` inserts a marker, `edit-doc` sets a concept's doc; an agent's doc edit becomes a `recommendation` item a person `apply`s or `dismiss`es. The shipped `review-glossmark` skill is this workflow for an agent: it decides its own pile, records recommendations on the rest, asks the owner about the HARD items grouped by pattern, and hands back a decisions file for the owner to apply as themselves. Over MCP the same engine serves `review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc` and the read-only `browse_node`, as the server's `GLOSS_ACTOR`.
 
 - Humans review novelty and hierarchy; everything else flows through policy.
 - **AUTO**: fingerprint-only changes, derived edges. Cleared by the engine.

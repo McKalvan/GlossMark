@@ -181,7 +181,7 @@ func cmdHook(args []string) int {
 	noMCP := fs.Bool("no-mcp", false, "do not register the MCP server in .mcp.json")
 	noHook := fs.Bool("no-hook", false, "do not register the SessionStart hook")
 	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it (agent:cursor for the Cursor files unless set)")
-	skill := fs.Bool("skill", false, "also install the shipped skills (adopt-glossmark, derive-ontology) into .claude/skills/, which Claude Code and Cursor both read; before gloss init, only the skills")
+	skill := fs.Bool("skill", false, "also install the shipped skills (adopt-glossmark, derive-ontology, review-glossmark) into .claude/skills/, which Claude Code and Cursor both read; before gloss init, only the skills")
 	cursor := fs.Bool("cursor", false, "also set up Cursor: an always-applied rule in .cursor/rules/glossmark.mdc (Cursor has no SessionStart hook) and the MCP server in .cursor/mcp.json")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
@@ -301,7 +301,7 @@ This repository links code to a domain ontology with one-line ` + "`@gloss`" + `
 
 ## Adopting GlossMark or deriving the ontology
 
-If asked to add GlossMark, derive the ontology or find the core concepts, follow ` + "`.claude/skills/derive-ontology/SKILL.md`" + ` and then ` + "`.claude/skills/adopt-glossmark/SKILL.md`" + ` (` + "`gloss hook install --skill`" + ` installs them). The core ontology is the user's domain, not yours:
+If asked to add GlossMark, derive the ontology or find the core concepts, follow ` + "`.claude/skills/derive-ontology/SKILL.md`" + ` and then ` + "`.claude/skills/adopt-glossmark/SKILL.md`" + `. To work the review backlog (` + "`@gloss?`" + ` proposals, stale links, drift findings), follow ` + "`.claude/skills/review-glossmark/SKILL.md`" + `. ` + "`gloss hook install --skill`" + ` installs all three. The core ontology is the user's domain, not yours:
 
 - Do the legwork first, then interview the user about core processes, core concepts, granularity and the views they want, before you write any ontology file.
 - Ask in chat as numbered questions with lettered choices, your recommendation first, then **end your turn and wait**. Never answer your own questions, never assume the recommended option, and never keep drafting while a question is open.
