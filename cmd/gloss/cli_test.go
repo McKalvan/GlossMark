@@ -452,6 +452,56 @@ func TestHookInstallSkillBeforeInit(t *testing.T) {
 	}
 }
 
+// Cursor has no SessionStart hook: --cursor writes an always-applied rule
+// that asks for the briefing and an MCP server running as agent:cursor, and
+// the rule says the ontology is derived with the user, not alone.
+func TestHookInstallCursor(t *testing.T) {
+	root := tiny(t, nil)
+	if code, out := gloss(t, "hook", "install", "--cursor", "--root", root); code != 0 {
+		t.Fatalf("hook install --cursor: exit %d\n%s", code, out)
+	}
+	rule, err := os.ReadFile(filepath.Join(root, ".cursor", "rules", "glossmark.mdc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"alwaysApply: true", "GLOSS_ACTOR=agent:cursor", " context --dir", "end your turn and wait", "derive-ontology"} {
+		if !strings.Contains(string(rule), want) {
+			t.Errorf("rule lacks %q:\n%s", want, rule)
+		}
+	}
+	mcp, err := os.ReadFile(filepath.Join(root, ".cursor", "mcp.json"))
+	if err != nil || !strings.Contains(string(mcp), `"GLOSS_ACTOR": "agent:cursor"`) {
+		t.Errorf(".cursor/mcp.json: %v\n%s", err, mcp)
+	}
+	// The Claude Code files keep their own actor.
+	if b, _ := os.ReadFile(filepath.Join(root, ".mcp.json")); !strings.Contains(string(b), "agent:claude-code") {
+		t.Errorf(".mcp.json: %s", b)
+	}
+	// An explicit --actor applies to both.
+	gloss(t, "hook", "install", "--cursor", "--actor", "agent:bob", "--root", root)
+	if b, _ := os.ReadFile(filepath.Join(root, ".cursor", "mcp.json")); !strings.Contains(string(b), "agent:bob") {
+		t.Errorf("--actor not applied to .cursor/mcp.json: %s", b)
+	}
+}
+
+// Before gloss init, --skill --cursor installs the skills and the rule that
+// points Cursor at them; --cursor alone has nothing to register.
+func TestHookInstallCursorBeforeInit(t *testing.T) {
+	root := t.TempDir()
+	if code, out := gloss(t, "hook", "install", "--skill", "--cursor", "--root", root); code != 0 {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".cursor", "rules", "glossmark.mdc")); err != nil {
+		t.Errorf("no rule: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".cursor", "mcp.json")); err == nil {
+		t.Errorf("an MCP server was registered without a workspace")
+	}
+	if code, _ := gloss(t, "hook", "install", "--cursor", "--root", t.TempDir()); code == 0 {
+		t.Errorf("hook install --cursor without a workspace succeeded")
+	}
+}
+
 // Issue #37: the hook names this binary by path when PATH finds another gloss.
 func TestGlossCommandFor(t *testing.T) {
 	dir := t.TempDir()

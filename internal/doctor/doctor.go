@@ -222,6 +222,20 @@ func (d *doctor) hook() {
 	mcp, _ := os.ReadFile(filepath.Join(d.ws.Root, ".mcp.json"))
 	hasHook := bytes.Contains(settings, []byte("gloss context"))
 	hasMCP := bytes.Contains(mcp, []byte(`"gloss"`))
+	if !hasHook && !hasMCP {
+		// Cursor has no SessionStart hook: gloss hook install --cursor writes
+		// a rule that asks the agent for the briefing instead.
+		rule, _ := os.ReadFile(filepath.Join(d.ws.Root, ".cursor", "rules", "glossmark.mdc"))
+		cmcp, _ := os.ReadFile(filepath.Join(d.ws.Root, ".cursor", "mcp.json"))
+		if bytes.Contains(rule, []byte("gloss context")) || bytes.Contains(rule, []byte(" context --dir")) {
+			if bytes.Contains(cmcp, []byte("GLOSS_ACTOR")) {
+				d.add("agent hook", OK, "Cursor rule and MCP server registered with GLOSS_ACTOR", "")
+			} else {
+				d.add("agent hook", Warn, "Cursor rule registered but no MCP server with GLOSS_ACTOR in .cursor/mcp.json", "gloss hook install --cursor")
+			}
+			return
+		}
+	}
 	switch {
 	case !hasHook && !hasMCP:
 		d.add("agent hook", Warn, "no SessionStart hook in .claude/settings.json and no MCP server in .mcp.json", "gloss hook install")

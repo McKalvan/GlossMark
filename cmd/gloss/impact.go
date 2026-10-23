@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,7 +24,7 @@ import (
 func init() {
 	register(command{"impact", "what a change touches: concepts, constraints, published seam, boundaries, tests and blast radius for changed files (or the given paths)", cmdImpact})
 	register(command{"context", "compact session-start briefing for an agent working in a directory (--dir) or on a feature (--concept); meant for a SessionStart hook", cmdContext})
-	register(command{"hook", "gloss hook install: register the SessionStart hook in .claude/settings.json and the MCP server in .mcp.json", cmdHook})
+	register(command{"hook", "gloss hook install: register the SessionStart hook in .claude/settings.json and the MCP server in .mcp.json (--cursor: a Cursor rule and .cursor/mcp.json)", cmdHook})
 }
 
 func cmdImpact(args []string) int {
@@ -179,18 +180,26 @@ func cmdHook(args []string) int {
 	fs, root := newFlags("hook")
 	noMCP := fs.Bool("no-mcp", false, "do not register the MCP server in .mcp.json")
 	noHook := fs.Bool("no-hook", false, "do not register the SessionStart hook")
-	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it")
-	skill := fs.Bool("skill", false, "also install the shipped Claude Code skills (adopt-glossmark, derive-ontology) into .claude/skills/; before gloss init, only the skills")
+	actor := fs.String("actor", "agent:claude-code", "GLOSS_ACTOR the hook and the MCP server run with, so links an agent writes are attributed to it (agent:cursor for the Cursor files unless set)")
+	skill := fs.Bool("skill", false, "also install the shipped skills (adopt-glossmark, derive-ontology) into .claude/skills/, which Claude Code and Cursor both read; before gloss init, only the skills")
+	cursor := fs.Bool("cursor", false, "also set up Cursor: an always-applied rule in .cursor/rules/glossmark.mdc (Cursor has no SessionStart hook) and the MCP server in .cursor/mcp.json")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() != 1 || fs.Arg(0) != "install" {
-		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--skill] [--actor agent:name]")
+		fmt.Fprintln(os.Stderr, "usage: gloss hook install [--no-mcp] [--no-hook] [--skill] [--cursor] [--actor agent:name]")
 		return 2
 	}
+	cursorActor := "agent:cursor"
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "actor" {
+			cursorActor = *actor
+		}
+	})
 	// Before gloss init there is no workspace to hook into, but the skills
-	// are how an adoption starts (derive-ontology runs before init).
-	if *skill {
+	// are how an adoption starts (derive-ontology runs before init), and a
+	// Cursor rule is how Cursor finds them.
+	if *skill || *cursor {
 		dir := *root
 		if dir == "" {
 			cwd, _ := os.Getwd()
@@ -201,10 +210,20 @@ func cmdHook(args []string) int {
 			}
 		}
 		if _, err := os.Stat(filepath.Join(dir, load.ConfigName)); err != nil {
+			if !*skill {
+				return fail(fmt.Errorf("no %s here: run gloss init first, or pass --skill to install only the skills and the Cursor rule", load.ConfigName))
+			}
 			if err := installSkills(dir); err != nil {
 				return fail(err)
 			}
-			fmt.Printf("gloss hook: no %s yet, so only the skills were installed; gloss init installs the hook and the MCP server\n", load.ConfigName)
+			what := "only the skills were installed"
+			if *cursor {
+				if err := installCursorRule(dir, cursorActor); err != nil {
+					return fail(err)
+				}
+				what = "only the skills and the Cursor rule were installed"
+			}
+			fmt.Printf("gloss hook: no %s yet, so %s; gloss init installs the hook and the MCP server\n", load.ConfigName, what)
 			return 0
 		}
 	}
@@ -215,6 +234,18 @@ func cmdHook(args []string) int {
 	if err := installHooks(p.WS.Root, *actor, !*noHook, !*noMCP); err != nil {
 		return fail(err)
 	}
+	if *cursor {
+		if !*noHook {
+			if err := installCursorRule(p.WS.Root, cursorActor); err != nil {
+				return fail(err)
+			}
+		}
+		if !*noMCP {
+			if err := registerMCP(p.WS.Root, filepath.Join(".cursor", "mcp.json"), glossCommand(), cursorActor); err != nil {
+				return fail(err)
+			}
+		}
+	}
 	if *skill {
 		if err := installSkills(p.WS.Root); err != nil {
 			return fail(err)
@@ -223,7 +254,8 @@ func cmdHook(args []string) int {
 	return 0
 }
 
-// installSkills copies the shipped skills into .claude/skills/.
+// installSkills copies the shipped skills into .claude/skills/. Cursor reads
+// that directory too, so one copy serves both.
 func installSkills(root string) error {
 	for _, name := range skills.Names {
 		b, err := skills.Installable(name)
@@ -239,6 +271,53 @@ func installSkills(root string) error {
 		}
 		fmt.Printf("gloss hook: skill %s installed in %s\n", name, relOrAbs(root, path))
 	}
+	return nil
+}
+
+// cursorRulePath is where gloss hook install --cursor writes its rule.
+var cursorRulePath = filepath.Join(".cursor", "rules", "glossmark.mdc")
+
+// cursorRule is the always-applied Cursor rule. Cursor has no SessionStart
+// hook, so the rule tells the agent to fetch the briefing itself, to carry
+// GLOSS_ACTOR on every gloss command, and that deriving or adopting an
+// ontology is a conversation with the user, not something to finish alone.
+func cursorRule(actor, bin string) string {
+	a := shellWord(actor)
+	b := shellWord(bin)
+	return `---
+description: GlossMark - link code to the domain ontology with @gloss comments
+alwaysApply: true
+---
+<!-- generated by gloss hook install --cursor; rerun it to update -->
+
+# GlossMark
+
+This repository links code to a domain ontology with one-line ` + "`@gloss`" + ` comments.
+
+- Before working in a directory, run ` + "`GLOSS_ACTOR=" + a + " " + b + " context --dir <that directory> --changed --budget 2000`" + ` and read the briefing: the boundary, the concepts you may link to, the current state.
+- Run every gloss command with ` + "`GLOSS_ACTOR=" + a + "`" + ` so the links you write are attributed to you. The glossmark MCP server (search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of) already runs as that actor.
+- Write ` + "`@gloss?`" + ` for every link you add; a human removes the ` + "`?`" + `.
+- ` + agents.ProposalSentence + `
+
+## Adopting GlossMark or deriving the ontology
+
+If asked to add GlossMark, derive the ontology or find the core concepts, follow ` + "`.claude/skills/derive-ontology/SKILL.md`" + ` and then ` + "`.claude/skills/adopt-glossmark/SKILL.md`" + ` (` + "`gloss hook install --skill`" + ` installs them). The core ontology is the user's domain, not yours:
+
+- Do the legwork first, then interview the user about core processes, core concepts, granularity and the views they want, before you write any ontology file.
+- Ask in chat as numbered questions with lettered choices, your recommendation first, then **end your turn and wait**. Never answer your own questions, never assume the recommended option, and never keep drafting while a question is open.
+`
+}
+
+// installCursorRule writes the Cursor rule.
+func installCursorRule(root, actor string) error {
+	path := filepath.Join(root, cursorRulePath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(cursorRule(actor, glossCommand())), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("gloss hook: Cursor rule written to %s (Cursor has no SessionStart hook; the rule asks the agent for gloss context)\n", relOrAbs(root, path))
 	return nil
 }
 
@@ -323,37 +402,46 @@ func installHooks(root, actor string, hook, mcp bool) error {
 		fmt.Printf("gloss hook: SessionStart hook registered in %s\n", relOrAbs(root, path))
 	}
 	if mcp {
-		path := filepath.Join(root, ".mcp.json")
-		cfg := map[string]any{}
-		if b, err := os.ReadFile(path); err == nil {
-			json.Unmarshal(b, &cfg)
-		}
-		servers, _ := cfg["mcpServers"].(map[string]any)
-		if servers == nil {
-			servers = map[string]any{}
-		}
-		srv, _ := servers["glossmark"].(map[string]any)
-		if srv == nil {
-			srv = map[string]any{"args": []string{"mcp"}}
-		}
-		if c, _ := srv["command"].(string); c == "" || c == "gloss" {
-			srv["command"] = bin
-		}
-		env, _ := srv["env"].(map[string]any)
-		if env == nil {
-			env = map[string]any{}
-		}
-		env["GLOSS_ACTOR"] = actor
-		srv["env"] = env
-		servers["glossmark"] = srv
-		cfg["mcpServers"] = servers
-		if err := writeJSON(path, cfg); err != nil {
+		if err := registerMCP(root, ".mcp.json", bin, actor); err != nil {
 			return err
 		}
-		fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(root, path))
 	}
 	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s (the hook exports it to the session's shell); agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of\n", actor)
 	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
+	return nil
+}
+
+// registerMCP adds the glossmark server to an MCP config file (rel to root)
+// in the mcpServers format Claude Code and Cursor share.
+func registerMCP(root, rel, bin, actor string) error {
+	path := filepath.Join(root, rel)
+	cfg := map[string]any{}
+	if b, err := os.ReadFile(path); err == nil {
+		json.Unmarshal(b, &cfg)
+	}
+	servers, _ := cfg["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	srv, _ := servers["glossmark"].(map[string]any)
+	if srv == nil {
+		srv = map[string]any{"args": []string{"mcp"}}
+	}
+	if c, _ := srv["command"].(string); c == "" || c == "gloss" {
+		srv["command"] = bin
+	}
+	env, _ := srv["env"].(map[string]any)
+	if env == nil {
+		env = map[string]any{}
+	}
+	env["GLOSS_ACTOR"] = actor
+	srv["env"] = env
+	servers["glossmark"] = srv
+	cfg["mcpServers"] = servers
+	if err := writeJSON(path, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("gloss hook: MCP server registered in %s\n", relOrAbs(root, path))
 	return nil
 }
 
