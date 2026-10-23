@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mckalvan/glossmark/internal/model"
 )
 
 // captureStderr returns what f writes to stderr.
@@ -50,15 +52,16 @@ func TestValueInLine(t *testing.T) {
 		{[]any{"a", "b"}, "anything", true},
 	}
 	for _, c := range cases {
-		if got := valueInLine(c.value, c.line); got != c.want {
-			t.Errorf("valueInLine(%v, %q) = %v, want %v", c.value, c.line, got, c.want)
+		if got := model.ValueInLine(c.value, c.line); got != c.want {
+			t.Errorf("ValueInLine(%v, %q) = %v, want %v", c.value, c.line, got, c.want)
 		}
 	}
 }
 
 // TestAcceptValueRefusesAMismatch: accept --value does not confirm a line
 // that no longer holds the published value unless --force says so, and
-// prints both (issue #160, E14).
+// prints both (issue #160, E14); the drift hint names --force only then
+// (issue #174).
 func TestAcceptValueRefusesAMismatch(t *testing.T) {
 	root, write, _ := gitRepo(t)
 	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
@@ -79,8 +82,10 @@ func TestAcceptValueRefusesAMismatch(t *testing.T) {
 			t.Errorf("refusal %q does not mention %s", errOut, want)
 		}
 	}
-	if code, _ := gloss(t, "drift", "--root", root); code == 0 {
+	if code, out := gloss(t, "drift", "--root", root); code == 0 {
 		t.Error("the refused accept cleared the value drift")
+	} else if !strings.Contains(out, "confirm the line as is with gloss accept --value --force z:Threshold") {
+		t.Errorf("drift hint on a mismatched line does not name --force (issue #174):\n%s", out)
 	}
 	errOut = captureStderr(t, func() { code, _ = gloss(t, "accept", "--value", "z:Threshold", "--force", "--root", root) })
 	if code != 0 || !strings.Contains(errOut, "confirming anyway") {
@@ -91,6 +96,9 @@ func TestAcceptValueRefusesAMismatch(t *testing.T) {
 	}
 	// A line that still holds the value is confirmed without --force.
 	write("fraud.kt", "const val REFERRAL_SCORE_THRESHOLD: Double = 0.80\n")
+	if _, out := gloss(t, "drift", "--root", root); !strings.Contains(out, "or confirm with gloss accept --value z:Threshold") || strings.Contains(out, "--force") {
+		t.Errorf("drift hint on a line that holds the value is not the plain form (issue #174):\n%s", out)
+	}
 	if code, _ := gloss(t, "accept", "--value", "z:Threshold", "--root", root); code != 0 {
 		t.Errorf("accept --value on a matching line exited %d", code)
 	}
