@@ -261,3 +261,39 @@ func TestUntestedNorUntestedEvent(t *testing.T) {
 		t.Errorf("untested = %+v, want the nor suffix", u)
 	}
 }
+
+// TestCoverageFindingsAgree: every implementation concept that concept
+// coverage counts as uncovered is named by a finding: a system-type only deployed,
+// or an entity only represented, is untested; one with no code is an
+// orphan (#170).
+func TestCoverageFindingsAgree(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n"+
+		"  Intake: { kind: process }\n"+
+		"  IntakeService: { kind: system-type }\n"+
+		"  Ticket: { kind: entity }\n"+
+		"  Unbuilt: { kind: process }\n")
+	write(".gloss.yaml", "boundary: o:svc\nlevel: container\ndefault-namespace: i\n")
+	write("intake.py", "# @gloss implements .Intake\ndef intake(): pass\n")
+	write("test_intake.py", "# @gloss verifies .Intake\ndef test_intake(): pass\n")
+	write("deploy.yaml", "# @gloss deploys .IntakeService scope=file\nreplicas: 1\n")
+	write("ticket.sql", "-- @gloss represents .Ticket\nCREATE TABLE ticket (id int);\n")
+	ws, g, _, lg := build(t, root)
+	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
+	if m := rep.Metrics; m.ConceptsCovered != 1 || m.ConceptsInScope != 4 {
+		t.Errorf("coverage %d of %d, want 1 of 4", m.ConceptsCovered, m.ConceptsInScope)
+	}
+	u := findings(rep, rollup.KindUntested)
+	if c := concepts(u); strings.Join(c, ",") != "i:IntakeService,i:Ticket" {
+		t.Errorf("untested = %v, want i:IntakeService and i:Ticket", c)
+	}
+	for _, f := range u {
+		if !strings.HasSuffix(f.Msg, "has code but nothing tests or verifies it") {
+			t.Errorf("untested message = %q", f.Msg)
+		}
+	}
+	if o := concepts(findings(rep, rollup.KindOrphan)); strings.Join(o, ",") != "i:Unbuilt" {
+		t.Errorf("orphans = %v, want i:Unbuilt", o)
+	}
+}

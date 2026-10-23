@@ -1,7 +1,7 @@
 <!-- @gloss documents gmi:DriftComparator, gmi:Linter scope=file -->
 # ADR 0028: What an orphan is, deprecated use in drift, and a stable drift trailer
 
-Status: accepted, 2026-10-21. Refs issue #160 (rows FF12, L27, E24; the other rows are fixes that need no decision).
+Status: accepted, 2026-10-21. Refs issue #160 (rows FF12, L27, E24; the other rows are fixes that need no decision). Decision 1 is reversed by issue #173: a flow a concept declares in the ontology is intent, which [ADR 0026](0026-rollup-intent-nesting-inherit.md) does not let stand in for code, so it no longer reaches a concept.
 
 ## Context
 
@@ -13,12 +13,12 @@ Adopting GlossMark in the glossmark-examples showcases turned up three places wh
 
 ## Decision
 
-1. **Orphan.** A concept is reached, and not an orphan, when a reached concept `produces`, `publishes`, `consumes` or `subscribes` to it in the ontology. This is the same as the marker form. The orphan message now says "no code links to it (a documents or instructs link does not count)". We kept the count rule and fixed the message, rather than only renaming what it counts, because the inline and ontology forms of one fact must agree. Making `subscribes` count while the ontology form did not would have left the inconsistency in place.
+1. **Orphan.** A concept is reached, and not an orphan, when a reached concept `produces`, `publishes`, `consumes` or `subscribes` to it in the ontology. This is the same as the marker form. The orphan message now says "no code links to it (a documents or instructs link does not count)". We kept the count rule and fixed the message, rather than only renaming what it counts, because the inline and ontology forms of one fact must agree. Making `subscribes` count while the ontology form did not would have left the inconsistency in place. *Reversed (#173):* ADR 0026 splits the two forms, the marker is code and the ontology form is intent, and the orphan rule now follows it, so an event only a concept intends is an orphan beside the gap that says no code subscribes to it. The message stands.
 2. **Deprecated use in drift.** `gloss drift`, MCP `drift` and `gloss export --status` add the `deprecated-use` findings that `gloss landscape` already reported. `policy.waivers` applies to them, so `gloss check` does not report a waiver of one as unmatched (GM611). The kind keeps its landscape name, `deprecated-use`, so one name works in `--fail-on` everywhere. It does not fail by default: a deprecation is a migration under way, and `overdue` enforces a boundary's deadline. A status row carries `deprecated: true` and `replaced-by`. The findings are appended after `rollup.Compare` (`rollup.AddDeprecatedUse`) instead of inside it, so views, slices and gates that read the report are unchanged.
 3. **The trailer.** The text and Markdown trailers leave file coverage out. Concept coverage is the headline, and file coverage was already secondary (one marker per helper raises it without adding knowledge). `gloss coverage` and `--format json` still carry it, and `--fail-under-files` still gates on it.
 
 ## Consequences
 
-- A repository whose events are only subscribed to locally, and published by a sibling, sees fewer orphans. An event nothing publishes anywhere is still visible in `gloss landscape`. Within one repository it is no longer an orphan once a built concept subscribes to it.
+- A repository whose events are only subscribed to locally, and published by a sibling, sees fewer orphans. An event nothing publishes anywhere is still visible in `gloss landscape`. Within one repository it is no longer an orphan once code subscribes to it (since #173, a marker; a built concept's ontology `subscribes` no longer counts).
 - `gloss drift` output gains a "Deprecated in use" section where a repository still uses a deprecated concept. Committed drift outputs change once for this, and once for the shorter trailer.
 - Findings now have stable ids in the text output on request: `gloss drift --ids` prints the key a waiver names.
