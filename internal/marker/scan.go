@@ -4,6 +4,7 @@ package marker
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"sort"
 	"strings"
@@ -29,11 +30,19 @@ func Scan(r io.Reader, style CommentStyle) ([]Found, []Diagnostic, []string) {
 	var lines []string
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1024*1024), 16*1024*1024)
+	sc.Split(scanLines)
 	for sc.Scan() {
 		lines = append(lines, sc.Text())
 	}
 	var found []Found
 	var diags []Diagnostic
+	if err := sc.Err(); err != nil {
+		diags = append(diags, Diagnostic{Line: len(lines) + 1, Severity: "warning", Code: "GM119", Msg: "not scanned past this line: " + err.Error()})
+	}
+	// A byte-order mark is not code before a header comment.
+	if len(lines) > 0 {
+		lines[0] = strings.TrimPrefix(lines[0], "\ufeff")
+	}
 	inBlock := -1 // index into style.Block when inside a block comment
 	header := true
 	inFence := "" // the fence token that opened the current Markdown code block
@@ -146,12 +155,12 @@ func commentSegments(line string, style CommentStyle, inBlock *int) []segment {
 				}
 				continue
 			}
-			if i := indexOutsideString(line, pos, tok); i >= 0 && (bestIdx < 0 || i < bestIdx) {
+			if i := indexOutsideString(line, pos, tok, true); i >= 0 && (bestIdx < 0 || i < bestIdx) {
 				bestIdx, bestLen, bestBlock = i, len(tok), -1
 			}
 		}
 		for bi, pair := range style.Block {
-			if i := indexOutsideString(line, pos, pair[0]); i >= 0 && (bestIdx < 0 || i < bestIdx) {
+			if i := indexOutsideString(line, pos, pair[0], len(style.Line) > 0); i >= 0 && (bestIdx < 0 || i < bestIdx) {
 				bestIdx, bestLen, bestBlock = i, len(pair[0]), bi
 			}
 		}
@@ -178,7 +187,18 @@ func commentSegments(line string, style CommentStyle, inBlock *int) []segment {
 
 // indexOutsideString finds tok in line from pos, skipping occurrences inside
 // simple quoted strings. Good enough for pass 1; tree-sitter replaces it.
-func indexOutsideString(line string, pos int, tok string) int {
+//
+// Markup styles (no line comment: Markdown, HTML, XML) have no string
+// literals around a comment, so quotes are not tracked there. A quote that
+// never closes on the line is an apostrophe, a lifetime ('a) or a digit
+// separator (1'000), not a string, and does not hide what follows.
+func indexOutsideString(line string, pos int, tok string, strs bool) int {
+	if !strs {
+		if i := strings.Index(line[pos:], tok); i >= 0 {
+			return pos + i
+		}
+		return -1
+	}
 	var quote byte
 	for i := pos; i < len(line); i++ {
 		ch := line[i]
@@ -192,7 +212,7 @@ func indexOutsideString(line string, pos int, tok string) int {
 			}
 			continue
 		}
-		if ch == '"' || ch == '\'' || ch == '`' {
+		if (ch == '"' || ch == '\'' || ch == '`') && closes(line, i+1, ch) {
 			quote = ch
 			continue
 		}
@@ -201,6 +221,46 @@ func indexOutsideString(line string, pos int, tok string) int {
 		}
 	}
 	return -1
+}
+
+// scanLines is bufio.ScanLines that also ends a line at a lone \r (classic
+// Mac line endings), so a file with no \n is not one line.
+func scanLines(data []byte, atEOF bool) (int, []byte, error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		if data[i] == '\n' {
+			return i + 1, data[:i], nil
+		}
+		if i+1 < len(data) {
+			if data[i+1] == '\n' {
+				return i + 2, data[:i], nil
+			}
+			return i + 1, data[:i], nil
+		}
+		if atEOF {
+			return i + 1, data[:i], nil
+		}
+		return 0, nil, nil // a \r at the end of the buffer may start \r\n
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+// closes reports whether quote occurs unescaped in line from pos.
+func closes(line string, pos int, quote byte) bool {
+	for i := pos; i < len(line); i++ {
+		switch line[i] {
+		case '\\':
+			i++
+		case quote:
+			return true
+		}
+	}
+	return false
 }
 
 // hasCode reports whether the line has non-comment, non-blank content.

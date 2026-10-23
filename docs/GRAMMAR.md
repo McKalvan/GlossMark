@@ -113,6 +113,7 @@ Feature: Checkout
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
 | GM117 | a file contains a marker but its type has no comment style, so it is not scanned: add it under `comment-styles:` (JSON takes a sidecar) |
 | GM118 | unknown key in `views.yaml` (at the top or in a view); the rest of the file still applies |
+| GM119 | a file in a scanned language is not scanned: a symlink out of the repository, not a regular file (a FIFO, a device), unreadable, or larger than 4 MiB |
 | GM130 | a symbol-level marker repeats a file-level marker's relation and target: keep one |
 | GM131 | the same relation and target on three or more consecutive declarations, whatever else is marked on them (two in a row is fine). The hint names what spans the run: for methods, one marker on the enclosing class or block; for top-level functions, where `scope=block` covers only the next one, one `scope=file` marker at the top of the file, one on the shared entry point, or, for a cross-cutting mechanism, `guards:` on its concept ([ADR 0015](adr/0015-guards.md)) |
 | GM132 | two markers with the same marker id (same relation, targets and anchor, or a reused `id=`): delete one; `gloss accept <id>` flips both |

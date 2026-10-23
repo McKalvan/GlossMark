@@ -7,8 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -51,6 +54,33 @@ func RenderMarker(ws *load.Workspace, path string, d Decision) string {
 	return ""
 }
 
+// scanned reports whether path is a file the build scans for markers, named
+// as the walk names it: a link may go into nothing else. That keeps an agent
+// out of glossmark.yaml, manifests and ontology files (./glossmark.yaml and
+// a/../ontology/x.gloss.yaml included) and out of anything outside the root.
+func scanned(ws *load.Workspace, path string) bool {
+	i := sort.SearchStrings(ws.Files, path)
+	if i == len(ws.Files) || ws.Files[i] != path {
+		return false
+	}
+	_, err := ws.Within(path)
+	return err == nil
+}
+
+// plainFields refuses decision fields that would not stay one marker on one
+// line: a newline in a target or scope writes a second, unreviewed line.
+func plainFields(d Decision) error {
+	for _, f := range []struct{ name, v string }{{"relation", d.Relation}, {"target", d.Target}, {"scope", d.Scope}} {
+		if strings.ContainsFunc(f.v, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+			return fmt.Errorf("write-link: %s %q holds whitespace", f.name, f.v)
+		}
+	}
+	if d.Scope != "" && !slices.Contains(model.Scopes, d.Scope) {
+		return fmt.Errorf("write-link: invalid scope %q; allowed: %s", d.Scope, strings.Join(model.Scopes, ", "))
+	}
+	return nil
+}
+
 // writeLinkAction classifies a link to write the way gloss diff would. An
 // agent writes proposals only; an accepted marker is a person's decision.
 func writeLinkAction(st *State, d Decision, actor string) (*Action, error) {
@@ -58,8 +88,11 @@ func writeLinkAction(st *State, d Decision, actor string) (*Action, error) {
 	if r := ws.Vocab.Get(d.Relation); r == nil || !r.Inline {
 		return nil, fmt.Errorf("write-link: relation %q cannot be used inline", d.Relation)
 	}
-	if !ws.InScope(d.Path) {
+	if !scanned(ws, d.Path) {
 		return nil, fmt.Errorf("write-link: %s is outside the workspace or excluded", d.Path)
+	}
+	if err := plainFields(d); err != nil {
+		return nil, err
 	}
 	target := d.Target
 	if strings.HasPrefix(target, ".") {
@@ -92,6 +125,9 @@ func writeLink(st *State, d Decision) (string, error) {
 	text := RenderMarker(st.WS, d.Path, d)
 	if text == "" {
 		return "", fmt.Errorf("write-link: %s has no comment syntax; write the link in %s.gloss", d.Path, d.Path)
+	}
+	if !scanned(st.WS, d.Path) {
+		return "", fmt.Errorf("write-link: %s is outside the workspace or excluded", d.Path)
 	}
 	path := st.WS.Abs(d.Path)
 	b, err := os.ReadFile(path)

@@ -218,9 +218,26 @@ func (c *Config) EffectivePolicy() *Policy {
 	return &p
 }
 
+// maxFile caps what a loader reads: a path in glossmark.yaml can name
+// /dev/zero or a FIFO, which would read forever.
+const maxFile = 16 << 20
+
+func readFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	switch {
+	case err != nil:
+		return nil, err
+	case !info.Mode().IsRegular():
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	case info.Size() > maxFile:
+		return nil, fmt.Errorf("%s is larger than %d MiB", path, maxFile>>20)
+	}
+	return os.ReadFile(path)
+}
+
 // LoadConfig reads glossmark.yaml.
 func LoadConfig(path string) (*Config, error) {
-	b, err := os.ReadFile(path)
+	b, err := readFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +480,7 @@ func (c *Concept) RelationNames() []string {
 // LoadOntology reads a *.gloss.yaml file. prefix is the namespace prefix the
 // config assigns it; the file may repeat it under namespace:.
 func LoadOntology(path string) (*Ontology, error) {
-	b, err := os.ReadFile(path)
+	b, err := readFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -675,7 +692,7 @@ type UnknownKey struct {
 // report, and the known keys still make the boundary, so one misspelt key
 // does not hand the directory's markers to the parent boundary.
 func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
-	b, err := os.ReadFile(path)
+	b, err := readFile(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -818,7 +835,7 @@ func DefaultViews(coreNS, implNS []string) *Views {
 // returned with their lines (Key is "views.<name>.<key>" inside a view) for
 // the caller to report; the rest of the file still applies.
 func LoadViews(path string) (*Views, []UnknownKey, error) {
-	b, err := os.ReadFile(path)
+	b, err := readFile(path)
 	if err != nil {
 		return nil, nil, err
 	}

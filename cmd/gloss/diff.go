@@ -216,6 +216,12 @@ func baseFiles(ws *load.Workspace, ref string, bg *graph.Graph) []string {
 // verifyBase fails with a message naming --base when ref is not a commit
 // here: in CI, usually a shallow clone that never fetched origin/main.
 func verifyBase(root, ref string) error {
+	// A ref reaches git as an argument: one that starts with "-" would be read
+	// as an option (--output=<file> writes anywhere), and the MCP impact_of
+	// tool takes it from an agent.
+	if strings.HasPrefix(ref, "-") {
+		return fmt.Errorf("base %q is not a ref", ref)
+	}
 	if _, err := gitOut(root, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err != nil {
 		return fmt.Errorf("base %s is not a commit in this repository; fetch it (git fetch origin main, or a deeper clone in CI) or name another ref with --base <ref>", ref)
 	}
@@ -235,7 +241,10 @@ func baseHasWorkspace(ws *load.Workspace, ref string) (bool, string) {
 }
 
 func changedFiles(root, ref string) ([]string, error) {
-	out, err := gitOut(root, "diff", "--name-only", "--relative", ref)
+	if err := verifyBase(root, ref); err != nil {
+		return nil, err
+	}
+	out, err := gitOut(root, "diff", "--name-only", "--relative", ref, "--")
 	if err != nil {
 		return nil, err
 	}

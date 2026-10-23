@@ -98,30 +98,61 @@ type rpcError struct {
 
 // Serve runs until stdin closes.
 func (s *Server) Serve() error {
-	sc := bufio.NewScanner(s.in)
-	sc.Buffer(make([]byte, 1024*1024), 64*1024*1024)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
-			continue
+	r := bufio.NewReaderSize(s.in, 1024*1024)
+	for {
+		b, tooLong, err := readLine(r, maxRequest)
+		if tooLong {
+			// One oversized request is that request's error, not the session's.
+			s.send(response{JSONRPC: "2.0", Error: &rpcError{-32700, fmt.Sprintf("parse error: request larger than %d MiB", maxRequest>>20)}})
+		} else if line := strings.TrimSpace(string(b)); line != "" {
+			s.serveLine(line)
 		}
-		var req request
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			s.send(response{JSONRPC: "2.0", Error: &rpcError{-32700, "parse error: " + err.Error()}})
-			continue
+		if err == io.EOF {
+			return nil
 		}
-		if req.ID == nil {
-			// Notification: nothing to answer.
-			continue
-		}
-		res, rerr := s.handle(req)
-		if rerr != nil {
-			s.send(response{JSONRPC: "2.0", ID: req.ID, Error: rerr})
-		} else {
-			s.send(response{JSONRPC: "2.0", ID: req.ID, Result: res})
+		if err != nil {
+			return err
 		}
 	}
-	return sc.Err()
+}
+
+// maxRequest caps one JSON-RPC line.
+const maxRequest = 64 * 1024 * 1024
+
+// readLine reads up to the next newline. A line longer than max is read to
+// its end and dropped, and reported as tooLong.
+func readLine(r *bufio.Reader, max int) (line []byte, tooLong bool, err error) {
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if !tooLong {
+			if len(line)+len(chunk) > max {
+				tooLong, line = true, nil
+			} else {
+				line = append(line, chunk...)
+			}
+		}
+		if err != bufio.ErrBufferFull {
+			return line, tooLong, err
+		}
+	}
+}
+
+func (s *Server) serveLine(line string) {
+	var req request
+	if err := json.Unmarshal([]byte(line), &req); err != nil {
+		s.send(response{JSONRPC: "2.0", Error: &rpcError{-32700, "parse error: " + err.Error()}})
+		return
+	}
+	if req.ID == nil {
+		// Notification: nothing to answer.
+		return
+	}
+	res, rerr := s.handle(req)
+	if rerr != nil {
+		s.send(response{JSONRPC: "2.0", ID: req.ID, Error: rerr})
+	} else {
+		s.send(response{JSONRPC: "2.0", ID: req.ID, Result: res})
+	}
 }
 
 func (s *Server) send(r response) {

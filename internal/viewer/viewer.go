@@ -35,6 +35,7 @@ type Data struct {
 	Findings []rollup.Finding `json:"findings,omitempty"`
 	// SourceURL is the source-url template from glossmark.yaml
 	// ("https://github.com/o/r/blob/main/{path}#L{line}"); paths link to it.
+	// The viewer ignores a template that is not http or https.
 	SourceURL string `json:"sourceUrl,omitempty"`
 	// Classified counts concepts with a criticality, for the empty state.
 	Classified int `json:"classified"`

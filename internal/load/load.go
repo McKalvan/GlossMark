@@ -302,6 +302,23 @@ func SkipDir(name string) bool { return defaultSkipDirs[name] }
 // MaxFileSize is the size above which a walk skips a file.
 const MaxFileSize = maxFileSize
 
+// unscannable says why the walk skips a file, or "" when it scans it.
+func (ws *Workspace) unscannable(path, rel string) string {
+	info, err := os.Stat(path)
+	switch {
+	case err != nil:
+		return err.Error()
+	case !info.Mode().IsRegular():
+		return "not a regular file"
+	case info.Size() > maxFileSize:
+		return fmt.Sprintf("larger than %d MiB", maxFileSize>>20)
+	}
+	if _, err := ws.Within(rel); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
 func (ws *Workspace) walk() error {
 	var manifests []*model.Manifest
 	var files []string
@@ -351,7 +368,13 @@ func (ws *Workspace) walk() error {
 			}
 			return nil
 		}
-		if info, err := d.Info(); err == nil && info.Size() > maxFileSize {
+		// Stat follows a symlink, so the size, the kind and the place checked
+		// are the target's: a FIFO or a device would hang the scan, and a link
+		// out of the repository would read a file the repository does not hold.
+		if why := ws.unscannable(path, rel); why != "" {
+			if _, ok := marker.StyleFor(rel, ws.Config.CommentStyles); ok {
+				ws.Diags = append(ws.Diags, marker.Diagnostic{Path: rel, Line: 1, Severity: "warning", Code: "GM119", Msg: "not scanned: " + why})
+			}
 			return nil
 		}
 		if _, ok := marker.StyleFor(rel, ws.Config.CommentStyles); !ok {
@@ -566,6 +589,33 @@ func (ws *Workspace) Rel(path string) string {
 
 // Abs returns the absolute path of a repo-relative file.
 func (ws *Workspace) Abs(rel string) string { return filepath.Join(ws.Root, filepath.FromSlash(rel)) }
+
+// Within resolves a repo-relative path that repository content names (a
+// value-from path, say) to an absolute path, refusing one that is absolute or
+// that leaves the root, by .. or through a symlink: such a path would let a
+// checked-out repository read files outside itself into the graph.
+func (ws *Workspace) Within(rel string) (string, error) {
+	p := filepath.FromSlash(rel)
+	if filepath.IsAbs(p) || filepath.VolumeName(p) != "" {
+		return "", fmt.Errorf("%s is absolute; paths are relative to the repository root", rel)
+	}
+	abs := filepath.Join(ws.Root, p)
+	if !inside(ws.Root, abs) {
+		return "", fmt.Errorf("%s is outside the repository", rel)
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		root, rerr := filepath.EvalSymlinks(ws.Root)
+		if rerr == nil && !inside(root, real) {
+			return "", fmt.Errorf("%s links outside the repository", rel)
+		}
+	}
+	return abs, nil
+}
+
+func inside(root, path string) bool {
+	r, err := filepath.Rel(root, path)
+	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator)) && !filepath.IsAbs(r)
+}
 
 // IsTestPath reports whether a repo-relative path looks like a test.
 func (ws *Workspace) IsTestPath(rel string) bool {

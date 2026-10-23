@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -54,9 +55,20 @@ type Resolved struct {
 }
 
 // PinPath is where gloss lock vendors an import:
-// .glossmark/imports/<prefix>@<version>.gloss.yaml.
+// .glossmark/imports/<prefix>@<version>.gloss.yaml. The version comes from the
+// imported ontology and the lockfile, both repository content, so any rune a
+// semver cannot hold is replaced and the copy never lands outside ImportsDir.
 func PinPath(root, prefix, version string) string {
-	return filepath.Join(root, StateDir, ImportsDir, prefix+"@"+orNone(version)+".gloss.yaml")
+	return filepath.Join(root, StateDir, ImportsDir, pinName(prefix)+"@"+pinName(orNone(version))+".gloss.yaml")
+}
+
+func pinName(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '.' || r == '-' || r == '+' || r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
+			return r
+		}
+		return '_'
+	}, s)
 }
 
 // pinned returns the vendored copy of an import when the lock pins it from
