@@ -44,6 +44,9 @@ const (
 	KindPlannedClosed = "planned-closed"
 	// KindPlanOverdue: a plan item past its inclusive by: date.
 	KindPlanOverdue = "plan-overdue"
+	// KindUnguarded: a handler under a guarded-by boundary lacks the guard's
+	// decorator that other handlers there carry (ADR 0015).
+	KindUnguarded = "unguarded"
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
@@ -158,6 +161,7 @@ func Compare(g *graph.Graph, ws *load.Workspace, opt Options) *Report {
 	c.rogues()
 	c.untested()
 	c.presentedOnly()
+	c.unguarded()
 	c.overlaps()
 	c.overdue()
 	c.stale()
@@ -189,7 +193,7 @@ func rank(kind string) int {
 		return 5
 	case KindUntested:
 		return 6
-	case KindPresentedOnly:
+	case KindPresentedOnly, KindUnguarded:
 		return 7
 	case KindValueDrift, KindOverdue, KindPlannedClosed, KindPlanOverdue:
 		return 1
@@ -1829,7 +1833,7 @@ func (c *comparer) waive() {
 }
 
 // FindingKinds are the kinds a finding can have, in the order --fail-on lists them.
-var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindOverdue, KindPlannedClosed, KindPlanOverdue, KindOutOfRange, KindDeprecatedUse, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindOverlap, KindStale, KindProposed, KindPlanned, KindConsistent}
+var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindOverdue, KindPlannedClosed, KindPlanOverdue, KindOutOfRange, KindDeprecatedUse, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindUnguarded, KindOverlap, KindStale, KindProposed, KindPlanned, KindConsistent}
 
 // ParseFailOn splits a --fail-on list and rejects unknown kinds, so a typo
 // cannot silently disable part of a gate. "none" (or nothing) fails on nothing.

@@ -297,3 +297,123 @@ func TestCoverageFindingsAgree(t *testing.T) {
 		t.Errorf("orphans = %v, want i:Unbuilt", o)
 	}
 }
+
+// TestGateActorFromCI: the remit rule reads the actor of a new marker from
+// the ledger the change commits, so a PR could rewrite agent:cataloger to
+// human:alice and drop its own gate from HARD to SOFT. Options.Actor (gloss
+// diff --actor, set by the Action from the PR author) gates the link as that
+// actor too, and rewriting a recorded author is reported (#186).
+func TestGateActorFromCI(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  zi: { iri: https://x/zi/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Menu: { kind: process }\n")
+	write("ontology/zi.gloss.yaml", "concepts:\n  Helper: { kind: process, internal: true }\n  Order: { kind: process, internal: true }\n")
+	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
+	write(".cataloger.md", "<!-- @gloss may-modify z:Menu, zi:Helper scope=file -->\n")
+	write("src/menu.py", "# @gloss implements z:Menu\ndef menu(): pass\n")
+	_, base, bres, _ := build(t, root)
+	write("src/order.py", "# @gloss? implements zi:Order conf=0.9\ndef order(): pass\n")
+	ws, head, res, _ := build(t, root)
+	pol := ws.Config.EffectivePolicy()
+	now := time.Now()
+	baseLg, _ := ledger.Open(filepath.Join(t.TempDir(), "ledger.jsonl"))
+	baseLg.Sync(base, bres.Markers, "agent:cataloger", now)
+	// The forged head ledger: every marker claims a human author.
+	headLg, _ := ledger.Open(filepath.Join(t.TempDir(), "ledger.jsonl"))
+	headLg.Sync(head, res.Markers, "human:alice", now)
+	for _, e := range headLg.Entries {
+		e.Actor = "human:alice"
+	}
+	for _, e := range head.Edges() {
+		if e.Prov != nil {
+			e.Prov.Actor = "human:alice"
+		}
+	}
+	order := func(im *gate.Impact) gate.Change {
+		for _, ch := range im.Changes {
+			if ch.Kind == "link-added" && ch.Object == "zi:Order" {
+				return ch
+			}
+		}
+		t.Fatalf("no link-added for zi:Order: %+v", im.Changes)
+		return gate.Change{}
+	}
+	forged := gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: pol, HeadLedger: headLg.Entries})
+	if ch := order(forged); ch.Gate != gate.SOFT {
+		t.Fatalf("without --actor the forged ledger decides: %s %v", ch.Gate, ch.Reasons)
+	}
+	im := gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: pol, HeadLedger: headLg.Entries, BaseLedger: baseLg.Entries, Actor: "agent:cataloger"})
+	ch := order(im)
+	if ch.Gate != gate.HARD || !strings.Contains(strings.Join(ch.Reasons, ";"), "outside cataloger may-modify remit") || ch.Actor != "agent:cataloger" {
+		t.Errorf("with --actor agent:cataloger: %s %q %v", ch.Gate, ch.Actor, ch.Reasons)
+	}
+	if im.Gate != gate.HARD {
+		t.Errorf("impact gate %s, want HARD", im.Gate)
+	}
+	// A human CI actor does not erase an agent claim in the provenance: the
+	// stricter of the two holds.
+	for _, e := range head.Edges() {
+		if e.Prov != nil {
+			e.Prov.Actor = "agent:cataloger"
+		}
+	}
+	if ch := order(gate.Classify(base, head, ws, gate.Options{Base: "base", Policy: pol, Actor: "human:alice"})); ch.Gate != gate.HARD {
+		t.Errorf("agent claim with human CI actor: %s %v", ch.Gate, ch.Reasons)
+	}
+	var rewritten bool
+	for _, ch := range im.Changes {
+		if ch.Kind == "actor-changed" && ch.Gate == gate.SOFT && strings.Contains(ch.Msg, "agent:cataloger → human:alice") {
+			rewritten = true
+		}
+	}
+	if !rewritten {
+		t.Errorf("rewritten author of src/menu.py not reported: %+v", im.Changes)
+	}
+	// A reviewer swapped with the review time kept is reported; a re-review
+	// (a later time) is not.
+	for id, e := range baseLg.Entries {
+		e.ReviewedBy, e.ReviewedAt = "human:bob", "2026-01-01T00:00:00Z"
+		h := *e
+		h.ReviewedBy = "human:mallory"
+		headLg.Entries[id] = &h
+	}
+	count := func(opt gate.Options) (n int) {
+		for _, ch := range gate.Classify(base, head, ws, opt).Changes {
+			if ch.Kind == "reviewer-changed" && ch.Gate == gate.SOFT {
+				n++
+			}
+		}
+		return n
+	}
+	if n := count(gate.Options{Base: "base", Policy: pol, HeadLedger: headLg.Entries, BaseLedger: baseLg.Entries}); n == 0 {
+		t.Error("swapped reviewer not reported")
+	}
+	for _, e := range headLg.Entries {
+		e.ReviewedAt = "2026-02-01T00:00:00Z"
+	}
+	if n := count(gate.Options{Base: "base", Policy: pol, HeadLedger: headLg.Entries, BaseLedger: baseLg.Entries}); n != 0 {
+		t.Errorf("re-review reported as rewritten %d times", n)
+	}
+}
+
+// TestBaseHardPaths: the head's policy is the change's own to edit, so a
+// path the base's hard-paths names stays HARD even when the same change
+// drops it from glossmark.yaml (#187).
+func TestBaseHardPaths(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\n")
+	write("ci/gate.sh", "# @gloss implements z:Doing scope=file\necho gate\n")
+	_, base, _, _ := build(t, root)
+	write("ci/gate.sh", "# @gloss implements z:Doing scope=file\necho skipped\n")
+	ws, head, _, _ := build(t, root)
+	opt := gate.Options{Base: "base", Policy: ws.Config.EffectivePolicy(), ChangedFiles: []string{"ci/gate.sh"}}
+	if im := gate.Classify(base, head, ws, opt); im.Gate == gate.HARD {
+		t.Fatalf("ci/gate.sh is under no hard path yet: %+v", im.Changes)
+	}
+	opt.BaseHardPaths = []string{"ci/**"}
+	if im := gate.Classify(base, head, ws, opt); im.Gate != gate.HARD {
+		t.Errorf("ci/gate.sh is under the base's hard-paths: gate %s, %+v", im.Gate, im.Changes)
+	}
+}

@@ -283,6 +283,18 @@
         },
         "doc": {
           "type": "string"
+        },
+        "surfaces": {
+          "description": "Opts a custom relation into the treatment guards and constrains get: impact (gloss impact lists the code it applies to) and context (gloss context --dir names it on an Applies here: line). See docs/adr/0015-guards.md.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "impact",
+              "context"
+            ]
+          },
+          "uniqueItems": true
         }
       }
     }

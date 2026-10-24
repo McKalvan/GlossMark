@@ -182,8 +182,8 @@ func str(desc string) map[string]any { return map[string]any{"type": "string", "
 var tools = []tool{
 	{"lookup_concept", "Return a concept (by CURIE such as lib:Book) with its kind, tier, doc, relations, realizations and the artifacts linking to it.",
 		obj(map[string]any{"curie": str("Concept CURIE, e.g. lib:Renewal")}, "curie")},
-	{"search_concepts", "Search concepts by meaning: CamelCase names split into words, aliases, docs, stems, synonyms and small typos all match; a kind word in the query (event, constraint) boosts that kind; one hop through realizes/is-a is followed. Hits carry the doc, the artifact count and which field and terms matched. Optionally restrict to a namespace, kind or tier.",
-		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
+	{"search_concepts", "Search concepts by meaning: CamelCase names split into words, aliases, docs, stems, synonyms and small typos all match; a kind word in the query (event, constraint) boosts that kind; one hop through realizes/is-a is followed. Hits carry the doc, the artifact count and which field and terms matched. Optionally restrict to a namespace, kind, tier or published status.",
+		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "published": map[string]any{"type": "boolean", "description": "true: only concepts on the published seam; false: only unpublished ones (optional)"}, "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
 	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
 		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
 	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files. " + agents.ProposalSentence,
@@ -261,13 +261,14 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 	case "search_concepts":
 		var a struct {
 			Query, Namespace, Kind, Tier string
+			Published                    *bool
 			Limit                        int
 		}
 		json.Unmarshal(args, &a)
 		if a.Limit <= 0 {
 			a.Limit = 20
 		}
-		return Search(g, a.Query, a.Namespace, a.Kind, a.Tier, a.Limit), nil
+		return SearchWith(g, a.Query, Filter{NS: a.Namespace, Kind: a.Kind, Tier: a.Tier, Published: a.Published}, a.Limit), nil
 	case "concepts_for_path":
 		var a struct {
 			Path string `json:"path"`

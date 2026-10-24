@@ -3,12 +3,16 @@
 # gmi: is the implementation tier, the Go packages and commands that realize it.
 owns:
   gm:  { iri: https://github.com/mckalvan/glossmark/ontology/gm/,  file: ontology/gm.gloss.yaml,  tier: core,           version: 1.0.0, owner: glossmark }
-  gmi: { iri: https://github.com/mckalvan/glossmark/ontology/gmi/, file: ontology/gmi.gloss.yaml, tier: implementation, version: 1.0.0, owner: glossmark }
+  gmi: { iri: https://github.com/mckalvan/glossmark/ontology/gmi/, file: ontology/gmi.gloss.yaml, tier: implementation, version: 1.0.1, owner: glossmark }
 prefixes:
   arch: https://github.com/mckalvan/glossmark/boundaries/
 source-url: https://github.com/mckalvan/glossmark/blob/main/{path}#L{line}   # the viewer links paths here
 # The example repositories are workspaces of their own and the corpus files carry
 # markers that point at the example ontologies, so neither belongs to this graph.
 exclude: ["examples/**", "corpus/testdata/**", "internal/suggest/testdata/**", "internal/harvest/testdata/**", ".glossmark/**", "dist/**", "go.sum"]
+# The defaults, plus what runs the gate: a change to the Action or a workflow
+# is a change to how every other change is judged (#187).
+policy:
+  hard-paths: ["ontology/**", "**/.gloss.yaml", "glossmark.yaml", "action.yml", ".github/workflows/**"]
 suggest:
   auto-accept-precision: 0.9   # SOFT = proposals whose evidence measured at least 90 % precision (ADR 0024)

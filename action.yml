@@ -21,6 +21,9 @@ inputs:
   coverage-fail-under:
     description: Minimum concept coverage percentage, implementation concepts with an artifact and a verifier (0 disables; "current" fails only when the PR lowers the base's coverage)
     default: "0"
+  actor:
+    description: Who made the change, for the agent-remit gate (agent:<name> or human:<name>). Default is the PR author, agent:<name> for a bot account. New links are gated as this actor as well as the one the committed ledger claims, so editing the ledger cannot lower the gate.
+    default: ""
   comment:
     description: Post the impact as a PR comment (needs pull-requests write permission)
     default: "true"
@@ -91,11 +94,21 @@ runs:
       working-directory: ${{ inputs.root }}
       # Inputs and the base branch name reach the shell as variables, never as
       # script text: a branch named $(...) would otherwise run.
-      env: { BASE: "${{ inputs.base }}", BASE_REF: "${{ github.base_ref }}", FAIL_ON: "${{ inputs.fail-on }}" }
+      env:
+        BASE: "${{ inputs.base }}"
+        BASE_REF: "${{ github.base_ref }}"
+        FAIL_ON: "${{ inputs.fail-on }}"
+        ACTOR: "${{ inputs.actor }}"
+        AUTHOR: "${{ github.event.pull_request.user.login }}"
+        AUTHOR_TYPE: "${{ github.event.pull_request.user.type }}"
       run: |
         [ -z "$BASE" ] && BASE="origin/$BASE_REF"
+        # The actor comes from GitHub, not from the ledger the PR commits (#186).
+        if [ -z "$ACTOR" ] && [ -n "$AUTHOR" ]; then
+          if [ "$AUTHOR_TYPE" = "Bot" ]; then ACTOR="agent:${AUTHOR%\[bot\]}"; else ACTOR="human:$(printf '%s' "$AUTHOR" | tr '[:upper:]' '[:lower:]')"; fi
+        fi
         set +e
-        gloss diff --base "$BASE" --format markdown --fail-on "$FAIL_ON" -o "$RUNNER_TEMP/impact.md"
+        gloss diff --base "$BASE" --actor "$ACTOR" --format markdown --fail-on "$FAIL_ON" -o "$RUNNER_TEMP/impact.md"
         echo "exit=$?" >> "$GITHUB_OUTPUT"
     - name: Comment on PR
       if: github.event_name == 'pull_request' && inputs.comment == 'true'

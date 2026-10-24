@@ -1,0 +1,18 @@
+{
+  "@context": {
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "ex": "https://ref.example/lending#",
+    "label": "rdfs:label",
+    "partOf": { "@id": "http://purl.obolibrary.org/obo/BFO_0000050", "@type": "@id" }
+  },
+  "@graph": [
+    { "@id": "ex:Patron", "@type": "owl:Class", "label": [{ "@value": "Usager", "@language": "fr" }, { "@value": "Patron", "@language": "en" }] },
+    { "@id": "ex:Loan", "@type": "owl:Class", "label": "Loan" },
+    { "@id": "ex:OverdueLoan", "@type": "owl:Class", "label": "Overdue Loan", "rdfs:subClassOf": { "@id": "ex:Loan" } },
+    { "@id": "ex:LoanItem", "@type": "owl:Class", "label": "Loan Item", "partOf": { "@id": "ex:Loan" } },
+    { "@id": "ex:LendingAgreement", "@type": "owl:Class", "skos:prefLabel": "Lending Agreement",
+      "rdfs:subClassOf": [{ "@id": "ex:Loan" }, { "@type": "owl:Restriction", "owl:onProperty": { "@id": "ex:covers" } }] }
+  ]
+}

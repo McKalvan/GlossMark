@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.0.0
+version: 1.0.1
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -72,7 +72,7 @@ concepts:
     value: 0.7
     doc: "The default soft-conf-threshold: proposals at or above it are SOFT. Bound to DefaultPolicy by a publishes-value marker."
   VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
-  AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark and derive-ontology Claude Code skills, shipped in the binary." }
+  AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark, derive-ontology and review-glossmark Claude Code skills, shipped in the binary." }
   EvidenceHarvester:  { kind: process, realizes: gm:Onboarding, doc: "gloss harvest: evidence of a repository's vocabulary from code, schemas, tests, UI, docs and git, before it has an ontology, and the lexical clusters a derivation starts from (ADR 0025)." }
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed], doc: "The MCP server agents call to search concepts, ask what a path or change touches, and propose links and concepts." }

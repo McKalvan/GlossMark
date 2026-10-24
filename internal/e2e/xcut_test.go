@@ -353,3 +353,82 @@ func TestInternalCriticalUntested(t *testing.T) {
 		t.Errorf("without its test: coverage %d of %d, want 0 of 1", m.ConceptsCovered, m.ConceptsInScope)
 	}
 }
+
+// TestManifestGuards: guarded-by in a manifest puts every artifact under the
+// directory behind a guard without a guards: list in the ontology; a custom
+// relation with surfaces: [impact, context] gets the guards treatment and
+// one without stays inert; and drift reports a handler that lacks the guard
+// decorator its siblings carry (#202, ADR 0015).
+func TestManifestGuards(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Approving: { kind: process }\n  Listing: { kind: process }\n  Access: { kind: constraint }\n")
+	write("ontology/i.gloss.yaml", "relations:\n  audits: { surfaces: [impact, context] }\n  notes: {}\n  oops: { surfaces: [impact, everywhere] }\n"+
+		"concepts:\n  Approver: { kind: process, realizes: z:Approving }\n  Lister: { kind: process, realizes: z:Listing }\n"+
+		"  Auth: { kind: process, realizes: z:Access, criticality: high }\n  Trail: { kind: process, internal: true, audits: [Approver] }\n  Memo: { kind: process, internal: true, notes: [Approver] }\n")
+	write(".gloss.yaml", "boundary: o:svc\nlevel: container\ndefault-namespace: i\n")
+	write("svc/api/.gloss.yaml", "boundary: o:api\nlevel: component\ndefault-namespace: i\nguarded-by: [i:Auth]\n")
+	write("svc/api/handlers.py", "# @gloss implements .Approver\n@requires_bearer\ndef approve(): pass\n\n\n# @gloss implements .Lister\ndef listing(): pass\n")
+	write("svc/api/test_handlers.py", "# @gloss verifies .Lister scope=file\n")
+	write("svc/platform/auth.py", "# @gloss implements .Auth\ndef requires_bearer(fn): return fn\n")
+	write("svc/platform/trail.py", "# @gloss implements .Trail scope=file\n")
+	write("svc/platform/memo.py", "# @gloss implements .Memo scope=file\n")
+	ws, g, _, _ := build(t, root)
+	var gm308 bool
+	for _, d := range check.Run(ws, g) {
+		if d.Severity == "error" {
+			t.Errorf("check: %s", d)
+		}
+	}
+	for _, d := range ws.Diags {
+		gm308 = gm308 || d.Code == "GM308" && strings.Contains(d.Msg, `"everywhere"`)
+	}
+	if !gm308 {
+		t.Error("no GM308 for the unknown surface everywhere")
+	}
+	fts := gate.Touched(g, ws, []string{"svc/api/handlers.py", "svc/platform/auth.py", "ontology/i.gloss.yaml"})
+	if ft := fts[0]; !reflect.DeepEqual(ft.GuardedBy, []string{"i:Auth (high)"}) || ft.Criticality != "high" || ft.CriticalityFrom != "i:Auth (guard)" {
+		t.Errorf("handlers.py: guarded by %v, reviewed at %q from %q", ft.GuardedBy, ft.Criticality, ft.CriticalityFrom)
+	}
+	touch := map[string]gate.ConceptTouch{}
+	for _, ft := range fts {
+		for _, c := range ft.Concepts {
+			touch[ft.Path+" "+c.Curie] = c
+		}
+	}
+	if c := touch["svc/platform/auth.py i:Auth"]; !reflect.DeepEqual(c.GuardedCode, []string{"svc/api/handlers.py"}) {
+		t.Errorf("i:Auth guarded code %v, want the handlers and not the test", c.GuardedCode)
+	}
+	if c := touch["ontology/i.gloss.yaml i:Trail"]; len(c.Applies) != 1 || c.Applies[0].Relation != "audits" || !reflect.DeepEqual(c.Applies[0].Code, []string{"svc/api/handlers.py"}) {
+		t.Errorf("i:Trail applies %+v", c.Applies)
+	}
+	if c := touch["ontology/i.gloss.yaml i:Memo"]; len(c.Applies) != 0 {
+		t.Errorf("notes has no surfaces, yet i:Memo applies %+v", c.Applies)
+	}
+	out := gate.RenderTouched(fts)
+	for _, want := range []string{"guarded by i:Auth (high) (guarded-by in svc/api/.gloss.yaml)", "audits code: svc/api/handlers.py"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("impact text lacks %q:\n%s", want, out)
+		}
+	}
+	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
+	brief := agents.Context(ws, g, ws.ManifestFor("svc/api/handlers.py"), rep, agents.ContextOptions{Dir: "svc/api"})
+	if want := "Applies here: i:Auth (high) guards code under svc/api/; i:Trail audits i:Approver"; !strings.Contains(brief, want) {
+		t.Errorf("briefing lacks %q:\n%s", want, brief)
+	}
+	if strings.Contains(brief, "notes") {
+		t.Errorf("notes has no surfaces, yet the briefing names it:\n%s", brief)
+	}
+	var unguarded []string
+	for _, f := range rep.Findings {
+		if f.Kind == rollup.KindUnguarded {
+			unguarded = append(unguarded, f.Path+":"+f.Concept)
+		}
+	}
+	if want := []string{"svc/api/handlers.py:i:Auth"}; !reflect.DeepEqual(unguarded, want) {
+		t.Errorf("unguarded = %v, want %v", unguarded, want)
+	}
+	if text := rollup.RenderText(rep, false); !strings.Contains(text, "svc/api/handlers.py#listing is under o:api, guarded-by i:Auth") {
+		t.Errorf("drift text:\n%s", text)
+	}
+}

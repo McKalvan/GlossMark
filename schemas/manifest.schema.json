@@ -49,6 +49,10 @@
       "description": "Concepts whose value this boundary edits at runtime (an admin page for a limit); compared like presents, never implies realizes (docs/adr/0012-surfaces.md).",
       "$ref": "#/$defs/stringOrList"
     },
+    "guarded-by": {
+      "description": "Mechanisms every artifact under this directory sits behind (authentication, a rate limit): the code is guarded by them as if the ontology listed each handler under guards:, and gloss drift reports a handler without the guard's decorator when its siblings carry it (docs/adr/0015-guards.md).",
+      "$ref": "#/$defs/stringOrList"
+    },
     "produces": {
       "description": "Concepts this boundary intends to produce; compared with the code's produces markers. A concept's own produces is intent: it is compared too but never closes a gap. Takes inherit, as realizes does.",
       "$ref": "#/$defs/stringOrList"

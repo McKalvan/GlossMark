@@ -49,7 +49,7 @@ gloss harvest --in $SCRATCH/evidence.jsonl --cluster > $SCRATCH/clusters.jsonl
 gloss harvest --in $SCRATCH/evidence.jsonl --cluster --format text --top 300
 ```
 
-`--root <dir>` points it at another checkout; `--unit <dir>` (repeatable) overrides the detected applications; `--no-git` skips renames. Re-run it after the interview if the owner changes the excludes.
+`--root <dir>` points it at another checkout; `--unit <dir>` (repeatable) overrides the detected applications; `--no-git` skips the history (renames, and the `first_seen`/`last_seen` dates that tell a retired term from a current one); `--reference <file>` (repeatable) adds an owner-supplied vocabulary in Turtle, RDF/XML or JSON-LD. Re-run it after the interview if the owner changes the excludes.
 
 **External sources.** For each document or tracker the owner calls authoritative (step 3; in step 1 only the ones that plainly are), use one subagent per source, in parallel. Each reads the source and writes evidence lines, and only these:
 
@@ -70,7 +70,7 @@ gloss harvest --in $SCRATCH/all.jsonl --cluster > $SCRATCH/clusters.jsonl
 
 Show the owner the sketch from step 1, then ask. These answers shape everything after them, so ask them before any drafting. Use as many rounds as the answers need (an ask tool may cap a round at four questions); a round that changes the picture earns a follow-up round. Ask about:
 
-1. **Scope and ownership.** Confirm the excludes; which documents are authoritative and which are stale; who owns each prospective namespace and in which language its names are written; optionally a reference vocabulary (schema.org, FIBO, FHIR, ISO 20022) to break naming ties, by hand, since `gloss harvest` does not read one yet.
+1. **Scope and ownership.** Confirm the excludes; which documents are authoritative and which are stale; who owns each prospective namespace and in which language its names are written; optionally a reference vocabulary (schema.org, FIBO, FHIR, ISO 20022) as a file the owner supplies: re-run with `--reference <file>`; it breaks naming ties and proposes `is-a`/`part-of` (`related` in the clusters) but never a concept.
 2. **Purpose.** Offer your one-sentence reading of what the business does and let them correct it.
 3. **Core processes.** Which of the candidate processes are the ones the business would name as its core (multi-select), and which are missing. These become the areas of the core (step 6) and the seeds of the shortlist.
 4. **Core concepts.** For each confirmed process, which candidate concepts are central, which are wrong or merely technical, and what the owner's word is where yours came from code.
@@ -123,7 +123,7 @@ Draft at the granularity the owner chose in step 3. At *coarse*, keep lifecycle 
 - **Kinds.** `entity`, `process`, `event`, `constraint`, `measure`, `capability`, `resource`, `system-type`, as GlossMark defines them.
 - **Lifecycle values are concepts, catalogue values are instances.**
   - A state the business moves things between (`overdue`, `submitted`) or a kind it treats differently (`DVD` as an `Item`) is a concept that `is-a` its enum.
-  - Plan names, regions, currencies and feature flags are instances. Record them in the derivation record as `instance-of`, not in a tier file.
+  - Plan names, regions, currencies and feature flags are instances. Record them in the derivation record as `instance-of`, not in a tier file. When the enums come from a file, `gloss import --from enums <file> --values --instances Plan,Region` imports those enums but reports their values instead of adding them as concepts.
   - Signals for lifecycle: a `status`/`state` field, `transition` evidence, comparisons in guards or tests.
   - Signals for catalogue: seeds, configuration, pricing tables, lookups.
   - Mixed signals become a question.

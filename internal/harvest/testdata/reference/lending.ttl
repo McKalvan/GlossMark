@@ -1,0 +1,16 @@
+# A reference vocabulary in Turtle: what an owner might export from Protégé.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix ex:   <https://ref.example/lending#> .
+
+ex:Patron a owl:Class ; rdfs:label "Patron"@en, "Usager"@fr .
+ex:Loan a owl:Class ;
+    rdfs:label "Loan" ;
+    rdfs:comment """A lending of one item
+to one patron.""" .
+ex:OverdueLoan a owl:Class ; rdfs:label "Overdue Loan" ; rdfs:subClassOf ex:Loan .
+ex:LoanItem a owl:Class ; rdfs:label "Loan Item" ;
+    <http://purl.obolibrary.org/obo/BFO_0000050> ex:Loan .
+ex:LendingAgreement a owl:Class ; skos:prefLabel "Lending Agreement" ; rdfs:subClassOf ex:Loan ,
+    [ a owl:Restriction ; owl:onProperty ex:covers ; owl:someValuesFrom ex:Loan ] .

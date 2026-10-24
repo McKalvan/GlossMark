@@ -53,6 +53,10 @@ type Cluster struct {
 	// "alias:member" from a glossary. Merging is a judgment (ADR 0025).
 	Related  []string `json:"related,omitempty"`
 	Evidence []string `json:"evidence"`
+	// FirstSeen and LastSeen span the dates of its evidence (git history):
+	// a candidate last seen long before HEAD is a retired term.
+	FirstSeen string `json:"first_seen,omitempty"`
+	LastSeen  string `json:"last_seen,omitempty"`
 }
 
 // maxEvidence caps the ids a cluster lists; the counts stay exact.
@@ -173,8 +177,18 @@ func Clusters(ev []Evidence) []Cluster {
 		if e.Unit != "" {
 			units[c.Key][e.Unit] = true
 		}
+		if e.FirstSeen != "" && (c.FirstSeen == "" || e.FirstSeen < c.FirstSeen) {
+			c.FirstSeen = e.FirstSeen
+		}
+		if e.LastSeen > c.LastSeen {
+			c.LastSeen = e.LastSeen
+		}
 	}
 	keys := namingKeys(ev)
+	// refNames are, per key, the labels a reference vocabulary gives it:
+	// they break a naming tie between the repository's own surfaces and are
+	// never a name themselves (ADR 0025, section 6.3).
+	refNames := map[string]map[string]bool{}
 	for i, e := range ev {
 		k := keys[i]
 		if k == "" {
@@ -192,6 +206,13 @@ func Clusters(ev []Evidence) []Cluster {
 			c.NamedAs = append(c.NamedAs, e.Signal)
 		}
 		note(c, e)
+		if e.Signal == "reference-term" {
+			if refNames[k] == nil {
+				refNames[k] = map[string]bool{}
+			}
+			refNames[k][normName(e.Surface)] = true
+			continue
+		}
 		t := surfaces[k][e.Surface]
 		if t == nil {
 			t = &surfaceTally{surface: e.Surface, rank: len(authority), exact: len(words(e.Surface)) == strings.Count(k, " ")+1}
@@ -241,30 +262,45 @@ func Clusters(ev []Evidence) []Cluster {
 		}
 		for _, c := range e.Context {
 			rel, target, ok := strings.Cut(c, ":")
-			if !ok || (rel != "renamed-to" && rel != "alias") {
+			if !ok || (rel != "renamed-to" && rel != "alias" && rel != "is-a" && rel != "part-of") {
 				continue
 			}
 			to := byKey[Key(target)]
 			if to == nil || to == from {
 				continue
 			}
-			addRelated(from, rel+":"+to.Key)
-			back := "alias:" + from.Key
-			if rel == "renamed-to" {
-				back = "renamed-from:" + from.Key
+			if rel == "is-a" || rel == "part-of" {
+				// Reference structure is proposed only between concepts
+				// that both have evidence of their own.
+				if e.Signal != "reference-term" || len(surfaces[from.Key]) == 0 || len(surfaces[to.Key]) == 0 {
+					continue
+				}
 			}
+			addRelated(from, rel+":"+to.Key)
+			back := map[string]string{"alias": "alias:", "renamed-to": "renamed-from:", "is-a": "has-subtype:", "part-of": "has-part:"}[rel] + from.Key
 			addRelated(to, back)
 		}
 	}
 	out := make([]Cluster, 0, len(byKey))
 	for k, c := range byKey {
+		if len(surfaces[k]) == 0 {
+			// Named only by a reference vocabulary: never a candidate,
+			// however much the repository mentions the words.
+			continue
+		}
 		var ts []*surfaceTally
 		for _, t := range surfaces[k] {
 			ts = append(ts, t)
 		}
+		for _, t := range ts {
+			t.ref = refNames[k][normName(t.surface)]
+		}
 		sort.Slice(ts, func(i, j int) bool {
 			if ts[i].exact != ts[j].exact {
 				return ts[i].exact
+			}
+			if ts[i].ref != ts[j].ref {
+				return ts[i].ref
 			}
 			if ts[i].rank != ts[j].rank {
 				return ts[i].rank < ts[j].rank
@@ -313,6 +349,13 @@ type surfaceTally struct {
 	surface, family string
 	rank, count     int
 	exact           bool
+	ref             bool // a reference vocabulary uses this form
+}
+
+// normName compares written forms by their words: LoanPeriod, loan_period
+// and "Loan period" are one name.
+func normName(s string) string {
+	return strings.ToLower(strings.Join(words(s), " "))
 }
 
 var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)

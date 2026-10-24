@@ -50,7 +50,7 @@ concepts:
 
 Write only what the owner confirmed in step 1, at the granularity they chose, and show them the list before you go on to step 4. Litmus test: if a domain expert would nod at the term, it is core; if only an engineer would, it is implementation. Core never mentions implementation names. Mark `criticality: high` or `critical` only where the owner said a mistake costs money, trust or compliance, and say why in a comment. Edit `ontology/views.yaml` to the views the owner chose.
 
-If the repo has a glossary, import it instead: `gloss import --from markdown-glossary docs/glossary.md --namespace <core>` (and `--from enums` for enum files), then edit.
+If the repo has a glossary, import it instead: `gloss import --from markdown-glossary docs/glossary.md --namespace <core>` (and `--from enums` for enum files; `--values` adds lifecycle values as concepts, `--instances Plan,Region` keeps catalogue enums' values out), then edit.
 
 ## 4. Draft the implementation tier
 
@@ -69,7 +69,7 @@ git apply suggestions.patch          # or: gloss suggest --write
 
 Each proposal's `conf` is the precision its kind of evidence measured on GlossMark's calibration set, so review the low ones hardest; `--min-conf` raises the floor (default 0.3). Proposals at or above the auto-accept threshold, which is derived from `suggest.auto-accept-precision` in `glossmark.yaml` (default 0.9), are marked `auto`; suggest prints the threshold and the precision it measured. A proposal to a deprecated concept carries a note naming its `replaced-by` and is never `auto`: keep it, or retarget it to the replacement. Concepts still `proposed: true` are not targets until accepted. If an owned namespace is nearly empty, suggest says so; `gloss suggest --concepts` drafts `ns:NEW:Name` candidates from declarations that share tables and docstring words. `gloss suggest -h` lists the relations and file types it covers.
 
-Then read every proposal. Delete the wrong ones, retarget the near misses, and add the markers `suggest` cannot see (tests that verify a concept by behaviour, docs, agent files). Aim for every implementation concept to have one artifact and one verifier, not for every file to have a marker.
+Then triage the proposals with the `review-glossmark` skill: it reads each one through `gloss review show`, accepts or rejects the SOFT ones through `gloss review apply` with a reason, and leaves a recommendation on the HARD ones for the owner. Retarget the near misses, and add the markers `suggest` cannot see (tests that verify a concept by behaviour, docs, agent files). Aim for every implementation concept to have one artifact and one verifier, not for every file to have a marker.
 
 ## 7. Check, drift, review
 

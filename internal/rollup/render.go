@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var kindOrder = []string{KindViolation, KindValueDrift, KindOverdue, KindPlanOverdue, KindOutOfRange, KindGap, KindPlannedClosed, KindRogue, KindProposed, KindPlanned, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested, KindDeprecatedUse, KindOverlap}
+var kindOrder = []string{KindViolation, KindValueDrift, KindOverdue, KindPlanOverdue, KindOutOfRange, KindGap, KindPlannedClosed, KindRogue, KindProposed, KindPlanned, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUnguarded, KindUntested, KindDeprecatedUse, KindOverlap}
 
 var kindTitle = map[string]string{
 	KindViolation:     "Violations (boundary exceeds its declared capability)",
@@ -20,6 +20,7 @@ var kindTitle = map[string]string{
 	KindOrphan:        "Orphan concepts (no artifacts)",
 	KindUntested:      "Implemented but untested",
 	KindPresentedOnly: "Presented but not implemented (a surface with no mechanism)",
+	KindUnguarded:     "Unguarded handlers (a guarded-by boundary's guard decorator missing)",
 	KindOverlap:       "Overlaps (one concept, several unrelated boundaries, no declared migration)",
 	KindOverdue:       "Overdue retirements (retire-by passed, code still there)",
 	KindOutOfRange:    "Imports out of range",
@@ -29,7 +30,7 @@ var kindTitle = map[string]string{
 	KindPlanOverdue:   "Plan items overdue (by passed, nothing implements them)",
 }
 
-var kindGlyph = map[string]string{KindPlanned: "◌", KindPlannedClosed: "●", KindPlanOverdue: "⌛", KindOverlap: "⇉", KindOverdue: "⌛", KindOutOfRange: "✗", KindDeprecatedUse: "~", KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
+var kindGlyph = map[string]string{KindPlanned: "◌", KindPlannedClosed: "●", KindPlanOverdue: "⌛", KindOverlap: "⇉", KindOverdue: "⌛", KindOutOfRange: "✗", KindDeprecatedUse: "~", KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindUnguarded: "⊘", KindValueDrift: "≠", KindConsistent: "✓"}
 
 // RenderText renders the report for a terminal.
 func RenderText(r *Report, all bool) string {
