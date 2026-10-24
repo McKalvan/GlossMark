@@ -22,6 +22,10 @@ views:
     doc: For whoever reads a drift report. A saved slice (ADR 0023) of the drift measure, its producers and the boundaries around them at code zoom, recomputed from the graph on every build.
     slice: [gm:Drift]
     zoom: code
+  increments:
+    doc: For maintainers building ontology-first increments (ADR 0034). A saved slice of the increment process, its plan items, the curation skill and plan record that realize it, and the boundaries around them at code zoom.
+    slice: [gm:Increment]
+    zoom: code
   constraints:
     doc: For governance reviewers. The six rules GlossMark enforces and the files that enforce them at code zoom. Curated (it names its concepts), so it opens expanded.
     include: [gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:ValueBinding, gmi:Linter, gmi:DriftComparator, gmi:ValueBinder]
