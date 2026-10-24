@@ -1,0 +1,10 @@
+# internal/agent-surface/.gloss.yaml: the MCP server and the AGENTS.md snippet. A logical component with no code of its
+# own: the packages that belong to it name it with part-of (ADR 0035), so it
+# declares what they declare.
+boundary: arch:lib-agents
+level: component
+label: Agent surface
+realizes: [inherit]
+publishes: [inherit]
+default-namespace: gmi
+owner: glossmark

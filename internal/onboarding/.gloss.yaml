@@ -1,0 +1,10 @@
+# internal/onboarding/.gloss.yaml: scaffolding, suggested markers and their calibration, vocabulary import and evidence harvesting. A logical component with no code of its
+# own: the packages that belong to it name it with part-of (ADR 0035), so it
+# declares what they declare.
+boundary: arch:lib-onboarding
+level: component
+label: Onboarding
+realizes: [inherit]
+produces: [inherit]
+default-namespace: gmi
+owner: glossmark

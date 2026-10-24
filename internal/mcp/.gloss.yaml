@@ -1,0 +1,9 @@
+# internal/mcp/.gloss.yaml: the graph served to agents over MCP.
+boundary: arch:mcp
+level: component
+label: mcp
+part-of: arch:lib-agents
+realizes: [gmi:McpServer, gmi:ReviewEngine, gmi:GraphBrowser]
+publishes: [gm:LinkProposed, gm:LinkAccepted, gm:LinkRejected]
+default-namespace: gmi
+owner: glossmark

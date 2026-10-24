@@ -1,0 +1,9 @@
+# internal/suggest/.gloss.yaml: proposed markers for unmarked declarations.
+boundary: arch:suggest
+level: component
+label: suggest
+part-of: arch:lib-onboarding
+realizes: [gmi:MarkerSuggester, gmi:SuggestCalibration]
+produces: [gm:ProposedLink]
+default-namespace: gmi
+owner: glossmark

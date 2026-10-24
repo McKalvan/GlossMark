@@ -1,0 +1,9 @@
+# internal/graph/.gloss.yaml: the canonical graph: nodes, edges, provenance and the JSON Lines encoding.
+boundary: arch:graph
+level: component
+label: graph
+part-of: arch:lib-graph
+realizes: [gmi:Publisher]
+holds: [gm:Artifact, gm:Boundary, gm:Concept, gmi:CanonicalGraph]
+default-namespace: gmi
+owner: glossmark

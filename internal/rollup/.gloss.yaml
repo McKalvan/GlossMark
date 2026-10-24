@@ -1,0 +1,10 @@
+# internal/rollup/.gloss.yaml: derived facts, drift comparison and criticality.
+boundary: arch:rollup
+level: component
+label: rollup
+part-of: arch:lib-checking
+realizes: [gmi:RollupEngine, gmi:DriftComparator, gmi:CriticalityStamper, gmi:Linter]
+produces: [gm:Coverage, gm:DecisionRequest, gm:Drift, gm:PlanItem]
+publishes: [gm:DecisionRequested, gm:DriftDetected]
+default-namespace: gmi
+owner: glossmark

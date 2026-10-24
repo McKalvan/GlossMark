@@ -1,0 +1,11 @@
+# internal/checking/.gloss.yaml: lint, rollup, drift comparison, the PR gate and the setup checks. A logical component with no code of its
+# own: the packages that belong to it name it with part-of (ADR 0035), so it
+# declares what they declare.
+boundary: arch:lib-checking
+level: component
+label: Checks, drift and gates
+realizes: [inherit]
+produces: [inherit]
+publishes: [inherit]
+default-namespace: gmi
+owner: glossmark

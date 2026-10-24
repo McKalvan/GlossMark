@@ -1,0 +1,9 @@
+# internal/model/.gloss.yaml: the typed shapes of every file GlossMark reads or writes.
+boundary: arch:model
+level: component
+label: model
+part-of: arch:lib-reading
+realizes: [gmi:ImportLock, gmi:SuggestCalibration, gmi:DefaultSoftThreshold]
+holds: [gm:Boundary, gm:Namespace, gm:Relation, gmi:FileFormats]
+default-namespace: gmi
+owner: glossmark

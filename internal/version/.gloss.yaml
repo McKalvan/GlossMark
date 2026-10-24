@@ -1,0 +1,8 @@
+# internal/version/.gloss.yaml: the tool, grammar and on-disk format versions.
+boundary: arch:version
+level: component
+label: version
+part-of: arch:lib-reading
+holds: [gmi:FormatVersions]
+default-namespace: gmi
+owner: glossmark

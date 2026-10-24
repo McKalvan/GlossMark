@@ -1,0 +1,8 @@
+# internal/store/.gloss.yaml: the graph as a SQLite database for ad-hoc queries.
+boundary: arch:store
+level: component
+label: store
+part-of: arch:lib-graph
+realizes: [gmi:SqliteExport]
+default-namespace: gmi
+owner: glossmark

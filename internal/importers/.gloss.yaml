@@ -1,0 +1,8 @@
+# internal/importers/.gloss.yaml: a markdown glossary or an enums file into ontology entries.
+boundary: arch:importers
+level: component
+label: importers
+part-of: arch:lib-onboarding
+realizes: [gmi:VocabularyImporter]
+default-namespace: gmi
+owner: glossmark

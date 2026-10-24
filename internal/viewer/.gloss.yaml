@@ -1,0 +1,8 @@
+# internal/viewer/.gloss.yaml: the static HTML viewer.
+boundary: arch:viewer
+level: component
+label: viewer
+part-of: arch:lib-projection
+realizes: [gmi:HtmlViewer]
+default-namespace: gmi
+owner: glossmark

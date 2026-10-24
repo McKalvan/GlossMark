@@ -1,0 +1,8 @@
+# internal/tui/.gloss.yaml: the full-screen terminal for gloss review.
+boundary: arch:tui
+level: component
+label: tui
+part-of: arch:lib-review
+realizes: [gmi:ReviewTerminal, gmi:GraphBrowser]
+default-namespace: gmi
+owner: glossmark

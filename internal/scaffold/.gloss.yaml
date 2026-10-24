@@ -1,0 +1,8 @@
+# internal/scaffold/.gloss.yaml: the files gloss init writes.
+boundary: arch:scaffold
+level: component
+label: scaffold
+part-of: arch:lib-onboarding
+realizes: [gmi:Scaffolder]
+default-namespace: gmi
+owner: glossmark
