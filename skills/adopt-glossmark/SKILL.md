@@ -50,7 +50,7 @@ concepts:
 
 Write only what the owner confirmed in step 1, at the granularity they chose, and show them the list before you go on to step 4. Litmus test: if a domain expert would nod at the term, it is core; if only an engineer would, it is implementation. Core never mentions implementation names. Mark `criticality: high` or `critical` only where the owner said a mistake costs money, trust or compliance, and say why in a comment. Edit `ontology/views.yaml` to the views the owner chose.
 
-If the repo has a glossary, import it instead: `gloss import --from markdown-glossary docs/glossary.md --namespace <core>` (and `--from enums` for enum files), then edit.
+If the repo has a glossary, import it instead: `gloss import --from markdown-glossary docs/glossary.md --namespace <core>` (and `--from enums` for enum files; `--values` adds lifecycle values as concepts, `--instances Plan,Region` keeps catalogue enums' values out), then edit.
 
 ## 4. Draft the implementation tier
 

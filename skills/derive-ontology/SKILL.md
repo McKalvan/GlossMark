@@ -123,7 +123,7 @@ Draft at the granularity the owner chose in step 3. At *coarse*, keep lifecycle 
 - **Kinds.** `entity`, `process`, `event`, `constraint`, `measure`, `capability`, `resource`, `system-type`, as GlossMark defines them.
 - **Lifecycle values are concepts, catalogue values are instances.**
   - A state the business moves things between (`overdue`, `submitted`) or a kind it treats differently (`DVD` as an `Item`) is a concept that `is-a` its enum.
-  - Plan names, regions, currencies and feature flags are instances. Record them in the derivation record as `instance-of`, not in a tier file.
+  - Plan names, regions, currencies and feature flags are instances. Record them in the derivation record as `instance-of`, not in a tier file. When the enums come from a file, `gloss import --from enums <file> --values --instances Plan,Region` imports those enums but reports their values instead of adding them as concepts.
   - Signals for lifecycle: a `status`/`state` field, `transition` evidence, comparisons in guards or tests.
   - Signals for catalogue: seeds, configuration, pricing tables, lookups.
   - Mixed signals become a question.

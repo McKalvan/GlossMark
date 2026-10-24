@@ -59,7 +59,7 @@ If the repository already keeps its vocabulary, import it instead of retyping it
 
 ```sh
 gloss import --from markdown-glossary docs/glossary.md --namespace lib   # headings → concepts, Def. → doc, Aliases, Kind, Status (not implemented → proposed: true)
-gloss import --from enums enums.yaml --namespace lib [--values]          # each enum an entity; --values adds each value as is-a the enum (--value-names prefixed: LoanStatusActive)
+gloss import --from enums enums.yaml --namespace lib [--values]          # each enum an entity; --values adds each value as is-a the enum (--value-names prefixed: LoanStatusActive); --instances Plan,Region imports those enums but not their values, which are catalogue instances, not concepts
 gloss export --status -o status.json                                     # implemented / untested / unimplemented / orphan / planned / proposed per concept, deprecated: true when retired
 ```
 
