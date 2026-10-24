@@ -13,7 +13,7 @@ def catalog_book(isbn: str, copies: int) -> Book: ...
 export interface Book { isbn: string; dueOn?: Date }
 ```
 
-One grammar, `@gloss`. Two ontology tiers: a **core** the business owns and an **implementation** engineering owns. One graph that tools diff, gate, project into views and serve to agents. Agents write the links while they write the code; humans own the core and review only what is new.
+One grammar, `@gloss`. Two ontology tiers: a **core** the business owns and an **implementation** engineering owns. One graph that tools diff, gate, project into views and serve to agents. Agents write the links while they write the code. People decide what the concepts are, what each boundary may do and what is critical; an agent can propose, re-confirm and tidy, but it cannot change what the system means without a person saying so.
 
 ## See it
 
@@ -62,7 +62,7 @@ Tests existed before TDD. What changed was *when* they were written, and that is
 
 - **One concept spans every artifact type.** ArchUnit, dependency-cruiser, import-linter and Nx boundaries stop at one language's import graph. In the clinic above, `clinic:Booking` reaches a Go handler, a Next.js page, a Playwright test, a Go test, a Kubernetes deployment, a GitHub Actions workflow and the architecture doc, because the marker is a comment and comments are everywhere. Terraform, SQL, protobuf, Avro and AGENTS.md link the same way.
 - **The vocabulary has an owner.** An agent can regenerate a summary of a codebase on demand, but nobody reviews it, nothing in it goes stale on purpose, and two runs disagree. An ontology entry has a namespace owner, a review trail in the ledger, a `proposed` state until someone accepts it, and a `planned` state with a deadline that turns a concept nobody built into a defect.
-- **An agent is inside the contract from its first marker.** The session brief says which concepts the directory it is in may touch. `propose_link` returns the gate verdict before the code is written. A new concept ships as a proposal in the same PR as its implementation. Novelty is what people review; everything else is bookkeeping an agent can do.
+- **An agent is inside the contract from its first marker.** The session brief says which concepts the directory it is in may touch. `propose_link` returns the gate verdict before the code is written. A new concept ships as a proposal in the same PR as its implementation. People decide what the system means and where its edges are; agents work inside that and bring the exceptions back as proposals.
 
 ## Install
 
