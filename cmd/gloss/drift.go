@@ -1,5 +1,5 @@
 // @gloss implements gmi:DriftComparator scope=file
-// @gloss produces gm:Drift, gm:Coverage, gm:DecisionRequest scope=file
+// @gloss produces gm:Drift, gm:Coverage, gm:DecisionRequest, gm:PlanItem scope=file
 // @gloss publishes gm:DriftDetected, gm:DecisionRequested scope=file
 
 package main
@@ -24,7 +24,7 @@ func init() {
 func cmdDrift(args []string) int {
 	fs, root := newFlags("drift")
 	format := fs.String("format", "text", "text | json | markdown")
-	failOn := fs.String("fail-on", "violation,value-drift,gap,dangling,overdue", "comma-separated finding kinds that fail the command")
+	failOn := fs.String("fail-on", "violation,value-drift,gap,dangling,overdue,planned-closed,plan-overdue", "comma-separated finding kinds that fail the command")
 	all := fs.Bool("all", false, "also list consistent pairs")
 	ids := fs.Bool("ids", false, "end each finding with its id, the key policy.waivers names (text output; JSON always has it)")
 	if err := parseFlags(fs, args); err != nil {
@@ -140,7 +140,7 @@ func cmdCoverage(args []string) int {
 		}
 		fmt.Printf("files %.1f%% (%d of %d %s carry an accepted link)\n", m.CoveragePct, m.CoveredFiles, m.InScopeFiles, scope)
 		fmt.Printf("markers %d (%d targets): accepted %d, proposed %d, stale %d, rejected %d; proposed concepts %d; review backlog oldest %d days\n", m.Markers, m.Targets, m.Accepted, m.Proposed, m.Stale, m.Rejected, m.ProposedConcepts, m.BacklogOldestDay)
-		fmt.Printf("orphans %d, rogues %d, violations %d, gaps %d, untested %d, dangling %d\n", m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Untested, m.Dangling)
+		fmt.Printf("orphans %d, rogues %d, violations %d, gaps %d, untested %d, dangling %d; open plan items %d (planned concepts are out of the denominator)\n", m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Untested, m.Dangling, m.PlanItems)
 	}
 	// With nothing in scope coverage is n/a, which no threshold fails.
 	if threshold > 0 && m.ConceptsInScope > 0 && m.ConceptCoveragePct < threshold {

@@ -12,6 +12,7 @@ import (
 // Status values for ConceptStatus, in precedence order.
 const (
 	StatusProposed      = "proposed"      // proposed: true, awaiting a human
+	StatusPlanned       = "planned"       // planned, nothing implements it yet (ADR 0034)
 	StatusOrphan        = "orphan"        // no artifact links to it
 	StatusUnimplemented = "unimplemented" // linked (config, a page, a consumer), but no artifact implements it
 	StatusUntested      = "untested"      // implemented, nothing verifies it
@@ -31,11 +32,14 @@ type ConceptStatusRow struct {
 	// an external checker can flag every use without parsing the ontology.
 	Deprecated bool   `json:"deprecated,omitempty"`
 	ReplacedBy string `json:"replaced-by,omitempty"`
-	Doc        string `json:"doc,omitempty"`
+	// Planned marks a plan item, with its deadline when it has one.
+	Planned bool   `json:"planned,omitempty"`
+	PlanBy  string `json:"plan-by,omitempty"`
+	Doc     string `json:"doc,omitempty"`
 }
 
 // ConceptStatus summarizes every owned concept for an external checker (a
-// glossary's Status column, an ontology linter): proposed, orphan,
+// glossary's Status column, an ontology linter): proposed, planned, orphan,
 // unimplemented, untested or implemented, plus counts and the finding kinds
 // that apply.
 func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
@@ -50,7 +54,7 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 		if n.Imported {
 			continue
 		}
-		r := ConceptStatusRow{Concept: n.CURIE, Tier: n.Tier, Kind: n.Kind, Doc: n.Doc, Findings: uniq(kinds[n.CURIE]), Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy}
+		r := ConceptStatusRow{Concept: n.CURIE, Tier: n.Tier, Kind: n.Kind, Doc: n.Doc, Findings: uniq(kinds[n.CURIE]), Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy, Planned: n.Planned, PlanBy: n.PlanBy}
 		// The concept and the implementation concepts that realize it.
 		ids := []string{n.ID}
 		for _, s := range g.Subjects(n.ID, "realizes") {
@@ -90,6 +94,8 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 		switch {
 		case n.Proposed:
 			r.Status = StatusProposed
+		case has(KindPlanned), has(KindPlanOverdue):
+			r.Status = StatusPlanned
 		case has(KindOrphan):
 			r.Status = StatusOrphan
 		case r.Artifacts == 0 && others > 0 && n.ValueFrom == "":

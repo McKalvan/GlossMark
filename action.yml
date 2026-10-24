@@ -14,7 +14,7 @@ inputs:
     default: HARD
   drift-fail-on:
     description: Comma-separated gloss drift finding kinds that fail the job (gloss drift --fail-on; e.g. add stale to require every changed link to be re-confirmed)
-    default: violation,value-drift,dangling,overdue
+    default: violation,value-drift,dangling,overdue,planned-closed,plan-overdue
   check-graph:
     description: Fail when the committed .glossmark/graph.jsonl is not what gloss build makes from the tree (gloss build --check)
     default: "false"

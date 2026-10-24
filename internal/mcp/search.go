@@ -21,6 +21,9 @@ type Hit struct {
 	Realizes    []string `json:"realizes,omitempty"`
 	Aliases     []string `json:"aliases,omitempty"`
 	Proposed    bool     `json:"proposed,omitempty"`
+	// Planned: specified, nothing implements it yet; PlanBy its deadline.
+	Planned bool   `json:"planned,omitempty"`
+	PlanBy  string `json:"plan_by,omitempty"`
 	// Artifacts is how many artifacts link to the concept; ties rank the
 	// better-connected concept first.
 	Artifacts int    `json:"artifacts"`
@@ -80,7 +83,7 @@ func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
 				score -= 30
 			}
 		}
-		h := Hit{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, PublishedAs: n.Published, Aliases: n.Aliases, Proposed: n.Proposed, Score: score, Matched: how,
+		h := Hit{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, PublishedAs: n.Published, Aliases: n.Aliases, Proposed: n.Proposed, Planned: n.Planned, PlanBy: n.PlanBy, Score: score, Matched: how,
 			dist: lev(raw, strings.ToLower(n.CURIE[strings.Index(n.CURIE, ":")+1:]))}
 		if r := g.Objects(n.ID, "realizes"); len(r) > 0 {
 			for _, x := range r {

@@ -374,6 +374,15 @@ func describe(g *graph.Graph, n *graph.Node) map[string]any {
 		out["deprecated"] = true
 		out["replaced_by"] = n.ReplacedBy
 	}
+	if n.Planned {
+		out["planned"] = true
+		if n.PlanBy != "" {
+			out["plan_by"] = n.PlanBy
+		}
+		if n.PlanTicket != "" {
+			out["plan_ticket"] = n.PlanTicket
+		}
+	}
 	if n.Value != nil {
 		out["value"] = n.Value
 	}

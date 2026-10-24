@@ -31,6 +31,11 @@ type ConceptSpec struct {
 	Aliases    []string
 	ProposedBy string
 	Proposed   bool
+	// Planned writes planned: true, or planned: { by, ticket } when either
+	// is set (ADR 0034).
+	Planned       bool
+	PlannedBy     string
+	PlannedTicket string
 }
 
 // file is one ontology file: its lines plus the parsed tree for locating entries.
@@ -234,6 +239,18 @@ func fields(spec ConceptSpec) []string {
 	if spec.Internal {
 		out = append(out, "internal: true")
 	}
+	if spec.Planned {
+		switch {
+		case spec.PlannedBy != "" && spec.PlannedTicket != "":
+			out = append(out, "planned: { by: "+spec.PlannedBy+", ticket: "+plain(spec.PlannedTicket)+" }")
+		case spec.PlannedBy != "":
+			out = append(out, "planned: { by: "+spec.PlannedBy+" }")
+		case spec.PlannedTicket != "":
+			out = append(out, "planned: { ticket: "+plain(spec.PlannedTicket)+" }")
+		default:
+			out = append(out, "planned: true")
+		}
+	}
 	if spec.Doc != "" {
 		// Always quoted: inside a { } flow mapping an unquoted doc ends at its first comma.
 		out = append(out, "doc: "+strconv.Quote(spec.Doc))
@@ -355,6 +372,94 @@ func SetProposed(path, name string, proposed bool, by string) error {
 		}
 		f.lines = append(f.lines[:end+1], append(add, f.lines[end+1:]...)...)
 	}
+	return f.save()
+}
+
+// IsPlanned reports whether a concept carries planned: (true or a mapping).
+func IsPlanned(path, name string) (bool, error) {
+	f, err := open(path)
+	if err != nil {
+		return false, err
+	}
+	k, v := f.entry(name)
+	if k == nil {
+		return false, fmt.Errorf("%s: no concept %s", path, name)
+	}
+	_, p := mapGet(v, "planned")
+	return p != nil && !(p.Kind == yaml.ScalarNode && p.Value == "false"), nil
+}
+
+// RemovePlanned drops a concept's planned: key, whether it is true or a
+// { by, ticket } mapping, in a block or a flow entry, editing only the
+// key's own lines (gloss accept --planned, ADR 0034).
+func RemovePlanned(path, name string) error {
+	f, err := open(path)
+	if err != nil {
+		return err
+	}
+	k, v := f.entry(name)
+	if k == nil {
+		return fmt.Errorf("%s: no concept %s", path, name)
+	}
+	pk, pv := mapGet(v, "planned")
+	if pk == nil {
+		return fmt.Errorf("%s: %s is not planned", path, name)
+	}
+	if v.Style&yaml.FlowStyle == 0 {
+		// Block entry: the key line through the value's last line, a block
+		// mapping's by: and ticket: lines included.
+		start, end := pk.Line-1, maxLine(pk, pv)-1
+		ind := indent(f.lines[start])
+		for end+1 < len(f.lines) {
+			t := strings.TrimSpace(f.lines[end+1])
+			if t == "" || indent(f.lines[end+1]) <= ind {
+				break
+			}
+			end++
+		}
+		f.lines = append(f.lines[:start], f.lines[end+1:]...)
+		return f.save()
+	}
+	i := pk.Line - 1
+	line := f.lines[i]
+	col := pk.Column - 1
+	if col < 0 || col >= len(line) || !strings.HasPrefix(line[col:], "planned") {
+		return fmt.Errorf("%s:%d: cannot locate planned", path, pk.Line)
+	}
+	valStart := col + len("planned:")
+	for valStart < len(line) && line[valStart] == ' ' {
+		valStart++
+	}
+	valEnd := valStart
+	if valStart < len(line) && (line[valStart] == '{' || line[valStart] == '[') {
+		depth := 0
+		for valEnd < len(line) {
+			switch line[valEnd] {
+			case '{', '[':
+				depth++
+			case '}', ']':
+				depth--
+			}
+			valEnd++
+			if depth == 0 {
+				break
+			}
+		}
+		if depth != 0 {
+			return fmt.Errorf("%s:%d: planned spans several lines; edit it by hand", path, pk.Line)
+		}
+	} else {
+		valEnd = scalarEnd(line, valStart, true)
+	}
+	prefix, suffix := line[:col], line[valEnd:]
+	// Take one separator with the key: the comma before it, or, for the
+	// first field, the one after it.
+	if t := strings.TrimRight(prefix, " "); strings.HasSuffix(t, ",") {
+		prefix = strings.TrimSuffix(t, ",")
+	} else if t := strings.TrimLeft(suffix, " "); strings.HasPrefix(t, ",") {
+		suffix = " " + strings.TrimLeft(strings.TrimPrefix(t, ","), " ")
+	}
+	f.lines[i] = prefix + suffix
 	return f.save()
 }
 

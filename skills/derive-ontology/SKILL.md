@@ -154,7 +154,7 @@ Draft at the granularity the owner chose in step 3. At *coarse*, keep lifecycle 
 
 The category is a hint, not a verdict. On the measured repository no rule separated built from planned cleanly. Errors came from homonyms, stemming collisions, partial builds and stale doc statuses. Never mark a concept planned without the owner.
 
-`planned:` is not in the ontology schema yet. Until it is, keep planned concepts out of the tier files and list them in the packet's **Planned** section.
+A planned concept is written in the tier file with `planned: true`, or `planned: { by: YYYY-MM-DD, ticket: <uri> }` when the owner names a deadline or a ticket (ADR 0034). It is out of coverage and orphans and a plan item in `gloss drift` until code implements it. List it in the packet's **Planned** section as well, so the owner confirms each one.
 
 ## 8. Critique
 
