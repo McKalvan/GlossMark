@@ -1,0 +1,8 @@
+# internal/harvest/.gloss.yaml: evidence of a repository's vocabulary before it has an ontology.
+boundary: arch:harvest
+level: component
+label: harvest
+part-of: arch:lib-onboarding
+realizes: [gmi:EvidenceHarvester]
+default-namespace: gmi
+owner: glossmark

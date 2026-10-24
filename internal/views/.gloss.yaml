@@ -1,0 +1,10 @@
+# internal/views/.gloss.yaml: the declared views projected from the graph.
+boundary: arch:views
+level: component
+label: views
+part-of: arch:lib-projection
+realizes: [gmi:ViewProjector]
+holds: [gm:View]
+produces: [gm:View]
+default-namespace: gmi
+owner: glossmark

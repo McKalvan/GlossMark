@@ -1,4 +1,5 @@
 // @gloss implements gmi:ReviewEngine scope=file
+// @gloss publishes gm:LinkAccepted, gm:LinkRejected scope=file
 
 // Package review is the engine behind gloss review (ADR 0033): the queue of
 // everything that waits on a reviewer, the context each item needs, the

@@ -1,0 +1,8 @@
+# internal/agents/.gloss.yaml: the AGENTS.md vocabulary snippet and the session briefing.
+boundary: arch:agents
+level: component
+label: agents
+part-of: arch:lib-agents
+realizes: [gmi:AgentsSnippet]
+default-namespace: gmi
+owner: glossmark

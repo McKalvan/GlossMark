@@ -1,0 +1,9 @@
+# internal/extract/.gloss.yaml: pass 1, markers and manifests into the graph.
+boundary: arch:extract
+level: component
+label: extract
+part-of: arch:lib-reading
+realizes: [gmi:Extractor, gmi:ValueBinder]
+produces: [gm:Graph]
+default-namespace: gmi
+owner: glossmark

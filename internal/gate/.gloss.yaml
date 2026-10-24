@@ -1,0 +1,9 @@
+# internal/gate/.gloss.yaml: AUTO, SOFT and HARD classification and the PR impact.
+boundary: arch:gate
+level: component
+label: gate
+part-of: arch:lib-checking
+realizes: [gmi:Gate]
+produces: [gm:Impact]
+default-namespace: gmi
+owner: glossmark

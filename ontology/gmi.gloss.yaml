@@ -1,71 +1,79 @@
 # ontology/gmi.gloss.yaml (implementation tier): the Go packages and commands that realize gm:.
+# A concept nested with part-of is a step of, or a parameter of, the mechanism it
+# belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 0.2.0
+version: 1.0.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
-  MarkerGrammar:      { kind: process, realizes: gm:Extraction, doc: "Parsing one marker line and the per-extension comment table." }
-  DeclarationAnchor:  { kind: process, realizes: gm:Extraction, doc: "Binding a marker to the declaration that follows it." }
-  WorkspaceLoader:    { kind: process, realizes: gm:Extraction, doc: "Reading glossmark.yaml, ontology files, manifests and imports." }
   Extractor:          { kind: process, realizes: gm:Extraction, doc: "Pass 1; markers, manifests and ontologies into the graph." }
+  MarkerGrammar:      { kind: process, part-of: Extractor, realizes: gm:Extraction, doc: "Parsing one marker line and the per-extension comment table." }
+  DeclarationAnchor:  { kind: process, part-of: Extractor, realizes: gm:Extraction, doc: "Binding a marker to the declaration that follows it." }
+  WorkspaceLoader:    { kind: process, part-of: Extractor, realizes: gm:Extraction, doc: "Reading glossmark.yaml, ontology files, manifests and imports." }
+  ImportLock:
+    kind: process
+    part-of: WorkspaceLoader
+    realizes: gm:Publication
+    doc: "Resolving import version ranges and pinning each import's version and content hash in glossmark.lock: the importer's side of the published seam."
+  ValueBinder:        { kind: process, part-of: Extractor, realizes: gm:ValueBinding, doc: "Resolves value-from and publishes-value to a line of code; the ledger baselines it and the comparator reports drift." }
   FileFormats:        { kind: resource, internal: true, doc: "The typed shapes of every file GlossMark reads or writes." }
+  FormatVersions:
+    kind: resource
+    part-of: FileFormats
+    internal: true
+    doc: "The tool release, grammar and on-disk format versions."
+  GraphFormatVersion:
+    kind: measure
+    part-of: FormatVersions
+    internal: true
+    value: 1
+    value-from: { path: internal/version/version.go, symbol: GraphFormat }
+    doc: "The graph.jsonl record format docs/VERSIONING.md documents; bumping it in code without here is value drift."
   # The graph and what is derived from it
   CanonicalGraph:     { kind: resource, realizes: gm:Graph, doc: "The deterministic graph.jsonl record stream (nodes, then edges, with provenance) and its JSON-LD context." }
   Linter:             { kind: process, realizes: [gm:Lint, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:AllowedList], doc: "Where the tier, seam, own-subject and allowed-list constraints are enforced." }
   RollupEngine:       { kind: process, realizes: gm:Rollup, doc: "Derives boundary-level facts from code-level links: containment, realization lifted to cores, flows lifted to boundaries, implied relationships." }
+  CriticalityStamper:
+    kind: process
+    part-of: RollupEngine
+    realizes: gm:Criticality
+    doc: "Stamps every concept, boundary and artifact with its effective criticality and reports boundaries that understate it."
   DriftComparator:    { kind: process, realizes: [gm:DriftComparison, gm:DeclaredCapability], produces: [gm:Coverage, gm:DecisionRequest], publishes: [gm:DecisionRequested], doc: "Classifies each declared-versus-derived pair as consistent, a violation or a gap, adds the concept- and link-level findings (orphan, untested, stale and the rest) and computes coverage." }
   Gate:               { kind: process, realizes: gm:Gating, doc: "Classifies the changes between two graphs as AUTO, SOFT or HARD by the views and criticality they touch, and renders the PR impact." }
+  Doctor:
+    kind: process
+    internal: true
+    doc: "One-line setup checks, each with its fix."
+  # Review
   ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale], doc: "The .glossmark/ledger.jsonl record of each link's review state, reviewer, reason and anchor fingerprint." }
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
   ReviewEngine:       { kind: process, realizes: gm:Review, doc: "gloss review (experimental, ADR 0033): the queue of everything that waits on a reviewer with the context each item needs, decisions by the gate's authority, recommendations, and an undo journal; headless as JSON and MCP." }
   ReviewTerminal:     { kind: process, part-of: ReviewEngine, doc: "The full-screen terminal for gloss review: the queue beside an item's context, history and concepts, one key per decision, prompts for what it needs, undo." }
   GraphBrowser:       { kind: process, part-of: ReviewEngine, presents: gm:Graph, doc: "Read-only browsing of the graph (gloss review node, the Browse tab, browse_node): any node with its edges in and out by relation and the drift findings on it." }
+  OntologyEditor:
+    kind: process
+    realizes: gm:Review
+    doc: "Formatting-preserving edits to ontology files: add, accept or remove a proposed concept and rewrite NEW markers once it exists."
+  TextDiff:           { kind: process, part-of: OntologyEditor, internal: true, doc: "Unified diffs of ontology files, so a suggested edit is reviewable before it is written." }
   # Outputs
   ViewProjector:      { kind: process, realizes: gm:Projection, doc: "Builds the views ontology/views.yaml defines and feature slices from the graph." }
   HtmlViewer:         { kind: process, part-of: ViewProjector, presents: gm:View, doc: "The static page that shows a projection: a UI surface for views, not their mechanism." }
   Publisher:          { kind: process, realizes: gm:Publication, doc: "Per-namespace ontology.jsonld and graph.jsonl for importers." }
   SqliteExport:       { kind: process, internal: true, doc: "gloss export --sqlite: the graph as a SQLite database with closure views, for ad-hoc queries." }
   LandscapeAssembler: { kind: process, realizes: gm:Landscape, doc: "Unions sibling repositories' graphs by IRI; realizes the landscape itself, there is no separate federation process yet." }
-  ValueBinder:        { kind: process, realizes: gm:ValueBinding, doc: "Resolves value-from and publishes-value to a line of code; the ledger baselines it and the comparator reports drift." }
-  DefaultSoftThreshold:
-    kind: measure
-    realizes: gm:Confidence
-    value: 0.7
-    doc: "The default soft-conf-threshold: proposals at or above it are SOFT. Bound to DefaultPolicy by a publishes-value marker."
-  GraphFormatVersion:
-    kind: measure
-    internal: true
-    value: 1
-    value-from: { path: internal/version/version.go, symbol: GraphFormat }
-    doc: "The graph.jsonl record format docs/VERSIONING.md documents; bumping it in code without here is value drift."
-  TextDiff:           { kind: process, internal: true, doc: "Unified diffs of ontology files, so a suggested edit is reviewable before it is written." }
   # Onboarding
   Scaffolder:         { kind: process, realizes: gm:Onboarding, doc: "gloss init: config, tier files, manifests, views, CI job and hook in one command." }
   MarkerSuggester:    { kind: process, realizes: gm:Onboarding, doc: "gloss suggest: proposed links for unmarked public surfaces, from names, docstrings, the tables they touch and the code their tests call." }
-  SuggestCalibration: { kind: process, realizes: gm:Onboarding, doc: "gloss suggest --eval, --calibrate and the calibration harness: precision and auto-accept rate per confidence band on labelled links, the counts conf is read from, and the auto-accept threshold derived from a precision target." }
+  SuggestCalibration: { kind: process, part-of: MarkerSuggester, realizes: gm:Onboarding, doc: "gloss suggest --eval, --calibrate and the calibration harness: precision and auto-accept rate per confidence band on labelled links, the counts conf is read from, and the auto-accept threshold derived from a precision target." }
+  DefaultSoftThreshold:
+    kind: measure
+    part-of: SuggestCalibration
+    realizes: gm:Confidence
+    value: 0.7
+    doc: "The default soft-conf-threshold: proposals at or above it are SOFT. Bound to DefaultPolicy by a publishes-value marker."
   VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
   AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark and derive-ontology Claude Code skills, shipped in the binary." }
   EvidenceHarvester:  { kind: process, realizes: gm:Onboarding, doc: "gloss harvest: evidence of a repository's vocabulary from code, schemas, tests, UI, docs and git, before it has an ontology, and the lexical clusters a derivation starts from (ADR 0025)." }
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed], doc: "The MCP server agents call to search concepts, ask what a path or change touches, and propose links and concepts." }
   AgentsSnippet:      { kind: process, realizes: gm:Vocabulary, doc: "The AGENTS.md vocabulary snippet and the session-start briefing." }
-  CriticalityStamper:
-    kind: process
-    realizes: gm:Criticality
-    doc: "Stamps every concept, boundary and artifact with its effective criticality and reports boundaries that understate it."
-  OntologyEditor:
-    kind: process
-    realizes: gm:Review
-    doc: "Formatting-preserving edits to ontology files: add, accept or remove a proposed concept and rewrite NEW markers once it exists."
-  ImportLock:
-    kind: process
-    realizes: gm:Publication
-    doc: "Resolving import version ranges and pinning each import's version and content hash in glossmark.lock: the importer's side of the published seam."
-  Doctor:
-    kind: process
-    internal: true
-    doc: "One-line setup checks, each with its fix."
-  FormatVersions:
-    kind: resource
-    internal: true
-    doc: "The tool release, grammar and on-disk format versions."

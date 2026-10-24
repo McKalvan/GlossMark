@@ -1,0 +1,8 @@
+# internal/doctor/.gloss.yaml: one-line setup checks, each with its fix.
+boundary: arch:doctor
+level: component
+label: doctor
+part-of: arch:lib-checking
+realizes: [gmi:Doctor]
+default-namespace: gmi
+owner: glossmark

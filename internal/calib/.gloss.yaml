@@ -1,0 +1,8 @@
+# internal/calib/.gloss.yaml: the calibration counts conf and the auto-accept threshold are read from.
+boundary: arch:calib
+level: component
+label: calib
+part-of: arch:lib-onboarding
+realizes: [gmi:SuggestCalibration]
+default-namespace: gmi
+owner: glossmark

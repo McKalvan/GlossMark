@@ -1,0 +1,8 @@
+# internal/textdiff/.gloss.yaml: unified diffs of small texts, so an edit is reviewable before it is written.
+boundary: arch:textdiff
+level: component
+label: textdiff
+part-of: arch:lib-review
+realizes: [gmi:TextDiff]
+default-namespace: gmi
+owner: glossmark

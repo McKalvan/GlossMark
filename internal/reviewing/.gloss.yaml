@@ -1,0 +1,11 @@
+# internal/reviewing/.gloss.yaml: the ledger, the review engine and its terminal, the graph browser and the ontology editor. A logical component with no code of its
+# own: the packages that belong to it name it with part-of (ADR 0035), so it
+# declares what they declare.
+boundary: arch:lib-review
+level: component
+label: Review
+realizes: [inherit]
+holds: [inherit]
+publishes: [inherit]
+default-namespace: gmi
+owner: glossmark

@@ -1,0 +1,8 @@
+# internal/check/.gloss.yaml: lint over the graph: syntax, references, tiers, allowed lists.
+boundary: arch:check
+level: component
+label: check
+part-of: arch:lib-checking
+realizes: [gmi:Linter]
+default-namespace: gmi
+owner: glossmark

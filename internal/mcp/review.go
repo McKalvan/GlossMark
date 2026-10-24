@@ -1,4 +1,5 @@
 // @gloss implements gmi:ReviewEngine scope=file
+// @gloss publishes gm:LinkAccepted, gm:LinkRejected scope=file
 
 package mcp
 

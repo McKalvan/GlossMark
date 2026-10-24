@@ -1,0 +1,9 @@
+# internal/review/.gloss.yaml: the engine behind gloss review.
+boundary: arch:review
+level: component
+label: review
+part-of: arch:lib-review
+realizes: [gmi:ReviewEngine]
+publishes: [gm:LinkAccepted, gm:LinkRejected]
+default-namespace: gmi
+owner: glossmark

@@ -1,23 +1,24 @@
 # ontology/views.yaml: the projections of GlossMark's own graph (docs/FILE-FORMATS.md).
+# Each view names who it is for and what it shows at its zoom (issue #192).
 views:
-  business:
-    doc: What a comment-native code ontology is about; the Go packages fold into what they realize.
+  concepts:
+    doc: For adopters and readers of the docs. The core tier alone at system zoom, what a comment-native code ontology is about, with the Go packages folded into the concepts they realize and the published seam shown.
     include: [gm:*]
     collapse: { "gmi:*": via realizes }
     show-published: true
     relations: [produces, consumes, constrains, publishes, subscribes, is-a, realizes]
     lift: range-lcs
     zoom: system
-  engineering:
-    doc: Both tiers, two levels of parts, container zoom.
+  architecture:
+    doc: For maintainers. Both tiers at component zoom, the command line and the library as containers, the library's components inside it, and each mechanism with its parts two levels deep.
     include: [gm:*, gmi:*]
     expand: { part-of: 2 }
-    zoom: container
+    zoom: component
   drift:
-    doc: A saved slice (ADR 0023) of the drift measure, its producers and the boundaries around them, recomputed from the graph on every build.
+    doc: For whoever reads a drift report. A saved slice (ADR 0023) of the drift measure, its producers and the boundaries around them at code zoom, recomputed from the graph on every build.
     slice: [gm:Drift]
     zoom: code
   constraints:
-    doc: The rules GlossMark enforces and the code that enforces them. Curated (it names its concepts), so it opens expanded.
+    doc: For governance reviewers. The six rules GlossMark enforces and the files that enforce them at code zoom. Curated (it names its concepts), so it opens expanded.
     include: [gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:DeclaredCapability, gm:AllowedList, gm:ValueBinding, gmi:Linter, gmi:DriftComparator, gmi:ValueBinder]
     zoom: code

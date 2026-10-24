@@ -1,0 +1,11 @@
+# internal/reading/.gloss.yaml: reading a workspace into the graph. A logical
+# component with no code of its own: the packages that belong to it name it
+# with part-of (ADR 0035), so it declares what they declare.
+boundary: arch:lib-reading
+level: component
+label: Reading a workspace
+realizes: [inherit]
+holds: [inherit]
+produces: [inherit]
+default-namespace: gmi
+owner: glossmark

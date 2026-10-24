@@ -1,0 +1,9 @@
+# internal/ledger/.gloss.yaml: the review state and provenance of every link.
+boundary: arch:ledger
+level: component
+label: ledger
+part-of: arch:lib-review
+holds: [gmi:ReviewLedger, gm:ProposedLink]
+publishes: [gm:LinkAccepted, gm:LinkRejected, gm:LinkStale]
+default-namespace: gmi
+owner: glossmark

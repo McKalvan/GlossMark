@@ -1,0 +1,8 @@
+# internal/slice/.gloss.yaml: feature slices from seed nodes.
+boundary: arch:slice
+level: component
+label: slice
+part-of: arch:lib-projection
+realizes: [gmi:ViewProjector]
+default-namespace: gmi
+owner: glossmark

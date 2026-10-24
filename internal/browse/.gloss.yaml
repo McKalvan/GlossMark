@@ -1,0 +1,8 @@
+# internal/browse/.gloss.yaml: read-only browsing of any node and its edges.
+boundary: arch:browse
+level: component
+label: browse
+part-of: arch:lib-review
+realizes: [gmi:GraphBrowser]
+default-namespace: gmi
+owner: glossmark

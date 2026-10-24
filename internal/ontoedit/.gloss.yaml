@@ -1,0 +1,8 @@
+# internal/ontoedit/.gloss.yaml: formatting-preserving edits to ontology files.
+boundary: arch:ontoedit
+level: component
+label: ontoedit
+part-of: arch:lib-review
+realizes: [gmi:OntologyEditor]
+default-namespace: gmi
+owner: glossmark

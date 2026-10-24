@@ -1,0 +1,8 @@
+# internal/load/.gloss.yaml: glossmark.yaml, ontologies, manifests, imports and the lock.
+boundary: arch:load
+level: component
+label: load
+part-of: arch:lib-reading
+realizes: [gmi:WorkspaceLoader, gmi:ImportLock, gmi:LandscapeAssembler]
+default-namespace: gmi
+owner: glossmark
