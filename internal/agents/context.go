@@ -294,6 +294,9 @@ func conceptLine(g *graph.Graph, n *graph.Node) string {
 	if n.Proposed {
 		tags = append(tags, "PROPOSED")
 	}
+	if n.Planned {
+		tags = append(tags, plannedTag(n))
+	}
 	if model.CriticalityRank(n.Criticality) >= model.CriticalityRank("high") {
 		tags = append(tags, "criticality "+n.Criticality)
 	}
@@ -423,4 +426,14 @@ func remits(g *graph.Graph, actor string) string {
 		return "Agent remits: " + strings.Join(parts, "; ") + "\n"
 	}
 	return ""
+}
+
+// plannedTag marks a planned concept for an agent: "PLANNED", with the
+// deadline when the plan has one, so the agent building the feature finds
+// the owner's name for it (ADR 0025 6.1, ADR 0034).
+func plannedTag(n *graph.Node) string {
+	if n.PlanBy != "" {
+		return "PLANNED (by " + n.PlanBy + ")"
+	}
+	return "PLANNED"
 }

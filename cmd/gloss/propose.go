@@ -344,6 +344,43 @@ func acceptConcepts(p *pipeline, curies []string, rev string, dry bool) (int, er
 }
 
 // rejectConcept records the rejection and optionally removes the entry.
+// acceptPlanned drops planned: from each concept (gloss accept --planned):
+// the plan closed, or the owner withdraws it. A plan nothing implements yet
+// is dropped with a warning, since the flag is the owner's to keep or drop.
+func acceptPlanned(p *pipeline, curies []string, dry bool) (int, error) {
+	n := 0
+	for _, c := range curies {
+		ns, name, err := splitCurie(c)
+		if err != nil {
+			return n, err
+		}
+		path, err := ontologyPath(p, ns)
+		if err != nil {
+			return n, err
+		}
+		planned, err := ontoedit.IsPlanned(path, name)
+		if err != nil {
+			return n, err
+		}
+		if !planned {
+			fmt.Fprintf(os.Stderr, "%s is not planned; nothing to accept\n", c)
+			continue
+		}
+		if node := p.Graph.NodeByCurie(c); node != nil && !rollup.PlanClosed(p.Graph, node.ID) {
+			fmt.Fprintf(os.Stderr, "gloss accept: nothing implements %s yet; dropping planned anyway\n", c)
+		}
+		fmt.Printf("%s planned on %s\n", map[bool]string{true: "would drop", false: "drop"}[dry], c)
+		if dry {
+			continue
+		}
+		if err := ontoedit.RemovePlanned(path, name); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
 func rejectConcept(p *pipeline, c, rev, reason string, remove bool) error {
 	ns, name, err := splitCurie(c)
 	if err != nil {

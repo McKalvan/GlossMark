@@ -25,6 +25,7 @@ func init() {
 const reviewUsage = `usage:
   gloss review                          interactive review on a terminal
   gloss review --format json|text       the queue (--kind proposed-link,stale-link,... --path dir)
+  gloss review --format frame [--size 120x36]  one rendered frame of the terminal UI, for screenshots and docs
   gloss review show <id> [--format text] one item with its context, history and concepts
   gloss review apply [file|-]           apply decisions, one JSON object per line; prints one result per line
   gloss review undo [--force]           revert the last decision
@@ -95,7 +96,8 @@ func cmdReview(args []string) int {
 		sub, args = args[0], args[1:]
 	}
 	fs, root := newFlags("review")
-	format := fs.String("format", "", "json | text (default: interactive on a terminal, text otherwise)")
+	format := fs.String("format", "", "json | text | frame (default: interactive on a terminal, text otherwise)")
+	size := fs.String("size", "120x36", "frame: columns x rows")
 	kinds := fs.String("kind", "", "comma-separated item kinds: "+strings.Join(review.Kinds, ", "))
 	paths := fs.String("path", "", "comma-separated files or directories the items must be under")
 	force := fs.Bool("force", false, "undo: restore even when a file changed since the decision")
@@ -114,6 +116,9 @@ func cmdReview(args []string) int {
 				return interactiveReview(e)
 			}
 			*format = "text"
+		}
+		if *format == "frame" {
+			return renderFrame(e, *size)
 		}
 		items, err := e.Queue()
 		if err != nil {
@@ -264,6 +269,20 @@ func isTerminal() bool {
 		}
 	}
 	return true
+}
+
+// renderFrame prints one frame of the terminal UI as it would open, without
+// a terminal: the same App the interactive session drives, rendered once.
+func renderFrame(e *review.Engine, size string) int {
+	var w, h int
+	if n, _ := fmt.Sscanf(size, "%dx%d", &w, &h); n != 2 || w <= 0 || h <= 0 {
+		return fail(fmt.Errorf("gloss review: --size wants COLUMNSxROWS, got %q", size))
+	}
+	opt := tui.Options{Actor: e.Actor, Browser: browser{e}, NoColor: os.Getenv("NO_COLOR") != ""}
+	app := tui.New(e, opt)
+	app.Reload()
+	fmt.Println(strings.ReplaceAll(app.Render(w, h), "\r\n", "\n"))
+	return 0
 }
 
 // interactiveReview runs the terminal UI (internal/tui).

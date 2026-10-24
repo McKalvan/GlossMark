@@ -1,7 +1,7 @@
 <!-- @gloss documents arch:glossmark scope=file -->
 # GlossMark
 
-GlossMark is a comment-native code ontology. One grammar, `@gloss`, links any artifact (code, tests, Terraform, configs, CI, Markdown, agent files) to concepts in two ontology tiers: a platonic **core** the business owns and a concrete **implementation** engineering owns. Agents write the links while they write the code; humans own the core and review only novelty. Everything compiles into one graph that tools diff, gate, project into views and serve to agents.
+As agents write more of the code, it changes faster than its reviewers can keep track of the concepts it introduces. GlossMark gives every artifact (code, tests, Terraform, configs, CI, docs, agent files) one comment line naming the domain concept it serves, so the concept becomes the join key across all of them, and the vocabulary is owned, reviewed and gated instead of regenerated from the code each time someone asks.
 
 ```python
 # @gloss implements circ:BookIntake
@@ -13,11 +13,28 @@ def catalog_book(isbn: str, copies: int) -> Book: ...
 export interface Book { isbn: string; dueOn?: Date }
 ```
 
+One grammar, `@gloss`. Two ontology tiers: a **core** the business owns and an **implementation** engineering owns. One graph that tools diff, gate, project into views and serve to agents. Agents write the links while they write the code. People decide what the concepts are, what each boundary may do and what is critical; an agent can propose, re-confirm and tidy, but it cannot change what the system means without a person saying so.
+
+## See it
+
+**The map.** `gloss view` draws boundaries as boxes and concepts as nodes. The example is Larkspur Clinics, a monorepo (Next.js, Go, Python, Postgres, Terraform, Kubernetes, GitHub Actions) where patients book and cancel outpatient appointments online, reminders go out before each visit and operations watch the no-show rate. This is its business view: the implementation tier folds into what it realizes, so a practice manager sees Booking, Cancellation, Availability and the two values engineering publishes, all in the language of their domain.
+
+![The business view: only core concepts, with the two published values ringed.](docs/img/viewer-business.png)
+
+**The engineering view of the same graph,** sliced to one feature, `clinic:Booking`: the Go handler that realizes it, the page that presents it, the Kubernetes deployment the service runs in, and the drift findings beside them.
+
+![The GlossMark viewer: the engineering view of a clinic-booking monorepo, sliced to clinic:Booking. Boundaries are boxes (Patient site, Booking API, Kubernetes deployment, Reminder worker), the Booking concept is highlighted with its realization and the panel lists the drift findings.](docs/img/viewer-slice.png)
+
+**The review.** `gloss review` is the queue of everything an agent proposed, every link that went stale, every rogue concept and every finding, each with the gate it needs (AUTO, SOFT, HARD) and who may decide it. An agent clears the AUTO and SOFT items itself and leaves a recommendation on the HARD ones.
+
+![The review terminal: a queue of proposed links, a stale link, a proposed concept, a rogue concept and untested findings, each tagged HARD, SOFT or AUTO, with the selected item's marker, concept doc and source beside it.](docs/img/review-terminal.png)
+
+**The drift report.** `gloss drift` compares what each boundary's manifest declares with what the code under it derives, and names the difference:
+
 ```
 $ gloss drift
 ✗ Violations (boundary exceeds its declared capability)
   acme:circulation-svc produces lib:Laptop but declares produces {lib:Media}; rollup: produces {lib:Item} (from lib:Book, lib:DVD, lib:Laptop, lib:Media) ⊄ declared [proposed link]
-  acme:circulation-svc realizes lib:Renewal but declares realizes {circ:CirculationService, lib:Cataloging, lib:Checkout, lib:LoanPeriod, lib:Return} [proposed link]
 ○ Gaps (declared, not implemented)
   acme:library-platform declares publishes lib:HoldReady but nothing under it publishes it: intended capability not implemented, or the declaration is wrong
 ? Rogue concepts (decision requests)
@@ -27,27 +44,25 @@ $ gloss drift
 Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue: 1   Violations: 2   Gaps: 1   Stale: 0   Untested: 5   Proposed links: 4   Proposed concepts: 0
 ```
 
-## What is in this repository
+The report is from [`examples/library`](examples/library/README.md) in this repository; the screenshots are from the [glossmark-examples](https://github.com/McKalvan/glossmark-examples) showcase, rendered by [`scripts/screenshots.sh`](scripts/screenshots.sh) with a `gloss` built from this tree.
 
-| Path | What |
-| --- | --- |
-| `cmd/gloss` | The CLI: `init`, `harvest`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `review`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
-| `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
-| `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
-| `internal/review` | `gloss review` (experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): the review queue, decisions by gate authority, agent recommendations and an undo journal |
-| `internal/tui` | The interactive terminal for `gloss review`, hand-rolled on `golang.org/x/term` |
-| `internal/browse` | The read-only graph browser: `gloss review node`, the terminal's Browse tab, `browse_node` |
-| `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
-| `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
-| `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](docs/adr/0025-deriving-the-ontology.md), experimental) |
-| `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` and `derive-ontology` (deriving the core and implementation tiers from an existing application, [ADR 0025](docs/adr/0025-deriving-the-ontology.md)), installed by `gloss hook install --skill` (`--cursor` adds a Cursor rule that points at them), before `gloss init` too |
-| `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
-| `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
-| `corpus/` | Conformance corpus for the grammar across 18 file types |
-| `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
-| `examples/library` | The worked example: a public library in two repos sharing one core (`circulation` owns both tiers, `holds-worker` imports and extends the core), covering taxonomic lift, the published seam, `value-from`, surfaces, criticality, extension, remits and a landscape; see its [README](examples/library/README.md) |
-| `docs/` | [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) |
-| `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
+## How it works in 60 seconds
+
+- **The marker.** `@gloss <relation> <target>` in any comment, in 18 file types. `@gloss?` is a proposal with a `conf=`; `scope=file` links the whole file; `ns:NEW:Name` proposes a concept that does not exist yet. [Grammar](docs/GRAMMAR.md), [when to mark](docs/MARKING.md).
+- **Two tiers.** A core concept (`lib:Book`, `clinic:Booking`) is implementation-independent by construction. An implementation concept either `realizes` one or is `internal`. The `published` flag is the only seam between the tiers and the only thing importable across repositories; touching it is HARD.
+- **Manifests.** A `.gloss.yaml` on a directory declares what that boundary `realizes`, `produces`, `consumes`, `publishes` and `holds`, which concepts code under it may target, and how critical it is. [File formats](docs/FILE-FORMATS.md).
+- **The graph.** `gloss build` compiles markers, ontology and manifests into `.glossmark/graph.jsonl`: deterministic, sorted, committed, meaningful in `git diff`. [Graph](docs/GRAPH.md).
+- **Drift.** Five rollup rules derive from the code what each boundary does; `gloss drift` compares that with what the manifest declares. The difference is a violation, a gap, an orphan, a rogue concept, an untested mechanism, a stale link or a drifted value.
+- **The gate.** `gloss diff` classifies a change AUTO, SOFT or HARD by what it touches (the published seam, constraints, criticality, agent remits) and the GitHub Action posts the impact on the PR: which views changed, which concepts, which blast radius. [Governance](docs/GOVERNANCE.md).
+- **Views and agents.** `views.yaml` projects the graph by tier and zoom. The MCP server and a SessionStart hook give an agent the concepts for the directory it is in, the gate verdict before it writes, and the review tools.
+
+## Why ontology-first
+
+Tests existed before TDD. What changed was *when* they were written, and that is what let them shape the design instead of merely checking it. GlossMark moves the system's vocabulary to the same position: curated before a ticket is implemented, implemented against it, reviewed as the pair ([ADR 0034](docs/adr/0034-ontology-first-increments.md)). Three things follow that no linter and no summary gives you:
+
+- **One concept spans every artifact type.** ArchUnit, dependency-cruiser, import-linter and Nx boundaries stop at one language's import graph. In the clinic above, `clinic:Booking` reaches a Go handler, a Next.js page, a Playwright test, a Go test, a Kubernetes deployment, a GitHub Actions workflow and the architecture doc, because the marker is a comment and comments are everywhere. Terraform, SQL, protobuf, Avro and AGENTS.md link the same way.
+- **The vocabulary has an owner.** An agent can regenerate a summary of a codebase on demand, but nobody reviews it, nothing in it goes stale on purpose, and two runs disagree. An ontology entry has a namespace owner, a review trail in the ledger, a `proposed` state until someone accepts it, and a `planned` state with a deadline that turns a concept nobody built into a defect.
+- **An agent is inside the contract from its first marker.** The session brief says which concepts the directory it is in may touch. `propose_link` returns the gate verdict before the code is written. A new concept ships as a proposal in the same PR as its implementation. People decide what the system means and where its edges are; agents work inside that and bring the exceptions back as proposals.
 
 ## Install
 
@@ -56,7 +71,7 @@ curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh 
 go install github.com/mckalvan/glossmark/cmd/gloss@v0.2.0                                          # with a Go toolchain
 ```
 
-Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.2.0` downloads the same binary.
+Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.2.0` downloads the same binary. Releases, grammar and file-format versions are pinned as described in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Try it
 
@@ -65,29 +80,17 @@ go build -o gloss ./cmd/gloss
 cd examples/library/circulation
 ../../../gloss check       # 0 errors, 1 warning: the Laptop link is outside the boundary's allowed list
 ../../../gloss drift       # the drift report above
-../../../gloss view        # .glossmark/viewer.html + views.js — open it in a browser: boundaries are boxes, click to drill in, click a concept for its code, tests and findings
+../../../gloss review      # the queue: 4 proposed links and a rogue concept to decide
+../../../gloss view        # .glossmark/viewer.html: boundaries are boxes, click to drill in, click a concept for its code, tests and findings
 cd ..
 ../../gloss landscape circulation holds-worker   # cross-repo context map; the HoldReady gap closes
 ```
 
-`go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.
+To adopt it on your own repository, `gloss init` scaffolds the files and the [Quickstart](docs/QUICKSTART.md) walks the first ontology; the `adopt-glossmark` and `derive-ontology` skills (`gloss hook install --skill`) let an agent do the first pass. The [showcase](https://github.com/McKalvan/glossmark-examples) has five realistic adoptions to copy from: a monorepo, three repositories sharing one core, an event-driven system, an agent-heavy repository and a brownfield legacy stack.
 
 ## For agents
 
-`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server with `search_concepts` (aliases, CamelCase words, stems, typos, one hop through `realizes`), `concepts_for_path`, `propose_link`, `propose_concept` (adds a `proposed: true` ontology entry so a new concept and its implementation ship in one PR), `impact_of` (what changed files touch: published seam, constraints, boundaries, tests, blast radius), `slice_of` (everything relevant to one feature, like `gloss slice`), `drift`, and the review tools (`review_queue`, `review_item`, `review_decide`, `review_undo`, `write_link`, `edit_concept_doc`, and the read-only `browse_node`; experimental, [ADR 0033](docs/adr/0033-review-sessions.md)): an agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
-
-## GlossMark on GlossMark
-
-This repository is its own first user. `glossmark.yaml` at the root owns two namespaces: `gm:` is the core tier (what a comment-native code ontology is about: links, concepts, namespaces, boundaries, extraction, lint, drift, review, gating) and `gmi:` is the implementation tier (the Go packages and commands that realize it). Every package and command carries a marker, the JSON Schemas have sidecars, the docs `documents` what they describe, and `.gloss.yaml` manifests at the root, `cmd/` and `internal/` declare what `gloss drift` compares with the code. The self-description uses the whole syntax: the root manifest says `realizes: [inherit, gm:Onboarding]`, `produces: [inherit]` and `publishes: [inherit]` instead of repeating its children, the library declares the entities it `holds` and widens its derived allowed set with `allowed: [derived, gm:Confidence, gm:GlossMark]`, the HTML viewer `presents` `gm:View` rather than realizing it, the graph format version is bound to `internal/version/version.go` with `value-from` and the default confidence threshold with a `publishes-value` marker (so bumping either in code without the ontology fails `gloss drift`), and `ontology/views.yaml` adds a curated `constraints` view. `go test ./internal/e2e/` includes a self-host test that fails on any lint warning or error, violation, gap, dangling reference, orphan, untested mechanism, proposed concept or unbound value in this tree.
-
-```sh
-go build -o gloss ./cmd/gloss
-./gloss check     # 0 errors, 0 warnings
-./gloss drift     # 0 violations, gaps, orphans, untested, proposed concepts or links; stale only for files edited since their last review
-./gloss view      # .glossmark/viewer.html
-```
-
-The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger records them as accepted without a reviewer until a human reviews them. Most markers here are `scope=file`, and a file-scope link goes stale whenever its file's code or prose changes ([ADR 0006](docs/adr/0006-file-fingerprint-excludes-markers.md)). So `gloss drift` lists stale links for the files a change touched: check that each link still holds, then `gloss accept --stale <paths>` (or `gloss accept <id>`) re-confirms them. CI holds this repository to the strictest gate the tool offers ([.github/workflows/ci.yml](.github/workflows/ci.yml)): the committed graph must match the tree (`gloss build --check`); `gloss drift` fails on every finding kind but `overlap` (the command line and the library it calls realize the same concepts by design, [ADR 0019](docs/adr/0019-migration-overlap.md)), stale links included; concept coverage must stay at 100%; and every concept must carry a doc. The workflow runs the Action from this checkout (`uses: ./`, `version: source`), so every PR also exercises `action.yml` and posts its own impact comment; a HARD change needs a reviewer to label the PR `ontology-approved`.
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server (`gloss mcp`) with concept search, `concepts_for_path`, `propose_link`, `propose_concept`, `impact_of`, `slice_of`, `drift` and the review tools. An agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## Design in one paragraph
 
@@ -97,10 +100,8 @@ Two tiers plus instances: core is implementation-independent by construction; ev
 
 Not every subsystem carries the same risk. `criticality: low | medium | high | critical` on a concept or a boundary flows through `realizes` to the code that implements it (a boundary's level reaches its files only with `criticality-floor: true`; `gloss criticality suggest` drafts a first classification), tags every change in the PR comment and `gloss impact`, raises the gate by policy (`critical` is HARD by default), colours the viewer and gives agents a reason to flag what they touch. See [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
 
-## Versions
+## More
 
-`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.2.0`), pre-commit (`rev: v0.2.0`), `install.sh v0.2.0` or `go install ...@v0.2.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [docs/VERSIONING.md](docs/VERSIONING.md).
-
-## Status
-
-Phase 1 (POC) and most of Phase 2 (MVP) of the roadmap are built; see [docs/PLAN.md](docs/PLAN.md) for what is deferred (tree-sitter anchoring, remote import fetch, SSSOM mappings, SCIP join, SHACL instance validation, plugin SDK).
+- [docs/REPOSITORY.md](docs/REPOSITORY.md): what is in this repository, GlossMark applied to itself (this tree is its own first user and CI holds it to the strictest gate), versions and roadmap status.
+- Docs: [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
+- [glossmark-examples](https://github.com/McKalvan/glossmark-examples): the showcase behind the screenshots, and a lab that turns rough edges into issues.

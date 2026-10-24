@@ -28,6 +28,12 @@ func TestGateBypasses(t *testing.T) {
 		{"accepting a concept hides a kind change", func(_ string, write func(string, string), _ func(...string)) {
 			write("ontology/z.gloss.yaml", strings.Replace(onto, "Fine: { kind: entity, proposed: true }", "Fine: { kind: measure }", 1))
 		}, "concept-changed"},
+		{"accepting a concept hides a relations edit", func(_ string, write func(string, string), _ func(...string)) {
+			// Dropping proposed is AUTO and explains the file to the
+			// hard-path rule (ADR 0034); the relations: block is no node
+			// or edge, so the namespace fingerprint has to catch it.
+			write("ontology/z.gloss.yaml", strings.Replace(onto, "Fine: { kind: entity, proposed: true }", "Fine: { kind: entity }", 1)+"relations:\n  produces: { lift: none }\n")
+		}, "namespace-changed"},
 		{"a signature edit hides a dropped decorator", func(_ string, write func(string, string), _ func(...string)) {
 			write("svc.py", "# @gloss consumes z:Secret\ndef read(card: str, _=None):\n    pass\n")
 		}, "decorators-changed"},

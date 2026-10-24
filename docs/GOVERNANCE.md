@@ -135,8 +135,10 @@ policy:
   criticality-gates: { critical: HARD, high: SOFT }
 ```
 
-Bookkeeping changes (an accepted proposal, a stale fingerprint) are reported
-with their level but never raised by it. A changed decorator stack on an
+Bookkeeping changes (an accepted proposal, a closed plan item whose `planned`
+key is dropped, a stale fingerprint) are reported with their level but never
+raised by it, and the two ontology edits among them explain their file to the
+`hard-paths` rule, so a PR that only drops `proposed` or `planned` is AUTO. A changed decorator stack on an
 unchanged signature (`decorators-changed`, ADR 0014) is not bookkeeping: a
 deleted `@requires_role` on a critical handler is HARD under the default.
 

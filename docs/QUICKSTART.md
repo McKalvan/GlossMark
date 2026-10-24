@@ -60,7 +60,7 @@ If the repository already keeps its vocabulary, import it instead of retyping it
 ```sh
 gloss import --from markdown-glossary docs/glossary.md --namespace lib   # headings → concepts, Def. → doc, Aliases, Kind, Status (not implemented → proposed: true)
 gloss import --from enums enums.yaml --namespace lib [--values]          # each enum an entity; --values adds each value as is-a the enum (--value-names prefixed: LoanStatusActive)
-gloss export --status -o status.json                                     # implemented / untested / unimplemented / orphan / proposed per concept, deprecated: true when retired
+gloss export --status -o status.json                                     # implemented / untested / unimplemented / orphan / planned / proposed per concept, deprecated: true when retired
 ```
 
 A glossary entry is a `##` to `####` heading followed by field lines: `**Def.**` (the doc; else the first paragraph), `**Aliases:**`, `**Kind:**` (`entity`, `process`, `event`, `constraint`, `measure`, ...), `**Is-a:**` and `**Status:**` (`planned` makes it `proposed: true`; `deprecated ... use Patron` or `replaced by Patron` sets `deprecated: true` and `replaced-by:`). A heading with no field line that is followed by a deeper heading is a section (`## Retired terms` above `### Borrower`) and is skipped. Without a `Kind:` line the kind is guessed from the definition (one that starts "Lending ..." or "The process of ..." is a process; one that says "never", "at most" or "how long" is a constraint), then from the name's ending; `gloss import` prints each added name with its kind and where the guess came from. Review them.
@@ -216,7 +216,7 @@ The Action's drift step fails on `violation,value-drift,dangling,overdue` by def
       - uses: mckalvan/glossmark@v0.2.0
         with:
           check-graph: "true"
-          drift-fail-on: violation,value-drift,gap,dangling,overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
+          drift-fail-on: violation,value-drift,gap,dangling,overdue,planned-closed,plan-overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
 ```
 
 Before pushing, `gloss drift` lists what went stale; check that each link still holds and `gloss accept --stale <paths>` re-confirms them (`-n` shows which first). GlossMark's own CI runs this way ([.github/workflows/ci.yml](../.github/workflows/ci.yml)): it also lets a reviewer clear a HARD gate by labelling the PR `ontology-approved`, so the human decision the gate asks for is recorded on the PR.

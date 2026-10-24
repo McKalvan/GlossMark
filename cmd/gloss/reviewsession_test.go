@@ -366,3 +366,24 @@ func TestReviewApplyRecommendation(t *testing.T) {
 		t.Errorf("recommendations file left behind: %v", err)
 	}
 }
+
+// --format frame renders the terminal UI once, without a terminal, at the
+// requested size.
+func TestReviewFrame(t *testing.T) {
+	root, _ := reviewTree(t)
+	t.Setenv("NO_COLOR", "1")
+	code, out := gloss(t, "review", "--format", "frame", "--size", "100x20", "--root", root)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	rows := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(rows) != 20 {
+		t.Errorf("got %d rows, want 20", len(rows))
+	}
+	if !strings.Contains(out, "soft.py") || !strings.Contains(out, "human:test") || strings.Contains(out, "\r") {
+		t.Errorf("frame:\n%s", out)
+	}
+	if code, out := gloss(t, "review", "--format", "frame", "--size", "wide", "--root", root); code == 0 {
+		t.Errorf("bad size accepted: %s", out)
+	}
+}

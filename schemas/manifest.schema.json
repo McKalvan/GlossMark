@@ -111,6 +111,24 @@
       "type": "string",
       "format": "date",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "planned": {
+      "description": "Capability the boundary will have (docs/adr/0034-ontology-first-increments.md): realizes, produces, consumes, publishes and subscribes it intends, with an optional inclusive deadline. A planned declaration is an ordinary declaration for the rollup, inherit and the derived allowed set; gloss drift reports it as a plan item (planned) instead of a gap until code under the boundary derives it, then planned-closed until it moves to the plain list, and plan-overdue once by has passed.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "realizes": { "$ref": "#/$defs/stringOrList" },
+        "produces": { "$ref": "#/$defs/stringOrList" },
+        "consumes": { "$ref": "#/$defs/stringOrList" },
+        "publishes": { "$ref": "#/$defs/stringOrList" },
+        "subscribes": { "$ref": "#/$defs/stringOrList" },
+        "by": {
+          "description": "The date (YYYY-MM-DD, inclusive) by which the planned declarations are due to be implemented.",
+          "type": "string",
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
     }
   },
   "$defs": {

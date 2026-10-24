@@ -176,6 +176,11 @@ func (c *checker) concepts() {
 		if n.CriticalityFrom == "declared" && !model.ValidCriticality(n.Criticality) {
 			c.add(n.File, n.Line, "error", "GM303", fmt.Sprintf("%s: unknown criticality %q; allowed: %s", n.CURIE, n.Criticality, strings.Join(model.CriticalityLevels, ", ")))
 		}
+		if n.Planned && n.PlanBy != "" {
+			if _, err := time.Parse(model.PlanDate, n.PlanBy); err != nil {
+				c.add(n.File, n.Line, "error", "GM307", fmt.Sprintf("%s: planned.by %q is not a YYYY-MM-DD date; the deadline is inclusive and drift reports plan-overdue after it", n.CURIE, n.PlanBy))
+			}
+		}
 		switch n.Tier {
 		case model.TierCore:
 			// Core may not reference any implementation namespace.

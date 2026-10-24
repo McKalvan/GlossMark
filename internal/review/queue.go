@@ -22,6 +22,9 @@ var findingKinds = map[string]bool{
 	rollup.KindViolation: true, rollup.KindGap: true, rollup.KindRogue: true, rollup.KindOrphan: true,
 	rollup.KindUntested: true, rollup.KindPresentedOnly: true, rollup.KindDangling: true, rollup.KindOverdue: true,
 	rollup.KindOutOfRange: true, rollup.KindDeprecatedUse: true, rollup.KindValueDrift: false,
+	// A closed plan item waits on the key being dropped; an overdue one on
+	// a date or a waiver. An open plan item waits on code, not a reviewer.
+	rollup.KindPlannedClosed: true, rollup.KindPlanOverdue: true, rollup.KindPlanned: false,
 }
 
 func buildQueue(st *State) []Item {
@@ -154,6 +157,11 @@ func findingItem(f rollup.Finding) Item {
 		Relation: f.Relation, Concept: f.Concept, Boundary: f.Boundary, Summary: f.Kind + ": " + f.Msg, Basis: basis(f.Msg),
 	}
 	why := []string{"a waiver edits glossmark.yaml"}
+	if f.Kind == rollup.KindPlannedClosed && f.Boundary == "" {
+		// The plan closed: dropping planned is bookkeeping, AUTO, as
+		// dropping proposed is (gloss accept --planned, ADR 0034).
+		it.Actions = append(it.Actions, action(ActAccept, gate.AUTO, []string{"the plan closed; dropping planned is bookkeeping"}))
+	}
 	if f.Kind == rollup.KindRogue {
 		// Proposing the concept answers the decision request with a
 		// proposal, which a human then accepts or rejects.

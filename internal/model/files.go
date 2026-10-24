@@ -361,6 +361,11 @@ type Concept struct {
 	// (gloss accept --concept) before it counts as part of the ontology.
 	Proposed   bool   `yaml:"proposed,omitempty" json:"proposed,omitempty"`
 	ProposedBy string `yaml:"proposed-by,omitempty" json:"proposed-by,omitempty"`
+	// Planned marks a concept the specification describes and nothing
+	// implements yet: `planned: true`, or `planned: { by: YYYY-MM-DD,
+	// ticket: <uri> }`. It is out of coverage and orphans and a plan item in
+	// drift until code implements it (ADR 0025 6.1, ADR 0034).
+	Planned *Plan `yaml:"planned,omitempty" json:"planned,omitempty"`
 	// Aliases are other names people and agents use for the concept; search matches them.
 	Aliases StringList `yaml:"aliases,omitempty" json:"aliases,omitempty"`
 	// Criticality classifies how much a change here matters (low | medium |
@@ -379,6 +384,84 @@ type Concept struct {
 	// becomes null keys, so both feed the GM304/GM305 lint. Not serialized.
 	NullKeys []string `yaml:"-" json:"-"`
 	Flow     bool     `yaml:"-" json:"-"`
+}
+
+// Plan is a planned: value. Both fields are optional: `planned: true` is a
+// plan with neither. By is YYYY-MM-DD, inclusive; Ticket is provenance the
+// tool never reads.
+type Plan struct {
+	By     string `yaml:"by,omitempty" json:"by,omitempty"`
+	Ticket string `yaml:"ticket,omitempty" json:"ticket,omitempty"`
+	// none records planned: false, which the loaders turn into no plan.
+	none bool
+}
+
+// PlanDate is the layout of a plan's by: date (and a waiver's expires:).
+const PlanDate = "2006-01-02"
+
+// UnmarshalYAML accepts true, false (no plan) or a { by, ticket } mapping.
+func (p *Plan) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		var b bool
+		if err := n.Decode(&b); err != nil {
+			return fmt.Errorf("line %d: planned: want true, false or { by: YYYY-MM-DD, ticket: <uri> }", n.Line)
+		}
+		*p = Plan{none: !b}
+		return nil
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k, v := n.Content[i], n.Content[i+1]
+			if v.Kind != yaml.ScalarNode {
+				return fmt.Errorf("line %d: planned.%s: want a scalar", v.Line, k.Value)
+			}
+			switch k.Value {
+			case "by":
+				p.By = v.Value
+			case "ticket":
+				p.Ticket = v.Value
+			default:
+				return fmt.Errorf("line %d: planned: unknown key %q; the keys are by and ticket", k.Line, k.Value)
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("line %d: planned: want true or { by: YYYY-MM-DD, ticket: <uri> }", n.Line)
+}
+
+// normalize returns nil for planned: false.
+func (p *Plan) normalize() *Plan {
+	if p == nil || p.none {
+		return nil
+	}
+	return p
+}
+
+// String renders the plan the way drift messages name it: "by 2026-11-30,
+// https://...", either part alone, or "" for a plan with neither.
+func (p *Plan) String() string {
+	if p == nil {
+		return ""
+	}
+	var parts []string
+	if p.By != "" {
+		parts = append(parts, "by "+p.By)
+	}
+	if p.Ticket != "" {
+		parts = append(parts, p.Ticket)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// Validate reports a by: that is not a YYYY-MM-DD date.
+func (p *Plan) Validate() error {
+	if p == nil || p.By == "" {
+		return nil
+	}
+	if _, err := time.Parse(PlanDate, p.By); err != nil {
+		return fmt.Errorf("planned.by must be a date (YYYY-MM-DD), got %q", p.By)
+	}
+	return nil
 }
 
 // ValueFrom names the code a concept's value comes from: a file and either
@@ -527,6 +610,9 @@ func LoadOntology(path string) (*Ontology, error) {
 			c.Line = o.Lines[name]
 		}
 	}
+	for _, c := range o.Concepts {
+		c.Planned = c.Planned.normalize()
+	}
 	return &o, nil
 }
 
@@ -575,6 +661,11 @@ type Manifest struct {
 	Deprecated bool   `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	ReplacedBy string `yaml:"replaced-by,omitempty" json:"replaced-by,omitempty"`
 	RetireBy   string `yaml:"retire-by,omitempty" json:"retire-by,omitempty"`
+	// Planned declares capability the boundary will have: an ordinary
+	// declaration for the rollup, inherit and the derived allowed set, which
+	// drift reports as a plan item instead of a gap until code under the
+	// boundary derives it (ADR 0034).
+	Planned *PlannedDecl `yaml:"planned,omitempty" json:"planned,omitempty"`
 
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
@@ -591,6 +682,47 @@ type Manifest struct {
 // list, such as realizes: [] on a boundary that is only a surface.
 func (m *Manifest) DeclaresNone(rel string) bool {
 	return m != nil && m.Empty[rel] && len(m.DeclaredSets()[rel]) == 0 && !m.Inherits(rel)
+}
+
+// PlannedDecl is a manifest's planned: block: the flows and realizations
+// the boundary intends to have by a date (ADR 0034).
+type PlannedDecl struct {
+	Realizes   StringList `yaml:"realizes,omitempty" json:"realizes,omitempty"`
+	Produces   StringList `yaml:"produces,omitempty" json:"produces,omitempty"`
+	Consumes   StringList `yaml:"consumes,omitempty" json:"consumes,omitempty"`
+	Publishes  StringList `yaml:"publishes,omitempty" json:"publishes,omitempty"`
+	Subscribes StringList `yaml:"subscribes,omitempty" json:"subscribes,omitempty"`
+	By         string     `yaml:"by,omitempty" json:"by,omitempty"`
+}
+
+// PlannedRelations are the manifest relations a planned: block may declare.
+var PlannedRelations = []string{"realizes", "produces", "consumes", "publishes", "subscribes"}
+
+// PlannedSets returns what the manifest plans, per relation (nil when it
+// plans nothing).
+func (m *Manifest) PlannedSets() map[string]StringList {
+	if m == nil || m.Planned == nil {
+		return nil
+	}
+	p := m.Planned
+	out := map[string]StringList{}
+	for rel, l := range map[string]StringList{"realizes": p.Realizes, "produces": p.Produces, "consumes": p.Consumes, "publishes": p.Publishes, "subscribes": p.Subscribes} {
+		if len(l) > 0 {
+			out[rel] = l
+		}
+	}
+	return out
+}
+
+// Plans reports whether the manifest's planned: block names target under
+// rel, as written (a CURIE or a bare name).
+func (m *Manifest) Plans(rel, target string) bool {
+	for _, t := range m.PlannedSets()[rel] {
+		if t == target {
+			return true
+		}
+	}
+	return false
 }
 
 // InheritMarker in a manifest's realizes:, holds:, produces:, consumes:,
@@ -651,7 +783,9 @@ func inheritable(rel string) bool {
 }
 
 // DeclaredSets returns the manifest's declared intent relations (without
-// the inherit marker on the relations that take it).
+// the inherit marker on the relations that take it), the planned: entries
+// included: a planned declaration is a declaration for every purpose but
+// the drift finding it produces (ADR 0034), and Plans tells them apart.
 func (m *Manifest) DeclaredSets() map[string]StringList {
 	out := m.lists()
 	for _, rel := range InheritableRelations {
@@ -662,6 +796,17 @@ func (m *Manifest) DeclaredSets() map[string]StringList {
 			}
 		}
 		out[rel] = kept
+	}
+	for rel, planned := range m.PlannedSets() {
+		for _, t := range planned {
+			dup := false
+			for _, r := range out[rel] {
+				dup = dup || r == t
+			}
+			if !dup {
+				out[rel] = append(out[rel], t)
+			}
+		}
 	}
 	return out
 }
@@ -703,12 +848,25 @@ func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
 	var unknown []UnknownKey
 	if len(doc.Content) == 1 && doc.Content[0].Kind == yaml.MappingNode {
 		known := yamlKeys(Manifest{})
+		plannedKeys := yamlKeys(PlannedDecl{})
 		mn := doc.Content[0]
 		var kept []*yaml.Node
 		for i := 0; i+1 < len(mn.Content); i += 2 {
 			if k := mn.Content[i]; !known[k.Value] {
 				unknown = append(unknown, UnknownKey{Key: k.Value, Line: k.Line})
 				continue
+			}
+			// A misspelt key inside planned: is reported at its line too.
+			if k, v := mn.Content[i], mn.Content[i+1]; k.Value == "planned" && v.Kind == yaml.MappingNode {
+				var pk []*yaml.Node
+				for j := 0; j+1 < len(v.Content); j += 2 {
+					if pkn := v.Content[j]; !plannedKeys[pkn.Value] {
+						unknown = append(unknown, UnknownKey{Key: "planned." + pkn.Value, Line: pkn.Line})
+						continue
+					}
+					pk = append(pk, v.Content[j], v.Content[j+1])
+				}
+				v.Content = pk
 			}
 			kept = append(kept, mn.Content[i], mn.Content[i+1])
 		}
@@ -755,6 +913,11 @@ func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
 	if m.RetireBy != "" {
 		if _, err := time.Parse("2006-01-02", m.RetireBy); err != nil {
 			return nil, unknown, fmt.Errorf("%s: retire-by must be a date (YYYY-MM-DD), got %q", path, m.RetireBy)
+		}
+	}
+	if m.Planned != nil && m.Planned.By != "" {
+		if _, err := time.Parse(PlanDate, m.Planned.By); err != nil {
+			return nil, unknown, fmt.Errorf("%s: planned.by must be a date (YYYY-MM-DD), got %q", path, m.Planned.By)
 		}
 	}
 	return &m, unknown, nil

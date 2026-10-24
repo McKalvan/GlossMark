@@ -437,9 +437,17 @@ function writeHash(){
   try{const h=S.slice?'#slice='+S.slice.seeds.map(encodeURIComponent).join(','):'';
     if(location.hash!==h)history.replaceState(null,'',h||location.pathname+location.search);}catch(e){}
 }
+// The hash names a slice (#slice=a,b), a view (#view=engineering), whether
+// every box opens (#open=all), or several joined by &. The TUI and writeHash
+// emit the bare slice form.
+function hashParam(k){
+  const m=new RegExp('(?:^#|[&;])'+k+'=([^&;]*)').exec(location.hash||'');if(!m)return null;
+  try{return decodeURIComponent(m[1]);}catch(e){return m[1];}
+}
+function viewFromHash(){const n=hashParam('view');const i=n?views.findIndex(v=>v&&v.name===n):-1;return i<0?0:i;}
 function readHash(){
-  const m=/^#slice=(.*)$/.exec(location.hash||'');if(!m)return null;
-  return m[1].split(',').map(x=>{try{return decodeURIComponent(x);}catch(e){return x;}}).filter(Boolean);
+  const v=hashParam('slice');if(v==null)return null;
+  return v.split(',').filter(Boolean);
 }
 
 /* ---- containment ---- */
@@ -1269,7 +1277,7 @@ window.glossViewer={
 
 /* ---- go ---- */
 applyTheme(saved);
-try{loadView(0);const hs=readHash();if(hs&&SL)setSlice(hs,true);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
+try{loadView(viewFromHash());sel.value=S.vi;if(hashParam('open')==='all')$('expandAll').onclick();const hs=readHash();if(hs&&SL)setSlice(hs,true);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
 window.addEventListener('hashchange',()=>{if(SL)setSlice(readHash(),true);});
 })();
 </script>
