@@ -2284,8 +2284,8 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 }
 
 // TestPlacement: every concept in a projection says why it sits where it
-// does. housed and unlinked come from the examples; shared, flow, bound and
-// surface do not occur there, so a small fixture covers them.
+// does. housed and unlinked come from the examples; shared, flow, bound,
+// surface, shape and planned do not occur there, so a small fixture covers them.
 func TestPlacement(t *testing.T) {
 	type want struct{ view, concept, placement, reason string }
 	expect := func(t *testing.T, root string, wants []want) {
@@ -2334,7 +2334,9 @@ func TestPlacement(t *testing.T) {
 	write("ontology/z.gloss.yaml", "concepts:\n  Thing: { kind: process }\n  Budgeting: { kind: process }\n"+
 		"  Evt: { kind: event }\n  Report: { kind: entity }\n  Out: { kind: entity }\n"+
 		"  In: { kind: entity }\n  Store: { kind: entity }\n  Cached: { kind: entity }\n"+
-		"  Cutoff: { kind: constraint, value: \"3\", value-from: { path: cfg.py, symbol: CUTOFF } }\n")
+		"  Cutoff: { kind: constraint, value: \"3\", value-from: { path: cfg.py, symbol: CUTOFF } }\n"+
+		"  Future: { kind: process, planned: { ticket: https://x/1 } }\n  Someday: { kind: process, planned: true }\n"+
+		"  Next: { kind: process, planned: { by: 2099-01-01 } }\n")
 	write("ontology/views.yaml", "views:\n  all:\n    include: [z:*, i:*]\n    zoom: container\n")
 	write("cfg.py", "CUTOFF = 3\n")
 	write("a/.gloss.yaml", "boundary: o:a\nlevel: container\nrealizes: [z:Thing]\nproduces: [z:Out]\n")
@@ -2348,7 +2350,7 @@ func TestPlacement(t *testing.T) {
 	write("sys/q/.gloss.yaml", "boundary: o:q\nlevel: container\nsubscribes: [z:Evt]\nconsumes: [z:In]\n")
 	write("sys/q/q.py", "# @gloss subscribes z:Evt\n# @gloss consumes z:In\ndef q(): pass\n")
 	write("sys/q/cache.py", "# @gloss represents z:Cached\nclass CachedRow: pass\n")
-	write("web/.gloss.yaml", "boundary: o:web\nlevel: container\npresents: [z:Budgeting]\n")
+	write("web/.gloss.yaml", "boundary: o:web\nlevel: container\npresents: [z:Budgeting]\nplanned: { realizes: [z:Next] }\n")
 	write("web/page.tsx", "// @gloss presents z:Budgeting\nexport function Page() {}\n")
 	expect(t, root, []want{
 		{"all", "z:Thing", views.PlacementShared, "realized or held by o:a, o:b"},
@@ -2366,7 +2368,39 @@ func TestPlacement(t *testing.T) {
 		{"all", "i:Rows", views.PlacementHoused, "inside o:p"},
 		{"all", "z:Store", views.PlacementHoused, "inside o:p"},
 		{"all", "z:Cached", views.PlacementShape, "represented by o:q, which declares no holds for it"},
+		// ADR 0038: a planned concept nothing places says so; one a manifest
+		// plans is housed there like any declared concept.
+		{"all", "z:Future", views.PlacementPlanned, "planned (https://x/1); no manifest plans it"},
+		{"all", "z:Someday", views.PlacementPlanned, "planned; no manifest plans it"},
+		{"all", "z:Next", views.PlacementHoused, "inside o:web"},
 	})
+	ws, g, _, _ := build(t, root)
+	var pr *views.Projection
+	for _, p := range views.ProjectAll(g, ws.Views) {
+		if p.Name == "all" {
+			pr = p
+		}
+	}
+	for _, n := range pr.Nodes {
+		if n.ID == "z:Next" && (!n.Planned || n.PlanBy != "2099-01-01") {
+			t.Errorf("z:Next = %+v, want planned by 2099-01-01", n)
+		}
+		if n.ID == "z:Thing" && n.Planned {
+			t.Errorf("z:Thing is not planned: %+v", n)
+		}
+	}
+	planned := 0
+	for _, e := range pr.Edges {
+		if e.Planned {
+			planned++
+			if e.S != "o:web" || e.P != "realizes" || e.O != "z:Next" {
+				t.Errorf("only o:web's planned realizes is a planned edge, got %+v", e)
+			}
+		}
+	}
+	if planned != 1 {
+		t.Errorf("got %d planned edges, want 1 (o:web realizes z:Next)", planned)
+	}
 }
 
 // TestManifestRelationsDocumented: the Manifest column of ADVANCED.md's

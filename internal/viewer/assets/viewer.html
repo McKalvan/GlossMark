@@ -93,9 +93,10 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .sw.o{background:var(--boundary-open);width:22px;height:16px;border-radius:4px}
 .sw.u{background:transparent;border:1.5px dashed var(--muted);width:22px;height:16px;border-radius:4px}
 .sw.i{border-style:dashed}.sw.p{box-shadow:0 0 0 2px var(--gold)}
+.sw.pl{background:color-mix(in srgb,var(--boundary-fill) 25%,transparent)}.sw.pl.od{outline:2px dashed var(--hard);outline-offset:1px}
 .sw.k{background:transparent;border-width:2.5px}
 .sw.k.low{border-color:var(--crit-low)}.sw.k.medium{border-color:var(--crit-medium)}.sw.k.high{border-color:var(--crit-high)}.sw.k.critical{border-color:var(--crit-critical)}
-.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}
+.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}.ln.pl{opacity:.45}
 .ln.add{border-color:var(--added)}.ln.rem{border-color:var(--removed)}
 .gate{font-weight:650;padding:1px 6px;border-radius:4px;color:#fff;font-size:11px}
 .gate.HARD{background:var(--hard)}.gate.SOFT{background:var(--soft)}.gate.AUTO{background:var(--auto)}
@@ -224,7 +225,7 @@ const critRank=l=>CRIT.indexOf(l||'');
 const PAD=22,TITLE=24;
 /* Placement of a concept (see docs/FILE-FORMATS.md), in precedence order. Unplaced
    concepts are drawn in one labelled group per value, outside the boundary boxes. */
-const PLACEMENTS=['housed','shared','flow','bound','surface','shape','unlinked'];
+const PLACEMENTS=['housed','shared','flow','bound','surface','shape','planned','unlinked'];
 const PLACEDEFS={
   housed:'Inside a boundary box: a boundary\u2019s code realizes it or its manifest declares it holds it; otherwise the nearest box enclosing what produces and uses it.',
   shared:'Unplaced: several unrelated boundaries realize or hold it and no boundary encloses them all. A common parent manifest may be missing.',
@@ -232,8 +233,16 @@ const PLACEDEFS={
   bound:'Unplaced: its value is bound to a line of code with value-from or publishes-value.',
   surface:'Unplaced: only pages present it or shells host it.',
   shape:'Unplaced: code represents it, but no boundary declares it holds it: a copy, a cache or a payload of data owned elsewhere.',
+  planned:'Unplaced: the concept is planned and no manifest plans it yet. Add it to the planned: block of the boundary that will build it (ADR 0034).',
   unlinked:'Unplaced: no boundary or artifact places it or flows it. Usually nothing links to it; gloss drift reports such a concept as an orphan.'};
 const placeRank=v=>{const i=PLACEMENTS.indexOf(v);return i<0?PLACEMENTS.length:i;};
+// A plan is overdue the day after its by date, by the reader's calendar (ADR 0038).
+const TODAY=(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date());
+const planState=n=>!n.planned?'':n.planBy&&n.planBy<TODAY?'overdue':'planned';
+const PLANDEFS={
+  built:'Concepts that are not planned: specified and, if anything implements them, built.',
+  planned:'Faint fill: a planned concept (planned: in its tier file), specified and not built yet. gloss drift lists it under plan items.',
+  overdue:'Faint fill, dashed red ring: a planned concept whose by date has passed. gloss drift reports it plan-overdue.'};
 const GROUP='__placement:';
 
 /* Per-view diff overlay: sets of added/removed/changed ids and edge keys. */
@@ -259,7 +268,7 @@ function readTheme(){
   const g=n=>cs.getPropertyValue(n).trim();
   C={bg:g('--canvas'),grid:g('--grid'),bFill:g('--boundary-fill'),bStroke:g('--boundary-stroke'),bOpen:g('--boundary-open'),aFill:g('--artifact-fill'),
      edge:g('--edge'),contain:g('--edge-contain'),label:g('--label'),halo:g('--label-halo'),gold:g('--gold'),added:g('--added'),
-     removed:g('--removed'),changed:g('--changed'),select:g('--select'),muted:g('--muted'),
+     removed:g('--removed'),changed:g('--changed'),select:g('--select'),muted:g('--muted'),hard:g('--hard'),
      crit:{low:g('--crit-low'),medium:g('--crit-medium'),high:g('--crit-high'),critical:g('--crit-critical')},
      ns:g('--node-sat'),nl:g('--node-light'),ss:g('--stroke-sat'),sl:g('--stroke-light')};
 }
@@ -275,7 +284,7 @@ function nodeColours(n){
 const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
-const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set()});
+const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set()});
 const S={slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},camMoved:false,theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
@@ -332,6 +341,7 @@ function hiddenByFilter(n){
     if(F.tier.has(n.tier||''))return true;
     if(F.kind.has(n.kind||''))return true;
     if(F.place.has(n.placement||''))return true;
+    if(F.plan.has(planState(n)||'built'))return true;
   }
   if(n.type==='boundary'&&F.level.has(n.kind||''))return true;
   if(F.crit.has(n.criticality||''))return true;
@@ -349,6 +359,7 @@ function buildFilters(){
     {key:'level',label:'Level',counts:count(n=>n.type==='boundary'?(n.kind||''):undefined)},
     {key:'crit',label:'Criticality',counts:count(n=>n.criticality||''),order:v=>critRank(v),dot:true},
     {key:'place',label:'Placement',counts:count(n=>n.type==='concept'&&!n.ghost?(n.placement||''):undefined),order:v=>placeRank(v),tip:v=>PLACEDEFS[v]},
+    {key:'plan',label:'Plan',counts:count(n=>n.type==='concept'&&!n.ghost?(planState(n)||'built'):undefined),order:v=>['built','planned','overdue'].indexOf(v),tip:v=>PLANDEFS[v]},
   ];
   groups.forEach(g=>{
     const vals=[...g.counts.keys()];
@@ -531,9 +542,9 @@ function rebuild(seedAll){
     if(e.p==='part-of'&&under(a,b))return;
     const k=a.id+'|'+e.p+'|'+b.id;
     let g=agg.get(k);
-    if(!g){g={s:a,o:b,p:e.p,src:new Set(),count:0,via:new Set(),lifted:false,proposed:true,rerouted:false,parts:[],diff:''};agg.set(k,g);}
+    if(!g){g={s:a,o:b,p:e.p,src:new Set(),count:0,via:new Set(),lifted:false,proposed:true,planned:true,rerouted:false,parts:[],diff:''};agg.set(k,g);}
     g.src.add(e.source||'declared');g.count+=e.count||1;(e.via||[]).forEach(v=>g.via.add(v));
-    if(e.lifted)g.lifted=true;if(!e.proposed)g.proposed=false;
+    if(e.lifted)g.lifted=true;if(!e.proposed)g.proposed=false;if(!e.planned)g.planned=false;
     if(a.id!==e.s||b.id!==e.o)g.rerouted=true;
     g.parts.push(e);
     const ek=ekey(e);
@@ -812,6 +823,7 @@ function draw(){
     const hl=selEdge===e||(selNode&&(e.s===selNode||e.o===selNode))||S.hover===e;
     if(selNode&&!hl)alpha*=.5;
     if(e.contain)alpha*=.8;
+    if(e.planned)alpha*=.45;
     ctx.globalAlpha=e.diff==='removed'?alpha*.55:alpha;
     ctx.strokeStyle=e.contain?C.contain:e.diff==='added'?C.added:e.diff==='removed'?C.removed:hl?C.select:C.edge;
     ctx.lineWidth=(e.contain?1:edgeWidth(e))*(hl?1.6:1);
@@ -848,12 +860,15 @@ function draw(){
     if(n.type==='boundary')ctx.roundRect(p.x-n._w/2,p.y-n._h/2,n._w,n._h,8);
     else if(n.type==='artifact')ctx.rect(p.x-6,p.y-6,12,12);
     else ctx.arc(p.x,p.y,n._r,0,Math.PI*2);
-    ctx.fill();ctx.stroke();ctx.setLineDash([]);
+    // Planned: a quarter of the fill, the outline as usual (ADR 0038).
+    if(n.planned&&!n.ghost){ctx.globalAlpha=alpha*.25;ctx.fill();ctx.globalAlpha=alpha;}else ctx.fill();
+    ctx.stroke();ctx.setLineDash([]);
     let ring=n._r+3.5;
     if(cc&&n.type!=='boundary'){ // criticality ring
       ctx.strokeStyle=cc;ctx.lineWidth=2.2;ctx.beginPath();
       if(n.type==='artifact')ctx.rect(p.x-9,p.y-9,18,18);else ctx.arc(p.x,p.y,ring,0,Math.PI*2);ctx.stroke();ring+=3.5;
     }
+    if(planState(n)==='overdue'){ctx.strokeStyle=C.hard;ctx.lineWidth=2;ctx.setLineDash([3,2]);ctx.beginPath();ctx.arc(p.x,p.y,ring,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ring+=3.5;}
     if(n.published){ctx.strokeStyle=C.gold;ctx.lineWidth=2.5;ctx.beginPath();
       if(n.type==='boundary')ctx.roundRect(p.x-n._w/2-4,p.y-n._h/2-4,n._w+8,n._h+8,11);else ctx.arc(p.x,p.y,ring+1,0,Math.PI*2);ctx.stroke();}
     if(n._diff==='changed'){ctx.strokeStyle=C.changed;ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.beginPath();
@@ -918,6 +933,7 @@ function nodeTip(n){
   if(n.criticality)h+=`<br><span class="k">criticality</span> ${esc(critText(n))}`;
   if(n.owner)h+=`<br><span class="k">owner</span> ${esc(n.owner)}`;
   if(n.published)h+=`<br><span class="k">published as</span> ${esc(n.publishedAs||'')}`;
+  if(n.planned)h+=`<br><span class="k">${planState(n)}</span>${n.planBy?' by '+esc(n.planBy):''}${n.planTicket?' · '+esc(n.planTicket):''}`;
   if(n.deprecated)h+=`<br><span class="k">deprecated</span>${n.replacedBy?' → '+esc(n.replacedBy):''}${n.retireBy?' · retire by '+esc(n.retireBy):''}`;
   if(n.value!=null)h+=`<br><span class="k">value</span> ${esc(typeof n.value==='object'?JSON.stringify(n.value):n.value)}`;
   if(n.liveValue)h+=`<br><span class="k">live</span> <span class="mono">${esc(n.liveValue)}</span>`;
@@ -931,7 +947,7 @@ function nodeTip(n){
 }
 function edgeTip(e){
   const iface=(e.s._open&&under(e.o,e.s))||(e.o._open&&under(e.s,e.o));
-  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
+  let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.planned?' · planned':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
   if(e.via&&e.via.size)h+=`<br><span class="k">via</span><ul>${[...e.via].slice(0,10).map(v=>'<li>'+esc(v)+'</li>').join('')}${e.via.size>10?'<li>…</li>':''}</ul>`;
   return h;
 }
@@ -985,6 +1001,10 @@ function renderPanel(){
     const sr=S.slice&&S.slice.roles.get(n.id);
     if(sr)row('slice role','<b title="'+esc(SLICEDEFS[sr.role]||'')+'">'+esc(sr.role)+'</b>'+(sr.member!==n.id?' <span class="via">as '+esc(sr.member)+'</span>':'')+(sr.via.length?'<div class="via">via '+sr.via.map(esc).join('<br>→ ')+'</div>':''));
     row('published as',n.published?esc(n.publishedAs||'yes'):'');
+    if(n.planned){const t=n.planTicket||'',st=planState(n);
+      row('planned','<b'+(st==='overdue'?' style="color:var(--hard)"':'')+'>'+(st==='overdue'?'overdue':'yes')+'</b>'+(n.planBy?' · by '+esc(n.planBy):'')+
+        (t?' · '+(/^https?:\/\//i.test(t)?'<a href="'+esc(t)+'" target="_blank" rel="noopener noreferrer">'+esc(t)+'</a>':esc(t)):'')+
+        '<div class="via">specified, not built yet: drift lists it under plan items until code implements it</div>');}
     row('deprecated',n.deprecated?'<b>yes</b>'+(n.replacedBy?' · replaced by '+(byId.get(n.replacedBy)?nodeLink(byId.get(n.replacedBy)):esc(n.replacedBy)):'')+(n.retireBy?' · retire by '+esc(n.retireBy):''):'');
     row('value',n.value!=null?esc(typeof n.value==='object'?JSON.stringify(n.value):n.value):'');
     if(n.liveValue){const at=n.valueFrom||'',i=at.lastIndexOf(':');row('live value','<span class="mono">'+esc(n.liveValue)+'</span><br>'+srcLink(i>0?at.slice(0,i):at,i>0?+at.slice(i+1):0));}
@@ -1005,14 +1025,14 @@ function renderPanel(){
     if(kids.length)h+=`<div><span style="color:var(--muted)">inside (${kids.length}) · ${S.expanded.has(n.id)?'open':'closed'}</span><ul>${kids.map(k=>'<li>'+nodeLink(k)+(k.type==='boundary'?' <span class="badge">'+esc(k.kind||'boundary')+'</span>':'')+(k.criticality?' '+critPill(k.criticality):'')+(k.internal?' <span class="via">internal</span>':'')+'</li>').join('')}</ul></div>`;
     if(n.folded&&n.folded.length)h+=`<div><span style="color:var(--muted)">folded into this node (${n.folded.length})</span><ul>${n.folded.map(f=>'<li class="mono">'+esc(f)+'</li>').join('')}</ul></div>`;
     const out=VE.filter(e=>!e.contain&&e.s===n),inn=VE.filter(e=>!e.contain&&e.o===n);
-    const edgeLi=(e,other,arrow)=>`<li>${arrow} <b title="${esc(relDef(e.p))}">${esc(e.p)}</b> ${arrow} ${nodeLink(other)} <span class="via">${esc(e.source)}${e.proposed?' · proposed':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''}${e.count>1?' · ×'+e.count:''}</span>${e.via.size?'<div class="via">via '+[...e.via].map(esc).join(', ')+'</div>':''}</li>`;
+    const edgeLi=(e,other,arrow)=>`<li>${arrow} <b title="${esc(relDef(e.p))}">${esc(e.p)}</b> ${arrow} ${nodeLink(other)} <span class="via">${esc(e.source)}${e.proposed?' · proposed':''}${e.planned?' · planned':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''}${e.count>1?' · ×'+e.count:''}</span>${e.via.size?'<div class="via">via '+[...e.via].map(esc).join(', ')+'</div>':''}</li>`;
     h+=`<h2>Outgoing (${out.length})</h2><ul>${out.map(e=>edgeLi(e,e.o,'→')).join('')||'<li class="via">none</li>'}</ul>`;
     h+=`<h2>Incoming (${inn.length})</h2><ul>${inn.map(e=>edgeLi(e,e.s,'←')).join('')||'<li class="via">none</li>'}</ul>`;
     }
   }else if(sel){
     const e=sel;
     h+=`<h2>Selected edge</h2><div>${nodeLink(e.s)} <b>—${esc(e.p)}→</b> ${nodeLink(e.o)}</div><dl><dt>meaning</dt><dd>${esc(relDef(e.p))}</dd><dt>source</dt><dd>${esc(e.source)}</dd><dt>count</dt><dd>${e.count}</dd>`;
-    if(e.proposed)h+='<dt>proposed</dt><dd>yes</dd>';if(e.lifted)h+='<dt>lifted</dt><dd>yes</dd>';if(e.diff)h+=`<dt>diff</dt><dd>${esc(e.diff)}</dd>`;
+    if(e.proposed)h+='<dt>proposed</dt><dd>yes</dd>';if(e.planned)h+='<dt>planned</dt><dd>yes</dd>';if(e.lifted)h+='<dt>lifted</dt><dd>yes</dd>';if(e.diff)h+=`<dt>diff</dt><dd>${esc(e.diff)}</dd>`;
     if(e.rerouted)h+=`<dt>underlying</dt><dd>${e.parts.map(p=>esc(p.s)+' → '+esc(p.o)).join('<br>')}</dd>`;
     if(e.via.size)h+=`<dt>via</dt><dd class="via">${[...e.via].map(esc).join('<br>')}</dd>`;h+='</dl>';
   }else{
@@ -1071,7 +1091,9 @@ const LEGEND=[
     ['<i class="sw a"></i>','artifact','A function, class, file, test or page that a @gloss marker links to a concept or boundary.']]},
   {name:'Concept styles',items:[
     ['<i class="sw c i"></i>','implementation tier','Dashed outline: a concept in an implementation-tier namespace (such as impl:), a mechanism such as a handler, pipeline or queue that realizes a core concept.'],
-    ['<i class="sw c p"></i>','published','Gold ring: a concept written as published: { as: core:X }, the only seam between tiers and across repositories.']]},
+    ['<i class="sw c p"></i>','published','Gold ring: a concept written as published: { as: core:X }, the only seam between tiers and across repositories.'],
+    ['<i class="sw c pl"></i>','planned',PLANDEFS.planned],
+    ['<i class="sw c pl od"></i>','overdue',PLANDEFS.overdue]]},
   {name:'Placement',unplaced:true,items:PLACEMENTS.map(v=>[v==='housed'?'<i class="sw o"></i>':'<i class="sw u"></i>',v,PLACEDEFS[v]]),
    note:'A concept no boundary houses is drawn in a dashed group outside the boxes, one group per value. The first value that applies wins, in this order.'},
   {name:'Criticality',items:[
@@ -1085,6 +1107,7 @@ const LEGEND=[
     ['<i class="ln thin"></i>','inline','Thin line: from a @gloss marker in the code.'],
     ['<i class="ln d"></i>','derived','Dashed line: derived by the rollup rules (such as the realization lift); written by the tool, never by hand.'],
     ['<i class="ln dot"></i>','proposed','Dotted line: a proposal (@gloss? or a proposed: true entry) that a human has not yet accepted.'],
+    ['<i class="ln pl"></i>','planned','Faint line: declared only in a manifest\u2019s planned: block, capability the boundary will have.'],
     ['<i class="ln thick"></i>','lifted','Thick line marked ↑: a boundary’s links to several concepts lifted to their least common subsumer (is-a); the panel lists the originals under via.']]},
   {name:'Diff',diff:true,items:[
     ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.'],
