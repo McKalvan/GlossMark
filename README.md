@@ -1,7 +1,7 @@
 <!-- @gloss documents arch:glossmark scope=file -->
 # GlossMark
 
-As agents write more of the code, nobody can keep up with what the system *means*. GlossMark gives every artifact (code, tests, Terraform, configs, CI, docs, agent files) one comment line naming the domain concept it serves, so the concept becomes the join key across all of them, and the vocabulary is owned, reviewed and gated instead of regenerated from the code each time someone asks.
+As agents write more of the code, it changes faster than its reviewers can keep track of the concepts it introduces. GlossMark gives every artifact (code, tests, Terraform, configs, CI, docs, agent files) one comment line naming the domain concept it serves, so the concept becomes the join key across all of them, and the vocabulary is owned, reviewed and gated instead of regenerated from the code each time someone asks.
 
 ```python
 # @gloss implements circ:BookIntake

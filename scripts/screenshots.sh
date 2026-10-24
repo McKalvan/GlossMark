@@ -6,8 +6,8 @@
 # pins in its GLOSS_REF): the viewer's #view= and #open= hash and the review
 # terminal's --format frame are newer than v0.2.0.
 #
-# Needs: go, chromium (CHROMIUM=), freeze (FREEZE=; go install
-# github.com/charmbracelet/freeze@latest) and a checkout of
+# Needs: go, chromium (CHROMIUM=), ImageMagick (MAGICK=), freeze (FREEZE=;
+# go install github.com/charmbracelet/freeze@latest) and a checkout of
 # https://github.com/McKalvan/glossmark-examples beside this repository
 # (GLOSS_EXAMPLES= to point elsewhere).
 set -euo pipefail
@@ -15,12 +15,14 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 EXAMPLES=${GLOSS_EXAMPLES:-$ROOT/../glossmark-examples}
 CHROMIUM=${CHROMIUM:-chromium}
+MAGICK=${MAGICK:-magick}
 FREEZE=${FREEZE:-$(go env GOPATH)/bin/freeze}
 OUT=$ROOT/docs/img
 SHOWCASE=$EXAMPLES/showcase
 
 [ -d "$SHOWCASE/clinic-booking" ] || { echo "no showcase at $SHOWCASE: clone glossmark-examples beside this repo or set GLOSS_EXAMPLES" >&2; exit 1; }
 command -v "$CHROMIUM" >/dev/null || { echo "chromium not found: set CHROMIUM=" >&2; exit 1; }
+command -v "$MAGICK" >/dev/null || { echo "ImageMagick not found: set MAGICK=" >&2; exit 1; }
 [ -x "$FREEZE" ] || { echo "freeze not found at $FREEZE: go install github.com/charmbracelet/freeze@latest" >&2; exit 1; }
 
 TMP=$(mktemp -d)
@@ -30,7 +32,7 @@ mkdir -p "$OUT"
 
 # shot NAME WIDTH HEIGHT SCALE URL: one headless screenshot.
 shot() {
-  "$CHROMIUM" --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+  timeout 90 "$CHROMIUM" --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
     --force-device-scale-factor="$4" --window-size="$2,$3" --virtual-time-budget=4000 \
     --screenshot="$OUT/$1.png" "$5" >/dev/null 2>&1
   [ -s "$OUT/$1.png" ] || { echo "chromium wrote nothing for $1" >&2; exit 1; }
@@ -43,12 +45,16 @@ shot viewer-slice 1440 900 1 "file://$TMP/clinic.html#view=engineering&slice=cli
 shot viewer-business 1440 900 1 "file://$TMP/clinic.html#view=business&open=all"
 
 # The review terminal: one frame of the kitchen-agents queue, rendered to SVG
-# by freeze and rasterised at 2x. A fixed actor keeps the header reproducible.
+# by freeze and rasterised at 2x. A fixed actor keeps the header reproducible;
+# freeze reads stdin when it is a pipe, so it gets none.
+# Chromium clips an SVG whose height equals the viewport's, so the viewport is
+# taller than the image and the white below it is trimmed off afterwards.
 (cd "$SHOWCASE/kitchen-agents" && GLOSS_ACTOR=human:reviewer "$FREEZE" \
   --execute "$TMP/gloss review --format frame --size 120x30" \
-  --output "$TMP/review.svg" --window --padding 14,20 --font.family Hack --font.size 11 --theme dracula >/dev/null)
+  --output "$TMP/review.svg" --window --padding 14,20 --font.family Hack --font.size 11 --theme dracula </dev/null >/dev/null)
 W=$(grep -o 'width="[0-9.]*"' "$TMP/review.svg" | head -1 | tr -dc 0-9.)
 H=$(grep -o 'height="[0-9.]*"' "$TMP/review.svg" | head -1 | tr -dc 0-9.)
-shot review-terminal "${W%.*}" "${H%.*}" 2 "file://$TMP/review.svg"
+shot review-terminal "${W%.*}" "$(( ${H%.*} + 120 ))" 2 "file://$TMP/review.svg"
+"$MAGICK" "$OUT/review-terminal.png" -trim +repage "$OUT/review-terminal.png"
 
 ls -l "$OUT"/*.png
