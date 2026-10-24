@@ -193,6 +193,10 @@ type Options struct {
 	// reports a change that rewrites the actor or reviewer of a marker the
 	// base already recorded. Nil skips the comparison.
 	BaseLedger map[string]*model.LedgerEntry
+	// BaseHardPaths are the hard-paths of the base's policy. The head's
+	// policy is the change's to edit, so a path is HARD when either names it:
+	// dropping a glob from hard-paths cannot exempt the same change (#187).
+	BaseHardPaths []string
 }
 
 // Classify diffs base against head.
@@ -1228,6 +1232,7 @@ func semver(s string) []int {
 // HARD whatever its semantic class (bookkeeping aside), and a changed file
 // the graph did not explain is reported on its own.
 func (c *classifier) paths() {
+	hard := append(slices.Clone(c.opt.Policy.HardPaths), c.opt.BaseHardPaths...)
 	seen := map[string]bool{}
 	for i := range c.im.Changes {
 		ch := &c.im.Changes[i]
@@ -1240,16 +1245,16 @@ func (c *classifier) paths() {
 		if !bookkeeping[ch.Kind] || explains[ch.Kind] {
 			seen[ch.Path] = true
 		}
-		if ch.Gate != HARD && ch.Path != "" && !bookkeeping[ch.Kind] && model.MatchAnyGlob(c.opt.Policy.HardPaths, ch.Path) {
+		if ch.Gate != HARD && ch.Path != "" && !bookkeeping[ch.Kind] && model.MatchAnyGlob(hard, ch.Path) {
 			ch.Gate = HARD
-			ch.Reasons = append(ch.Reasons, "edit to ontology/ or manifests (hard-paths)")
+			ch.Reasons = append(ch.Reasons, "edit under hard-paths")
 		}
 	}
 	for _, f := range c.opt.ChangedFiles {
-		if seen[f] || !model.MatchAnyGlob(c.opt.Policy.HardPaths, f) {
+		if seen[f] || !model.MatchAnyGlob(hard, f) {
 			continue
 		}
-		c.add(Change{Gate: HARD, Kind: "hard-path", Glyph: "!", Path: f, Reasons: []string{"edit to ontology/ or manifests"}, Msg: fmt.Sprintf("%s changed", f)})
+		c.add(Change{Gate: HARD, Kind: "hard-path", Glyph: "!", Path: f, Reasons: []string{"edit under hard-paths"}, Msg: fmt.Sprintf("%s changed", f)})
 	}
 }
 

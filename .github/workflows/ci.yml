@@ -60,7 +60,8 @@ jobs:
   # every finding kind but overlap (the command line and the library it calls
   # realize the same concepts by design, ADR 0019), stale links included, and
   # concept coverage stays at 100%. On a pull request it posts the impact
-  # comment and fails a HARD change until a reviewer labels it ontology-approved.
+  # comment. It does not gate: the PR's own action.yml and gloss would judge
+  # the PR (#187), so the gate job below does that with the base's.
   glossmark:
     runs-on: ubuntu-latest
     permissions:
@@ -75,11 +76,43 @@ jobs:
           check-graph: "true"
           drift-fail-on: violation,value-drift,gap,dangling,overdue,planned-closed,plan-overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
           coverage-fail-under: "100"
-          # The label approves the commits a reviewer saw: a push (synchronize)
-          # is gated again, and approval-reset takes the label off.
-          fail-on: ${{ contains(github.event.pull_request.labels.*.name, 'ontology-approved') && github.event.action != 'synchronize' && 'none' || 'HARD' }}
+          fail-on: none
           # A fork's token cannot comment; its PRs still get the gate.
           comment: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+  # The gate: gloss built from the base commit classifies the PR, so a PR that
+  # edits the Gate step, action.yml, cmd/gloss or internal/gate is judged by
+  # the code it changes, not by its changed copy (#187). A HARD change fails
+  # until a reviewer labels it ontology-approved.
+  gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with: { go-version: stable, cache: true }
+      - name: Build gloss from the base commit
+        env: { BASE_SHA: "${{ github.event.pull_request.base.sha }}" }
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/base-tool" "$BASE_SHA"
+          (cd "$RUNNER_TEMP/base-tool" && go build -trimpath -o "$RUNNER_TEMP/gate-bin/gloss" ./cmd/gloss)
+          git worktree remove --force "$RUNNER_TEMP/base-tool"
+      - name: gloss diff (base binary)
+        env:
+          BASE_SHA: "${{ github.event.pull_request.base.sha }}"
+          AUTHOR: "${{ github.event.pull_request.user.login }}"
+          AUTHOR_TYPE: "${{ github.event.pull_request.user.type }}"
+          # The label approves the commits a reviewer saw: a push (synchronize)
+          # is gated again, and approval-reset takes the label off.
+          FAIL_ON: ${{ contains(github.event.pull_request.labels.*.name, 'ontology-approved') && github.event.action != 'synchronize' && 'none' || 'HARD' }}
+        run: |
+          GLOSS="$RUNNER_TEMP/gate-bin/gloss"
+          if [ "$AUTHOR_TYPE" = "Bot" ]; then ACTOR="agent:${AUTHOR%\[bot\]}"; else ACTOR="human:$(printf '%s' "$AUTHOR" | tr '[:upper:]' '[:lower:]')"; fi
+          # A base from before --actor existed gates without it.
+          set -- --base "$BASE_SHA" --fail-on "$FAIL_ON"
+          if "$GLOSS" diff -h 2>&1 | grep -q -- '-actor'; then set -- "$@" --actor "$ACTOR"; fi
+          "$GLOSS" diff "$@"
 
   # A push after ontology-approved invalidates it: the label is removed, so a
   # reviewer re-applies it to the new commits (the labeled event re-runs the gate).

@@ -395,3 +395,25 @@ func TestGateActorFromCI(t *testing.T) {
 		t.Errorf("re-review reported as rewritten %d times", n)
 	}
 }
+
+// TestBaseHardPaths: the head's policy is the change's own to edit, so a
+// path the base's hard-paths names stays HARD even when the same change
+// drops it from glossmark.yaml (#187).
+func TestBaseHardPaths(t *testing.T) {
+	root, write := tempRepo(t)
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  Doing: { kind: process }\n")
+	write(".gloss.yaml", "boundary: o:b\nlevel: container\n")
+	write("ci/gate.sh", "# @gloss implements z:Doing scope=file\necho gate\n")
+	_, base, _, _ := build(t, root)
+	write("ci/gate.sh", "# @gloss implements z:Doing scope=file\necho skipped\n")
+	ws, head, _, _ := build(t, root)
+	opt := gate.Options{Base: "base", Policy: ws.Config.EffectivePolicy(), ChangedFiles: []string{"ci/gate.sh"}}
+	if im := gate.Classify(base, head, ws, opt); im.Gate == gate.HARD {
+		t.Fatalf("ci/gate.sh is under no hard path yet: %+v", im.Changes)
+	}
+	opt.BaseHardPaths = []string{"ci/**"}
+	if im := gate.Classify(base, head, ws, opt); im.Gate != gate.HARD {
+		t.Errorf("ci/gate.sh is under the base's hard-paths: gate %s, %+v", im.Gate, im.Changes)
+	}
+}

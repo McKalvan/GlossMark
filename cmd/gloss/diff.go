@@ -58,7 +58,7 @@ func cmdDiff(args []string) int {
 		label += " (no graph)"
 	}
 	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption, BaseViews: baseViews(head.WS, *base),
-		Actor: *actor, BaseLedger: baseLedger(head.WS, *base)})
+		Actor: *actor, BaseLedger: baseLedger(head.WS, *base), BaseHardPaths: baseHardPaths(head.WS, *base)})
 	var buf bytes.Buffer
 	switch *format {
 	case "json":
@@ -191,6 +191,27 @@ func baseViews(ws *load.Workspace, ref string) *model.Views {
 		return nil
 	}
 	return v
+}
+
+// baseHardPaths reads the hard-paths of the policy committed at ref (the
+// defaults when it sets none); nil when the base has no glossmark.yaml.
+func baseHardPaths(ws *load.Workspace, ref string) []string {
+	if ref == "" {
+		return nil
+	}
+	prefix, err := gitOut(ws.Root, "rev-parse", "--show-prefix")
+	if err != nil {
+		return nil
+	}
+	out, err := gitOut(ws.Root, "show", ref+":"+strings.TrimSpace(prefix)+load.ConfigName)
+	if err != nil {
+		return nil
+	}
+	var cfg model.Config
+	if yaml.Unmarshal([]byte(out), &cfg) != nil {
+		return nil
+	}
+	return cfg.EffectivePolicy().HardPaths
 }
 
 // baseLedger reads the ledger committed at ref; nil when the base has none
