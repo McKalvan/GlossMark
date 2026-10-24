@@ -11,3 +11,8 @@ realizes: [inherit, gm:Onboarding]
 produces: [inherit]
 publishes: [inherit]
 owner: glossmark
+# Ontology-first increments, P2 (ADR 0034, #200): the curate-increment skill
+# ships with the other skills under skills/.
+planned:
+  realizes: [gmi:IncrementCurator]
+  by: 2026-11-30

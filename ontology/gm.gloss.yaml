@@ -1,7 +1,7 @@
 # ontology/gm.gloss.yaml (core tier): what a comment-native code ontology is about.
 # Nothing here names a Go package, a file or a command; that is gmi:'s job.
 namespace: gm
-version: 1.0.0
+version: 1.0.1
 doc: The concepts GlossMark exists to manage, independent of how the tool is built.
 concepts:
   # Areas: every concept below is part of one, so a view opens on six nodes
@@ -70,6 +70,6 @@ concepts:
   Increment:
     kind: process
     part-of: Adopting
-    planned: { ticket: https://github.com/McKalvan/GlossMark/pull/188 }
+    planned: { by: 2026-11-30, ticket: https://github.com/McKalvan/GlossMark/issues/200 }
     produces: [PlanItem]
     doc: "A ticket, a spec or a bug curated into an ontology change first and implemented against it second: the unit of ontology-first engineering. The curation step (P2) is not built yet."
