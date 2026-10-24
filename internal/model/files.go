@@ -79,9 +79,18 @@ type Config struct {
 	TestPaths []string `yaml:"test-paths,omitempty" json:"test-paths,omitempty"`
 	// Suggest tunes gloss suggest.
 	Suggest *SuggestConfig `yaml:"suggest,omitempty" json:"suggest,omitempty"`
+	// History tunes gloss history (ADR 0040).
+	History *HistoryConfig `yaml:"history,omitempty" json:"history,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
+}
+
+// HistoryConfig is the history: block of glossmark.yaml.
+type HistoryConfig struct {
+	// Step is what one history step spans: commit (default), first-parent
+	// or version. gloss history --step overrides it.
+	Step string `yaml:"step,omitempty" json:"step,omitempty"`
 }
 
 // NamespaceDecl describes an owned namespace.

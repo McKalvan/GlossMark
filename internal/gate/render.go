@@ -60,6 +60,9 @@ func header(im *Impact) string {
 	return sb.String()
 }
 
+// RenderRows renders changes as the aligned rows of the text report.
+func RenderRows(changes []Change) string { return renderRows(changes, 0) }
+
 // renderRows renders changes as aligned rows; limit > 0 caps them.
 func renderRows(changes []Change, limit int) string {
 	var sb strings.Builder
