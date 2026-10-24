@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Gating scope=file -->
 # ADR 0040: ontology history is the gate folded over commits
 
-Status: proposed, 2026-10-24; `gloss history` with `--format json` (decisions 1 to 5, and 6 without `history_of`) built 2026-10-24; ledger transitions appear where the gate reports them (accepted, stale), not yet merged by date. MCP `history_of` and the pull-request comment (decision 7) are next.
+Status: proposed, 2026-10-24; `gloss history` with `--format json` and MCP `history_of` (decisions 1 to 6) built 2026-10-24; ledger transitions appear where the gate reports them (accepted, stale), not yet merged by date. The pull-request comment (decision 7) is next.
 
 ## Context
 
@@ -37,7 +37,7 @@ What does not carry over is how `gloss diff` gets its base. It extracts the base
    - Ledger transitions on the links of a followed subject (proposed, accepted, rejected, stale, re-confirmed) are merged into its timeline by date, so the reviewer sees who decided as well as what changed.
    - By default only steps with a SOFT or HARD change, or an edit under `policy.hard-paths`, are shown; `--all` shows AUTO-only steps too.
    - `--format json` emits the steps as a list, each an impact in the shape of `gloss diff --format json` with the step's commits.
-   - MCP `history_of(curies, since?, step?)` returns that JSON for the given subjects. `since` defaults to the merge base with the default branch on a branch, else the last version bump of the subject's namespace.
+   - MCP `history_of(curies, since?, step?, all?, limit?)` returns those steps compacted for an agent: without per-view deltas, without AUTO changes unless `all`, at most `limit` steps (default 20). `since` defaults to the merge base with the default branch on a branch, else the last version bump of the subject's namespace.
 
 7. **The pull-request comment shows recent history.** For each concept and boundary the pull request touches, the Action's comment adds its last few history steps (default 3) under the impact, so the reviewer reads the change beside how the subject got here.
 

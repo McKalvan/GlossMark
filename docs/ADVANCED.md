@@ -124,6 +124,8 @@ Every relation is followed in one direction for one reason, never as a blind N-h
 
 A step is `built` (read from the committed graphs), `verified` (`--verify`), `unbuilt` (ontology files changed and `graph.jsonl` did not: the graph was not rebuilt, or the edit changes nothing in it; its changes otherwise appear on the next commit that rebuilds the graph) or `skipped` with the reason (a graph format this release does not read, or no `glossmark.yaml`). A repository that runs `gloss build --check` in CI has no unbuilt step that hides a change. A shallow clone is reported as truncated; fetch the history (`fetch-depth: 0`) first.
 
+MCP `history_of` (`curies`, `since`, `step`, `all`, `limit`) is the same history for an agent, compacted: each step keeps its commit, author, status, gate, version bumps, realization moves, views changed and its SOFT and HARD changes (AUTO ones too with `all`), at most `limit` steps (default 20, newest first, `more` counts the rest). Without `since` it starts at the merge base with the default branch when HEAD is ahead of it, so on a branch it is the branch's own history; otherwise just before the last commit that changed the `version:` of a namespace the subjects are in (every owned namespace without subjects), so the bump is included. `since` in the response says which.
+
 ## Files and version numbers
 
 Three kinds of file: `glossmark.yaml` (namespaces, policy), `*.gloss.yaml` (one per namespace, the concepts) and `.gloss.yaml` (one per boundary directory). Four numbers: the tool release, the grammar (`grammar: 1`), the file formats (`"format"` headers) and each namespace's semver. [FILE-FORMATS.md](FILE-FORMATS.md) and [VERSIONING.md](VERSIONING.md) have the details.

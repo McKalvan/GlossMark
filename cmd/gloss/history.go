@@ -88,15 +88,9 @@ func cmdHistory(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	mode := *step
-	if mode == "" && ws.Config.History != nil {
-		mode = ws.Config.History.Step
-	}
-	if mode == "" {
-		mode = "commit"
-	}
-	if mode != "commit" && mode != "first-parent" && mode != "version" {
-		fmt.Fprintf(os.Stderr, "gloss history: unknown step %q; use commit, first-parent or version\n", mode)
+	mode, err := historyMode(ws, *step)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "gloss history:", err)
 		return 2
 	}
 	if strings.HasPrefix(*rng, "-") {
@@ -115,6 +109,152 @@ func cmdHistory(args []string) int {
 	}
 	os.Stdout.WriteString(renderHistory(h))
 	return 0
+}
+
+// historyMode is the step: the flag, else history.step, else commit.
+func historyMode(ws *load.Workspace, flag string) (string, error) {
+	mode := flag
+	if mode == "" && ws.Config.History != nil {
+		mode = ws.Config.History.Step
+	}
+	if mode == "" {
+		mode = "commit"
+	}
+	if mode != "commit" && mode != "first-parent" && mode != "version" {
+		return "", fmt.Errorf("unknown step %q; use commit, first-parent or version", mode)
+	}
+	return mode, nil
+}
+
+// historyOf is MCP history_of: the history since a ref, newest steps first,
+// with AUTO changes and per-view deltas left out unless all.
+type historyOf struct {
+	Range   string        `json:"range"`
+	Since   string        `json:"since"` // why the history starts where it does
+	Step    string        `json:"step"`
+	Lineage []string      `json:"lineage,omitempty"`
+	Steps   []compactStep `json:"steps"`
+	// More counts the steps past limit; Hidden the AUTO-only ones left out.
+	More      int  `json:"more,omitempty"`
+	Hidden    int  `json:"hidden,omitempty"`
+	Truncated bool `json:"truncated,omitempty"`
+}
+
+type compactStep struct {
+	Commit       string                   `json:"commit"`
+	From         string                   `json:"from,omitempty"`
+	Date         string                   `json:"date"`
+	Author       string                   `json:"author"`
+	Title        string                   `json:"title"`
+	Status       string                   `json:"status"`
+	Reason       string                   `json:"reason,omitempty"`
+	Gate         gate.Class               `json:"gate,omitempty"`
+	Versions     []gate.VersionChange     `json:"versions,omitempty"`
+	Changes      []gate.Change            `json:"changes,omitempty"`
+	Realizations []gate.RealizationChange `json:"realizations,omitempty"`
+	ViewsChanged []string                 `json:"views_changed,omitempty"`
+}
+
+func runHistoryOf(root string, subjects []string, since, step string, all bool, limit int) (*historyOf, error) {
+	ws, err := load.Load(root)
+	if err != nil {
+		return nil, err
+	}
+	mode, err := historyMode(ws, step)
+	if err != nil {
+		return nil, err
+	}
+	why := "since " + since
+	if since == "" {
+		since, why = historySince(ws, subjects)
+	} else if verifyBase(ws.Root, since) != nil {
+		return nil, fmt.Errorf("since %q is not a commit in this repository; fetch it, or omit since for the default", since)
+	}
+	rng := "HEAD"
+	if since != "" {
+		rng = since + "..HEAD"
+	}
+	h, err := runHistory(ws, rng, mode, subjects, all, false)
+	if err != nil {
+		return nil, err
+	}
+	out := &historyOf{Range: rng, Since: why, Step: mode, Lineage: h.Lineage, Hidden: h.Hidden, Truncated: h.Truncated, Steps: []compactStep{}}
+	for i, st := range h.Steps {
+		if i >= limit {
+			out.More = len(h.Steps) - limit
+			break
+		}
+		cs := compactStep{Commit: st.Commit, From: st.From, Date: st.Date, Author: st.Author, Title: st.Title, Status: st.Status, Reason: st.Reason}
+		if im := st.Impact; im != nil {
+			cs.Gate, cs.Versions, cs.Realizations, cs.ViewsChanged = im.Gate, im.Versions, im.Realizations, im.ViewsChanged
+			for _, ch := range im.Changes {
+				if all || ch.Gate != gate.AUTO {
+					cs.Changes = append(cs.Changes, ch)
+				}
+			}
+		}
+		out.Steps = append(out.Steps, cs)
+	}
+	return out, nil
+}
+
+// historySince picks where history_of starts by default: the merge base with
+// the default branch when HEAD is ahead of it, else the parent of the last
+// commit that changed the version of a namespace the subjects are in (all
+// owned namespaces when there are none), so the bump itself is included.
+// "" means all of HEAD's history.
+func historySince(ws *load.Workspace, subjects []string) (string, string) {
+	head, _ := gitOut(ws.Root, "rev-parse", "HEAD")
+	head = strings.TrimSpace(head)
+	def := ""
+	if out, err := gitOut(ws.Root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil {
+		def = strings.TrimSpace(out)
+	}
+	for _, c := range []string{def, "origin/main", "origin/master", "main", "master"} {
+		if c == "" {
+			continue
+		}
+		if mb, err := gitOut(ws.Root, "merge-base", "HEAD", c); err == nil {
+			if mb = strings.TrimSpace(mb); mb != head {
+				return mb, "merge base with " + c
+			}
+			break
+		}
+	}
+	var files []string
+	for p, d := range ws.Config.Owns {
+		in := len(subjects) == 0
+		for _, s := range subjects {
+			in = in || strings.HasPrefix(s, p+":")
+		}
+		if in && d.File != "" {
+			files = append(files, d.File)
+		}
+	}
+	sort.Strings(files)
+	bump, behind := "", -1
+	for _, f := range files {
+		c, err := gitOut(ws.Root, "log", "-1", "--format=%H", "-G", "^version:", "--", f)
+		if c = strings.TrimSpace(c); err != nil || c == "" {
+			continue
+		}
+		n, err := gitOut(ws.Root, "rev-list", "--count", c+"..HEAD")
+		if err != nil {
+			continue
+		}
+		var k int
+		fmt.Sscan(strings.TrimSpace(n), &k)
+		if k > behind {
+			bump, behind = c, k
+		}
+	}
+	if bump == "" {
+		return "", "all of HEAD's history (no version bump found)"
+	}
+	if _, err := gitOut(ws.Root, "rev-parse", "--verify", "--quiet", bump+"^"); err != nil {
+		return "", "all of HEAD's history (the last version bump is the first commit)"
+	}
+	return bump + "^", "last version bump, " + short(bump)
 }
 
 func runHistory(ws *load.Workspace, rng, mode string, follow []string, all, verify bool) (*historyResult, error) {
@@ -262,7 +402,8 @@ func (s *snapshots) ontologyFile(f string) bool {
 // history reads.
 func (s *snapshots) step(c historyCommit, parent string, files []string, replaced map[string]string) *historyStep {
 	ok, unbuilt := s.relevant(files)
-	if !ok {
+	// A commit before GlossMark was adopted here is not a step.
+	if !ok || s.load(c.hash).none {
 		return nil
 	}
 	st := &historyStep{Commit: c.hash, Parent: parent, Date: c.date, Author: c.author, Title: c.title, Status: "built"}
@@ -327,7 +468,7 @@ func (s *snapshots) chapters(commits []historyCommit, replaced map[string]string
 	var last historyCommit
 	open := false
 	for _, c := range commits {
-		if ok, _ := s.relevant(c.files); !ok {
+		if ok, _ := s.relevant(c.files); !ok || s.load(c.hash).none {
 			continue
 		}
 		if !open {

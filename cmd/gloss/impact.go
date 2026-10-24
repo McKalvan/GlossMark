@@ -295,7 +295,7 @@ alwaysApply: true
 This repository links code to a domain ontology with one-line ` + "`@gloss`" + ` comments.
 
 - Before working in a directory, run ` + "`GLOSS_ACTOR=" + a + " " + b + " context --dir <that directory> --changed --budget 2000`" + ` and read the briefing: the boundary, the concepts you may link to, the current state.
-- Run every gloss command with ` + "`GLOSS_ACTOR=" + a + "`" + ` so the links you write are attributed to you. The glossmark MCP server (search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of) already runs as that actor.
+- Run every gloss command with ` + "`GLOSS_ACTOR=" + a + "`" + ` so the links you write are attributed to you. The glossmark MCP server (search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of, history_of) already runs as that actor.
 - Write ` + "`@gloss?`" + ` for every link you add; a human removes the ` + "`?`" + `.
 - ` + agents.ProposalSentence + `
 
@@ -414,7 +414,7 @@ func installHooks(root, actor string, hook, mcp bool) error {
 			return err
 		}
 	}
-	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s (the hook exports it to the session's shell); agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of\n", actor)
+	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s (the hook exports it to the session's shell); agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of, history_of\n", actor)
 	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
 	return nil
 }

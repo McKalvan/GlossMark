@@ -26,7 +26,7 @@ import (
 )
 
 func init() {
-	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, slice_of, drift, and the review tools review_queue, review_item, review_decide, review_undo, write_link, edit_concept_doc, browse_node)", cmdMCP})
+	register(command{"mcp", "serve the graph to agents over MCP on stdio (lookup_concept, search_concepts, concepts_for_path, propose_link, impact_of, slice_of, history_of, drift, and the review tools review_queue, review_item, review_decide, review_undo, write_link, edit_concept_doc, browse_node)", cmdMCP})
 }
 
 type mcpBackend struct {
@@ -51,6 +51,11 @@ func (b *mcpBackend) ReviewEngine() (*review.Engine, error) {
 		b.engine = e
 	}
 	return b.engine, nil
+}
+
+// History serves MCP history_of (ADR 0040).
+func (b *mcpBackend) History(subjects []string, since, step string, all bool, limit int) (any, error) {
+	return runHistoryOf(b.root, subjects, since, step, all, limit)
 }
 
 func (b *mcpBackend) Current() (*load.Workspace, *graph.Graph, map[string]*model.LedgerEntry, error) {
