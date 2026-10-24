@@ -34,8 +34,13 @@ func cmdHarvest(args []string) int {
 		ingest = append(ingest, s)
 		return nil
 	})
+	var reference []string
+	fs.Func("reference", "an owner-supplied reference vocabulary (Turtle, RDF/XML or JSON-LD) read into reference-term evidence (repeatable); it breaks naming ties and proposes is-a and part-of, never a concept", func(s string) error {
+		reference = append(reference, s)
+		return nil
+	})
 	in := fs.String("in", "", "read evidence from this file instead of harvesting")
-	noGit := fs.Bool("no-git", false, "skip rename evidence from the git history")
+	noGit := fs.Bool("no-git", false, "skip the git history: rename evidence and first and last seen dates")
 	cluster := fs.Bool("cluster", false, "print candidate concepts instead of evidence")
 	about := fs.String("about", "", "print only the evidence that names or mentions this term (a candidate, an alias, a constraint's subject)")
 	format := fs.String("format", "jsonl", "jsonl | text (text: a summary of --cluster, or one line per observation with --about)")
@@ -53,9 +58,15 @@ func cmdHarvest(args []string) int {
 	var ev []harvest.Evidence
 	var err error
 	if *in != "" {
-		ev, err = readEvidence(*in)
+		// A saved harvest plus a reference read now.
+		if ev, err = readEvidence(*in); err == nil && len(reference) > 0 {
+			var more []harvest.Evidence
+			if more, err = harvest.Reference(reference); err == nil {
+				ev = append(ev, more...)
+			}
+		}
 	} else {
-		ev, err = harvest.Harvest(dir, harvest.Options{Exclude: exclude, Units: units, Git: !*noGit})
+		ev, err = harvest.Harvest(dir, harvest.Options{Exclude: exclude, Units: units, Git: !*noGit, Reference: reference})
 	}
 	if err != nil {
 		return fail(err)

@@ -46,6 +46,10 @@
       "@type": "@id"
     },
     "gm": "https://glossmark.dev/vocab#",
+    "guarded-by": {
+      "@id": "gm:guarded-by",
+      "@type": "@id"
+    },
     "guards": {
       "@id": "gm:guards",
       "@type": "@id"

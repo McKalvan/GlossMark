@@ -4,5 +4,6 @@ level: component
 label: load
 part-of: arch:lib-reading
 realizes: [gmi:WorkspaceLoader, gmi:ImportLock, gmi:LandscapeAssembler]
+holds: [gmi:PlanRecord]   # .glossmark/plan.jsonl, read and validated with the workspace (ADR 0034)
 default-namespace: gmi
 owner: glossmark

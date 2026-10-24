@@ -308,6 +308,10 @@ func (ex *extractor) manifests() {
 				ex.g.AddEdge(&graph.Edge{S: iri, P: rel, O: oiri, Source: graph.SourceDeclared, Prov: prov})
 			}
 		}
+		for _, t := range m.GuardedBy {
+			oiri, _ := ex.g.Expand(t)
+			ex.g.AddEdge(&graph.Edge{S: iri, P: "guarded-by", O: oiri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1, Raw: t}})
+		}
 		if m.Owner != "" {
 			actor := m.Owner
 			if !strings.Contains(actor, ":") {

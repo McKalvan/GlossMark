@@ -177,6 +177,11 @@ func (b *mcpBackend) ImpactOfChange(base string, paths []string) (any, error) {
 	}
 	touched := gate.Touched(g, ws, uniqStrings(files))
 	out := map[string]any{"files": touched}
+	pol := ws.Config.EffectivePolicy()
+	after := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: pol})
+	if pt := gate.PlanItemsTouched(g, ws, after, touched); pt != nil {
+		out["plan"] = pt
+	}
 	if ss := slicesTouched(g, ws, touched); len(ss) > 0 {
 		out["slices"] = ss
 	}
@@ -185,8 +190,6 @@ func (b *mcpBackend) ImpactOfChange(base string, paths []string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		pol := ws.Config.EffectivePolicy()
-		after := rollup.Compare(g, ws, rollup.Options{Ledger: lg, Policy: pol})
 		im := gate.Classify(bg, g, ws, gate.Options{Base: base, Policy: pol, HeadLedger: lg, ChangedFiles: files, AfterReport: after})
 		out["gate"] = im.Gate
 		out["changes"] = im.Changes

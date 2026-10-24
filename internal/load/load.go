@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -46,6 +47,8 @@ type Workspace struct {
 	Prefixes map[string]string
 	// Resolved records how each import was resolved (version, source, hash).
 	Resolved map[string]*Resolved
+	// Plan is the plan record (.glossmark/plan.jsonl, ADR 0034) when present.
+	Plan []PlanLine
 	// Lock is glossmark.lock when present.
 	Lock    *Lock
 	lockErr error
@@ -192,6 +195,12 @@ func Load(root string) (*Workspace, error) {
 		}
 		sort.Strings(names)
 		for _, n := range names {
+			for _, s := range o.Relations[n].Surfaces {
+				if !slices.Contains(model.RelationSurfaces, s) {
+					ws.Diags = append(ws.Diags, marker.Diagnostic{Path: ws.Rel(o.Path), Line: 1, Severity: "warning", Code: "GM308",
+						Msg: fmt.Sprintf("relations.%s.surfaces: unknown surface %q; use %s", n, s, strings.Join(model.RelationSurfaces, " or "))})
+				}
+			}
 			ws.Vocab.Override(n, o.Relations[n])
 		}
 	}
@@ -221,6 +230,7 @@ func Load(root string) (*Workspace, error) {
 	if err := ws.walk(); err != nil {
 		return nil, err
 	}
+	ws.readPlan()
 	return ws, nil
 }
 

@@ -29,8 +29,12 @@ type Options struct {
 	// Units are the application directories; nil means the deployables
 	// gloss init would plan (ADR 0016, decision 1).
 	Units []string
-	// Git adds rename evidence from the history.
+	// Git adds rename evidence from the history and dates every surface
+	// with its first and last commit.
 	Git bool
+	// Reference lists owner-supplied vocabularies (Turtle, RDF/XML,
+	// JSON-LD) read into reference-term evidence (ADR 0025, section 6.3).
+	Reference []string
 }
 
 // Harvest walks root and returns its evidence, sorted by path, line and signal.
@@ -97,7 +101,13 @@ func Harvest(root string, opt Options) ([]Evidence, error) {
 	}
 	if opt.Git {
 		h.out = append(h.out, gitRenames(root, h.unitFor, exclude)...)
+		gitSeen(root, h.out, exclude)
 	}
+	ref, err := Reference(opt.Reference)
+	if err != nil {
+		return nil, err
+	}
+	h.out = append(h.out, ref...)
 	sortEvidence(h.out)
 	return h.out, nil
 }
@@ -202,6 +212,11 @@ func (h *harvester) file(rel string, lines []string, style marker.CommentStyle, 
 	case ext == ".sql" || ext == ".ddl" || ext == ".psql":
 		h.sql(rel, lines)
 		return
+	case ext == ".tf" || ext == ".hcl" || ext == ".yaml" || ext == ".yml":
+		if !test {
+			h.topics(rel, lines, ext)
+		}
+		return
 	case ext == ".feature":
 		for _, d := range marker.Declarations(rel, lines, style) {
 			if i := strings.Index(d.Symbol, ":"); i >= 0 {
@@ -228,6 +243,9 @@ func (h *harvester) file(rel string, lines []string, style marker.CommentStyle, 
 		}
 	}
 	h.lineSignals(rel, lines, test, ext, decls)
+	if !test {
+		h.topics(rel, lines, ext)
+	}
 }
 
 func aliasContext(aliases []string) []string {

@@ -284,7 +284,7 @@ function nodeColours(n){
 const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
-const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set()});
+const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set(),pub:new Set()});
 const S={slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},camMoved:false,theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
@@ -344,12 +344,16 @@ function hiddenByFilter(n){
     if(F.kind.has(n.kind||''))return true;
     if(F.place.has(n.placement||''))return true;
     if(F.plan.has(planState(n)||'built'))return true;
+    if(F.pub.has(pubState(n)))return true;
   }
   if(n.type==='boundary'&&F.level.has(n.kind||''))return true;
   if(F.crit.has(n.criticality||''))return true;
   return false;
 }
 const ONLY_TIP='Click to toggle, Shift+click to show only this';
+// pubState: whether a concept is on the published seam, the one thing
+// another repository can import.
+const pubState=n=>n.published?'published':'not published';
 function buildFilters(){
   const box=$('filters');box.innerHTML='';
   const count=(f,label)=>{const m=new Map();V._nodes.forEach(n=>{if(n.group)return;const v=f(n);if(v===undefined)return;m.set(v,(m.get(v)||0)+1);});return m;};
@@ -362,6 +366,7 @@ function buildFilters(){
     {key:'crit',label:'Criticality',counts:count(n=>n.criticality||''),order:v=>critRank(v),dot:true},
     {key:'place',label:'Placement',counts:count(n=>n.type==='concept'&&!n.ghost?(n.placement||''):undefined),order:v=>placeRank(v),tip:v=>PLACEDEFS[v]},
     {key:'plan',label:'Plan',counts:count(n=>n.type==='concept'&&!n.ghost?(planState(n)||'built'):undefined),order:v=>['built','planned','overdue'].indexOf(v),tip:v=>PLANDEFS[v]},
+    {key:'pub',label:'Published',counts:count(n=>n.type==='concept'&&!n.ghost?pubState(n):undefined),order:v=>v==='published'?0:1,tip:v=>v==='published'?'On the published seam: importable by other repositories.':'Not published: stays inside this repository.'},
   ];
   groups.forEach(g=>{
     const vals=[...g.counts.keys()];
@@ -1145,6 +1150,7 @@ const RELDEFS={
   'publishes':'A emits event B. Lifted to boundaries; a publisher in one repository and a subscriber in another get a context-map edge in gloss landscape.',
   'subscribes':'A listens for event B. Lifted to boundaries and matched against publishers across repositories.',
   'constrains':'A limits B: a constraint or measure that applies to B, such as a cut-off time that constrains settlement. Declared in the ontology.',
+  'guarded-by':'Everything under boundary A sits behind mechanism B (authentication, a rate limit). Declared in A\u2019s manifest; a change there is reviewed at B\u2019s level.',
   'reverses':'A undoes B, such as a refund that reverses a capture. Declared in the ontology.',
   'attaches-to':'A exists only alongside B and is attached to it. Declared in the ontology.',
   'is-a':'A is a kind of B. A inherits what B realizes, and lifting rolls links up this taxonomy.',

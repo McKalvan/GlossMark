@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.0.0
+version: 1.1.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -72,7 +72,16 @@ concepts:
     value: 0.7
     doc: "The default soft-conf-threshold: proposals at or above it are SOFT. Bound to DefaultPolicy by a publishes-value marker."
   VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
-  AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark and derive-ontology Claude Code skills, shipped in the binary." }
+  AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark, derive-ontology and review-glossmark Claude Code skills, shipped in the binary." }
+  # Ontology-first increments, phase P2 (ADR 0034, #200): curated before it is built.
+  IncrementCurator:
+    kind: process
+    realizes: gm:Increment
+    doc: "The curate-increment skill: takes a ticket, spec or bug as evidence, interviews the owner (scope, processes, concepts, boundaries, seam, views, criticality), reviews the draft with them and writes the planned entries, manifest declarations, view and plan record. It writes no code or markers and stops before the PR."
+  PlanRecord:
+    kind: resource
+    realizes: gm:Increment
+    doc: "The committed .glossmark/plan.jsonl, read and validated by gloss: one brief line per increment, one decision line per entry written or changed, one deviation line per departure. It keeps why each plan entry was written."
   EvidenceHarvester:  { kind: process, realizes: gm:Onboarding, doc: "gloss harvest: evidence of a repository's vocabulary from code, schemas, tests, UI, docs and git, before it has an ontology, and the lexical clusters a derivation starts from (ADR 0025)." }
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed], doc: "The MCP server agents call to search concepts, ask what a path or change touches, and propose links and concepts." }

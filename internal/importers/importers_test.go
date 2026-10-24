@@ -359,3 +359,33 @@ func TestImportRecord(t *testing.T) {
 		t.Errorf("record:\n%s", b)
 	}
 }
+
+// TestEnumInstances (#205): a catalogue enum named in Instances is imported
+// without its values, which come back as instances, while a lifecycle enum
+// in the same file keeps its values as concepts.
+func TestEnumInstances(t *testing.T) {
+	src := []byte("Plan: [Free, Pro, Team]\nLoanStatus: [ACTIVE, OVERDUE]\n")
+	es, insts, err := ParseEnumsWith(src, EnumOptions{Values: true, Instances: []string{"plan"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range es {
+		names = append(names, e.Name)
+	}
+	if got := strings.Join(names, ","); got != "Plan,LoanStatus,Active,Overdue" {
+		t.Errorf("concepts = %s", got)
+	}
+	var vals []string
+	for _, in := range insts {
+		vals = append(vals, in.Enum+"/"+in.Name)
+	}
+	if got := strings.Join(vals, ","); got != "Plan/Free,Plan/Pro,Plan/Team" {
+		t.Errorf("instances = %s", got)
+	}
+	// Without Instances the import is what it was.
+	old, _ := ParseEnumsNamed(src, true, false)
+	if len(old) != 7 {
+		t.Errorf("--values without --instances: %d entries, want 7", len(old))
+	}
+}

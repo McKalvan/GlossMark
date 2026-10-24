@@ -1,5 +1,6 @@
 // @gloss implements gmi:McpServer scope=file
 // @gloss publishes gm:LinkProposed scope=file
+// @gloss consumes gm:PlanItem scope=file
 
 // Package mcp serves the graph to agents over the Model Context Protocol
 // (JSON-RPC 2.0 on stdio): lookup_concept, search_concepts, concepts_for_path,
@@ -182,13 +183,13 @@ func str(desc string) map[string]any { return map[string]any{"type": "string", "
 var tools = []tool{
 	{"lookup_concept", "Return a concept (by CURIE such as lib:Book) with its kind, tier, doc, relations, realizations and the artifacts linking to it.",
 		obj(map[string]any{"curie": str("Concept CURIE, e.g. lib:Renewal")}, "curie")},
-	{"search_concepts", "Search concepts by meaning: CamelCase names split into words, aliases, docs, stems, synonyms and small typos all match; a kind word in the query (event, constraint) boosts that kind; one hop through realizes/is-a is followed. Hits carry the doc, the artifact count and which field and terms matched. Optionally restrict to a namespace, kind or tier.",
-		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
+	{"search_concepts", "Search concepts by meaning: CamelCase names split into words, aliases, docs, stems, synonyms and small typos all match; a kind word in the query (event, constraint) boosts that kind; one hop through realizes/is-a is followed. Hits carry the doc, the artifact count and which field and terms matched. Optionally restrict to a namespace, kind, tier or published status.",
+		obj(map[string]any{"query": str("Substring or words to match"), "namespace": str("Prefix to restrict to (optional)"), "kind": str("Concept kind (optional)"), "tier": str("core | implementation (optional)"), "published": map[string]any{"type": "boolean", "description": "true: only concepts on the published seam; false: only unpublished ones (optional)"}, "limit": map[string]any{"type": "integer", "default": 20}}, "query")},
 	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
 		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
 	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files. " + agents.ProposalSentence,
 		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str("implements | represents | verifies | ..."), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "relation", "target")},
-	{"impact_of", "Impact of a change. Pass proposals (links you intend to add) to get each link's gate; and/or pass paths (files you changed) or base (a git ref) to learn what those files touch: the concepts, whether they sit on the published seam, what constrains them, which boundaries declare them, their tests, and the other files sharing them. With base, the AUTO/SOFT/HARD classification of the whole working tree is included.",
+	{"impact_of", "Impact of a change. Pass proposals (links you intend to add) to get each link's gate; and/or pass paths (files you changed) or base (a git ref) to learn what those files touch: the concepts, whether they sit on the published seam, what constrains them, which boundaries declare them, their tests, and the other files sharing them, and the plan items (ADR 0034) the change closes or still works towards. With base, the AUTO/SOFT/HARD classification of the whole working tree is included.",
 		obj(map[string]any{"proposals": map[string]any{"type": "array", "items": obj(map[string]any{"path": str(""), "relation": str(""), "target": str(""), "conf": map[string]any{"type": "number"}, "note": str("")}, "path", "relation", "target")},
 			"paths": map[string]any{"type": "array", "items": str("Repo-relative file you changed or will change")},
 			"base":  str("Git ref to diff the working tree against (e.g. origin/main)")})},
@@ -261,13 +262,14 @@ func (s *Server) call(name string, args json.RawMessage) (any, error) {
 	case "search_concepts":
 		var a struct {
 			Query, Namespace, Kind, Tier string
+			Published                    *bool
 			Limit                        int
 		}
 		json.Unmarshal(args, &a)
 		if a.Limit <= 0 {
 			a.Limit = 20
 		}
-		return Search(g, a.Query, a.Namespace, a.Kind, a.Tier, a.Limit), nil
+		return SearchWith(g, a.Query, Filter{NS: a.Namespace, Kind: a.Kind, Tier: a.Tier, Published: a.Published}, a.Limit), nil
 	case "concepts_for_path":
 		var a struct {
 			Path string `json:"path"`

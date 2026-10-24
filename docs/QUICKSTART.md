@@ -59,7 +59,7 @@ If the repository already keeps its vocabulary, import it instead of retyping it
 
 ```sh
 gloss import --from markdown-glossary docs/glossary.md --namespace lib   # headings → concepts, Def. → doc, Aliases, Kind, Status (not implemented → proposed: true)
-gloss import --from enums enums.yaml --namespace lib [--values]          # each enum an entity; --values adds each value as is-a the enum (--value-names prefixed: LoanStatusActive)
+gloss import --from enums enums.yaml --namespace lib [--values]          # each enum an entity; --values adds each value as is-a the enum (--value-names prefixed: LoanStatusActive); --instances Plan,Region imports those enums but not their values, which are catalogue instances, not concepts
 gloss export --status -o status.json                                     # implemented / untested / unimplemented / orphan / planned / proposed per concept, deprecated: true when retired
 ```
 
@@ -123,7 +123,7 @@ On an existing codebase, let the tool draft the first pass and review it rather 
 ```sh
 gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public surfaces, from names, docstrings, tables touched and test calls
 git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
-gloss hook install --skill           # installs the adopt-glossmark and derive-ontology skills: the whole adoption, and deriving the ontology from what exists, as agent workflows (works before gloss init)
+gloss hook install --skill           # installs the adopt-glossmark, derive-ontology, review-glossmark and curate-increment skills: the whole adoption, deriving the ontology from what exists, working the review queue after, and planning each feature in the ontology before it is built, as agent workflows (works before gloss init)
 gloss hook install --skill --cursor  # the same for Cursor: an always-applied rule in .cursor/rules/glossmark.mdc that points at the skills
 ```
 
@@ -165,6 +165,8 @@ The actor belongs to a marker's first appearance, not to whoever runs the last b
 
 **Subagents need their own actor.** Subagents share the session's shell environment and its MCP server, so without more they all write as the session's actor, and the remit gate checks every link against one agent. Give each subagent its actor in its agent file (`.claude/agents/prep-cook.md`): "run gloss commands as `GLOSS_ACTOR=agent:prep-cook gloss build`". The name after `agent:` is the agent file's name, which is what ties the link to that agent's `may-modify` remit and lets `gloss context` show only its remit. A link a subagent writes through the shared MCP server is attributed to the server's actor; prefer writing `@gloss?` lines and running `gloss build` with the subagent's actor. `gloss build` warns when a rebuild would change the actor on an existing marker.
 
+**In CI the actor comes from GitHub.** The ledger and graph a PR commits are the PR author's to edit, so `gloss diff --actor` takes the actor from outside them: the Action passes the PR author (`agent:<name>` for a bot account, `human:<login>` otherwise, or its `actor:` input). A link new in the PR is gated as that actor and as the one its provenance claims, and the stricter holds; a change that rewrites the author or reviewer the base ledger recorded for a marker is listed as `actor-changed` or `reviewer-changed`.
+
 ## Agent experience
 
 Four commands exist so an agent can work the ontology without a human in the loop until the review:
@@ -183,7 +185,7 @@ gloss reject --concept circ:RenewalHandler --reason "duplicate of circ:RenewalFl
 
 The briefing ranks concepts by relevance: those linked by code under the directory, then those its manifest declares, then its default namespace, then the rest. When `GLOSS_ACTOR` names an agent with an agent file (`agent:cataloging-assistant` and `.claude/agents/cataloging-assistant.md`), it shows only that agent's remit. In a retiring module it adds a "Retiring here" line: the deprecated boundary (or one enclosing it) with its `replaced-by` and `retire-by`, and each deprecated concept the code links to with its successor and the boundary that realizes it.
 
-A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [borrower]` on `lib:Patron`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "pickup window" finds `hw:PickupClock`.
+A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [borrower]` on `lib:Patron`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "pickup window" finds `hw:PickupClock`. `published: true` keeps only the published seam and `false` drops it; the viewer's Filters panel has the same Published row.
 
 Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept`, `slice_of` and `drift`. `gloss slice <curie>` (MCP `slice_of`, `gloss context --concept`) shows everything relevant to one feature; see [ADVANCED.md](ADVANCED.md#feature-slices-gloss-slice).
 

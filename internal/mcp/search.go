@@ -42,6 +42,21 @@ type Hit struct {
 // window" finds hw:PickupClock through its core concept. Ties go to core
 // concepts, then to the one with more artifacts, then to the shorter name.
 func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
+	return SearchWith(g, q, Filter{NS: ns, Kind: kind, Tier: tier}, limit)
+}
+
+// Filter restricts a search; an empty field matches everything.
+type Filter struct {
+	NS, Kind, Tier string
+	// Published, when set, keeps only concepts on the published seam (true)
+	// or only those off it (false): an implementation concept with
+	// published-as and the name it is published as.
+	Published *bool
+}
+
+// SearchWith is Search with a Filter.
+func SearchWith(g *graph.Graph, q string, f Filter, limit int) []Hit {
+	ns, kind, tier := f.NS, f.Kind, f.Tier
 	words := tokens(q)
 	if len(words) == 0 {
 		return nil
@@ -65,6 +80,9 @@ func Search(g *graph.Graph, q, ns, kind, tier string, limit int) []Hit {
 	var hits []Hit
 	for _, n := range g.NodesOf(model.NodeConcept) {
 		if ns != "" && n.NS != ns || kind != "" && n.Kind != kind || tier != "" && n.Tier != tier {
+			continue
+		}
+		if f.Published != nil && *f.Published != (n.Published != "" || len(g.In(n.ID, "published-as")) > 0) {
 			continue
 		}
 		if n.Imported && n.Tier == model.TierImpl && n.Published == "" {

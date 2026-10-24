@@ -1,4 +1,5 @@
 // @gloss implements gmi:AdoptionSkill scope=file
+// @gloss implements gmi:IncrementCurator scope=file
 
 // Package skills ships the Claude Code skills that come with GlossMark, so
 // gloss hook install --skill can install them without a network fetch.
@@ -11,11 +12,11 @@ import (
 
 // FS holds every skill directory (adopt-glossmark/SKILL.md, ...).
 //
-//go:embed adopt-glossmark/SKILL.md derive-ontology/SKILL.md
+//go:embed adopt-glossmark/SKILL.md derive-ontology/SKILL.md review-glossmark/SKILL.md curate-increment/SKILL.md
 var FS embed.FS
 
 // Names lists the shipped skills.
-var Names = []string{"adopt-glossmark", "derive-ontology"}
+var Names = []string{"adopt-glossmark", "derive-ontology", "review-glossmark", "curate-increment"}
 
 // Installable returns a skill's SKILL.md as it is installed into another
 // repository: without GlossMark's own self-hosting markers, which name the

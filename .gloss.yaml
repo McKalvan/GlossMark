@@ -7,7 +7,7 @@ label: GlossMark
 # gm:Onboarding is added here for the skill shipped in skills/. The flows
 # inherit too (ADR 0026): the root produces and publishes what its two
 # containers do, and their code markers say so.
-realizes: [inherit, gm:Onboarding]
+realizes: [inherit, gm:Onboarding, gmi:IncrementCurator]
 produces: [inherit]
 publishes: [inherit]
 owner: glossmark

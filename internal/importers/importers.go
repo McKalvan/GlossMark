@@ -200,12 +200,46 @@ func ParseEnums(b []byte, withValues bool) ([]Entry, error) {
 // names every value <Enum><Value> (LoanStatusActive), so a bare value never
 // lands in the namespace without its enum.
 func ParseEnumsNamed(b []byte, withValues, prefixed bool) ([]Entry, error) {
+	es, _, err := ParseEnumsWith(b, EnumOptions{Values: withValues, Prefixed: prefixed})
+	return es, err
+}
+
+// EnumOptions say how an enums file is imported.
+type EnumOptions struct {
+	// Values adds each value as a concept that is-a its enum.
+	Values bool
+	// Prefixed names every value <Enum><Value>.
+	Prefixed bool
+	// Instances names the enums whose values are catalogue instances (plans,
+	// regions, currencies), not concepts: the enum is imported, its values
+	// are returned as instances and never become concepts (ADR 0025 section
+	// 6.2). Names match the enum as written or in PascalCase.
+	Instances []string
+}
+
+// Instance is a catalogue value of an enum imported with
+// EnumOptions.Instances: instance-of Enum. Until instances have a file
+// format (#213) they are reported, not written.
+type Instance struct {
+	Enum string `json:"instance_of"`
+	Name string `json:"name"`
+	Doc  string `json:"doc,omitempty"`
+	Line int    `json:"line"`
+}
+
+// ParseEnumsWith reads an enums file as ParseEnums does, with options.
+func ParseEnumsWith(b []byte, opt EnumOptions) ([]Entry, []Instance, error) {
+	withValues, prefixed := opt.Values, opt.Prefixed
+	catalogue := map[string]bool{}
+	for _, n := range opt.Instances {
+		catalogue[Pascal(n)] = true
+	}
 	var root yaml.Node
 	if err := yaml.Unmarshal(b, &root); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("expected a mapping of enum name to values")
+		return nil, nil, fmt.Errorf("expected a mapping of enum name to values")
 	}
 	m := root.Content[0]
 	if v := get(m, "enums"); v != nil && v.Kind == yaml.MappingNode {
@@ -281,10 +315,19 @@ func ParseEnumsNamed(b []byte, withValues, prefixed bool) ([]Entry, error) {
 		names[e.Name] = true
 		out = append(out, e)
 	}
+	var insts []Instance
+	for en := range catalogue {
+		for _, v := range vals[en] {
+			insts = append(insts, Instance{Enum: en, Name: v.name, Doc: strings.TrimSpace(v.doc), Line: v.line})
+		}
+	}
+	sort.Slice(insts, func(a, b int) bool { return insts[a].Line < insts[b].Line })
 	if withValues {
 		enums := make([]string, 0, len(vals))
 		for e := range vals {
-			enums = append(enums, e)
+			if !catalogue[e] {
+				enums = append(enums, e)
+			}
 		}
 		sort.Strings(enums)
 		for _, en := range enums {
@@ -302,7 +345,7 @@ func ParseEnumsNamed(b []byte, withValues, prefixed bool) ([]Entry, error) {
 			}
 		}
 	}
-	return out, nil
+	return out, insts, nil
 }
 
 func get(m *yaml.Node, key string) *yaml.Node {
