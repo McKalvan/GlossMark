@@ -156,6 +156,9 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
   <input type="text" id="search" placeholder="Search id / label…" autocomplete="off">
   <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation">Filters</button>
   <span class="sep"></span>
+  <select id="changesSel" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
+    <option value="">All nodes</option><option value="0">Only changes</option><option value="1">Changes + 1 hop</option><option value="2">Changes + 2 hops</option><option value="3">Changes + 3 hops</option>
+  </select>
   <button id="expandAll" title="Open every boundary and part-of tree">Expand all</button>
   <button id="collapseAll" title="Back to the top: every boundary closed">Collapse all</button>
   <button id="fit" title="Fit to window (f)">Fit</button>
@@ -284,8 +287,8 @@ function nodeColours(n){
 const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
-const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set(),pub:new Set()});
-const S={slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
+const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set(),pub:new Set(),chg:new Set()});
+const S={deg:null,slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},camMoved:false,theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
 const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage'),panel=$('panel');
@@ -312,11 +315,12 @@ function loadView(i){
   // Drop self-references and dangling parents/boundaries.
   nodes.forEach(n=>{if(n.parent===n.id||!byId.has(n.parent))n.parent='';if(n.boundary===n.id||!byId.has(n.boundary))n.boundary='';});
   V._nodes=nodes;V._edges=edges;
+  markChanges();
   // The top of the system: everything closed; drill in by clicking.
   S.expanded=groupIds();S.pos=new Map();S.pinned=new Set();S.sel=null;S.hover=null;S.focus=null;S.f=emptyFilters();
-  S.rels=new Set(edges.map(e=>e.p));S.slice=null;
+  S.rels=new Set(edges.map(e=>e.p));S.slice=null;S.deg=null;
   rng=mulberry(hash(V.name||'view')+1);
-  buildFilters();
+  buildFilters();syncChangesBtn();
   rebuild(true);
   // A curated view (one that names its concepts) opens with every box open.
   if(V.curated){V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(true);}
@@ -330,6 +334,61 @@ function loadView(i){
 }
 
 const groupIds=()=>new Set(V._nodes.filter(n=>n.group).map(n=>n.id));
+
+/* ---- change states ---- */
+// What the diff did to each node, and how far each node is from it. A change
+// is a node (added, removed, changed) or an edge (added, removed: its unchanged
+// endpoints are "edge changed"); those are degree 0. _dist is the hops from
+// the nearest change, over edges and part-of (drawn as nesting, not as an
+// edge), up to MAX_DEG, never onward through a boundary; _in is the nearest degree of anything inside a box or
+// whole. Both come from the data, not from what is shown, so they do not
+// depend on the filters. S.deg is the degree the map shows (null: everything).
+const MAX_DEG=3;
+const CHG_ORDER=['added','removed','changed','edge changed','1 away','2 away','3 away','contains changes','unchanged'];
+const CHGDEFS={'added':'Added since the base.','removed':'Removed since the base (drawn as a ghost).','changed':'Its definition, badge, criticality or published value changed.',
+  'edge changed':'Unchanged itself; an edge to or from it was added or removed.','1 away':'Unchanged; one edge or part-of from a change.','2 away':'Unchanged; two hops from a change.',
+  '3 away':'Unchanged; three hops from a change.','contains changes':'A box or whole with a change, or a node near one, inside it.','unchanged':'More than three hops from any change.'};
+function markChanges(){
+  V._nodes.forEach(n=>{n._chg=n.group?'':D.on?'unchanged':'';n._dist=Infinity;n._in=Infinity;});
+  if(!D.on)return;
+  const set=(id,st)=>{const n=byId.get(id);if(n&&!n.group&&CHG_ORDER.indexOf(st)<CHG_ORDER.indexOf(n._chg))n._chg=st;};
+  D.an.forEach(id=>set(id,'added'));D.rn.forEach(id=>set(id,'removed'));D.cn.forEach(id=>set(id,'changed'));
+  V._edges.forEach(e=>{if(e.ghost||D.ae.has(ekey(e))||D.re.has(ekey(e))){set(e.s,'edge changed');set(e.o,'edge changed');}});
+  // Breadth-first from every change over edges and part-of.
+  const adj=new Map(),link=(a,b)=>{if(!byId.has(a)||!byId.has(b))return;(adj.get(a)||adj.set(a,[]).get(a)).push(b);(adj.get(b)||adj.set(b,[]).get(b)).push(a);};
+  V._edges.forEach(e=>link(e.s,e.o));
+  V._nodes.forEach(n=>{if(n.type==='concept'&&n.parent)link(n.id,n.parent);});
+  let front=V._nodes.filter(n=>CHG_ORDER.indexOf(n._chg)<=3);
+  front.forEach(n=>{n._dist=0;});
+  for(let d=1;d<=MAX_DEG&&front.length;d++){
+    const next=[];
+    // A boundary takes a distance but does not pass it on: its edges are
+    // everything it realizes, produces and consumes, so one hop through a box
+    // would reach most of the system.
+    front.filter(n=>n.type!=='boundary').forEach(n=>(adj.get(n.id)||[]).forEach(id=>{const m=byId.get(id);if(m&&!m.group&&m._dist===Infinity){m._dist=d;set(id,d+' away');next.push(m);}}));
+    front=next;
+  }
+  // A box or whole holds the nearest degree of anything inside it.
+  V._nodes.filter(n=>n._dist<Infinity).forEach(n=>{
+    const seen=new Set([n.id]),up=[n.parent,n.boundary];
+    while(up.length){const id=up.pop(),a=byId.get(id);if(!a||seen.has(id))continue;seen.add(id);a._in=Math.min(a._in,n._dist);set(id,'contains changes');up.push(a.parent,a.boundary);}
+  });
+}
+// shownByDegree: within S.deg of a change, or a box holding something that is.
+const shownByDegree=n=>Math.min(n._dist,n._in)<=S.deg;
+// setDegree: show only what is within deg of a change (null: everything),
+// opening every box that holds something shown.
+function setDegree(deg){
+  S.deg=deg;
+  const opens=n=>S.deg!==null&&n._in<=S.deg&&kidsOf.has(n.id);
+  V._nodes.forEach(n=>{if(opens(n))S.expanded.add(n.id);});
+  rebuild(false);
+  // Opening a box can reveal boxes inside it that hold shown nodes too.
+  let more=S.deg!==null,g=0;
+  while(more&&g++<16){more=false;V._nodes.forEach(n=>{if(opens(n)&&!S.expanded.has(n.id)){S.expanded.add(n.id);more=true;}});if(more)rebuild(false);}
+  syncChangesBtn();fit();renderPanel();
+}
+function syncChangesBtn(){const b=$('changesSel');b.hidden=!D.on;b.value=S.deg===null?'':String(S.deg);b.classList.toggle('on',S.deg!==null);}
 
 /* ---- filters ---- */
 function hiddenByFilter(n){
@@ -346,6 +405,8 @@ function hiddenByFilter(n){
     if(F.plan.has(planState(n)||'built'))return true;
     if(F.pub.has(pubState(n)))return true;
   }
+  if(n._chg&&F.chg.has(n._chg))return true;
+  if(S.deg!==null&&n._chg&&!shownByDegree(n))return true;
   if(n.type==='boundary'&&F.level.has(n.kind||''))return true;
   if(F.crit.has(n.criticality||''))return true;
   return false;
@@ -366,6 +427,7 @@ function buildFilters(){
     {key:'crit',label:'Criticality',counts:count(n=>n.criticality||''),order:v=>critRank(v),dot:true},
     {key:'place',label:'Placement',counts:count(n=>n.type==='concept'&&!n.ghost?(n.placement||''):undefined),order:v=>placeRank(v),tip:v=>PLACEDEFS[v]},
     {key:'plan',label:'Plan',counts:count(n=>n.type==='concept'&&!n.ghost?(planState(n)||'built'):undefined),order:v=>['built','planned','overdue'].indexOf(v),tip:v=>PLANDEFS[v]},
+    {key:'chg',label:'Change',counts:count(n=>n._chg||undefined),order:v=>CHG_ORDER.indexOf(v),tip:v=>CHGDEFS[v]},
     {key:'pub',label:'Published',counts:count(n=>n.type==='concept'&&!n.ghost?pubState(n):undefined),order:v=>v==='published'?0:1,tip:v=>v==='published'?'On the published seam: importable by other repositories.':'Not published: stays inside this repository.'},
   ];
   groups.forEach(g=>{
@@ -385,7 +447,7 @@ function buildFilters(){
           f.clear();if(!alone)vals.forEach(x=>{if(x!==v)f.add(x);});
           row.querySelectorAll('.chip').forEach((el,i)=>el.classList.toggle('off',f.has(vals[i])));
         }else{f.has(v)?f.delete(v):f.add(v);c.classList.toggle('off');}
-        rebuild(false);renderPanel();draw();};
+        rebuild(false);syncChangesBtn();renderPanel();draw();};
       row.appendChild(c);
     });
     box.appendChild(row);
@@ -411,7 +473,7 @@ function buildFilters(){
   const gl=document.createElement('span');gl.className='gl';gl.textContent='Flags';row.appendChild(gl);
   const l=document.createElement('label');l.innerHTML='<input type="checkbox" id="internal"> show internal mechanisms';row.appendChild(l);
   const reset=document.createElement('button');reset.textContent='Reset filters';reset.style.marginLeft='auto';
-  reset.onclick=()=>{S.f=emptyFilters();S.rels=new Set(V._edges.map(e=>e.p));S.internal=false;buildFilters();rebuild(false);renderPanel();draw();};
+  reset.onclick=()=>{S.f=emptyFilters();S.deg=null;S.rels=new Set(V._edges.map(e=>e.p));S.internal=false;buildFilters();rebuild(false);syncChangesBtn();renderPanel();draw();};
   row.appendChild(reset);
   box.appendChild(row);
   $('internal').checked=S.internal;
@@ -795,7 +857,7 @@ function draw(){
   const sel=S.sel,q=S.q,selNode=sel&&sel.id?sel:null,selEdge=sel&&!sel.id?sel:null;
   const nb=new Set();if(selNode)VE.forEach(e=>{if(e.s===selNode)nb.add(e.o.id);if(e.o===selNode)nb.add(e.s.id);});
   const match=n=>!q||(n.id||'').toLowerCase().includes(q)||(n.label||'').toLowerCase().includes(q);
-  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;if(S.slice&&!n.group){const r=S.slice.roles.get(n.id);if(r&&r.role==='context')a*=.45;}return a;};
+  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;if(S.slice&&!n.group){const r=S.slice.roles.get(n.id);if(r&&r.role==='context')a*=.45;}if(S.deg!==null&&n._dist>0&&n._dist<Infinity)a*=[1,.55,.38,.26][n._dist];return a;};
   // open boundaries, outermost first
   const open=VN.filter(n=>n._open).sort((a,b)=>depthOf(a)-depthOf(b));
   ctx.textAlign='left';ctx.textBaseline='middle';
@@ -1278,6 +1340,7 @@ views.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textC
 sel.onchange=()=>loadView(+sel.value);
 $('search').oninput=ev=>{S.q=ev.target.value.trim().toLowerCase();draw();};
 $('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');};
+$('changesSel').onchange=ev=>setDegree(ev.target.value===''?null:+ev.target.value);
 $('expandAll').onclick=()=>{V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(false);fit();renderPanel();};
 $('collapseAll').onclick=()=>{S.expanded=groupIds();S.focus=null;rebuild(false);fit();renderPanel();};
 $('fit').onclick=fit;
@@ -1313,7 +1376,7 @@ window.glossViewer={
 
 /* ---- go ---- */
 applyTheme(saved);
-try{loadView(viewFromHash());sel.value=S.vi;if(hashParam('open')==='all')$('expandAll').onclick();const hs=readHash();if(hs&&SL)setSlice(hs,true);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
+try{loadView(viewFromHash());sel.value=S.vi;if(hashParam('open')==='all')$('expandAll').onclick();{const c=hashParam('changes');if(c!=null&&D.on&&/^[0-3]$/.test(c))setDegree(+c);}const hs=readHash();if(hs&&SL)setSlice(hs,true);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
 window.addEventListener('hashchange',()=>{if(SL)setSlice(readHash(),true);});
 })();
 </script>
