@@ -320,6 +320,8 @@ function loadView(i){
   rebuild(true);
   // A curated view (one that names its concepts) opens with every box open.
   if(V.curated){V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(true);}
+  // A lone top-level box (one system at system zoom) opens: closed, it is the whole picture.
+  else{const tops=VN.filter(n=>n.type==='boundary'&&!n._c);if(tops.length===1&&alone(tops[0])){S.expanded.add(tops[0].id);rebuild(true);}}
   // A saved slice (slice: in views.yaml) opens with its slice active.
   if(Array.isArray(V.slice)&&V.slice.length&&SL){setSlice(resolveSeeds(V.slice),true);return;}
   fit();
@@ -510,6 +512,8 @@ function repr(id){ // nearest visible node standing in for id
   }
   return null;
 }
+// alone: no other boundary is shown beside b, in its container or at the top.
+function alone(b){return !(b._c?kidsOf.get(b._c.id)||[]:VN).some(x=>x!==b&&x.type==='boundary'&&x._vis&&x._c===b._c);}
 function under(n,anc){let c=n._c,g=0;while(c&&g++<64){if(c===anc)return true;c=c._c;}return false;}
 function depthOf(n){let d=0,c=n._lc;while(c&&d<64){d++;c=c._lc;}return d;}
 function hiddenDesc(n){let c=0;(kidsOf.get(n.id)||[]).forEach(k=>{if(!k._vis)c++;c+=hiddenDesc(k);});return c;}
@@ -540,6 +544,9 @@ function rebuild(seedAll){
     // edge from a boundary to something inside it, or part-of up to the container.
     if(HOUSING.has(e.p)&&a.type==='boundary'&&under(b,a))return;
     if(e.p==='part-of'&&under(a,b))return;
+    // A box's interface edges face its neighbours; a box with none (the one
+    // system at system zoom) would only repeat the edges drawn inside it.
+    if((a.type==='boundary'&&under(b,a)&&alone(a))||(b.type==='boundary'&&under(a,b)&&alone(b)))return;
     const k=a.id+'|'+e.p+'|'+b.id;
     let g=agg.get(k);
     if(!g){g={s:a,o:b,p:e.p,src:new Set(),count:0,via:new Set(),lifted:false,proposed:true,planned:true,rerouted:false,parts:[],diff:''};agg.set(k,g);}

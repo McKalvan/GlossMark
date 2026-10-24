@@ -4,6 +4,7 @@ views:
   concepts:
     doc: For adopters and readers of the docs. The core tier alone at system zoom, what a comment-native code ontology is about, with the Go packages folded into the concepts they realize and the published seam shown.
     include: [gm:*]
+    exclude: [gm:GlossMark]   # the system box already says it
     collapse: { "gmi:*": via realizes }
     show-published: true
     relations: [produces, consumes, constrains, publishes, subscribes, is-a, realizes]
@@ -12,6 +13,9 @@ views:
   architecture:
     doc: For maintainers. Both tiers at component zoom, the command line and the library as containers, the library's components inside it, and each mechanism with its parts two levels deep.
     include: [gm:*, gmi:*]
+    # The areas group the core tier for the concepts view; here the
+    # components do that, so each concept stays in the box that builds it.
+    exclude: [gm:Modelling, gm:Reading, gm:Checking, gm:Reviewing, gm:Projecting, gm:Adopting]
     expand: { part-of: 2 }
     zoom: component
   drift:

@@ -224,6 +224,9 @@ func (p *projector) collapseRule(curie string) string {
 	return ""
 }
 
+// foldRels are the relations a collapsed concept folds along (see target).
+var foldRels = []string{"realizes", "published-as", "part-of", "is-a"}
+
 // target returns the IRIs a concept is shown as in this view.
 func (p *projector) target(iri string, depth int) []string {
 	if t, ok := p.fold[iri]; ok {
@@ -1041,9 +1044,16 @@ func (p *projector) edges() {
 		if p.fold[e.O] != nil {
 			os = p.fold[e.O]
 		}
+		// The edges a collapsed concept folds along are the fold itself:
+		// gmi:Linter realizes gm:Lint is why the Linter is drawn as gm:Lint,
+		// not a relation between the core concepts it folds into.
+		folding := false
+		if sn := p.g.Node(e.S); sn != nil && p.collapseRule(sn.CURIE) != "" {
+			folding = has(foldRels, e.P)
+		}
 		for _, s := range ss {
 			for _, o := range os {
-				if s == o || !p.included[s] || !p.included[o] {
+				if s == o || !p.included[s] || !p.included[o] || folding && has(ss, o) {
 					continue
 				}
 				sc, oc := p.g.Curie(s), p.g.Curie(o)
