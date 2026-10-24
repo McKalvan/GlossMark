@@ -211,6 +211,20 @@
           "type": "string",
           "description": "Actor that proposed the entry, e.g. agent:claude-code@model."
         },
+        "planned": {
+          "description": "The concept is specified and nothing implements it yet (docs/adr/0025-deriving-the-ontology.md 6.1, docs/adr/0034-ontology-first-increments.md). true, or { by: YYYY-MM-DD, ticket: <uri> }, both optional: by is the inclusive deadline after which drift reports plan-overdue; ticket is provenance the tool never reads. Out of coverage and orphans; a plan item in gloss drift until the first implements or represents link reaches it, then planned-closed until gloss accept --planned drops the key. Allowed on core and implementation concepts.",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "by": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                "ticket": { "type": "string", "format": "uri", "minLength": 1 }
+              }
+            }
+          ]
+        },
         "aliases": {
           "$ref": "#/$defs/stringOrList",
           "description": "Other names people and agents use; search_concepts matches them."
@@ -222,7 +236,7 @@
         }
       },
       "patternProperties": {
-        "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|aliases|criticality)$)[a-z][a-z0-9-]*$": {
+        "^(?!(?:kind|label|doc|is-a|part-of|has-part|realizes|published|internal|deprecated|replaced-by|value|shapes|proposed|proposed-by|planned|aliases|criticality)$)[a-z][a-z0-9-]*$": {
           "description": "A relation (produces, consumes, publishes, subscribes, constrains, guards or its alias applies-to, reverses, attaches-to, or one declared under relations:) and its target(s).",
           "$ref": "#/$defs/stringOrList"
         }

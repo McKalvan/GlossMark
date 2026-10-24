@@ -85,7 +85,7 @@ func (ex *extractor) namespaces() {
 	sort.Strings(names)
 	for _, p := range names {
 		o := ex.ws.Ontologies[p]
-		n := &graph.Node{NodeType: model.NodeNamespace, ID: o.IRI, CURIE: p + ":", NS: p, Tier: o.Tier, Version: o.Version, Doc: o.Doc, Imported: !ex.ws.Owned[p]}
+		n := &graph.Node{NodeType: model.NodeNamespace, ID: o.IRI, CURIE: p + ":", NS: p, Tier: o.Tier, Version: o.Version, Doc: o.Doc, Imported: !ex.ws.Owned[p], DeclsFP: declsFingerprint(o)}
 		if d, ok := ex.ws.Config.Owns[p]; ok {
 			n.Owner = d.Owner
 			n.File = d.File
@@ -95,6 +95,19 @@ func (ex *extractor) namespaces() {
 		}
 		ex.g.AddNode(n)
 	}
+}
+
+// declsFingerprint hashes an ontology file's non-concept content: its iri,
+// tier, doc and relation declarations. The gate compares it between base
+// and head, so an edit to relations: cannot hide behind a bookkeeping change
+// to a concept in the same file.
+func declsFingerprint(o *model.Ontology) string {
+	b, _ := json.Marshal(struct {
+		IRI, Tier, Doc string
+		Relations      map[string]model.RelationDecl
+	}{o.IRI, o.Tier, o.Doc, o.Relations})
+	h := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(h[:8])
 }
 
 // resolveRef expands a reference written in an ontology file: bare names are
@@ -129,6 +142,9 @@ func (ex *extractor) ontologies() {
 			n := &graph.Node{NodeType: model.NodeConcept, ID: iri, CURIE: curie, NS: ns, Tier: o.Tier, Kind: c.Kind, Label: c.Label, Doc: c.Doc,
 				Internal: c.Internal, Deprecated: c.Deprecated, Value: c.Value, Imported: !ex.ws.Owned[ns], File: file, Line: c.Line,
 				Proposed: c.Proposed, ProposedBy: c.ProposedBy, Aliases: []string(c.Aliases)}
+			if c.Planned != nil {
+				n.Planned, n.PlanBy, n.PlanTicket = true, c.Planned.By, c.Planned.Ticket
+			}
 			if c.Criticality != "" {
 				n.Criticality, n.CriticalityFrom = c.Criticality, "declared"
 			}
@@ -285,7 +301,11 @@ func (ex *extractor) manifests() {
 		for rel, targets := range m.DeclaredSets() {
 			for _, t := range targets {
 				oiri, _ := ex.g.Expand(t)
-				ex.g.AddEdge(&graph.Edge{S: iri, P: rel, O: oiri, Source: graph.SourceDeclared, Prov: &graph.Prov{Path: m.Path, Line: 1, Raw: t}})
+				prov := &graph.Prov{Path: m.Path, Line: 1, Raw: t}
+				if m.Plans(rel, t) {
+					prov.Rule = graph.RulePlanned
+				}
+				ex.g.AddEdge(&graph.Edge{S: iri, P: rel, O: oiri, Source: graph.SourceDeclared, Prov: prov})
 			}
 		}
 		if m.Owner != "" {

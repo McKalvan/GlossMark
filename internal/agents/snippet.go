@@ -83,6 +83,10 @@ func Snippet(ws *load.Workspace, g *graph.Graph, m *model.Manifest) string {
 				// until a human accepts the concept.
 				notes = append(notes, "PROPOSED")
 			}
+			if n.Planned {
+				// Specified, not built: the name to link the feature to.
+				notes = append(notes, plannedTag(n))
+			}
 			if n.Doc != "" {
 				// The notes are joined with "; ", so a doc's own full stop
 				// would read ".; realizes".

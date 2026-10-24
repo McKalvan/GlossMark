@@ -384,6 +384,10 @@ func (e *Engine) execute(st *State, it *Item, d Decision) (string, error) {
 		return run(args...)
 	case KindFinding:
 		switch d.Action {
+		case ActAccept:
+			if it.Finding == rollup.KindPlannedClosed && it.Concept != "" {
+				return run("accept", "--planned", it.Concept)
+			}
 		case ActWaive:
 			return addWaiver(st.WS, strings.TrimPrefix(it.ID, "finding:"), d)
 		case ActPropose:
