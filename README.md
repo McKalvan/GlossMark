@@ -17,7 +17,7 @@ One grammar, `@gloss`. Two ontology tiers: a **core** the business owns and an *
 
 ## See it
 
-**The map.** `gloss view` draws boundaries as boxes and concepts as nodes. This is the engineering view of a clinic-booking monorepo (Next.js, Go, Python, Postgres, Terraform, Kubernetes, GitHub Actions) sliced to one feature, `clinic:Booking`: the Go handler that realizes it, the page that presents it, the Kubernetes deployment the service runs in, and the drift findings beside them.
+**The map.** `gloss view` draws boundaries as boxes and concepts as nodes. The example is Larkspur Clinics, a monorepo (Next.js, Go, Python, Postgres, Terraform, Kubernetes, GitHub Actions) where patients book and cancel outpatient appointments online, reminders go out before each visit and operations watch the no-show rate. This is its engineering view sliced to one feature, `clinic:Booking`: the Go handler that realizes it, the page that presents it, the Kubernetes deployment the service runs in, and the drift findings beside them.
 
 ![The GlossMark viewer: the engineering view of a clinic-booking monorepo, sliced to clinic:Booking. Boundaries are boxes (Patient site, Booking API, Kubernetes deployment, Reminder worker), the Booking concept is highlighted with its realization and the panel lists the drift findings.](docs/img/viewer-slice.png)
 
