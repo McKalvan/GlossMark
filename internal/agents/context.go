@@ -77,7 +77,7 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 			fmt.Fprintf(&head, "Allowed targets: %s (others are HARD-gated%s)\n", strings.Join(allowed.Patterns, ", "), how)
 		}
 	}
-	head.WriteString(applied(g, opt.Dir))
+	head.WriteString(applied(g, rollup.AppliesRelationsIn(ws.Vocab, "context"), opt.Dir))
 	head.WriteString(remits(g, opt.Actor))
 
 	if rep != nil {
@@ -321,7 +321,7 @@ func conceptLine(g *graph.Graph, n *graph.Node) string {
 // what guards (ADR 0015) or constrains a concept an artifact there links to,
 // or a concept that one stands for, so an agent editing a handler knows the
 // authentication and rate limits it sits behind.
-func applied(g *graph.Graph, dir string) string {
+func applied(g *graph.Graph, rels []string, dir string) string {
 	dir = strings.Trim(filepath.ToSlash(dir), "/")
 	if dir == "." {
 		dir = ""
@@ -329,6 +329,22 @@ func applied(g *graph.Graph, dir string) string {
 	type key struct{ src, rel string }
 	on := map[key]map[string]bool{}
 	var order []key
+	// guarded-by in a manifest at, above or below dir guards code here.
+	for _, mg := range rollup.ManifestGuards(g) {
+		if !rollup.Under(dir, mg.Dir) && !rollup.Under(mg.Dir, dir) {
+			continue
+		}
+		k := key{mg.Guard, "guards"}
+		if on[k] == nil {
+			on[k] = map[string]bool{}
+			order = append(order, k)
+		}
+		where := mg.Dir
+		if where == "" {
+			where = "."
+		}
+		on[k]["code under "+where+"/"] = true
+	}
 	for _, a := range g.NodesOf(model.NodeArtifact) {
 		if dir != "" && a.Path != dir && !strings.HasPrefix(a.Path, dir+"/") {
 			continue
@@ -341,7 +357,7 @@ func applied(g *graph.Graph, dir string) string {
 				continue
 			}
 			for _, x := range append([]string{e.O}, rollup.RealizesStar(g, e.O)...) {
-				for _, rel := range rollup.AppliesRelations {
+				for _, rel := range rels {
 					for _, s := range g.Subjects(x, rel) {
 						k := key{s, rel}
 						if on[k] == nil {
@@ -357,9 +373,21 @@ func applied(g *graph.Graph, dir string) string {
 	if len(order) == 0 {
 		return ""
 	}
+	relRank := func(r string) int {
+		switch r {
+		case "guards":
+			return 0
+		case "constrains":
+			return 1
+		}
+		return 2
+	}
 	sort.Slice(order, func(i, j int) bool {
 		if order[i].rel != order[j].rel {
-			return order[i].rel > order[j].rel // guards before constrains
+			if relRank(order[i].rel) != relRank(order[j].rel) {
+				return relRank(order[i].rel) < relRank(order[j].rel) // guards, constrains, then custom
+			}
+			return order[i].rel < order[j].rel
 		}
 		return g.Curie(order[i].src) < g.Curie(order[j].src)
 	})

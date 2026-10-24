@@ -92,7 +92,15 @@ type Relation struct {
 	// (a soft rule: violations are warnings).
 	RangeKinds []string `json:"range-kinds,omitempty" yaml:"range-kinds,omitempty"`
 	Doc        string   `json:"doc,omitempty" yaml:"doc,omitempty"`
+	// Surfaces opts a custom concept-to-concept relation into the treatment
+	// guards and constrains get: impact (gloss impact lists the code it
+	// applies to) and context (gloss context --dir names it on an Applies
+	// here: line). See docs/adr/0015-guards.md.
+	Surfaces []string `json:"surfaces,omitempty" yaml:"surfaces,omitempty"`
 }
+
+// RelationSurfaces are the values surfaces: takes.
+var RelationSurfaces = []string{"impact", "context"}
 
 var (
 	c    = []NodeType{NodeConcept}
@@ -133,6 +141,7 @@ var BuiltinRelations = []Relation{
 	{Name: "subscribes", Domain: acb, Range: c, Inline: true, Ontology: true, Manifest: true, Derived: true, Lift: LiftRangeLCS, RangeKinds: []string{"event"}},
 	{Name: "constrains", Domain: c, Range: c, Ontology: true, Doc: "A rule that applies to a concept. gloss impact and gloss context show it on both ends; it carries no criticality."},
 	{Name: "guards", Domain: c, Range: c, Ontology: true, Doc: "A cross-cutting mechanism (authentication, a rate limit, a flag) applies to a concept and the code that implements it. gloss impact and gloss context show it on both ends; gloss diff reviews a change to guarded code at the guard's level without the code inheriting it. See docs/adr/0015-guards.md."},
+	{Name: "guarded-by", Domain: []NodeType{NodeBoundary}, Range: c, Manifest: true, Doc: "Boundary → the mechanism every artifact under its directory sits behind: declared in a manifest as guarded-by:. gloss impact and gloss context treat the code under it as guarded by the concept, gloss diff reviews it at the guard's level, and gloss drift reports a handler there that lacks the guard's decorator when its siblings carry it. See docs/adr/0015-guards.md."},
 	{Name: "applies-to", Domain: c, Range: c, Ontology: true, Doc: "Accepted alias of guards in ontology files, stored as guards."},
 	{Name: "reverses", Domain: c, Range: c, Ontology: true},
 	{Name: "attaches-to", Domain: c, Range: c, Ontology: true},
@@ -185,6 +194,9 @@ func (v *Vocabulary) Override(name string, decl RelationDecl) {
 	if decl.Doc != "" {
 		r.Doc = decl.Doc
 	}
+	if len(decl.Surfaces) > 0 {
+		r.Surfaces = decl.Surfaces
+	}
 }
 
 // Get returns the relation or nil.
@@ -222,4 +234,5 @@ type RelationDecl struct {
 	Domain     []NodeType `yaml:"domain,omitempty" json:"domain,omitempty"`
 	Range      []NodeType `yaml:"range,omitempty" json:"range,omitempty"`
 	Doc        string     `yaml:"doc,omitempty" json:"doc,omitempty"`
+	Surfaces   []string   `yaml:"surfaces,omitempty" json:"surfaces,omitempty"`
 }

@@ -29,8 +29,11 @@ type ConceptTouch struct {
 	Guards          []string `json:"guards,omitempty"`       // what this mechanism guards (ADR 0015)
 	GuardedBy       []string `json:"guarded_by,omitempty"`   // mechanisms guarding this, with their level
 	GuardedCode     []string `json:"guarded_code,omitempty"` // files linked to what this guards
-	Boundaries      []string `json:"boundaries,omitempty"`   // boundaries that declare or derive it
-	Tests           []string `json:"tests,omitempty"`        // artifacts that test or verify it
+	// Applies lists the custom relations declared with surfaces: [impact]
+	// that touch this concept, on either end.
+	Applies    []AppliedTouch `json:"applies,omitempty"`
+	Boundaries []string       `json:"boundaries,omitempty"` // boundaries that declare or derive it
+	Tests      []string       `json:"tests,omitempty"`      // artifacts that test or verify it
 	// TestsVia lists the tests of the concepts that realize this one, which
 	// gloss drift counts for it.
 	TestsVia       []ViaTests `json:"tests_via,omitempty"`
@@ -52,18 +55,31 @@ type ViaTests struct {
 
 // FileTouch is what one changed file touches.
 type FileTouch struct {
-	Path     string         `json:"path"`
-	Boundary string         `json:"boundary,omitempty"`
-	Manifest string         `json:"manifest,omitempty"`
-	Allowed  []string       `json:"allowed,omitempty"`
-	Links    []LinkTouch    `json:"links"`
-	Concepts []ConceptTouch `json:"concepts"`
-	Gate     Class          `json:"gate"`
-	Hints    []string       `json:"hints,omitempty"`
+	Path     string `json:"path"`
+	Boundary string `json:"boundary,omitempty"`
+	// GuardedBy names the mechanisms a manifest puts this file behind with
+	// guarded-by, with their level (ADR 0015).
+	GuardedBy []string       `json:"guarded_by,omitempty"`
+	Manifest  string         `json:"manifest,omitempty"`
+	Allowed   []string       `json:"allowed,omitempty"`
+	Links     []LinkTouch    `json:"links"`
+	Concepts  []ConceptTouch `json:"concepts"`
+	Gate      Class          `json:"gate"`
+	Hints     []string       `json:"hints,omitempty"`
 	// Criticality is the highest level among the file's boundary and the
 	// concepts it touches; CriticalityFrom names the node that carries it.
 	Criticality     string `json:"criticality,omitempty"`
 	CriticalityFrom string `json:"criticality_from,omitempty"`
+}
+
+// AppliedTouch is a custom relation with surfaces: [impact] on a concept:
+// what the concept applies it to, what applies it to the concept, and the
+// files linked to what it applies to.
+type AppliedTouch struct {
+	Relation string   `json:"relation"`
+	To       []string `json:"to,omitempty"`
+	By       []string `json:"by,omitempty"`
+	Code     []string `json:"code,omitempty"`
 }
 
 // LinkTouch is one marker in a changed file.
@@ -93,6 +109,15 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 				}
 			}
 		}
+		for _, id := range rollup.PathGuards(g, f) {
+			if gn := g.Node(id); gn != nil {
+				label := gn.CURIE
+				if gn.Criticality != "" {
+					label += " (" + gn.Criticality + ")"
+				}
+				ft.GuardedBy = append(ft.GuardedBy, label)
+			}
+		}
 		seen := map[string]bool{}
 		code := false
 		addConcept := func(id string) {
@@ -101,7 +126,7 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 				return
 			}
 			seen[id] = true
-			ft.Concepts = append(ft.Concepts, describeTouch(g, n, f))
+			ft.Concepts = append(ft.Concepts, describeTouch(g, ws, n, f))
 		}
 		switch {
 		case strings.HasSuffix(f, ".gloss.yaml") && !strings.HasSuffix(f, "/.gloss.yaml") && f != ".gloss.yaml":
@@ -149,6 +174,9 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 					ft.Gate = Max(ft.Gate, cls)
 					// A guard raises the file's review level, not its own (ADR 0015).
 					if gn := topGuard(g, e.P, e.O); gn != nil && model.CriticalityRank(gn.Criticality) > model.CriticalityRank(ft.Criticality) {
+						ft.Criticality, ft.CriticalityFrom = gn.Criticality, gn.CURIE+" (guard)"
+					}
+					if gn := topPathGuard(g, e); gn != nil && model.CriticalityRank(gn.Criticality) > model.CriticalityRank(ft.Criticality) {
 						ft.Criticality, ft.CriticalityFrom = gn.Criticality, gn.CURIE+" (guard)"
 					}
 					if on := g.Node(e.O); on != nil && on.Criticality != "" && !rollup.CarriesCriticality(e.P) {
@@ -264,7 +292,7 @@ func realizesChain(g *graph.Graph, id string) []string {
 	return out
 }
 
-func describeTouch(g *graph.Graph, n *graph.Node, self string) ConceptTouch {
+func describeTouch(g *graph.Graph, ws *load.Workspace, n *graph.Node, self string) ConceptTouch {
 	c := ConceptTouch{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, Published: n.Published, Proposed: n.Proposed, Deprecated: n.Deprecated, Internal: n.Internal, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom}
 	for _, e := range g.In(n.ID, "published-as") {
 		c.PublishedBy = append(c.PublishedBy, g.Curie(e.S))
@@ -288,7 +316,23 @@ func describeTouch(g *graph.Graph, n *graph.Node, self string) ConceptTouch {
 		}
 		c.GuardedBy = append(c.GuardedBy, label)
 	}
-	c.GuardedCode = without(rollup.AppliedCode(g, n.ID, "guards"), self)
+	c.GuardedCode = without(uniq(append(rollup.AppliedCode(g, n.ID, "guards"), rollup.ManifestGuardedCode(g, n.ID)...)), self)
+	sort.Strings(c.GuardedCode)
+	for _, rel := range rollup.AppliesRelationsIn(ws.Vocab, "impact")[len(rollup.AppliesRelations):] {
+		var to, by []string
+		for _, o := range g.Objects(n.ID, rel) {
+			to = append(to, g.Curie(o))
+		}
+		for _, s := range g.Subjects(n.ID, rel) {
+			by = append(by, g.Curie(s))
+		}
+		code := without(rollup.AppliedCode(g, n.ID, rel), self)
+		if len(to)+len(by)+len(code) > 0 {
+			sort.Strings(to)
+			sort.Strings(by)
+			c.Applies = append(c.Applies, AppliedTouch{Relation: rel, To: to, By: by, Code: code})
+		}
+	}
 	c.ConstrainedCode = without(rollup.AppliedCode(g, n.ID, "constrains"), self)
 	sort.Strings(c.Guards)
 	sort.Strings(c.GuardedBy)

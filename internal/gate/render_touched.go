@@ -19,6 +19,9 @@ func RenderTouched(ts []FileTouch) string {
 			fmt.Fprintf(&sb, ", criticality %s", t.Criticality)
 		}
 		sb.WriteString("]\n")
+		if len(t.GuardedBy) > 0 {
+			fmt.Fprintf(&sb, "  guarded by %s (guarded-by in %s)\n", strings.Join(t.GuardedBy, ", "), t.Manifest)
+		}
 		for _, l := range t.Links {
 			q := ""
 			if l.Proposed {
@@ -58,6 +61,14 @@ func RenderTouched(ts []FileTouch) string {
 			if len(c.GuardedBy) > 0 {
 				bits = append(bits, "guarded by "+strings.Join(c.GuardedBy, ", "))
 			}
+			for _, a := range c.Applies {
+				if len(a.To) > 0 {
+					bits = append(bits, a.Relation+" "+strings.Join(a.To, ", "))
+				}
+				if len(a.By) > 0 {
+					bits = append(bits, a.Relation+" by "+strings.Join(a.By, ", "))
+				}
+			}
 			if c.Proposed {
 				bits = append(bits, "PROPOSED")
 			}
@@ -82,6 +93,11 @@ func RenderTouched(ts []FileTouch) string {
 			}
 			if len(c.ConstrainedCode) > 0 {
 				fmt.Fprintf(&sb, "      constrained code: %s\n", strings.Join(c.ConstrainedCode, ", "))
+			}
+			for _, a := range c.Applies {
+				if len(a.Code) > 0 {
+					fmt.Fprintf(&sb, "      %s code: %s\n", a.Relation, strings.Join(a.Code, ", "))
+				}
 			}
 			for _, w := range c.Warnings {
 				fmt.Fprintf(&sb, "      ! %s\n", w)

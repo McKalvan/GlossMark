@@ -20,7 +20,7 @@ import (
 // (ADR 0019) and consistent pairs need nothing.
 var findingKinds = map[string]bool{
 	rollup.KindViolation: true, rollup.KindGap: true, rollup.KindRogue: true, rollup.KindOrphan: true,
-	rollup.KindUntested: true, rollup.KindPresentedOnly: true, rollup.KindDangling: true, rollup.KindOverdue: true,
+	rollup.KindUntested: true, rollup.KindPresentedOnly: true, rollup.KindUnguarded: true, rollup.KindDangling: true, rollup.KindOverdue: true,
 	rollup.KindOutOfRange: true, rollup.KindDeprecatedUse: true, rollup.KindValueDrift: false,
 	// A closed plan item waits on the key being dropped; an overdue one on
 	// a date or a waiver. An open plan item waits on code, not a reviewer.

@@ -641,7 +641,11 @@ type Manifest struct {
 	// Configures names the concepts whose value this boundary edits at
 	// runtime (an admin page for a limit); compared like presents, never
 	// implies realizes (ADR 0012).
-	Configures       StringList `yaml:"configures,omitempty" json:"configures,omitempty"`
+	Configures StringList `yaml:"configures,omitempty" json:"configures,omitempty"`
+	// GuardedBy names the mechanisms every artifact under the directory sits
+	// behind (authentication, a rate limit): guarded code without a guards:
+	// list in the ontology (ADR 0015).
+	GuardedBy        StringList `yaml:"guarded-by,omitempty" json:"guarded-by,omitempty"`
 	DefaultNamespace string     `yaml:"default-namespace,omitempty" json:"default-namespace,omitempty"`
 	Allowed          StringList `yaml:"allowed,omitempty" json:"allowed,omitempty"`
 	Generated        StringList `yaml:"generated,omitempty" json:"generated,omitempty"`

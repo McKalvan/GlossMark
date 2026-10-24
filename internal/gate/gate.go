@@ -644,6 +644,13 @@ func (c *classifier) governance() {
 			if on != nil {
 				guards = guardsOf(gr, ch.Relation, on.ID)
 			}
+			if ch.Path != "" && rollup.GuardedLink(ch.Relation) {
+				for _, id := range rollup.PathGuards(c.head, ch.Path) {
+					if gn := c.head.Node(id); gn != nil {
+						guards = append(guards, gn)
+					}
+				}
+			}
 			for _, gn := range guards {
 				consider(gn)
 			}
@@ -885,6 +892,9 @@ func LinkCriticality(g *graph.Graph, ws *load.Workspace, e *graph.Edge) (lvl, fr
 	if gn := topGuard(g, e.P, e.O); gn != nil && model.CriticalityRank(gn.Criticality) > model.CriticalityRank(lvl) {
 		lvl, from = gn.Criticality, gn.CURIE
 	}
+	if gn := topPathGuard(g, e); gn != nil && model.CriticalityRank(gn.Criticality) > model.CriticalityRank(lvl) {
+		lvl, from = gn.Criticality, gn.CURIE
+	}
 	if e.Prov != nil {
 		if m := ws.ManifestFor(e.Prov.Path); m != nil {
 			if b := g.NodeByCurie(m.Boundary); b != nil {
@@ -919,6 +929,22 @@ func topGuard(g *graph.Graph, rel, obj string) *graph.Node {
 	var best *graph.Node
 	for _, n := range guardsOf(g, rel, obj) {
 		if n.Criticality != "" && (best == nil || model.CriticalityRank(n.Criticality) > model.CriticalityRank(best.Criticality)) {
+			best = n
+		}
+	}
+	return best
+}
+
+// topPathGuard is the most critical guard a manifest declares with
+// guarded-by over the file of an inline link, or nil: the same review level
+// as a guard declared in the ontology.
+func topPathGuard(g *graph.Graph, e *graph.Edge) *graph.Node {
+	if e.Prov == nil || e.Prov.Path == "" || !rollup.GuardedLink(e.P) {
+		return nil
+	}
+	var best *graph.Node
+	for _, id := range rollup.PathGuards(g, e.Prov.Path) {
+		if n := g.Node(id); n != nil && n.Criticality != "" && (best == nil || model.CriticalityRank(n.Criticality) > model.CriticalityRank(best.Criticality)) {
 			best = n
 		}
 	}

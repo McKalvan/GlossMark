@@ -25,11 +25,17 @@ A cross-cutting concern (authentication, rate limiting, feature flags, request l
 - A guarded handler with no level of its own shows `criticality high` in `gloss impact` and in its `gloss diff` change, from the guard, while the graph and `gloss criticality` still report it unclassified.
 - `guards` targets are checked like any ontology relation: GM215 for a missing target, the tier rule (GM310) for a core concept guarding an implementation concept.
 
+## Amendment, 2026-10-24: the manifest form, custom surfaces and drift (#202)
+
+The three items this ADR deferred are built.
+
+1. **`guarded-by:` in a manifest** (`guarded-by: [xapi:BearerAuthentication]`) is a `guarded-by` edge from the boundary to the concept. Every artifact under the manifest's directory with a link other than a test, a document or an agent file is guarded code, as if the ontology listed its concept under `guards:`: `gloss impact` shows `guarded by` on the file and lists it under the guard's `guarded code:`, `gloss context --dir` names it on `Applies here:` (for the directory, an enclosing one or one beneath it), and decision 5 applies. It is directory-based like the manifest itself, not `part-of`-based. It is not a declared intent: drift does not compare it with derived edges, and it does not widen `allowed`.
+2. **`surfaces:` on a relation declaration** (`relations: { audits: { surfaces: [impact, context] } }`) gives a custom concept-to-concept relation decisions 3 and 4: `impact` shows it on both ends with an `<relation> code:` line, `context` puts it on `Applies here:`. It does not get decision 5: a custom relation never sets a review level. Without `surfaces` a declared relation stays inert. An unknown surface is GM308.
+3. **`unguarded` in `gloss drift`.** The manifest form has its own drift semantics. Evidence that a handler is guarded is its decorator stack (ADR 0014); the guard's decorator names are the symbols of the declarations that `implement` the guard or a concept realizing it. Under a `guarded-by` directory, a handler (a symbol-anchored artifact with a guarded link, other than the guard's own implementation) that carries none of those names is `unguarded` when at least one other handler there carries one. When no handler carries one the guard is applied some other way (middleware, a router), and the declaration is taken at its word: no finding. The finding is a warning and not in the default `--fail-on` set.
+
 ## Deferred
 
-- A manifest key `guarded-by: [xapi:BearerAuthentication]` meaning every artifact under the directory is guarded. The ontology form covers the lab's done-when and keeps one place to look; a manifest form needs its own drift semantics.
-- `relations: { x: { surfaces: [impact, context] } }` for a custom relation to opt into the same treatment.
-- `gloss drift` findings for guards (an unguarded handler in a guarded boundary).
+- Nothing from the first version of this ADR.
 
 ## Alternatives considered
 
