@@ -228,7 +228,7 @@ const PLACEMENTS=['housed','shared','flow','bound','surface','unlinked'];
 const PLACEDEFS={
   housed:'Inside a boundary box: a boundary\u2019s code realizes or represents it.',
   shared:'Unplaced: several unrelated boundaries realize or represent it and no boundary encloses them all. A common parent manifest may be missing.',
-  flow:'Unplaced: a boundary produces, consumes, publishes or subscribes to it. Expected for outputs, inputs and events that pass between boundaries.',
+  flow:'Unplaced: nothing shown produces or publishes it, or what does shares no enclosing boundary with what uses it. Expected for inputs from outside and for what passes between unrelated systems.',
   bound:'Unplaced: its value is bound to a line of code with value-from or publishes-value.',
   surface:'Unplaced: only pages present it or shells host it.',
   unlinked:'Unplaced: no boundary or artifact places it or flows it. Usually nothing links to it; gloss drift reports such a concept as an orphan.'};

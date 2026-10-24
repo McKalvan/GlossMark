@@ -445,7 +445,9 @@ func (p *projector) artifacts() {
 // (declared in manifests or derived from the artifacts beneath them), mapped
 // through this view's folds. The deepest candidates win; when several
 // unrelated boundaries house one concept it goes to their nearest common
-// enclosing boundary, or stays unplaced when there is none. A part-of tree
+// enclosing boundary, or stays unplaced when there is none. A concept no
+// boundary houses goes to the nearest boundary enclosing everything that
+// produces, consumes, publishes or subscribes to it (ADR 0036). A part-of tree
 // moves as one: its root takes the common boundary of its parts.
 func (p *projector) house() {
 	// Tie-break: a boundary whose own code implements or represents the
@@ -461,7 +463,9 @@ func (p *projector) house() {
 	// concept that realizes it) beats one whose code only derives it, so a
 	// gateway schema that represents an entity does not take it from the
 	// service that declares holds: for it (ADR 0012, ADR 0013).
-	cand := map[string]map[string]int{} // concept CURIE → boundary CURIE → strength
+	cand := map[string]map[string]int{}   // concept CURIE → boundary CURIE → strength
+	flows := map[string]map[string]bool{} // concept CURIE → boundaries that flow it
+	sourced := map[string]bool{}          // concept CURIE → a boundary produces or publishes it
 	for _, b := range p.g.NodesOf(model.NodeBoundary) {
 		bt := p.fold[b.ID]
 		if len(bt) == 0 || !p.included[bt[0]] {
@@ -498,6 +502,23 @@ func (p *projector) house() {
 				}
 			}
 		}
+		for _, r := range flowRels {
+			for _, e := range p.g.Out(b.ID, r[0]) {
+				for _, t := range p.target(e.O, 0) {
+					tc := p.g.Curie(t)
+					if i, ok := p.byID[tc]; !p.included[t] || !ok || p.nodes[i].Type != "concept" {
+						continue
+					}
+					if flows[tc] == nil {
+						flows[tc] = map[string]bool{}
+					}
+					flows[tc][bc] = true
+					if r[0] == "produces" || r[0] == "publishes" {
+						sourced[tc] = true
+					}
+				}
+			}
+		}
 	}
 	strongest := map[string]map[string]bool{}
 	for cu, byB := range cand {
@@ -515,6 +536,24 @@ func (p *projector) house() {
 		}
 		strongest[cu] = set
 		p.nodes[p.byID[cu]].Boundary = p.resolveBoundary(set)
+	}
+	// Flow is the weaker tier: it places only a concept nothing houses, and
+	// leaves it unplaced when the parties share no enclosing boundary, the
+	// seam between unrelated systems that the flow group is for. Consumers
+	// alone never place it: what they consume comes from outside.
+	flowedTo := map[string]string{} // concept CURIE → boundary its flows place it in
+	for cu, set := range flows {
+		if _, housed := cand[cu]; housed {
+			delete(flows, cu)
+			continue
+		}
+		if !sourced[cu] {
+			continue
+		}
+		if b := p.resolveBoundary(set); b != "" {
+			p.nodes[p.byID[cu]].Boundary = b
+			flowedTo[cu] = b
+		}
 	}
 	// Part-of trees: the root adopts the common boundary of its descendants
 	// when it has none of its own; parts without one follow the root.
@@ -568,7 +607,7 @@ func (p *projector) house() {
 	for _, i := range follow {
 		p.nodes[i].Boundary = p.nodes[rootOf(i)].Boundary
 	}
-	p.place(strongest)
+	p.place(strongest, flows, flowedTo)
 }
 
 // ownCode reports whether a derived housing edge is the boundary's own code
@@ -692,8 +731,9 @@ var surfaceRels = [][2]string{{"presents", "presented by"}, {"hosts", "hosted by
 
 // place gives every concept node its placement and the reason for it.
 // strongest holds each concept's strongest housing candidates; a concept left
-// without a boundary that has any is shared.
-func (p *projector) place(strongest map[string]map[string]bool) {
+// without a boundary that has any is shared. flows holds the shown boundaries
+// that flow a concept nothing houses, and flowedTo the box they placed it in.
+func (p *projector) place(strongest, flows map[string]map[string]bool, flowedTo map[string]string) {
 	links := map[string]map[string]map[string]bool{} // concept CURIE → relation → who
 	add := func(iri, rel, who string) {
 		for _, t := range p.target(iri, 0) {
@@ -755,10 +795,16 @@ func (p *projector) place(strongest map[string]map[string]bool) {
 		switch {
 		case n.Boundary != "":
 			n.Placement, n.PlacementReason = PlacementHoused, "inside "+n.Boundary
+			if flowedTo[n.ID] == n.Boundary {
+				n.PlacementReason += "; " + reason(l, flowRels)
+			}
 		case len(strongest[n.ID]) > 0:
 			n.Placement, n.PlacementReason = PlacementShared, "realized or represented by "+list(p.deepest(strongest[n.ID]))+", and no boundary encloses them all"
 		case reason(l, flowRels) != "":
 			n.Placement, n.PlacementReason = PlacementFlow, reason(l, flowRels)
+			if len(p.deepest(flows[n.ID])) > 1 {
+				n.PlacementReason += ", and no boundary encloses them all"
+			}
 		case len(l["value-from"]) > 0:
 			n.Placement, n.PlacementReason = PlacementBound, "value bound to code at "+list(keys(l["value-from"]))
 		case reason(l, surfaceRels) != "":
