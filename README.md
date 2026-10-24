@@ -17,13 +17,13 @@ One grammar, `@gloss`. Two ontology tiers: a **core** the business owns and an *
 
 ## See it
 
-**The map.** `gloss view` draws boundaries as boxes and concepts as nodes. The example is Larkspur Clinics, a monorepo (Next.js, Go, Python, Postgres, Terraform, Kubernetes, GitHub Actions) where patients book and cancel outpatient appointments online, reminders go out before each visit and operations watch the no-show rate. This is its engineering view sliced to one feature, `clinic:Booking`: the Go handler that realizes it, the page that presents it, the Kubernetes deployment the service runs in, and the drift findings beside them.
-
-![The GlossMark viewer: the engineering view of a clinic-booking monorepo, sliced to clinic:Booking. Boundaries are boxes (Patient site, Booking API, Kubernetes deployment, Reminder worker), the Booking concept is highlighted with its realization and the panel lists the drift findings.](docs/img/viewer-slice.png)
-
-**The business view of the same graph.** The implementation tier folds into what it realizes, so a practice manager sees Booking, Cancellation, Availability and the two values engineering publishes, and nothing named after a Go package.
+**The map.** `gloss view` draws boundaries as boxes and concepts as nodes. The example is Larkspur Clinics, a monorepo (Next.js, Go, Python, Postgres, Terraform, Kubernetes, GitHub Actions) where patients book and cancel outpatient appointments online, reminders go out before each visit and operations watch the no-show rate. This is its business view: the implementation tier folds into what it realizes, so a practice manager sees Booking, Cancellation, Availability and the two values engineering publishes, and nothing named after a Go package.
 
 ![The business view: only core concepts, with the two published values ringed.](docs/img/viewer-business.png)
+
+**The engineering view of the same graph,** sliced to one feature, `clinic:Booking`: the Go handler that realizes it, the page that presents it, the Kubernetes deployment the service runs in, and the drift findings beside them.
+
+![The GlossMark viewer: the engineering view of a clinic-booking monorepo, sliced to clinic:Booking. Boundaries are boxes (Patient site, Booking API, Kubernetes deployment, Reminder worker), the Booking concept is highlighted with its realization and the panel lists the drift findings.](docs/img/viewer-slice.png)
 
 **The review.** `gloss review` is the queue of everything an agent proposed, every link that went stale, every rogue concept and every finding, each with the gate it needs (AUTO, SOFT, HARD) and who may decide it. An agent clears the AUTO and SOFT items itself and leaves a recommendation on the HARD ones.
 
