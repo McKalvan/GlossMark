@@ -191,12 +191,15 @@ func Migrating(a, b *graph.Node) bool {
 }
 
 // overlaps reports each concept that two or more unrelated boundaries
-// realize or hold, unless every one of them is linked to another by a
-// declared migration (deprecated + replaced-by), which says the overlap is
+// realize or declare they hold, unless every one of them is linked to another
+// by a declared migration (deprecated + replaced-by), which says the overlap is
 // intended and ends when the old side is deleted.
 func (c *comparer) overlaps() {
 	for _, rel := range []string{"realizes", "holds"} {
 		sets := OwnRealizers(c.g, rel)
+		if rel == "holds" {
+			sets = Holders(c.g)
+		}
 		names := make([]string, 0, len(sets))
 		for k := range sets {
 			names = append(names, k)
@@ -360,7 +363,13 @@ func (c *comparer) boundaries() {
 			// never covers a gap (ADR 0026).
 			derivedEdges := map[string][]*graph.Edge{}
 			intendedEdges := map[string][]*graph.Edge{}
-			for _, e := range c.g.Out(b.ID, rel) {
+			// holds is declared only; the code's side is what it represents
+			// (ADR 0037).
+			codeRel := rel
+			if rel == "holds" {
+				codeRel = "represents"
+			}
+			for _, e := range c.g.Out(b.ID, codeRel) {
 				switch {
 				case e.Source != graph.SourceDerived:
 				case e.Prov != nil && e.Prov.Rule == RuleIntended:
@@ -384,8 +393,8 @@ func (c *comparer) boundaries() {
 				if rel == "realizes" && c.eventOnly(d) {
 					continue // events are compared through publishes/subscribes, not realizes
 				}
-				if rel == "holds" && c.flowShape(b.ID, d) {
-					continue // a payload type is the shape of the boundary's flow, not stored data
+				if rel == "holds" {
+					continue // representing a concept is no claim to own it: a DTO or a cache is not a violation
 				}
 				covered := false
 				for _, s := range declared {
@@ -558,8 +567,8 @@ func (c *comparer) unlifted(b, s string) []string {
 }
 
 // KindMismatch explains why a manifest relation cannot be satisfied for a
-// concept of the wrong kind: publishes and subscribes take events (since
-// ADR 0013 represents derives holds on any kind). Empty when the kind fits.
+// concept of the wrong kind: publishes and subscribes take events (holds
+// takes any kind, ADR 0013). Empty when the kind fits.
 func KindMismatch(g *graph.Graph, rel, iri string) string {
 	n := g.Node(iri)
 	if n == nil || n.NodeType != model.NodeConcept || n.Kind == "" {
@@ -1059,25 +1068,6 @@ func (c *comparer) eventOnly(id string) bool {
 		}
 	}
 	return true
-}
-
-// flowShape reports whether an event-only concept is one boundary b
-// publishes, subscribes, produces or consumes: code that represents it there
-// is the flow's payload, so its derived holds needs no holds: entry (#172).
-// It still covers a declared one, so an event log can be declared. The flow
-// is the code's or the manifest's; a concept's intent alone does not count.
-func (c *comparer) flowShape(b, id string) bool {
-	if !c.eventOnly(id) {
-		return false
-	}
-	for _, rel := range LiftedRelations {
-		for _, e := range c.g.Out(b, rel) {
-			if e.O == id && !intent(e) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (c *comparer) orphans() {

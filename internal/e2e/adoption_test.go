@@ -84,16 +84,16 @@ func TestForeignKeyIsOwnSubject(t *testing.T) {
 func TestGroupedViolationPointsAtSets(t *testing.T) {
 	root, write := workspace(t)
 	write("glossmark.yaml", "owns:\n  frt: { iri: https://x/frt/, tier: core }\n")
-	write("ontology/frt.gloss.yaml", "concepts:\n  ShipmentBooked: { kind: entity }\n  ShipmentPickedUp: { kind: entity }\n  Route: { kind: entity }\n")
-	write(".gloss.yaml", "boundary: o:planner\nlevel: container\nholds: [frt:Route]\n")
-	write("a.py", "# @gloss represents frt:ShipmentBooked\nclass A: pass\n# @gloss represents frt:ShipmentPickedUp\nclass B: pass\n")
+	write("ontology/frt.gloss.yaml", "concepts:\n  ShipmentBooked: { kind: process }\n  ShipmentPickedUp: { kind: process }\n  Route: { kind: process }\n")
+	write(".gloss.yaml", "boundary: o:planner\nlevel: container\nrealizes: [frt:Route]\n")
+	write("a.py", "# @gloss implements frt:ShipmentBooked\ndef a(): pass\n# @gloss implements frt:ShipmentPickedUp\ndef b(): pass\n")
 	ws, g, _, lg := build(t, root)
 	rep := rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
 	vs := findings(rep, rollup.KindViolation)
 	if len(vs) != 2 || vs[0].Concept != "frt:ShipmentBooked" {
 		t.Fatalf("violations = %+v", vs)
 	}
-	if want := "o:planner holds frt:ShipmentPickedUp, which its declared holds does not cover (declared and derived sets: see the frt:ShipmentBooked line)"; vs[1].Msg != want {
+	if want := "o:planner realizes frt:ShipmentPickedUp, which its declared realizes does not cover (declared and derived sets: see the frt:ShipmentBooked line)"; vs[1].Msg != want {
 		t.Errorf("second violation = %q, want %q", vs[1].Msg, want)
 	}
 }

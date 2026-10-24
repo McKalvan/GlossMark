@@ -111,7 +111,8 @@ func TestVersioningGate(t *testing.T) {
 }
 
 // TestRealizationChanges: gloss diff says what moved (#98): one line per
-// concept whose realizing or holding boundaries changed, a change for the
+// concept whose realizing boundaries changed (holds is declared, so a change
+// to it is a manifest change, ADR 0037), a change for the
 // boundary that lost its last implementation, HARD when nothing realizes
 // the concept any more, and a deleted view listed as changed.
 func TestRealizationChanges(t *testing.T) {
@@ -132,11 +133,8 @@ func TestRealizationChanges(t *testing.T) {
 	for _, r := range im.Realizations {
 		lines = append(lines, r.String())
 	}
-	want := []string{"z:Invoicing realized by {o:old} → {o:new, o:old}", "z:Invoice held by {o:old} → {o:new, o:old}"}
-	for _, w := range want {
-		if !has(lines, w) {
-			t.Errorf("realization changes %v, want %q", lines, w)
-		}
+	if want := []string{"z:Invoicing realized by {o:old} → {o:new, o:old}"}; strings.Join(lines, "\n") != strings.Join(want, "\n") {
+		t.Errorf("realization changes %v, want %v", lines, want)
 	}
 	if !strings.Contains(gate.RenderText(im), "Realization changes:\n  z:Invoicing realized by") {
 		t.Errorf("text render lacks the block:\n%s", gate.RenderText(im))
@@ -149,7 +147,7 @@ func TestRealizationChanges(t *testing.T) {
 	im = gate.Classify(during, after, ws, gate.Options{Base: "during", Policy: ws.Config.EffectivePolicy(),
 		BaseViews: &model.Views{Views: map[string]*model.View{"business": {}, "invoicing-migration": {}}}})
 	rm := changesOf(im, "realization-removed")
-	if len(rm) != 2 || rm[0].Msg == "" || !strings.Contains(rm[0].Msg, "o:old no longer") || !strings.Contains(rm[0].Msg, "now o:new") || rm[0].Gate != gate.SOFT {
+	if len(rm) != 1 || rm[0].Msg == "" || !strings.Contains(rm[0].Msg, "o:old no longer") || !strings.Contains(rm[0].Msg, "now o:new") || rm[0].Gate != gate.SOFT {
 		t.Errorf("cutover: %+v", rm)
 	}
 	if !has(im.ViewsChanged, "invoicing-migration (removed)") {

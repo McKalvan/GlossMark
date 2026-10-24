@@ -759,11 +759,11 @@ func (c *checker) manifests() {
 				}
 				if allowed.Derived {
 					msg := fmt.Sprintf("%s %s is outside the allowed set derived from %s (HARD gate); declare the concept there, or write allowed: to widen it (gloss check --explain shows the set)", e.P, on.CURIE, m.Path)
-					// An API or wire schema of data stored elsewhere presents it:
-					// represents would make this boundary hold it (ADR 0013).
+					// An API or wire schema of data stored elsewhere is a shape
+					// of it; representing it claims no ownership (ADR 0037).
 					if e.P == "represents" {
 						if holder := c.declaredHolder(on.ID, b.ID); holder != "" {
-							msg += fmt.Sprintf("; %s declares holds %s, so if this is an API or wire schema of data stored there, write presents %s instead", holder, on.CURIE, on.CURIE)
+							msg += fmt.Sprintf("; %s declares holds %s, and representing it here claims no ownership, so if this is a copy or a wire schema of data stored there, write allowed: [derived, %s]", holder, on.CURIE, on.CURIE)
 						}
 					}
 					c.add(e.Prov.Path, e.Prov.Line, "warning", "GM503", msg)

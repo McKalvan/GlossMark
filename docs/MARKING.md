@@ -76,7 +76,7 @@ With the inline form the surface is not a concept, so it is never untested and n
 
 ## API and wire schemas
 
-A GraphQL type, an OpenAPI schema or a protobuf message in a gateway looks like a data shape, but when the entity is stored elsewhere the gateway does not hold it. Mark it `presents hp:Order` (or leave it unmarked), not `represents`: `represents` makes the boundary `hold` the entity. Keep `represents` for the table, model or file where the data lives. `gloss check` says so when a `represents` falls outside the allowed set and another boundary declares `holds` for the concept (GM503).
+A GraphQL type, an OpenAPI schema, a protobuf message or a cache table is a data shape too, so `represents hp:Order` is right on it. Representing a concept claims no ownership: the boundary where the data lives says so with `holds: [hp:Order]` in its manifest, and only that places the entity in its box ([ADR 0037](adr/0037-holds-is-declared-ownership.md)). When a `represents` falls outside the allowed set and another boundary declares `holds` for the concept, `gloss check` suggests widening `allowed:` (GM503).
 
 ## Value editors
 

@@ -3,6 +3,7 @@ boundary: acme:holds-worker
 level: container
 part-of: acme:library-platform
 realizes: [lib:HoldFulfillment, lib:PickupWindow]
+holds: [lib:Hold]
 default-namespace: hw
 allowed: [lib:Hold, lib:Item, lib:HoldFulfillment, lib:ItemReturned, lib:HoldReady, lib:PickupWindow, hw:*]
 owner: holds-eng

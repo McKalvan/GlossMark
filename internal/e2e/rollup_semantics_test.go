@@ -198,19 +198,15 @@ func TestInheritOnFlowsAndHolds(t *testing.T) {
 			t.Errorf("platform %s: %+v, want consistent", rel, fs)
 		}
 	}
-	// A nested boundary that holds data but declares no holds.
+	// A nested boundary whose code represents data it declares no holds for
+	// is a shape, not an omission (ADR 0037).
 	write("services/assess/.gloss.yaml", "boundary: o:assess\nlevel: container\n")
 	write("services/assess/rows.py", "# @gloss represents cl:Assessment\nclass AssessmentRow: pass\n")
 	rep, _ = compare(t, root)
-	var v []rollup.Finding
 	for _, f := range rep.Findings {
 		if f.Kind == rollup.KindViolation {
-			v = append(v, f)
+			t.Errorf("violation for an undeclared shape: %+v", f)
 		}
-	}
-	if len(v) != 1 || v[0].Boundary != "o:assess" || v[0].Relation != "holds" || v[0].Path != "services/assess/.gloss.yaml" ||
-		!strings.Contains(v[0].Msg, "o:assess holds 1 concept but declares no holds; o:platform inherits from it: declare it under holds in services/assess/.gloss.yaml: {cl:Assessment}") {
-		t.Errorf("violations = %+v", v)
 	}
 	// presents takes no inherit: the word stays an unresolved target.
 	write(".gloss.yaml", "boundary: o:platform\nlevel: system\npresents: [inherit]\n")

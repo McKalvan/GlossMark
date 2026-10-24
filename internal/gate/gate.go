@@ -156,22 +156,19 @@ type VersionChange struct {
 	OK        bool   `json:"ok"`
 }
 
-// RealizationChange is a concept whose deepest realizing (relation realizes)
-// or holding (holds) boundaries differ between base and head.
+// RealizationChange is a concept whose deepest realizing boundaries differ
+// between base and head. holds is declared only (ADR 0037), so a change to it
+// is a manifest-changed change.
 type RealizationChange struct {
 	Concept  string   `json:"concept"`
-	Relation string   `json:"relation"` // realizes | holds
+	Relation string   `json:"relation"` // realizes
 	Before   []string `json:"before"`
 	After    []string `json:"after"`
 }
 
 // String renders "hire:Invoicing realized by {a} → {a, b}".
 func (r RealizationChange) String() string {
-	verb := "realized by"
-	if r.Relation == "holds" {
-		verb = "held by"
-	}
-	return fmt.Sprintf("%s %s {%s} → {%s}", r.Concept, verb, strings.Join(r.Before, ", "), strings.Join(r.After, ", "))
+	return fmt.Sprintf("%s realized by {%s} → {%s}", r.Concept, strings.Join(r.Before, ", "), strings.Join(r.After, ", "))
 }
 
 // Options for Classify.
@@ -990,52 +987,47 @@ func (c *classifier) stale() {
 	}
 }
 
-// realizations reports, per concept, how the set of boundaries realizing or
-// holding it moved, and adds a change for each boundary that lost its last
+// realizations reports, per concept, how the set of boundaries realizing it
+// moved, and adds a change for each boundary that lost its last
 // implementation of a concept; governance gates that change at the
 // concept's criticality, so a cutover off a critical concept is not SOFT.
 func (c *classifier) realizations() {
-	for _, rel := range []string{"realizes", "holds"} {
-		before, after := rollup.Realizers(c.base, rel), rollup.Realizers(c.head, rel)
-		rawAfter := rollup.RealizersRaw(c.head, rel)
-		concepts := map[string]bool{}
-		for k := range before {
-			concepts[k] = true
+	const rel = "realizes"
+	before, after := rollup.Realizers(c.base, rel), rollup.Realizers(c.head, rel)
+	rawAfter := rollup.RealizersRaw(c.head, rel)
+	concepts := map[string]bool{}
+	for k := range before {
+		concepts[k] = true
+	}
+	for k := range after {
+		concepts[k] = true
+	}
+	var names []string
+	for k := range concepts {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, cu := range names {
+		b, a := before[cu], after[cu]
+		if strings.Join(b, ",") == strings.Join(a, ",") {
+			continue
 		}
-		for k := range after {
-			concepts[k] = true
-		}
-		var names []string
-		for k := range concepts {
-			names = append(names, k)
-		}
-		sort.Strings(names)
-		for _, cu := range names {
-			b, a := before[cu], after[cu]
-			if strings.Join(b, ",") == strings.Join(a, ",") {
-				continue
+		c.im.Realizations = append(c.im.Realizations, RealizationChange{Concept: cu, Relation: rel, Before: b, After: a})
+		for _, bc := range b {
+			bn := c.head.NodeByCurie(bc)
+			if bn != nil && rawAfter[cu][bn.ID] {
+				continue // still realized there, or by a boundary nested in it
 			}
-			c.im.Realizations = append(c.im.Realizations, RealizationChange{Concept: cu, Relation: rel, Before: b, After: a})
-			for _, bc := range b {
-				bn := c.head.NodeByCurie(bc)
-				if bn != nil && rawAfter[cu][bn.ID] {
-					continue // still realized there, or by a boundary nested in it
-				}
-				verb := "realizes"
-				if rel == "holds" {
-					verb = "holds"
-				}
-				msg := fmt.Sprintf("%s no longer %s %s", bc, verb, cu)
-				gate, why := SOFT, "last implementation in a boundary removed"
-				if len(a) > 0 {
-					msg += "; now " + strings.Join(a, ", ")
-				} else {
-					msg += "; nothing does now"
-					gate, why = HARD, "no boundary "+verb+" it any more"
-				}
-				c.add(Change{Gate: gate, Kind: "realization-removed", Glyph: "-", Relation: rel, Subject: cu, Object: bc, Boundary: bc,
-					Reasons: []string{why}, Msg: msg})
+			msg := fmt.Sprintf("%s no longer realizes %s", bc, cu)
+			gate, why := SOFT, "last implementation in a boundary removed"
+			if len(a) > 0 {
+				msg += "; now " + strings.Join(a, ", ")
+			} else {
+				msg += "; nothing does now"
+				gate, why = HARD, "no boundary realizes it any more"
 			}
+			c.add(Change{Gate: gate, Kind: "realization-removed", Glyph: "-", Relation: rel, Subject: cu, Object: bc, Boundary: bc,
+				Reasons: []string{why}, Msg: msg})
 		}
 	}
 }

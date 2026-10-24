@@ -59,9 +59,10 @@ func TestGraphQLScannedAndUnscannedMarkers(t *testing.T) {
 	}
 }
 
-// TestRepresentsAnyKindHolds: a table that stores a measure's values holds
-// the measure, so a manifest declaring it under holds: with no allowed: is
-// consistent: no GM503 and no gap (#63, ADR 0013).
+// TestRepresentsAnyKindHolds: a table that stores a measure's values
+// satisfies holds: for the measure, so a manifest declaring it with no
+// allowed: is consistent: no GM503 and no gap (#63, ADR 0013). A shape the
+// manifest does not hold is no violation (ADR 0037).
 func TestRepresentsAnyKindHolds(t *testing.T) {
 	root, write := workspace(t)
 	write("glossmark.yaml", "owns:\n  wh: { iri: https://x/wh/, tier: core }\n")
@@ -80,20 +81,12 @@ func TestRepresentsAnyKindHolds(t *testing.T) {
 			t.Errorf("%s: %+v", k, fs)
 		}
 	}
-	// An undeclared concept the code represents is a holds violation.
+	// An undeclared concept the code represents is a shape: no violation.
 	write("sql/events.sql", "-- @gloss represents wh:Recount\nCREATE TABLE recounts (id int);\n")
 	ws, g, _, lg = build(t, root)
 	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
-	if v := findings(rep, rollup.KindViolation); len(v) != 1 || v[0].Concept != "wh:Recount" || v[0].Relation != "holds" {
-		t.Errorf("violations = %+v, want holds wh:Recount", v)
-	}
-	// The payload type of an event the boundary publishes is the flow's
-	// shape, not stored data: no holds violation (#172).
-	write("sql/events.sql", "-- @gloss represents wh:Recount\nCREATE TABLE recounts (id int);\n-- @gloss publishes wh:Recount\nCREATE FUNCTION emit() RETURNS void AS $$ $$;\n")
-	ws, g, _, lg = build(t, root)
-	rep = rollup.Compare(g, ws, rollup.Options{Ledger: lg.Entries, Policy: ws.Config.EffectivePolicy()})
 	if v := findings(rep, rollup.KindViolation); len(v) != 0 {
-		t.Errorf("violations with publishes = %+v, want none", v)
+		t.Errorf("violations = %+v, want none", v)
 	}
 	// Declared, it is still held: an event log.
 	write("sql/.gloss.yaml", "boundary: whb:db\nlevel: container\nholds: [wh:Count, wh:CountVariance, wh:Recount]\n")
@@ -280,8 +273,8 @@ func TestSurfacePlacementIgnoresCurieStyle(t *testing.T) {
 					gm503 = append(gm503, d.Msg)
 				}
 			}
-			if len(gm503) != 1 || !strings.Contains(gm503[0], "hpb:orders declares holds hp:Order") || !strings.Contains(gm503[0], "write presents hp:Order") {
-				t.Errorf("GM503 = %v, want one suggesting presents", gm503)
+			if len(gm503) != 1 || !strings.Contains(gm503[0], "hpb:orders declares holds hp:Order") || !strings.Contains(gm503[0], "write allowed: [derived, hp:Order]") {
+				t.Errorf("GM503 = %v, want one suggesting allowed", gm503)
 			}
 		})
 	}

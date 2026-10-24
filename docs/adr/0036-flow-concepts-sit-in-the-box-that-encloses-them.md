@@ -23,11 +23,11 @@ That holds between unrelated systems, but not inside one. On GlossMark's own gra
 - In a repository with one root manifest, `flow` essentially never appears. It appears only where the parties have no common boundary: several top-level boundaries in one repository, or a `gloss landscape` of repositories that are not part of one system. That is the intent: it marks the edges a reader should look at across systems. The library landscape is not such a case: `acme:holds-worker` is part of `acme:library-platform`, so `lib:HoldReady` is housed in the platform at system zoom and in the worker at container zoom.
 - In the library example, `lib:Laptop` (produced by `acme:circulation-svc`) is housed in the service and `lib:HoldReady` (published by `acme:library-platform`, whose publisher is the holds-worker repository) is housed in the platform. `TestPlacement` covers `flow` with a two-root fixture instead.
 - The viewer's legend text for `flow` and FILE-FORMATS.md change with it. `PlacementFlow` keeps its name and JSON value.
-- Not addressed: `gm:Ledger` stays `unlinked` in the self-host's `architecture` view although `arch:ledger` holds `gmi:ReviewLedger`, which realizes it. The derived `holds` reaches the core concept but no `represents` does, and only `realizes` and `represents` house. Whether a lifted `holds` should house is a separate question about `rollup.HousingRelations`, which criticality also rolls along.
+- Not addressed here: `gm:Ledger` stayed `unlinked` in the self-host's `architecture` view although `arch:ledger` holds `gmi:ReviewLedger`, which realizes it. [ADR 0037](0037-holds-is-declared-ownership.md) places it.
 
 ## Alternatives considered
 
 - **Flow parties as weak housing candidates in the same tier set.** Simpler code, but a concept whose parties share no boundary would then report `shared` with "realized or represented by", which is false.
-- **Let any party place it, consumers included.** The first draft did. It houses an inbound event or a cache of another system's entity in its consumer, as if the consumer owned it.
+- **Let any party place it, consumers included.** The first draft did. It houses an inbound event or a cache of another system's entity in its consumer, the mistake ADR 0037 removes for `represents`.
 - **Place only when two or more parties share a box; leave a single producer's output in `flow`.** Keeps the original argument for outputs, but the self-host's `concepts` view would still draw ten outputs of the only box outside it, which is the case this ADR exists for.
 - **Rename the groups and leave placement alone.** Better wording ("passes between ...") helps the label but not the picture: the system's central concepts would still sit outside the system.
