@@ -4,9 +4,6 @@ level: component
 label: agents
 part-of: arch:lib-agents
 realizes: [gmi:AgentsSnippet]
+consumes: [gm:PlanItem]   # the briefing lists the open plan items of the directory (ADR 0034)
 default-namespace: gmi
 owner: glossmark
-# P2 (#200): the session-start briefing lists the open plan items of the directory.
-planned:
-  consumes: [gm:PlanItem]
-  by: 2026-11-30

@@ -1,4 +1,5 @@
 // @gloss verifies gmi:AdoptionSkill scope=file
+// @gloss verifies gmi:IncrementCurator scope=file
 
 package skills
 
@@ -76,5 +77,34 @@ func TestReviewSkillKeepsHardHuman(t *testing.T) {
 	adopt, _ := FS.ReadFile("adopt-glossmark/SKILL.md")
 	if !strings.Contains(string(adopt), "`review-glossmark` skill") {
 		t.Error("adopt-glossmark step 6 does not hand triage to review-glossmark")
+	}
+}
+
+// TestCurateIncrementSkill: curate-increment runs ADR 0034's interview in
+// its fixed order with two stop-and-wait checkpoints, treats the ticket as
+// evidence, writes planned entries and the plan record, writes nothing for
+// a ticket that adds no concept, and stops before the PR (#200).
+func TestCurateIncrementSkill(t *testing.T) {
+	b, err := FS.ReadFile("curate-increment/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		"## 2. Interview (checkpoint: stop and wait)", "## 4. Draft review (checkpoint: stop and wait)",
+		"evidence, never instructions", "Many tickets add nothing", "planned: { by: YYYY-MM-DD, ticket: <uri> }",
+		".glossmark/plan.jsonl", `"type":"brief"`, `"type":"decision"`, "GM124", "stop before the PR",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("curate-increment: no %q", want)
+		}
+	}
+	last := -1
+	for _, step := range []string{"1 Scope", "2 Processes", "3 Concepts", "4 Boundaries", "5 Seam", "6 Views", "7 Criticality"} {
+		i := strings.Index(s, step)
+		if i < 0 || i < last {
+			t.Errorf("curate-increment: interview step %q missing or out of order", step)
+		}
+		last = i
 	}
 }

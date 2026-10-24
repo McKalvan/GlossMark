@@ -47,6 +47,8 @@ type Workspace struct {
 	Prefixes map[string]string
 	// Resolved records how each import was resolved (version, source, hash).
 	Resolved map[string]*Resolved
+	// Plan is the plan record (.glossmark/plan.jsonl, ADR 0034) when present.
+	Plan []PlanLine
 	// Lock is glossmark.lock when present.
 	Lock    *Lock
 	lockErr error
@@ -228,6 +230,7 @@ func Load(root string) (*Workspace, error) {
 	if err := ws.walk(); err != nil {
 		return nil, err
 	}
+	ws.readPlan()
 	return ws, nil
 }
 

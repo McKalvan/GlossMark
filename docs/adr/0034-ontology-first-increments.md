@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:DriftComparison scope=file -->
 # ADR 0034: Ontology-first increments
 
-Status: proposed, 2026-10-23; phase P1 (section 8) built 2026-10-23, the rest a design to workshop. Builds on `planned:` from [ADR 0025](0025-deriving-the-ontology.md) section 6.1 and amends it; extends `gloss drift`, `gloss diff`, `gloss publish` and the gate; adds a `curate-increment` skill.
+Status: proposed, 2026-10-23; phase P1 (section 8) built 2026-10-23; phase P2 curated as an increment in this repository (#215) and built 2026-10-24 (#200): the `curate-increment` skill, `.glossmark/plan.jsonl` read and validated (GM124), plan items in the briefing and `impact_of`. P3 is a design to workshop. Builds on `planned:` from [ADR 0025](0025-deriving-the-ontology.md) section 6.1 and amends it; extends `gloss drift`, `gloss diff`, `gloss publish` and the gate; adds a `curate-increment` skill.
 
 ## Context
 

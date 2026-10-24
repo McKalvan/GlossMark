@@ -438,7 +438,7 @@ func TestHookInstallSkillBeforeInit(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "only the skills were installed") {
 		t.Fatalf("hook install --skill before init: exit %d\n%s", code, out)
 	}
-	for _, name := range []string{"adopt-glossmark", "derive-ontology", "review-glossmark"} {
+	for _, name := range []string{"adopt-glossmark", "derive-ontology", "review-glossmark", "curate-increment"} {
 		b, err := os.ReadFile(filepath.Join(root, ".claude", "skills", name, "SKILL.md"))
 		if err != nil || strings.Contains(string(b), "<!-- @gloss") {
 			t.Errorf("%s: %v", name, err)
@@ -464,7 +464,7 @@ func TestHookInstallCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"alwaysApply: true", "GLOSS_ACTOR=agent:cursor", " context --dir", "end your turn and wait", "derive-ontology", "review-glossmark"} {
+	for _, want := range []string{"alwaysApply: true", "GLOSS_ACTOR=agent:cursor", " context --dir", "end your turn and wait", "derive-ontology", "review-glossmark", "curate-increment"} {
 		if !strings.Contains(string(rule), want) {
 			t.Errorf("rule lacks %q:\n%s", want, rule)
 		}
