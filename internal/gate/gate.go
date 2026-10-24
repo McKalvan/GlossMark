@@ -230,7 +230,11 @@ func Classify(base, head *graph.Graph, ws *load.Workspace, opt Options) *Impact 
 		if a.Path != b.Path {
 			return a.Path < b.Path
 		}
-		return a.Line < b.Line
+		if a.Line != b.Line {
+			return a.Line < b.Line
+		}
+		// Changes are collected from maps; the message settles the order.
+		return a.Msg < b.Msg
 	})
 	for i := range im.Changes {
 		ch := &im.Changes[i]
