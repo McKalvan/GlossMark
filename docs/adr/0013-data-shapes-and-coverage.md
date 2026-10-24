@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:DriftComparison scope=file -->
 # ADR 0013: Data shapes hold what they store; coverage counts what code implements
 
-Status: accepted, 2026-10-20. Closes issues #53 (F-SURF-7), #54 (F-SURF-8) and #63 (F-POOR-6).
+Status: accepted, 2026-10-20. Closes issues #53 (F-SURF-7), #54 (F-SURF-8) and #63 (F-POOR-6). Amended by [ADR 0037](0037-holds-is-declared-ownership.md): `represents` no longer derives `holds`.
 
 ## Context
 

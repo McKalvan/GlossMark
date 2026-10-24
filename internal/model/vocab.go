@@ -123,7 +123,7 @@ var BuiltinRelations = []Relation{
 	{Name: "provisions", Domain: a, Range: cb, Inline: true, Doc: "IaC artifact provisions a resource or boundary. On a resource or system-type concept it lifts to the boundary as realizes."},
 	{Name: "configures", Domain: ab, Range: cb, Inline: true, Manifest: true, Derived: true, Doc: "A config artifact, or a page that edits a value at runtime, configures a concept or boundary: lifts to the boundary as configures (and, on a resource or system-type concept, as realizes); it carries the concept's criticality and never places it. See docs/adr/0012-surfaces.md."},
 	{Name: "deploys", Domain: a, Range: cb, Inline: true, Doc: "CI artifact deploys a system-type or boundary. On a resource or system-type concept it lifts to the boundary as realizes."},
-	{Name: "holds", Domain: []NodeType{NodeBoundary}, Range: c, Manifest: true, Derived: true, Doc: "Boundary holds the data of a concept (an entity's records, a measure's stored values): derived from represents, declared in a manifest, compared by gloss drift."},
+	{Name: "holds", Domain: []NodeType{NodeBoundary}, Range: c, Manifest: true, Doc: "Boundary owns the data of a concept (an entity's records, a measure's stored values): declared in a manifest only; gloss drift checks that code under it represents it."},
 	{Name: "documents", Domain: a, Range: cb, Inline: true, Doc: "Markdown documents a concept or boundary."},
 	{Name: "instructs", Domain: a, Range: cb, Inline: true, Doc: "An agent file's instructions concern a concept."},
 	{Name: "may-modify", Domain: a, Range: cb, Inline: true, Doc: "An agent's change remit. Targets may be globs (pa:*)."},

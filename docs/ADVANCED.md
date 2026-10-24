@@ -10,7 +10,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | Relation | Inline | Ontology | Manifest | Meaning |
 | --- | :-: | :-: | :-: | --- |
 | `implements` | ✓ | | | artifact is the mechanism behind a concept; lifts to the boundary as `realizes` |
-| `represents` | ✓ | | | artifact is the data shape of a concept; it lifts to `holds` |
+| `represents` | ✓ | | | artifact is the data shape of a concept (the system of record, a copy, a wire schema); it satisfies a declared `holds` but never derives one ([ADR 0037](adr/0037-holds-is-declared-ownership.md)) |
 | `presents` | ✓ | ✓ | ✓ | a UI surface (page, screen) for a concept; lifts as itself, never to `realizes`, carries no criticality ([ADR 0001](adr/0001-presents-and-hosts.md)) |
 | `hosts` | ✓ | ✓ | ✓ | a shell or container for a concept (the app frame, a router); lifts as itself, never to `realizes` |
 | `verifies` (`tests`) | ✓ | | | test artifact checks a concept; `tests` is an accepted alias (GM240 asks for `verifies`) |
@@ -24,7 +24,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 | `produces`, `consumes` | ✓ | ✓ | ✓ | intended (concept, manifest) or actual (artifact) flow of a concept; a concept's lifts to the boundaries implementing it as intent, compared with the manifest but never closing a gap; summarized with `range-lcs`, one lift per subset sharing a subsumer ([ADR 0026](adr/0026-rollup-intent-nesting-inherit.md)) |
 | `publishes`, `subscribes` | ✓ | ✓ | ✓ | same for events |
 | `realizes` | | ✓ | ✓ | implementation concept → core concept; a boundary → what its code stands for |
-| `holds` | | | ✓ | boundary holds a concept's data (an entity's records, a measure's stored values); derived from `represents` |
+| `holds` | | | ✓ | boundary owns a concept's data (an entity's records, a measure's stored values); declared only, and `gloss drift` reports a gap when no code under it represents the concept |
 | `is-a` | | ✓ | | taxonomy; the closure is computed, a concept inherits `realizes` through it |
 | `part-of` | | ✓ | ✓ | partonomy for concepts and boundaries; a part realizes what its whole realizes |
 | `has-part` | | ✓ | | inverse of `part-of`, for concepts; a manifest names its whole with `part-of` instead |
@@ -54,7 +54,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 | Kind | Meaning | Fails by default |
 | --- | --- | :-: |
-| violation | a boundary's code realizes, holds, produces, consumes, publishes or subscribes something its manifest does not declare, or a concept its code implements intends a flow the manifest neither covers nor refines | ✓ |
+| violation | a boundary's code realizes, produces, consumes, publishes or subscribes something its manifest does not declare, or a concept its code implements intends a flow the manifest neither covers nor refines | ✓ |
 | gap | a manifest declares something no code under it implements (a concept's intended flow does not count) | ✓ |
 | value-drift | the code a published value is bound to (`value-from`, `publishes-value`) changed and the ontology `value` did not | ✓ |
 | dangling | a marker, a manifest relation key or `allowed:` entry, or a relation in the workspace's own ontology files targets a concept that does not exist (in a marker, write `ns:NEW:Name` with `@gloss?` to propose it). `gloss check` already rejects every one of these but an `allowed:` entry (GM215, or GM210/GM211 for a target that does not resolve; GM501 only warns about `allowed:`), so a workspace whose `check` passes sees `dangling` only there; drift reports them all for a workspace that skips `check` | ✓ |
@@ -84,7 +84,7 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 A label or `doc:` change on a core concept is HARD and changes every view that shows the concept: the definition is what the business view says. On an implementation concept it is SOFT, unless its file is under `policy.hard-paths` (default `ontology/**`, `**/.gloss.yaml`, `glossmark.yaml`): a change in a file under hard-paths is HARD whatever its semantic class, so the path rule is never lowered ([ADR 0018](adr/0018-gate-classification.md)).
 
-`gloss diff` also prints a **Realization changes** block (`realizations` in JSON): one line per concept whose deepest realizing or holding boundaries changed, such as `hire:Invoicing realized by {bw:hirehq-invoicing} → {bw:hirehq-invoicing, bw:invoicing-service}`. A boundary that loses its last implementation of a concept is a `realization-removed` change, gated at the concept's criticality, and HARD when no boundary realizes or holds the concept any more. A view the change deletes is listed under "Views changed" as `name (removed)`.
+`gloss diff` also prints a **Realization changes** block (`realizations` in JSON): one line per concept whose deepest realizing boundaries changed (a `holds` change is a manifest change, HARD), such as `hire:Invoicing realized by {bw:hirehq-invoicing} → {bw:hirehq-invoicing, bw:invoicing-service}`. A boundary that loses its last implementation of a concept is a `realization-removed` change, gated at the concept's criticality, and HARD when no boundary realizes the concept any more. A view the change deletes is listed under "Views changed" as `name (removed)`.
 
 ## Review states (the ledger)
 

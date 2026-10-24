@@ -129,15 +129,10 @@ func Derive(g *graph.Graph, vocab *model.Vocabulary) {
 				if !IsConcrete(e.O) {
 					continue
 				}
+				// represents is a data shape, not ownership: a DTO, a cache or
+				// the system of record all represent a concept, so it never
+				// derives holds. Only a manifest declares holds (ADR 0037).
 				direct("represents", e.O, a, e)
-				// A table, file or package that represents a concept means the
-				// boundary holds its data: an entity's records, a measure's
-				// stored values, an event log, a constraint's configured value.
-				// A manifest declares holds: (ADR 0013).
-				if on := g.Node(e.O); on != nil && on.NodeType == model.NodeConcept {
-					direct("holds", e.O, a, e)
-					liftStar("holds", a, e)
-				}
 			}
 			for _, rel := range append(append([]string{}, SurfaceRelations...), ConfigRelations...) {
 				for _, e := range g.Out(a.ID, rel) {

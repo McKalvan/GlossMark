@@ -61,6 +61,29 @@ func deepest(g *graph.Graph, raw map[string]map[string]bool) map[string][]string
 	return out
 }
 
+// Holders maps each concept CURIE to the deepest boundaries whose manifest
+// declares holds for it. holds is never derived (ADR 0037), so two of them
+// are two claims to own the same data.
+func Holders(g *graph.Graph) map[string][]string {
+	out := map[string]map[string]bool{}
+	for _, b := range g.NodesOf(model.NodeBoundary) {
+		for _, e := range g.Out(b.ID, "holds") {
+			if e.Source != graph.SourceDeclared {
+				continue
+			}
+			n := g.Node(e.O)
+			if n == nil || n.NodeType != model.NodeConcept {
+				continue
+			}
+			if out[n.CURIE] == nil {
+				out[n.CURIE] = map[string]bool{}
+			}
+			out[n.CURIE][b.ID] = true
+		}
+	}
+	return deepest(g, out)
+}
+
 // RealizersRaw maps each concept CURIE to the set of boundary IRIs with a
 // derived rel edge to it, enclosing boundaries included.
 func RealizersRaw(g *graph.Graph, rel string) map[string]map[string]bool {

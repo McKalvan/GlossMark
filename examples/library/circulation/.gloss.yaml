@@ -4,6 +4,7 @@ level: system
 label: Library platform
 realizes: [inherit]                     # whatever the containers below declare
 produces: [lib:Item]
+holds: [lib:Loan, lib:Patron]            # the loans migration is the system of record
 publishes: [lib:ItemReturned, lib:HoldReady]
 owner: library-services
 criticality: critical

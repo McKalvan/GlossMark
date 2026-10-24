@@ -224,13 +224,14 @@ const critRank=l=>CRIT.indexOf(l||'');
 const PAD=22,TITLE=24;
 /* Placement of a concept (see docs/FILE-FORMATS.md), in precedence order. Unplaced
    concepts are drawn in one labelled group per value, outside the boundary boxes. */
-const PLACEMENTS=['housed','shared','flow','bound','surface','unlinked'];
+const PLACEMENTS=['housed','shared','flow','bound','surface','shape','unlinked'];
 const PLACEDEFS={
-  housed:'Inside a boundary box: a boundary\u2019s code realizes or represents it.',
-  shared:'Unplaced: several unrelated boundaries realize or represent it and no boundary encloses them all. A common parent manifest may be missing.',
-  flow:'Unplaced: a boundary produces, consumes, publishes or subscribes to it. Expected for outputs, inputs and events that pass between boundaries.',
+  housed:'Inside a boundary box: a boundary\u2019s code realizes it or its manifest declares it holds it; otherwise the nearest box enclosing what produces and uses it.',
+  shared:'Unplaced: several unrelated boundaries realize or hold it and no boundary encloses them all. A common parent manifest may be missing.',
+  flow:'Unplaced: nothing shown produces or publishes it, or what does shares no enclosing boundary with what uses it. Expected for inputs from outside and for what passes between unrelated systems.',
   bound:'Unplaced: its value is bound to a line of code with value-from or publishes-value.',
   surface:'Unplaced: only pages present it or shells host it.',
+  shape:'Unplaced: code represents it, but no boundary declares it holds it: a copy, a cache or a payload of data owned elsewhere.',
   unlinked:'Unplaced: no boundary or artifact places it or flows it. Usually nothing links to it; gloss drift reports such a concept as an orphan.'};
 const placeRank=v=>{const i=PLACEMENTS.indexOf(v);return i<0?PLACEMENTS.length:i;};
 const GROUP='__placement:';
@@ -1097,7 +1098,7 @@ const RELDEFS={
   'implements':'A is the code that does the work of B: the handler, pipeline or module behind a process, capability or event. Lifts to the boundary as realizes.',
   'represents':'A is the data shape of B: a model, table or schema. On an entity it lifts to the boundary as holds.',
   'replaced-by':'A is deprecated and B takes over: the replaced-by key on a concept or a boundary manifest. A is drawn dotted.',
-  'holds':'Boundary A stores B\u2019s data. Derived from represents on an entity or declared in a manifest; gloss drift compares the two.',
+  'holds':'Boundary A owns B\u2019s data. Declared in a manifest only; gloss drift checks that code under A represents B.',
   'presents':'A is a UI surface that shows B: a page or screen. Lifts as presents, never as realizes, and carries no criticality.',
   'hosts':'A is a shell or container for B: the app frame or a router. Lifts as hosts, never as realizes.',
   'verifies':'A is a test that checks B.',

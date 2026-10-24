@@ -15,7 +15,7 @@ import (
 )
 
 // TestOverlapAndOverdue pins ADR 0019 (#95): two unrelated boundaries
-// realizing or holding one concept is an overlap; a declared migration
+// realizing one concept, or declaring they hold it (ADR 0037), is an overlap; a declared migration
 // (deprecated + replaced-by) silences it; past retire-by the retiring
 // boundary is overdue, which fails.
 func TestOverlapAndOverdue(t *testing.T) {
@@ -23,13 +23,13 @@ func TestOverlapAndOverdue(t *testing.T) {
 	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\nprefixes:\n  o: https://x/o/\n")
 	write("ontology/z.gloss.yaml", "concepts:\n  Invoicing: { kind: process }\n  Invoice: { kind: entity }\n")
 	write(".gloss.yaml", "boundary: o:root\nlevel: system\n")
-	write("new/.gloss.yaml", "boundary: o:new\nlevel: container\n")
+	write("new/.gloss.yaml", "boundary: o:new\nlevel: container\nholds: [z:Invoice]\n")
 	write("old/gen.py", "# @gloss implements z:Invoicing\ndef gen(): pass\n")
 	write("old/models.py", "# @gloss represents z:Invoice\nclass Invoice: pass\n")
 	write("new/run.py", "# @gloss implements z:Invoicing\ndef run(): pass\n")
 	write("new/table.sql", "-- @gloss represents z:Invoice\nCREATE TABLE invoices (id int);\n")
 	drift := func(oldManifest string) *rollup.Report {
-		write("old/.gloss.yaml", "boundary: o:old\nlevel: container\n"+oldManifest)
+		write("old/.gloss.yaml", "boundary: o:old\nlevel: container\nholds: [z:Invoice]\n"+oldManifest)
 		ws, g, _, _ := build(t, root)
 		return rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy()})
 	}

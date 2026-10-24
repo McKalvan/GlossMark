@@ -1639,8 +1639,10 @@ func TestAdoptionDiff(t *testing.T) {
 }
 
 // TestInfraAndDataSatisfyDeclarations: provisions, configures and deploys on
-// a resource or system-type lift to realizes; represents on an entity lifts
-// to holds; a manifest can declare both and gloss drift compares them.
+// a resource or system-type lift to realizes; represents satisfies a declared
+// holds; a manifest can declare both and gloss drift compares them. Code that
+// represents a concept the manifest does not hold is a shape, not a violation
+// (ADR 0037).
 func TestInfraAndDataSatisfyDeclarations(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, content string) {
@@ -1661,9 +1663,8 @@ func TestInfraAndDataSatisfyDeclarations(t *testing.T) {
 	if gaps := findings(rep, rollup.KindGap); len(gaps) != 0 {
 		t.Errorf("infra and data links should satisfy the declarations; gaps: %+v", gaps)
 	}
-	viol := findings(rep, rollup.KindViolation)
-	if len(viol) != 1 || viol[0].Boundary != "o:db" || viol[0].Relation != "holds" || viol[0].Concept != "z:Other" {
-		t.Errorf("want one holds violation for z:Other, got %+v", viol)
+	if viol := findings(rep, rollup.KindViolation); len(viol) != 0 {
+		t.Errorf("representing z:Other without holding it is no violation, got %+v", viol)
 	}
 	deploy := g.NodeByCurie("o:deploy")
 	if r := g.Objects(deploy.ID, "realizes"); !has(curies(g, r), "i:AwsHost") || !has(curies(g, r), "z:Host") || !has(curies(g, r), "z:Shop") {
@@ -2283,7 +2284,7 @@ func TestCriticalityFloorAndSuggest(t *testing.T) {
 }
 
 // TestPlacement: every concept in a projection says why it sits where it
-// does. housed, flow and unlinked come from the examples; shared, bound and
+// does. housed and unlinked come from the examples; shared, flow, bound and
 // surface do not occur there, so a small fixture covers them.
 func TestPlacement(t *testing.T) {
 	type want struct{ view, concept, placement, reason string }
@@ -2314,9 +2315,9 @@ func TestPlacement(t *testing.T) {
 	expect(t, example(t, "library/circulation"), []want{
 		{"engineering", "lib:Checkout", views.PlacementHoused, "inside acme:circulation-svc"},
 		{"engineering", "lib:Loan", views.PlacementHoused, "inside acme:library-platform"},
-		{"engineering", "lib:Laptop", views.PlacementFlow, "produced by acme:circulation-svc"},
+		{"engineering", "lib:Laptop", views.PlacementHoused, "inside acme:circulation-svc; produced by acme:circulation-svc"},
 		{"engineering", "lib:ItemReturned", views.PlacementHoused, "inside acme:circulation-svc"},
-		{"engineering", "lib:HoldReady", views.PlacementFlow, "published by acme:library-platform"},
+		{"engineering", "lib:HoldReady", views.PlacementHoused, "inside acme:library-platform; published by acme:library-platform"},
 		{"engineering", "lib:Hold", views.PlacementSurface, "presented by acme:opac"},
 		{"engineering", "lib:InterlibraryLoan", views.PlacementUnlinked, "no boundary realizes"},
 		{"engineering", "circ:CoverImageCache", views.PlacementUnlinked, "no boundary realizes"},
@@ -2328,21 +2329,43 @@ func TestPlacement(t *testing.T) {
 		os.MkdirAll(filepath.Dir(p), 0o755)
 		os.WriteFile(p, []byte(content), 0o644)
 	}
-	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n")
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Rows: { kind: entity, realizes: z:Store }\n")
 	write("ontology/z.gloss.yaml", "concepts:\n  Thing: { kind: process }\n  Budgeting: { kind: process }\n"+
+		"  Evt: { kind: event }\n  Report: { kind: entity }\n  Out: { kind: entity }\n"+
+		"  In: { kind: entity }\n  Store: { kind: entity }\n  Cached: { kind: entity }\n"+
 		"  Cutoff: { kind: constraint, value: \"3\", value-from: { path: cfg.py, symbol: CUTOFF } }\n")
-	write("ontology/views.yaml", "views:\n  all:\n    include: [z:*]\n    zoom: container\n")
+	write("ontology/views.yaml", "views:\n  all:\n    include: [z:*, i:*]\n    zoom: container\n")
 	write("cfg.py", "CUTOFF = 3\n")
-	write("a/.gloss.yaml", "boundary: o:a\nlevel: container\nrealizes: [z:Thing]\n")
-	write("a/x.py", "# @gloss implements z:Thing\ndef x(): pass\n")
-	write("b/.gloss.yaml", "boundary: o:b\nlevel: container\nrealizes: [z:Thing]\n")
-	write("b/y.py", "# @gloss implements z:Thing\ndef y(): pass\n")
+	write("a/.gloss.yaml", "boundary: o:a\nlevel: container\nrealizes: [z:Thing]\nproduces: [z:Out]\n")
+	write("a/x.py", "# @gloss implements z:Thing\n# @gloss produces z:Out\ndef x(): pass\n")
+	write("b/.gloss.yaml", "boundary: o:b\nlevel: container\nrealizes: [z:Thing]\nconsumes: [z:Out]\n")
+	write("b/y.py", "# @gloss implements z:Thing\n# @gloss consumes z:Out\ndef y(): pass\n")
+	write("sys/.gloss.yaml", "boundary: o:sys\nlevel: system\n")
+	write("sys/p/.gloss.yaml", "boundary: o:p\nlevel: container\npublishes: [z:Evt]\nproduces: [z:Report]\nholds: [i:Rows]\n")
+	write("sys/p/p.py", "# @gloss publishes z:Evt\n# @gloss produces z:Report\ndef p(): pass\n")
+	write("sys/p/rows.sql", "-- @gloss represents i:Rows\nCREATE TABLE rows (id int);\n")
+	write("sys/q/.gloss.yaml", "boundary: o:q\nlevel: container\nsubscribes: [z:Evt]\nconsumes: [z:In]\n")
+	write("sys/q/q.py", "# @gloss subscribes z:Evt\n# @gloss consumes z:In\ndef q(): pass\n")
+	write("sys/q/cache.py", "# @gloss represents z:Cached\nclass CachedRow: pass\n")
 	write("web/.gloss.yaml", "boundary: o:web\nlevel: container\npresents: [z:Budgeting]\n")
 	write("web/page.tsx", "// @gloss presents z:Budgeting\nexport function Page() {}\n")
 	expect(t, root, []want{
-		{"all", "z:Thing", views.PlacementShared, "realized or represented by o:a, o:b"},
+		{"all", "z:Thing", views.PlacementShared, "realized or held by o:a, o:b"},
 		{"all", "z:Cutoff", views.PlacementBound, "value bound to code at cfg.py:1"},
 		{"all", "z:Budgeting", views.PlacementSurface, "presented by o:web"},
+		// ADR 0036: a flow concept sits in the smallest box enclosing everything
+		// that produces, consumes, publishes or subscribes to it.
+		{"all", "z:Evt", views.PlacementHoused, "inside o:sys; published by o:p; subscribed to by o:q"},
+		{"all", "z:Report", views.PlacementHoused, "inside o:p; produced by o:p"},
+		{"all", "z:Out", views.PlacementFlow, "produced by o:a; consumed by o:b, and no boundary encloses them all"},
+		// A consumer alone does not place what it consumes: it comes from outside.
+		{"all", "z:In", views.PlacementFlow, "consumed by o:q"},
+		// ADR 0037: a declared holds houses the concept and the core concepts
+		// it realizes; code that only represents a concept places nothing.
+		{"all", "i:Rows", views.PlacementHoused, "inside o:p"},
+		{"all", "z:Store", views.PlacementHoused, "inside o:p"},
+		{"all", "z:Cached", views.PlacementShape, "represented by o:q, which declares no holds for it"},
 	})
 }
 
