@@ -733,6 +733,23 @@ func TestSearchByMeaning(t *testing.T) {
 	if len(hits) == 0 || hits[0].Curie != "circ:CheckoutHandler" || !strings.HasPrefix(hits[0].Matched, "via") && !strings.HasPrefix(hits[0].Matched, "name") {
 		t.Errorf("one-hop search = %+v", hits)
 	}
+	// published: true keeps the seam (the circ concept published as
+	// lib:LoanPeriod, and lib:LoanPeriod itself); false drops it (#195).
+	yes, no := true, false
+	pub := mcp.SearchWith(g, "loan period", mcp.Filter{Published: &yes}, 10)
+	if len(pub) == 0 || pub[0].Curie != "lib:LoanPeriod" {
+		t.Errorf("published loan period = %+v", pub)
+	}
+	for _, h := range pub {
+		if h.Curie != "lib:LoanPeriod" && h.PublishedAs == "" {
+			t.Errorf("published: true returned %s, which is not published", h.Curie)
+		}
+	}
+	for _, h := range mcp.SearchWith(g, "loan period", mcp.Filter{Published: &no}, 10) {
+		if h.Curie == "lib:LoanPeriod" || h.PublishedAs != "" {
+			t.Errorf("published: false returned %s", h.Curie)
+		}
+	}
 	// Across the import: holds-worker finds its measure from the core name.
 	_, hw, _, _ := build(t, example(t, "library/holds-worker"))
 	if h := mcp.Search(hw, "pickup window", "hw", "", "", 3); len(h) == 0 || h[0].Curie != "hw:PickupClock" {
