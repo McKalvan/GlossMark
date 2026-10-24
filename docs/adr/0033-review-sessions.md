@@ -13,6 +13,8 @@ Reviewing meant three commands and a lot of copying. `gloss status` listed the p
    - `gloss review --format json` lists the queue, `gloss review show <id>` adds an item's detail, `gloss review apply [file|-]` applies decisions written as JSON Lines, and `gloss review undo` reverts the last one. These are for scripts, CI and any agent with a shell.
    - The MCP tools `review_queue`, `review_item`, `review_decide` and `review_undo`, plus `write_link` and `edit_concept_doc`.
    - `gloss review` on a terminal is a full-screen interface for people.
+
+   The `review-glossmark` skill (`gloss hook install --skill`) is the agent workflow over the headless mode: it reads the queue, decides the AUTO and SOFT items, recommends on the HARD ones and stops for the owner (#183).
 2. **Items.**
    - Proposed links (`@gloss?`).
    - Stale links.

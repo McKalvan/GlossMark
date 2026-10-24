@@ -86,7 +86,7 @@ cd ..
 ../../gloss landscape circulation holds-worker   # cross-repo context map; the HoldReady gap closes
 ```
 
-To adopt it on your own repository, `gloss init` scaffolds the files and the [Quickstart](docs/QUICKSTART.md) walks the first ontology; the `adopt-glossmark` and `derive-ontology` skills (`gloss hook install --skill`) let an agent do the first pass. The [showcase](https://github.com/McKalvan/glossmark-examples) has five realistic adoptions to copy from: a monorepo, three repositories sharing one core, an event-driven system, an agent-heavy repository and a brownfield legacy stack.
+To adopt it on your own repository, `gloss init` scaffolds the files and the [Quickstart](docs/QUICKSTART.md) walks the first ontology; the `adopt-glossmark` and `derive-ontology` skills (`gloss hook install --skill`) let an agent do the first pass, and `review-glossmark` lets it work the review queue after that. The [showcase](https://github.com/McKalvan/glossmark-examples) has five realistic adoptions to copy from: a monorepo, three repositories sharing one core, an event-driven system, an agent-heavy repository and a brownfield legacy stack.
 
 ## For agents
 
