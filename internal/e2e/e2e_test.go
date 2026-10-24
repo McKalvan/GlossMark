@@ -2403,6 +2403,43 @@ func TestPlacement(t *testing.T) {
 	}
 }
 
+// TestFoldAbsorbsItsEdges: a mechanism that realizes several core concepts
+// is drawn as each of them in a view that collapses it via realizes; the
+// realizes edges it folds along are the fold, not relations between those
+// concepts, while its other edges attach to every concept it folds into.
+func TestFoldAbsorbsItsEdges(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n  i: { iri: https://x/i/, tier: implementation }\n")
+	write("ontology/z.gloss.yaml", "concepts:\n  A: { kind: process }\n  B: { kind: constraint }\n  C: { kind: entity }\n")
+	write("ontology/i.gloss.yaml", "concepts:\n  Checker: { kind: process, realizes: [z:A, z:B], consumes: [z:C] }\n")
+	write("ontology/views.yaml", "views:\n  core:\n    include: [z:*]\n    collapse: { \"i:*\": via realizes }\n    zoom: system\n")
+	ws, g, _, _ := build(t, root)
+	got := map[string]bool{}
+	for _, p := range views.ProjectAll(g, ws.Views) {
+		if p.Name != "core" {
+			continue
+		}
+		for _, e := range p.Edges {
+			got[e.S+" "+e.P+" "+e.O] = true
+		}
+	}
+	for _, e := range []string{"z:A realizes z:B", "z:B realizes z:A"} {
+		if got[e] {
+			t.Errorf("%s is the fold of i:Checker, not an edge", e)
+		}
+	}
+	for _, e := range []string{"z:A consumes z:C", "z:B consumes z:C"} {
+		if !got[e] {
+			t.Errorf("missing %s: i:Checker's own edges attach to what it folds into (got %v)", e, got)
+		}
+	}
+}
+
 // TestManifestRelationsDocumented: the Manifest column of ADVANCED.md's
 // relation table ticks exactly the relations a .gloss.yaml accepts, and a
 // manifest that writes one it does not is a GM110 with a relative path.
