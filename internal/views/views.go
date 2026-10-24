@@ -81,6 +81,11 @@ type PNode struct {
 	Deprecated bool   `json:"deprecated,omitempty"`
 	ReplacedBy string `json:"replacedBy,omitempty"`
 	RetireBy   string `json:"retireBy,omitempty"`
+	// Planned, PlanBy and PlanTicket (concepts only) mark a concept that is
+	// specified and not built yet; the viewer draws it faint (ADR 0038).
+	Planned    bool   `json:"planned,omitempty"`
+	PlanBy     string `json:"planBy,omitempty"`
+	PlanTicket string `json:"planTicket,omitempty"`
 }
 
 // PEdge is an edge as the view shows it.
@@ -90,6 +95,7 @@ type PEdge struct {
 	O        string   `json:"o"`
 	Source   string   `json:"source"` // declared | inline | derived | mixed
 	Proposed bool     `json:"proposed,omitempty"`
+	Planned  bool     `json:"planned,omitempty"` // every edge behind it is from a manifest's planned: block (ADR 0038)
 	Count    int      `json:"count,omitempty"`
 	Lifted   bool     `json:"lifted,omitempty"`
 	Via      []string `json:"via,omitempty"`
@@ -329,7 +335,8 @@ func (p *projector) concepts() {
 		p.included[n.ID] = true
 		p.fold[n.ID] = []string{n.ID}
 		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom,
-			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom, Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy}
+			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom, Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy,
+			Planned: n.Planned, PlanBy: n.PlanBy, PlanTicket: n.PlanTicket}
 		pn.Branch = p.branch(n.ID)
 		if n.Published != "" {
 			pn.Published = true
@@ -751,6 +758,7 @@ const (
 	PlacementBound    = "bound"
 	PlacementSurface  = "surface"
 	PlacementShape    = "shape"
+	PlacementPlanned  = "planned"
 	PlacementUnlinked = "unlinked"
 )
 
@@ -841,6 +849,19 @@ func (p *projector) place(strongest, flows map[string]map[string]bool, flowedTo 
 			n.Placement, n.PlacementReason = PlacementSurface, reason(l, surfaceRels)
 		case len(shapers(l["other:represents"])) > 0:
 			n.Placement, n.PlacementReason = PlacementShape, "represented by "+list(p.deepest(shapers(l["other:represents"])))+", which declares no holds for it"
+		case n.Planned:
+			var plan []string
+			if n.PlanTicket != "" {
+				plan = append(plan, n.PlanTicket)
+			}
+			if n.PlanBy != "" {
+				plan = append(plan, "by "+n.PlanBy)
+			}
+			n.Placement, n.PlacementReason = PlacementPlanned, "planned"
+			if len(plan) > 0 {
+				n.PlacementReason += " (" + strings.Join(plan, ", ") + ")"
+			}
+			n.PlacementReason += "; no manifest plans it: add it to the planned: block of the boundary that will build it"
 		default:
 			var other []string
 			for rel, who := range l {
@@ -995,6 +1016,7 @@ func (p *projector) edges() {
 		e   PEdge
 		src map[string]bool
 		all bool // all contributing edges proposed
+		pl  bool // all contributing edges planned
 		n   int
 	}
 	aggs := map[string]*agg{}
@@ -1028,13 +1050,16 @@ func (p *projector) edges() {
 				k := sc + "|" + e.P + "|" + oc
 				a, ok := aggs[k]
 				if !ok {
-					a = &agg{e: PEdge{S: sc, P: e.P, O: oc}, src: map[string]bool{}, all: true}
+					a = &agg{e: PEdge{S: sc, P: e.P, O: oc}, src: map[string]bool{}, all: true, pl: true}
 					aggs[k] = a
 				}
 				a.src[e.Source] = true
 				a.n++
 				if e.Prov == nil || !e.Prov.Proposed {
 					a.all = false
+				}
+				if e.Prov == nil || e.Prov.Rule != graph.RulePlanned {
+					a.pl = false
 				}
 				if e.Prov != nil && len(e.Prov.Via) > 0 {
 					a.e.Via = uniq(append(a.e.Via, e.Prov.Via...))
@@ -1095,7 +1120,7 @@ func (p *projector) edges() {
 					continue // the summary is not in this view: keep the members
 				}
 				var via []string
-				allProposed := true
+				allProposed, allPlanned := true, true
 				srcs := map[string]bool{}
 				for _, o := range gr.Members {
 					oc := p.g.Curie(o)
@@ -1109,10 +1134,13 @@ func (p *projector) edges() {
 						if !a.all {
 							allProposed = false
 						}
+						if !a.pl {
+							allPlanned = false
+						}
 					}
 				}
 				lc := p.g.Curie(gr.Subsumer)
-				lifted[key.s+"|"+key.p+"|"+lc] = PEdge{S: key.s, P: key.p, O: lc, Source: mixed(srcs), Lifted: true, Via: uniq(via), Count: len(via), Proposed: allProposed}
+				lifted[key.s+"|"+key.p+"|"+lc] = PEdge{S: key.s, P: key.p, O: lc, Source: mixed(srcs), Lifted: true, Via: uniq(via), Count: len(via), Proposed: allProposed, Planned: allPlanned}
 			}
 		}
 	}
@@ -1144,6 +1172,7 @@ func (p *projector) edges() {
 		}
 		a.e.Source = mixed(a.src)
 		a.e.Proposed = a.all
+		a.e.Planned = a.pl
 		a.e.Count = a.n
 		p.outEdges = append(p.outEdges, a.e)
 	}
