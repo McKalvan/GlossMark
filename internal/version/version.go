@@ -51,6 +51,9 @@ const LedgerFormat = 1
 // LockFormat is the glossmark.lock format.
 const LockFormat = 1
 
+// PlanFormat is the .glossmark/plan.jsonl format (ADR 0034).
+const PlanFormat = 1
+
 // EvidenceFormat is the format of the evidence gloss harvest writes (ADR 0025).
 const EvidenceFormat = 1
 
@@ -87,7 +90,7 @@ func Report() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "gloss %s\n", String())
 	fmt.Fprintf(&sb, "grammar %d (supported: %s)\n", Grammar, join(SupportedGrammars))
-	fmt.Fprintf(&sb, "graph format %d, ledger format %d, lock format %d\n", GraphFormat, LedgerFormat, LockFormat)
+	fmt.Fprintf(&sb, "graph format %d, ledger format %d, lock format %d, plan format %d\n", GraphFormat, LedgerFormat, LockFormat, PlanFormat)
 	if bi, ok := debug.ReadBuildInfo(); ok {
 		fmt.Fprintf(&sb, "built with %s\n", bi.GoVersion)
 	}

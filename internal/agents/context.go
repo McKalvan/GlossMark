@@ -1,4 +1,5 @@
 // @gloss implements gmi:AgentsSnippet scope=file
+// @gloss consumes gm:PlanItem scope=file
 
 package agents
 
@@ -79,6 +80,7 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 	}
 	head.WriteString(applied(g, rollup.AppliesRelationsIn(ws.Vocab, "context"), opt.Dir))
 	head.WriteString(remits(g, opt.Actor))
+	head.WriteString(planItems(rep, m, allowed, opt.Dir))
 
 	if rep != nil {
 		mm := rep.Metrics
@@ -130,6 +132,72 @@ func Context(ws *load.Workspace, g *graph.Graph, m *model.Manifest, rep *rollup.
 		out = out[:opt.Budget*4-4] + "...\n"
 	}
 	return out
+}
+
+// maxPlanItems caps the plan items the briefing lists.
+const maxPlanItems = 8
+
+// planItems lists the plan items (ADR 0034) an agent working in dir is
+// building towards: the planned declarations of a manifest at or under dir,
+// and the planned concepts the directory's manifest declares, plans or
+// allows code to link to. A closed one says to drop planned.
+func planItems(rep *rollup.Report, m *model.Manifest, allowed rollup.Allowed, dir string) string {
+	if rep == nil {
+		return ""
+	}
+	dir = strings.Trim(filepath.ToSlash(dir), "/")
+	if dir == "." {
+		dir = ""
+	}
+	declared := map[string]bool{}
+	if m != nil {
+		for _, ts := range m.DeclaredSets() {
+			for _, t := range ts {
+				declared[t] = true
+			}
+		}
+	}
+	var open, closed []string
+	for _, f := range rep.Findings {
+		switch f.Kind {
+		case rollup.KindPlanned, rollup.KindPlanOverdue, rollup.KindPlannedClosed:
+		default:
+			continue
+		}
+		here := f.Path != "" && !strings.HasSuffix(f.Path, ".gloss.yaml") && rollup.Under(f.Path, dir) ||
+			strings.HasSuffix(f.Path, "/.gloss.yaml") && rollup.Under(f.Path, dir) ||
+			f.Path == ".gloss.yaml" && dir == "" ||
+			m != nil && f.Boundary == m.Boundary ||
+			f.Concept != "" && (declared[f.Concept] || m != nil && len(allowed.Patterns) > 0 && allowed.Matches(f.Concept))
+		if !here {
+			continue
+		}
+		if f.Kind == rollup.KindPlannedClosed {
+			closed = append(closed, f.Msg)
+		} else {
+			open = append(open, f.Msg)
+		}
+	}
+	if len(open)+len(closed) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	list := func(title string, items []string) {
+		if len(items) == 0 {
+			return
+		}
+		sb.WriteString(title + "\n")
+		for i, it := range items {
+			if i == maxPlanItems {
+				fmt.Fprintf(&sb, "  ... %d more (gloss drift)\n", len(items)-i)
+				break
+			}
+			sb.WriteString("  - " + it + "\n")
+		}
+	}
+	list("Open plan items here (ADR 0034; build against them, and record a departure as a proposed concept, not a silent change):", open)
+	list("Closed plan items here (drop planned with gloss accept --planned):", closed)
+	return sb.String()
 }
 
 // retiring is the "Retiring here" line: the boundary (or one enclosing it)

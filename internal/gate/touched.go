@@ -379,3 +379,59 @@ func describeTouch(g *graph.Graph, ws *load.Workspace, n *graph.Node, self strin
 	}
 	return c
 }
+
+// PlanTouch is what a change does to the plan (ADR 0034): the plan items
+// the changed files close, and the open ones they work towards.
+type PlanTouch struct {
+	Closes []string `json:"closes,omitempty"`
+	Open   []string `json:"open,omitempty"`
+}
+
+// PlanItemsTouched sorts the plan items of a drift report by whether the
+// touched files close them (planned-closed) or still leave them open: the
+// items on the concepts the files reach, on the boundaries they sit in, and,
+// for an open planned concept, on the concepts those boundaries allow code
+// to link to. Nil when the change touches no plan item.
+func PlanItemsTouched(g *graph.Graph, ws *load.Workspace, rep *rollup.Report, ts []FileTouch) *PlanTouch {
+	if rep == nil {
+		return nil
+	}
+	concepts, bounds := map[string]bool{}, map[string]bool{}
+	var allowed []rollup.Allowed
+	for _, t := range ts {
+		if t.Boundary != "" && !bounds[t.Boundary] {
+			bounds[t.Boundary] = true
+			if m := ws.ManifestFor(t.Path); m != nil {
+				allowed = append(allowed, rollup.AllowedFor(g, ws, m))
+			}
+		}
+		for _, c := range t.Concepts {
+			concepts[c.Curie] = true
+		}
+	}
+	allows := func(c string) bool {
+		for _, a := range allowed {
+			if len(a.Patterns) > 0 && a.Matches(c) {
+				return true
+			}
+		}
+		return false
+	}
+	p := &PlanTouch{}
+	for _, f := range rep.Findings {
+		reached := f.Concept != "" && concepts[f.Concept] || f.Boundary != "" && bounds[f.Boundary]
+		if !reached && !(f.Kind != rollup.KindPlannedClosed && f.Concept != "" && allows(f.Concept)) {
+			continue
+		}
+		switch f.Kind {
+		case rollup.KindPlannedClosed:
+			p.Closes = append(p.Closes, f.Msg)
+		case rollup.KindPlanned, rollup.KindPlanOverdue:
+			p.Open = append(p.Open, f.Msg)
+		}
+	}
+	if len(p.Closes)+len(p.Open) == 0 {
+		return nil
+	}
+	return p
+}

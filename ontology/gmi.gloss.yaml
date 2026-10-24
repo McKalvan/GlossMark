@@ -77,12 +77,10 @@ concepts:
   IncrementCurator:
     kind: process
     realizes: gm:Increment
-    planned: { by: 2026-11-30, ticket: https://github.com/McKalvan/GlossMark/issues/200 }
     doc: "The curate-increment skill: takes a ticket, spec or bug as evidence, interviews the owner (scope, processes, concepts, boundaries, seam, views, criticality), reviews the draft with them and writes the planned entries, manifest declarations, view and plan record. It writes no code or markers and stops before the PR."
   PlanRecord:
     kind: resource
     realizes: gm:Increment
-    planned: { by: 2026-11-30, ticket: https://github.com/McKalvan/GlossMark/issues/200 }
     doc: "The committed .glossmark/plan.jsonl, read and validated by gloss: one brief line per increment, one decision line per entry written or changed, one deviation line per departure. It keeps why each plan entry was written."
   EvidenceHarvester:  { kind: process, realizes: gm:Onboarding, doc: "gloss harvest: evidence of a repository's vocabulary from code, schemas, tests, UI, docs and git, before it has an ontology, and the lexical clusters a derivation starts from (ADR 0025)." }
   # Agents
