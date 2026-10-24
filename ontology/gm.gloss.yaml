@@ -1,7 +1,7 @@
 # ontology/gm.gloss.yaml (core tier): what a comment-native code ontology is about.
 # Nothing here names a Go package, a file or a command; that is gmi:'s job.
 namespace: gm
-version: 0.1.1
+version: 0.2.0
 doc: The concepts GlossMark exists to manage, independent of how the tool is built.
 concepts:
   # Things
