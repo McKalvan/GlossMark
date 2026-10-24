@@ -33,6 +33,7 @@ func cmdDiff(args []string) int {
 	format := fs.String("format", "text", "text | markdown | json")
 	failOn := fs.String("fail-on", "HARD", "gate class that fails the command: HARD | SOFT | none")
 	out := fs.String("o", "", "also write the output to this file")
+	actor := fs.String("actor", "", "who made the change according to CI (agent:<name> or human:<name>); new links are gated as this actor too, whatever the committed ledger claims")
 	baseline := fs.Bool("baseline", false, "report the whole tree as an adoption: counts per boundary and per view instead of per link (automatic when the base has no graph)")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
@@ -56,7 +57,8 @@ func cmdDiff(args []string) int {
 		adoption = true
 		label += " (no graph)"
 	}
-	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption, BaseViews: baseViews(head.WS, *base)})
+	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption, BaseViews: baseViews(head.WS, *base),
+		Actor: *actor, BaseLedger: baseLedger(head.WS, *base)})
 	var buf bytes.Buffer
 	switch *format {
 	case "json":
@@ -189,6 +191,38 @@ func baseViews(ws *load.Workspace, ref string) *model.Views {
 		return nil
 	}
 	return v
+}
+
+// baseLedger reads the ledger committed at ref; nil when the base has none
+// or git cannot say.
+func baseLedger(ws *load.Workspace, ref string) map[string]*model.LedgerEntry {
+	if ref == "" {
+		return nil
+	}
+	rel, err := filepath.Rel(ws.Root, ws.StatePath(ledger.FileName))
+	if err != nil {
+		return nil
+	}
+	prefix, err := gitOut(ws.Root, "rev-parse", "--show-prefix")
+	if err != nil {
+		return nil
+	}
+	out, err := gitOut(ws.Root, "show", ref+":"+strings.TrimSpace(prefix)+filepath.ToSlash(rel))
+	if err != nil {
+		return nil
+	}
+	tmp, err := os.CreateTemp("", "gloss-base-ledger-")
+	if err != nil {
+		return nil
+	}
+	defer os.Remove(tmp.Name())
+	tmp.WriteString(out)
+	tmp.Close()
+	lg, err := ledger.Open(tmp.Name())
+	if err != nil {
+		return nil
+	}
+	return lg.Entries
 }
 
 // baseReport compares the base graph over the base tree's own file set, as

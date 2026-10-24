@@ -165,6 +165,8 @@ The actor belongs to a marker's first appearance, not to whoever runs the last b
 
 **Subagents need their own actor.** Subagents share the session's shell environment and its MCP server, so without more they all write as the session's actor, and the remit gate checks every link against one agent. Give each subagent its actor in its agent file (`.claude/agents/prep-cook.md`): "run gloss commands as `GLOSS_ACTOR=agent:prep-cook gloss build`". The name after `agent:` is the agent file's name, which is what ties the link to that agent's `may-modify` remit and lets `gloss context` show only its remit. A link a subagent writes through the shared MCP server is attributed to the server's actor; prefer writing `@gloss?` lines and running `gloss build` with the subagent's actor. `gloss build` warns when a rebuild would change the actor on an existing marker.
 
+**In CI the actor comes from GitHub.** The ledger and graph a PR commits are the PR author's to edit, so `gloss diff --actor` takes the actor from outside them: the Action passes the PR author (`agent:<name>` for a bot account, `human:<login>` otherwise, or its `actor:` input). A link new in the PR is gated as that actor and as the one its provenance claims, and the stricter holds; a change that rewrites the author or reviewer the base ledger recorded for a marker is listed as `actor-changed` or `reviewer-changed`.
+
 ## Agent experience
 
 Four commands exist so an agent can work the ontology without a human in the loop until the review:

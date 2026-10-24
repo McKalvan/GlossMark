@@ -185,6 +185,14 @@ type Options struct {
 	// BaseViews are the views declared at the base; a view declared there and
 	// not in the head is listed as changed (removed). Nil when unknown.
 	BaseViews *model.Views
+	// Actor is who made the change according to CI (gloss diff --actor), not
+	// according to files the change commits. A link new in the head is gated
+	// under this actor as well as the one its provenance claims (#186).
+	Actor string
+	// BaseLedger is the ledger committed at the base; with HeadLedger it
+	// reports a change that rewrites the actor or reviewer of a marker the
+	// base already recorded. Nil skips the comparison.
+	BaseLedger map[string]*model.LedgerEntry
 }
 
 // Classify diffs base against head.
@@ -197,6 +205,7 @@ func Classify(base, head *graph.Graph, ws *load.Workspace, opt Options) *Impact 
 	c.ontology()
 	c.manifests()
 	c.links()
+	c.provenance()
 	c.stale()
 	if !opt.Adoption {
 		c.realizations()
@@ -760,6 +769,16 @@ func (c *classifier) manifests() {
 // ClassifyLink gates one inline link in the head graph against policy. It is
 // shared with gloss accept --policy.
 func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.Policy) (Class, []string) {
+	return classifyLinkAs(g, ws, e, pol, "")
+}
+
+// classifyLinkAs is ClassifyLink with a second actor besides the one the
+// link's provenance claims: the actor rules (remit, agent proposal without
+// conf) run under both and the stricter result holds. The provenance comes
+// from the ledger and graph the change itself commits, so gloss diff --actor
+// passes the CI identity here and an edited actor field cannot lower the gate
+// (#186).
+func classifyLinkAs(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.Policy, also string) (Class, []string) {
 	var reasons []string
 	gate := SOFT
 	p := e.Prov
@@ -796,12 +815,20 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 			}
 		}
 	}
+	actors := []string{p.Actor}
+	if also != "" && also != p.Actor {
+		actors = append(actors, also)
+	}
+	isAgent := func(a string) bool { return strings.HasPrefix(a, "agent:") }
 	// Agent remit (may-modify) when the actor is a named agent with an agent file.
-	if p.Actor != "" && strings.HasPrefix(p.Actor, "agent:") {
-		if remit, ok := agentRemit(g, p.Actor); ok {
+	for _, actor := range actors {
+		if !isAgent(actor) {
+			continue
+		}
+		if remit, ok := agentRemit(g, actor); ok {
 			if on.NodeType == model.NodeConcept && !model.MatchAnyCurie(remit, on.CURIE) {
 				gate = HARD
-				reasons = append(reasons, fmt.Sprintf("outside %s may-modify remit", agentName(p.Actor)))
+				reasons = append(reasons, fmt.Sprintf("outside %s may-modify remit", agentName(actor)))
 			}
 		}
 	}
@@ -825,7 +852,7 @@ func ClassifyLink(g *graph.Graph, ws *load.Workspace, e *graph.Edge, pol *model.
 		if conf >= 0 && conf < pol.SoftConfThreshold {
 			gate = HARD
 			reasons = append(reasons, fmt.Sprintf("conf %.2f below threshold %.2f", conf, pol.SoftConfThreshold))
-		} else if conf < 0 && strings.HasPrefix(p.Actor, "agent:") {
+		} else if conf < 0 && slices.ContainsFunc(actors, isAgent) {
 			gate = HARD
 			reasons = append(reasons, "agent proposal without conf")
 		}
@@ -944,7 +971,7 @@ func (c *classifier) links() {
 			}
 			continue
 		}
-		gate, why := ClassifyLink(c.head, c.ws, e, c.opt.Policy)
+		gate, why := classifyLinkAs(c.head, c.ws, e, c.opt.Policy, c.opt.Actor)
 		glyph := "+"
 		if e.Prov.Proposed {
 			glyph = "?"
@@ -958,7 +985,7 @@ func (c *classifier) links() {
 			kind = "new-concept"
 		}
 		c.add(Change{Gate: gate, Kind: kind, Glyph: glyph, Relation: e.P, Subject: c.head.Curie(e.S), Object: c.head.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol,
-			Proposed: e.Prov.Proposed, Conf: conf, Actor: e.Prov.Actor, Reasons: why, MarkerID: e.Prov.ID, Msg: fmt.Sprintf("%s %s", e.P, c.head.Curie(e.O))})
+			Proposed: e.Prov.Proposed, Conf: conf, Actor: firstNonEmpty(c.opt.Actor, e.Prov.Actor), Reasons: why, MarkerID: e.Prov.ID, Msg: fmt.Sprintf("%s %s", e.P, c.head.Curie(e.O))})
 		if m := c.ws.ManifestFor(e.Prov.Path); m != nil {
 			c.bounds[m.Boundary] = true
 		}
@@ -977,6 +1004,45 @@ func (c *classifier) links() {
 		c.add(Change{Gate: gate, Kind: "link-removed", Glyph: "-", Relation: e.P, Subject: c.base.Curie(e.S), Object: c.base.Curie(e.O), Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, MarkerID: e.Prov.ID, Reasons: why,
 			Msg: fmt.Sprintf("%s %s removed", e.P, c.base.Curie(e.O))})
 	}
+}
+
+// provenance reports ledger entries whose author or reviewer the change
+// rewrote. Who wrote a marker never changes after the fact, so a new actor is
+// SOFT; a new reviewer with the same review time is SOFT too, while one with a
+// later time is a re-review (a stale link re-confirmed), already reported as
+// the stale link it settles.
+func (c *classifier) provenance() {
+	if c.opt.BaseLedger == nil || c.opt.HeadLedger == nil {
+		return
+	}
+	ids := make([]string, 0, len(c.opt.BaseLedger))
+	for id := range c.opt.BaseLedger {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		b, h := c.opt.BaseLedger[id], c.opt.HeadLedger[id]
+		if h == nil {
+			continue
+		}
+		if b.Actor != "" && h.Actor != b.Actor {
+			c.add(Change{Gate: SOFT, Kind: "actor-changed", Glyph: "~", Path: h.Path, MarkerID: id, Actor: h.Actor,
+				Reasons: []string{"provenance rewritten: the ledger names a different author for a marker the base recorded"},
+				Msg:     fmt.Sprintf("%s author %s → %s", id, b.Actor, orNone(h.Actor))})
+		}
+		if b.ReviewedBy != "" && h.ReviewedBy != b.ReviewedBy && (h.ReviewedAt == b.ReviewedAt || h.ReviewedBy == "") {
+			c.add(Change{Gate: SOFT, Kind: "reviewer-changed", Glyph: "~", Path: h.Path, MarkerID: id, Actor: h.ReviewedBy,
+				Reasons: []string{"provenance rewritten: a different reviewer with the same review time"},
+				Msg:     fmt.Sprintf("%s reviewer %s → %s", id, b.ReviewedBy, orNone(h.ReviewedBy))})
+		}
+	}
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // decoratorChange reports the decorators removed from and added to an
