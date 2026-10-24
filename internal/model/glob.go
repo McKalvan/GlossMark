@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	globCache = map[string]*regexp.Regexp{}
-	globMu    sync.Mutex
+	globCache  = map[string]*regexp.Regexp{}
+	curieCache = map[string]*regexp.Regexp{}
+	globMu     sync.Mutex
 )
 
 // MatchGlob matches a slash-separated path against a gitignore-style glob:
@@ -67,6 +68,12 @@ func MatchCurie(pattern, curie string) bool {
 	if !strings.Contains(pattern, "*") {
 		return pattern == curie
 	}
+	globMu.Lock()
+	re, ok := curieCache[pattern]
+	globMu.Unlock()
+	if ok {
+		return re.MatchString(curie)
+	}
 	var sb strings.Builder
 	sb.WriteString("^")
 	for i := 0; i < len(pattern); i++ {
@@ -82,7 +89,11 @@ func MatchCurie(pattern, curie string) bool {
 		}
 	}
 	sb.WriteString("$")
-	return regexp.MustCompile(sb.String()).MatchString(curie)
+	re = regexp.MustCompile(sb.String())
+	globMu.Lock()
+	curieCache[pattern] = re
+	globMu.Unlock()
+	return re.MatchString(curie)
 }
 
 // MatchAnyCurie reports whether any pattern matches.

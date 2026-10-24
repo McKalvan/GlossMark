@@ -109,6 +109,21 @@ A label or `doc:` change on a core concept is HARD and changes every view that s
 
 Every relation is followed in one direction for one reason, never as a blind N-hop neighbourhood, so a hub concept does not pull in the graph; [ADR 0023](adr/0023-feature-slices.md) has the rules. The same slice is MCP `slice_of`, `gloss context --concept <curie>` (a briefing on a feature rather than a directory), a saved slice in `views.yaml` (`slice: [lib:Cataloging]`, see [FILE-FORMATS.md](FILE-FORMATS.md#viewsyaml)) and the viewer's "Slice on this" (or Alt+click a node; `#slice=lib:Cataloging` in the URL shares it; Esc or the chip's × clears it).
 
+## History (`gloss history`)
+
+`gloss history` is the gate folded over commits: each step is what `gloss diff` would say about a commit against its parent, so it answers when a concept, boundary or link was added, changed, deprecated or removed, by whom, and at which gate ([ADR 0040](adr/0040-ontology-history.md)). It reads the `graph.jsonl` each commit committed and loads that commit's ontology files, manifests, `glossmark.yaml` and views without scanning code, so each step is classified under the policy of its own commit. Only commits that change the graph, the ledger or those files are steps; the rest change nothing in the ontology. Steps print newest first; a step whose changes are all AUTO is hidden unless `--all`.
+
+| Flag | Effect |
+| --- | --- |
+| *subjects* | concept or boundary CURIEs to follow; changes, realization moves and version bumps that name them, or a predecessor or successor `replaced-by` links them to |
+| `--range <a>..<b>` | the revision range to walk (default `HEAD`, all of its history) |
+| `--step commit\|first-parent\|version` | every commit, merges left out (their changes are on the commits they merge; default, or `history.step` in `glossmark.yaml`); the main line with merges; or one step per namespace version bump, with the commits after the last bump as an open step |
+| `--all` | also show AUTO-only steps |
+| `--verify` | rebuild each step's graphs from their trees, as `gloss diff` does, instead of trusting the committed graphs |
+| `--format text\|json` | output; `json` lists each step with its commit, author, status and the impact in the shape of `gloss diff --format json` |
+
+A step is `built` (read from the committed graphs), `verified` (`--verify`), `unbuilt` (ontology files changed and `graph.jsonl` did not: the graph was not rebuilt, or the edit changes nothing in it; its changes otherwise appear on the next commit that rebuilds the graph) or `skipped` with the reason (a graph format this release does not read, or no `glossmark.yaml`). A repository that runs `gloss build --check` in CI has no unbuilt step that hides a change. A shallow clone is reported as truncated; fetch the history (`fetch-depth: 0`) first.
+
 ## Files and version numbers
 
 Three kinds of file: `glossmark.yaml` (namespaces, policy), `*.gloss.yaml` (one per namespace, the concepts) and `.gloss.yaml` (one per boundary directory). Four numbers: the tool release, the grammar (`grammar: 1`), the file formats (`"format"` headers) and each namespace's semver. [FILE-FORMATS.md](FILE-FORMATS.md) and [VERSIONING.md](VERSIONING.md) have the details.

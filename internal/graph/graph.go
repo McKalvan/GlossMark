@@ -863,11 +863,20 @@ func ReadJSONL(r io.Reader) (*Graph, error) {
 		if line == "" {
 			continue
 		}
+		// WriteJSONL puts "type" first, so the record type is usually a prefix;
+		// anything else is probed.
 		var probe struct {
 			Type string `json:"type"`
 		}
-		if err := json.Unmarshal([]byte(line), &probe); err != nil {
-			return nil, fmt.Errorf("graph.jsonl:%d: %w", lineNo, err)
+		switch {
+		case strings.HasPrefix(line, `{"type":"node"`):
+			probe.Type = "node"
+		case strings.HasPrefix(line, `{"type":"edge"`):
+			probe.Type = "edge"
+		default:
+			if err := json.Unmarshal([]byte(line), &probe); err != nil {
+				return nil, fmt.Errorf("graph.jsonl:%d: %w", lineNo, err)
+			}
 		}
 		switch probe.Type {
 		case "context":

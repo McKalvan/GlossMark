@@ -122,6 +122,18 @@
         }
       }
     },
+    "history": {
+      "description": "The repository's defaults for gloss history (ADR 0040). Command-line flags override them.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "description": "What one history step spans: every commit (merges excluded), the first-parent main line, or the commits between two namespace version bumps.",
+          "enum": ["commit", "first-parent", "version"],
+          "default": "commit"
+        }
+      }
+    },
     "grammar": {
       "type": "integer",
       "minimum": 1,
