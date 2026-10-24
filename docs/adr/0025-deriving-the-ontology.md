@@ -218,7 +218,7 @@ When D1 is built, `gm:` gains the concepts it introduces (evidence, derivation, 
 
 ### 12. Spike: `gloss harvest` on AgentArena
 
-Status: built and tested (experimental). `gloss harvest` and `internal/harvest` implement sections 3 and 4 except `--reference`, the `topic` extractor and first and last seen dates from history; `--cluster` implements the lexical half of phase 3 and the triangulation of section 6. The skill, the derivation record, the interview and alignment are not built.
+Status: built and tested (experimental). `gloss harvest` and `internal/harvest` implement sections 3 and 4, `--reference` (Turtle, RDF/XML and JSON-LD, read with the standard library) and the reference rules of 6.3 included, with the `topic` extractor and first and last seen dates from history (#203); `--cluster` implements the lexical half of phase 3 and the triangulation of section 6. The skill, the derivation record, the interview and alignment are not built.
 
 **Setup.** AgentArena at `3ade8b6`, with `docs/ontology/**` and `CLAUDE.md` hidden (`--exclude`), and the exercise packages' `repo/` and `oracle/` trees excluded because they are other applications' code. There are two answer keys. The first is the owner's glossary (`docs/ontology/glossary.md`: 159 entries, each with a status). The second is the ontology the earlier agent adoption wrote (branch `claude/glossmark-ontology` at `2b6f07f`: 168 `arena:` core and 110 `aa:` implementation concepts); an agent derived it from the same code, so it is not independent. A key counts as recalled when some candidate's key equals the key of its name or an alias. Scoring code is not committed; the method is this paragraph.
 

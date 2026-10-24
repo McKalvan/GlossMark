@@ -4,9 +4,11 @@ package harvest
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -316,6 +318,187 @@ func TestSentencesAndTransitions(t *testing.T) {
 		v, a, o := transition(c.line)
 		if v != c.value || (v != "" && (strings.ToLower(a) != strings.ToLower(c.attr) || o != c.of)) {
 			t.Errorf("transition(%q) = %q %q %q, want %q %q %q", c.line, v, a, o, c.value, c.attr, c.of)
+		}
+	}
+}
+
+// TestReference: the same vocabulary in Turtle, RDF/XML and JSON-LD reads
+// as the same terms, English labels first, with is-a from subClassOf and
+// part-of from BFO's part of; a restriction is not a parent (#203).
+func TestReference(t *testing.T) {
+	want := []string{
+		"Lending Agreement is-a [https://ref.example/lending#Loan] part-of []",
+		"Loan Item is-a [] part-of [https://ref.example/lending#Loan]",
+		"Loan is-a [] part-of []",
+		"Overdue Loan is-a [https://ref.example/lending#Loan] part-of []",
+		"Patron is-a [] part-of []",
+	}
+	for _, f := range []string{"lending.ttl", "lending.rdf", "lending.jsonld"} {
+		terms, err := ReadReference(filepath.Join("testdata", "reference", f))
+		if err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		var got []string
+		for _, rt := range terms {
+			got = append(got, fmt.Sprintf("%s is-a %v part-of %v", rt.Label, rt.Parents, rt.Wholes))
+		}
+		sort.Strings(got)
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("%s:\n%s\nwant\n%s", f, strings.Join(got, "\n"), strings.Join(want, "\n"))
+		}
+	}
+	ev, err := Reference([]string{"testdata/reference/lending.ttl"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range ev {
+		if err := e.Validate(); err != nil || e.Signal != "reference-term" || e.Source.Family != FamilyReference || e.Source.Locator == "" {
+			t.Errorf("%+v: %v", e, err)
+		}
+	}
+}
+
+// TestReferenceInClusters: a term only the reference names is no candidate;
+// a reference label picks the cluster name when the repository's own
+// surfaces disagree; reference structure links two candidates that both
+// have evidence of their own, and nothing else.
+func TestReferenceInClusters(t *testing.T) {
+	ref, err := Reference([]string{"testdata/reference/lending.ttl"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := []Evidence{
+		newEvidence("", "doc-heading", "Patrons", "docs/lending.md", 3),
+		newEvidence("", "type-decl", "Patron", "app/patron.py", 1),
+		newEvidence("", "type-decl", "Loan", "app/loan.py", 1),
+		newEvidence("", "type-decl", "OverdueLoan", "app/loan.py", 9),
+		newEvidence("", "function-decl", "sign_lending_agreement", "app/loan.py", 20),
+	}
+	by := func(cs []Cluster) map[string]Cluster {
+		m := map[string]Cluster{}
+		for _, c := range cs {
+			m[c.Key] = c
+		}
+		return m
+	}
+	before := by(Clusters(own))
+	patron, loan, overdue := Key("Patron"), Key("Loan"), Key("OverdueLoan")
+	if before[patron].Name != "Patrons" {
+		t.Fatalf("without a reference the doc names it: %q", before[patron].Name)
+	}
+	after := by(Clusters(append(append([]Evidence{}, own...), ref...)))
+	if after[patron].Name != "Patron" {
+		t.Errorf("with the reference: %q, want Patron", after[patron].Name)
+	}
+	if _, ok := after[Key("Lending Agreement")]; ok {
+		t.Error("lending agreement is named only by the reference, yet it is a candidate")
+	}
+	if _, ok := after[Key("Loan Item")]; ok {
+		t.Error("loan item is named only by the reference, yet it is a candidate")
+	}
+	if !slices.Contains(after[overdue].Related, "is-a:"+loan) || !slices.Contains(after[loan].Related, "has-subtype:"+overdue) {
+		t.Errorf("overdue loan related %v, loan related %v", after[overdue].Related, after[loan].Related)
+	}
+	for _, r := range after[loan].Related {
+		if strings.Contains(r, "lending") || strings.Contains(r, "item") {
+			t.Errorf("loan related %v names a reference-only term", after["loan"].Related)
+		}
+	}
+}
+
+// TestTopics: queue, event and cron names in code, Terraform and a
+// Kubernetes CronJob are topic evidence with their kind; a lower-case UI
+// event is not (#203).
+func TestTopics(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(dir, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("worker/returns.py", "QUEUE_NAME = \"overdue-notices\"\n\ndef on_return(bus, loan):\n    bus.publish(\"loan.returned\", loan)\n    button.emit(\"click\")\n")
+	write("infra/main.tf", "resource \"aws_sqs_queue\" \"hold_ready\" {\n  name = \"hold-ready\"\n}\n")
+	write("deploy/reminders.yaml", "apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: send-reminders\nspec:\n  schedule: \"0 9 * * *\"\n")
+	ev, err := Harvest(dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range ev {
+		if e.Signal == "topic" {
+			got = append(got, e.Surface+" "+e.Context[0])
+			if e.Source.Family != FamilyCode {
+				t.Errorf("%+v: family", e)
+			}
+		}
+	}
+	sort.Strings(got)
+	if want := []string{"hold_ready kind:queue", "loan.returned kind:event", "overdue-notices kind:queue", "send-reminders kind:cron"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("topics = %v, want %v", got, want)
+	}
+}
+
+// TestGitSeen: every surface is dated from the history. A term renamed
+// away carries the commit that added it and the commit that retired it; a
+// current one, the commit that added it and HEAD (#203).
+func TestGitSeen(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	dir := t.TempDir()
+	git := func(date string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE="+date+"T12:00:00Z", "GIT_COMMITTER_DATE="+date+"T12:00:00Z")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(rel, body string) {
+		if err := os.WriteFile(filepath.Join(dir, rel), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("2024-01-02", "init", "-q")
+	write("borrower.py", "class Borrower:\n    card_number: str\n    branch: str\n    email: str\n")
+	git("2024-01-02", "add", ".")
+	git("2024-01-02", "commit", "-q", "-m", "first")
+	git("2024-03-04", "mv", "borrower.py", "patron.py")
+	write("patron.py", "class Patron:\n    card_number: str\n    branch: str\n    email: str\n")
+	git("2024-03-04", "add", ".")
+	git("2024-03-04", "commit", "-q", "-m", "rename")
+	write("notes.md", "# Notes\n")
+	git("2024-05-06", "add", ".")
+	git("2024-05-06", "commit", "-q", "-m", "later")
+	ev, err := Harvest(dir, Options{Git: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, e := range ev {
+		got[e.Signal+" "+e.Surface] = e.FirstSeen + ".." + e.LastSeen
+	}
+	if s := got["rename borrower"]; s != "2024-01-02..2024-03-04" {
+		t.Errorf("retired borrower seen %q", s)
+	}
+	if s := got["type-decl Patron"]; s != "2024-03-04..2024-05-06" {
+		t.Errorf("current Patron seen %q (all: %v)", s, got)
+	}
+	var cl Cluster
+	for _, c := range Clusters(ev) {
+		if c.Key == Key("borrower") {
+			cl = c
+		}
+	}
+	if cl.FirstSeen != "2024-01-02" || cl.LastSeen != "2024-03-04" {
+		t.Errorf("borrower cluster seen %s..%s", cl.FirstSeen, cl.LastSeen)
+	}
+	noGit, _ := Harvest(dir, Options{})
+	for _, e := range noGit {
+		if e.FirstSeen != "" || e.LastSeen != "" {
+			t.Errorf("without git: %+v", e)
 		}
 	}
 }

@@ -140,7 +140,17 @@
           "items": {
             "type": "string"
           },
-          "description": "Typed hints, prefix:value: is-a:, table:, fk:, enum:, of:, in:, attr:, member:, parent:, class:, alias:, renamed-to:, from:."
+          "description": "Typed hints, prefix:value: is-a:, part-of:, iri:, kind:, resource:, table:, fk:, enum:, of:, in:, attr:, member:, parent:, class:, alias:, renamed-to:, from:."
+        },
+        "first_seen": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Date of the first commit whose diff adds the surface (git history; absent with --no-git or outside git)."
+        },
+        "last_seen": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "For an observation of the current tree, the date of the HEAD commit; for one from history (a rename), the date of the last commit whose diff names the surface: when a retired term was last seen."
         }
       }
     }

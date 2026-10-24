@@ -62,6 +62,12 @@ type Evidence struct {
 	Surface string   `json:"surface"`
 	Source  Source   `json:"source"`
 	Context []string `json:"context,omitempty"`
+	// FirstSeen and LastSeen date the surface from git history
+	// (YYYY-MM-DD): when it first appeared, and when it was last seen (the
+	// HEAD commit for the current tree, the last commit naming it for a
+	// retired term). Empty outside git or with --no-git.
+	FirstSeen string `json:"first_seen,omitempty"`
+	LastSeen  string `json:"last_seen,omitempty"`
 }
 
 // Source says where an observation was made: a path and line in the
