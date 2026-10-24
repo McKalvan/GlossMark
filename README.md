@@ -17,7 +17,7 @@ One grammar, `@gloss`. Two ontology tiers: a **core** the business owns and an *
 
 ## See it
 
-**The map.** `gloss view` draws boundaries as boxes and concepts as nodes. The example is Larkspur Clinics, a monorepo (Next.js, Go, Python, Postgres, Terraform, Kubernetes, GitHub Actions) where patients book and cancel outpatient appointments online, reminders go out before each visit and operations watch the no-show rate. This is its business view: the implementation tier folds into what it realizes, so a practice manager sees Booking, Cancellation, Availability and the two values engineering publishes, and nothing named after a Go package.
+**The map.** `gloss view` draws boundaries as boxes and concepts as nodes. The example is Larkspur Clinics, a monorepo (Next.js, Go, Python, Postgres, Terraform, Kubernetes, GitHub Actions) where patients book and cancel outpatient appointments online, reminders go out before each visit and operations watch the no-show rate. This is its business view: the implementation tier folds into what it realizes, so a practice manager sees Booking, Cancellation, Availability and the two values engineering publishes, all in the language of their domain.
 
 ![The business view: only core concepts, with the two published values ringed.](docs/img/viewer-business.png)
 
