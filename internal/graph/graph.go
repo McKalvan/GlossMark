@@ -53,12 +53,18 @@ type Node struct {
 	Value      any    `json:"value,omitempty"`
 	// ValueFrom is path:line of the code a published value is bound to;
 	// LiveValue is that line, ValueFP its fingerprint (see model.ValueFrom).
-	ValueFrom  string   `json:"value-from,omitempty"`
-	LiveValue  string   `json:"live-value,omitempty"`
-	ValueFP    string   `json:"value-fp,omitempty"`
-	Imported   bool     `json:"imported,omitempty"`
-	Proposed   bool     `json:"proposed,omitempty"`
-	ProposedBy string   `json:"proposed-by,omitempty"`
+	ValueFrom  string `json:"value-from,omitempty"`
+	LiveValue  string `json:"live-value,omitempty"`
+	ValueFP    string `json:"value-fp,omitempty"`
+	Imported   bool   `json:"imported,omitempty"`
+	Proposed   bool   `json:"proposed,omitempty"`
+	ProposedBy string `json:"proposed-by,omitempty"`
+	// Planned: the concept is specified and nothing implements it yet;
+	// PlanBy is its inclusive deadline (YYYY-MM-DD) and PlanTicket the
+	// tracker reference, both optional (ADR 0034).
+	Planned    bool     `json:"planned,omitempty"`
+	PlanBy     string   `json:"plan-by,omitempty"`
+	PlanTicket string   `json:"plan-ticket,omitempty"`
 	Aliases    []string `json:"aliases,omitempty"`
 	// Criticality is the effective governance level (low | medium | high |
 	// critical) of a concept, boundary or artifact; CriticalityFrom says where
@@ -70,9 +76,12 @@ type Node struct {
 	CriticalitySource string `json:"criticality-source,omitempty"`
 	// CriticalityFloor: the boundary's level is a floor for its artifacts.
 	CriticalityFloor bool `json:"criticality-floor,omitempty"`
-	// Namespace attributes.
+	// Namespace attributes. DeclsFP fingerprints what an ontology file says
+	// outside its concepts (iri, tier, doc and the relations: block), which
+	// no concept node or edge carries, so gloss diff sees an edit there.
 	Version string `json:"version,omitempty"`
 	Owner   string `json:"owner,omitempty"`
+	DeclsFP string `json:"decls-fp,omitempty"`
 	// Artifact attributes.
 	Path   string         `json:"path,omitempty"`
 	Anchor *marker.Anchor `json:"anchor,omitempty"`
@@ -86,6 +95,10 @@ type Node struct {
 	File string `json:"file,omitempty"`
 	Line int    `json:"line,omitempty"`
 }
+
+// RulePlanned marks a declared manifest edge that comes from the planned:
+// block: a declaration for the rollup, a plan item for drift (ADR 0034).
+const RulePlanned = "planned"
 
 // Prov is edge provenance.
 type Prov struct {

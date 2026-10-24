@@ -116,6 +116,8 @@ For each candidate concept, the record states which source families evidence it.
 
 #### 6.1 Planned concepts
 
+Built in [ADR 0034](0034-ontology-first-increments.md) phase P1, which amends two points below: `planned` is allowed on implementation concepts too, and a `verifies` link alone does not close a plan item (a test written first is the paradigm working, not the plan closing). It also adds the long form `planned: { by, ticket }`, the manifest `planned:` block and the `planned`, `planned-closed` and `plan-overdue` findings.
+
 A concept the specification describes and nothing implements is real domain knowledge, and an agent about to build the feature should link to it rather than mint a second name. It is also not a defect, so it must not count against coverage. The core tier gains a structural key:
 
 ```yaml

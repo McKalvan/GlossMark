@@ -415,6 +415,11 @@ func (c *classifier) ontology() {
 			c.add(Change{Gate: AUTO, Kind: "concept-accepted", Glyph: "+", Subject: h.CURIE, Path: h.File, Line: h.Line, Reasons: []string{"proposal accepted"}, Msg: fmt.Sprintf("concept %s accepted", h.CURIE)})
 			// Accepting is AUTO; what else changed with it is classified below.
 		}
+		if b.Planned && !h.Planned {
+			// The plan closed: dropping planned is bookkeeping, as dropping
+			// proposed is, and needs no bump (ADR 0034 section 2).
+			c.add(Change{Gate: AUTO, Kind: "planned-dropped", Glyph: "✓", Subject: h.CURIE, Path: h.File, Line: h.Line, Reasons: []string{"plan closed: planned dropped"}, Msg: fmt.Sprintf("concept %s planned dropped", h.CURIE)})
+		}
 		var diffs []string
 		bump := "PATCH"
 		raise := func(to string) {
@@ -448,6 +453,11 @@ func (c *classifier) ontology() {
 		if b.ReplacedBy != h.ReplacedBy {
 			diffs = append(diffs, fmt.Sprintf("replaced-by %s → %s", orNone(b.ReplacedBy), orNone(h.ReplacedBy)))
 			raise("MINOR")
+		}
+		// A plan added or re-dated is a decision about the roadmap; its
+		// removal is reported above and not again here.
+		if (h.Planned && !b.Planned) || (b.Planned && h.Planned && (b.PlanBy != h.PlanBy || b.PlanTicket != h.PlanTicket)) {
+			diffs = append(diffs, fmt.Sprintf("planned %s → %s", orNone(planOf(b)), orNone(planOf(h))))
 		}
 		if declaredCriticality(b) != declaredCriticality(h) {
 			diffs = append(diffs, fmt.Sprintf("criticality %s → %s", orNone(declaredCriticality(b)), orNone(declaredCriticality(h))))
@@ -525,12 +535,22 @@ func (c *classifier) ontology() {
 	}
 	// Namespaces: an owned one is an edit to glossmark.yaml; an imported one crosses repos.
 	for _, n := range c.head.NodesOf(model.NodeNamespace) {
-		if b := c.base.Node(n.ID); b == nil {
+		b := c.base.Node(n.ID)
+		if b == nil {
 			if n.Imported {
 				c.add(Change{Gate: HARD, Kind: "import-added", Glyph: "!", Subject: n.CURIE, Path: load.ConfigName, Reasons: []string{"cross-repo import"}, Msg: fmt.Sprintf("import %s added", n.CURIE)})
 			} else {
 				c.add(Change{Gate: HARD, Kind: "namespace-added", Glyph: "!", Subject: n.CURIE, Path: load.ConfigName, Reasons: []string{"namespace added (edit to glossmark.yaml)"}, Msg: fmt.Sprintf("namespace %s added", n.CURIE)})
 			}
+			continue
+		}
+		// What the file says outside its concepts (relations:, doc, tier,
+		// iri) is no node or edge; a bookkeeping change to a concept in the
+		// same file explains the file to the hard-path rule, so this edit
+		// is reported on its own. A graph built before the fingerprint
+		// existed has none, and is not compared.
+		if !n.Imported && b.DeclsFP != "" && n.DeclsFP != "" && b.DeclsFP != n.DeclsFP {
+			c.add(Change{Gate: HARD, Kind: "namespace-changed", Glyph: "!", Subject: n.CURIE, Path: n.File, Reasons: []string{"edit to the ontology file outside its concepts (relations:, doc, tier or iri)"}, Msg: fmt.Sprintf("namespace %s: declarations changed", n.NS)})
 		}
 	}
 	for _, n := range c.base.NodesOf(model.NodeNamespace) {
@@ -544,6 +564,18 @@ func (c *classifier) ontology() {
 	}
 }
 
+// planOf renders a concept's plan for a diff line: "by 2026-11-30, <ticket>",
+// "true" for a dated plan with neither, or "" when not planned.
+func planOf(n *graph.Node) string {
+	if n == nil || !n.Planned {
+		return ""
+	}
+	if p := (&model.Plan{By: n.PlanBy, Ticket: n.PlanTicket}).String(); p != "" {
+		return p
+	}
+	return "true"
+}
+
 func declaredCriticality(n *graph.Node) string {
 	if n != nil && n.CriticalityFrom == "declared" {
 		return n.Criticality
@@ -553,8 +585,17 @@ func declaredCriticality(n *graph.Node) string {
 
 // governance stamps every change with the criticality of what it touches and
 // raises its gate to what the policy demands for that level.
+// bookkeeping are the change kinds no floor raises: accepted proposals, a
+// closed plan, stale rows and re-anchored markers (ADR 0018 section 2).
+var bookkeeping = map[string]bool{"link-accepted": true, "concept-accepted": true, "planned-dropped": true, "stale": true, "fingerprint-changed": true}
+
+// explains lists the bookkeeping kinds that account for an edit to their
+// file: dropping proposed or planned is the edit to the ontology file, so
+// the hard-path rule has nothing left to report there. A ledger row (stale,
+// fingerprint-changed, link-accepted) names a code file it did not change.
+var explains = map[string]bool{"concept-accepted": true, "planned-dropped": true}
+
 func (c *classifier) governance() {
-	bookkeeping := map[string]bool{"link-accepted": true, "concept-accepted": true, "stale": true, "fingerprint-changed": true}
 	linkKinds := map[string]bool{"link-added": true, "link-removed": true, "new-concept": true, "link-accepted": true, "stale": true, "fingerprint-changed": true, "decorators-changed": true}
 	touched := map[string]CriticalityTouch{}
 	for i := range c.im.Changes {
@@ -1130,13 +1171,15 @@ func semver(s string) []int {
 // the graph did not explain is reported on its own.
 func (c *classifier) paths() {
 	seen := map[string]bool{}
-	bookkeeping := map[string]bool{"link-accepted": true, "concept-accepted": true, "stale": true, "fingerprint-changed": true}
 	for i := range c.im.Changes {
 		ch := &c.im.Changes[i]
-		// Bookkeeping (a stale row, a re-anchored marker) does not explain a
-		// file's change: a ledger row naming glossmark.yaml would otherwise
-		// hide an edit to its policy from the hard-path rule.
-		if !bookkeeping[ch.Kind] {
+		// Bookkeeping from the ledger (a stale row, a re-anchored marker)
+		// does not explain a file's change: a ledger row naming
+		// glossmark.yaml would otherwise hide an edit to its policy from the
+		// hard-path rule. Bookkeeping from the ontology diff (an accepted
+		// proposal, a closed plan) is the edit, and any other edit to the
+		// same entry is a change of its own.
+		if !bookkeeping[ch.Kind] || explains[ch.Kind] {
 			seen[ch.Path] = true
 		}
 		if ch.Gate != HARD && ch.Path != "" && !bookkeeping[ch.Kind] && model.MatchAnyGlob(c.opt.Policy.HardPaths, ch.Path) {

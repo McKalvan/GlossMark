@@ -73,7 +73,7 @@ jobs:
         with:
           version: source
           check-graph: "true"
-          drift-fail-on: violation,value-drift,gap,dangling,overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
+          drift-fail-on: violation,value-drift,gap,dangling,overdue,planned-closed,plan-overdue,out-of-range,deprecated-use,rogue,orphan,untested,presented-only,stale,proposed
           coverage-fail-under: "100"
           # The label approves the commits a reviewer saw: a push (synchronize)
           # is gated again, and approval-reset takes the label off.

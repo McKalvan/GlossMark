@@ -87,17 +87,18 @@ func cmdAccept(args []string) int {
 	stale := fs.Bool("stale", false, "re-confirm every stale link (its current anchor becomes the baseline); path arguments limit it to those files or directories")
 	dry := fs.Bool("n", false, "dry run: show what would be accepted")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs (proposed: true in an ontology file)")
+	planned := fs.Bool("planned", false, "the arguments are planned concept CURIEs whose plan has closed: drops planned: from the ontology file")
 	value := fs.Bool("value", false, "the arguments are concept CURIEs whose drifted published value is confirmed as is")
 	force := fs.Bool("force", false, "with --value: confirm even when the bound line does not hold the published value")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
 	if fs.NArg() == 0 && !*all && !*byPolicy && !*stale {
-		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy | --stale [path]... | --concept <ns:Name>... | --value <ns:Name>...")
+		fmt.Fprintln(os.Stderr, "usage: gloss accept <marker-id|path:line>... | --all | --policy | --stale [path]... | --concept <ns:Name>... | --planned <ns:Name>... | --value <ns:Name>...")
 		return 2
 	}
-	if *stale && (*all || *byPolicy || *concept || *value) {
-		fmt.Fprintln(os.Stderr, "gloss accept: --stale re-confirms stale links only; it does not combine with --all, --policy, --concept or --value")
+	if *stale && (*all || *byPolicy || *concept || *planned || *value) {
+		fmt.Fprintln(os.Stderr, "gloss accept: --stale re-confirms stale links only; it does not combine with --all, --policy, --concept, --planned or --value")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -135,6 +136,16 @@ func cmdAccept(args []string) int {
 				return fail(err)
 			}
 			fmt.Printf("gloss accept: %s confirmed by %s\n", plural(n, "published value"), rev)
+		}
+		return 0
+	}
+	if *planned {
+		n, err := acceptPlanned(p, fs.Args(), *dry)
+		if err != nil {
+			return fail(err)
+		}
+		if !*dry {
+			fmt.Printf("gloss accept: %s closed\n", plural(n, "plan item"))
 		}
 		return 0
 	}

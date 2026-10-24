@@ -1,5 +1,5 @@
 // @gloss implements gmi:DriftComparator scope=file
-// @gloss produces gm:Drift, gm:Coverage, gm:DecisionRequest scope=file
+// @gloss produces gm:Drift, gm:Coverage, gm:DecisionRequest, gm:PlanItem scope=file
 // @gloss publishes gm:DriftDetected, gm:DecisionRequested scope=file
 
 package rollup
@@ -35,6 +35,15 @@ const (
 	KindOverlap = "overlap"
 	// KindOverdue: a deprecated boundary past its retire-by date still has code.
 	KindOverdue = "overdue"
+	// KindPlanned: a planned concept, or a manifest's planned declaration,
+	// that nothing implements yet: an orphan or a gap with a deadline and a
+	// kinder name (ADR 0034). Never in the default --fail-on set.
+	KindPlanned = "planned"
+	// KindPlannedClosed: code implements the planned thing; drop planned so
+	// the flag does not go stale.
+	KindPlannedClosed = "planned-closed"
+	// KindPlanOverdue: a plan item past its inclusive by: date.
+	KindPlanOverdue = "plan-overdue"
 )
 
 // ComparedRelations are the manifest relations compared against derivation.
@@ -62,9 +71,12 @@ type Finding struct {
 	Proposed bool     `json:"proposed,omitempty"`
 	Path     string   `json:"path,omitempty"`
 	Line     int      `json:"line,omitempty"`
-	Msg      string   `json:"msg"`
-	Waived   bool     `json:"waived,omitempty"`
-	Waiver   string   `json:"waiver,omitempty"`
+	// By and Ticket are a plan item's deadline and tracker reference.
+	By     string `json:"by,omitempty"`
+	Ticket string `json:"ticket,omitempty"`
+	Msg    string `json:"msg"`
+	Waived bool   `json:"waived,omitempty"`
+	Waiver string `json:"waiver,omitempty"`
 }
 
 // Decision is a request for a human decision about the ontology.
@@ -105,6 +117,8 @@ type Metrics struct {
 	Gaps             int `json:"gaps"`
 	Untested         int `json:"untested"`
 	ProposedConcepts int `json:"proposed_concepts"`
+	// PlanItems counts the open plan items (planned and plan-overdue).
+	PlanItems        int `json:"plan_items"`
 	Dangling         int `json:"dangling"`
 	BacklogOldestDay int `json:"review_backlog_oldest_days"`
 	Concepts         int `json:"concepts"`
@@ -140,6 +154,7 @@ func Compare(g *graph.Graph, ws *load.Workspace, opt Options) *Report {
 	c.boundaries()
 	c.flushOmissions()
 	c.orphans()
+	c.plans()
 	c.rogues()
 	c.untested()
 	c.presentedOnly()
@@ -176,7 +191,7 @@ func rank(kind string) int {
 		return 6
 	case KindPresentedOnly:
 		return 7
-	case KindValueDrift, KindOverdue:
+	case KindValueDrift, KindOverdue, KindPlannedClosed, KindPlanOverdue:
 		return 1
 	case KindOverlap:
 		return 8
@@ -294,6 +309,120 @@ func (c *comparer) overdue() {
 	}
 }
 
+// plans reports each owned planned concept as a plan item: open (nothing
+// implements it; a verifies link alone keeps it open, listed as verified,
+// not implemented), overdue once its by: day has ended, or closed, once an
+// implements or represents link reaches it directly, through a concept that
+// realizes it, or through a subtype (ADR 0034 section 2).
+func (c *comparer) plans() {
+	for _, n := range c.g.NodesOf(model.NodeConcept) {
+		if !n.Planned || n.Imported {
+			continue
+		}
+		f := Finding{Concept: n.CURIE, Path: n.File, Line: n.Line, By: n.PlanBy, Ticket: n.PlanTicket}
+		plan := planText(n.PlanBy, n.PlanTicket)
+		switch {
+		case c.planClosed(n.ID):
+			f.Kind, f.Severity = KindPlannedClosed, "warning"
+			f.Msg = fmt.Sprintf("%s is implemented: drop planned (gloss accept --planned %s)", n.CURIE, n.CURIE)
+		case c.planOverdue(n.PlanBy):
+			f.Kind, f.Severity = KindPlanOverdue, "error"
+			f.Msg = fmt.Sprintf("planned concept %s was due by %s%s and nothing implements it yet", n.CURIE, n.PlanBy, ticketText(n.PlanTicket))
+		default:
+			f.Kind, f.Severity = KindPlanned, "info"
+			f.Msg = fmt.Sprintf("planned concept %s%s: nothing implements it yet", n.CURIE, plan)
+		}
+		if f.Kind != KindPlannedClosed && c.tested(n.ID, 0) {
+			f.Msg = strings.Replace(f.Msg, "nothing implements it yet", "verified, not implemented", 1)
+		}
+		c.add(f)
+	}
+}
+
+// PlanClosed reports whether the implementation has reached a planned
+// concept (see planClosed): gloss accept --planned warns when it has not.
+func PlanClosed(g *graph.Graph, id string) bool { return (&comparer{g: g}).planClosed(id) }
+
+// planClosed reports whether the implementation has reached a planned
+// concept: an artifact implements or represents it, a concept realizing it,
+// or something below it in is-a. verifies and the other links do not close.
+func (c *comparer) planClosed(id string) bool {
+	for _, x := range append([]string{id}, c.g.Descendants(id)...) {
+		if c.implemented(x, 0) || c.represented(x) {
+			return true
+		}
+	}
+	return false
+}
+
+// planOverdue reports whether a plan's by: day has ended (inclusive, like a
+// waiver's expires). A plan without a date is never overdue.
+func (c *comparer) planOverdue(by string) bool {
+	if by == "" {
+		return false
+	}
+	due, err := time.Parse(model.PlanDate, by)
+	return err == nil && WaiverExpired(due, c.opt.Now)
+}
+
+// planText renders a plan's deadline and ticket for a message: " (by
+// 2026-11-30, https://...)" or "".
+func planText(by, ticket string) string {
+	p := (&model.Plan{By: by, Ticket: ticket}).String()
+	if p == "" {
+		return ""
+	}
+	return " (" + p + ")"
+}
+
+func ticketText(ticket string) string {
+	if ticket == "" {
+		return ""
+	}
+	return " (" + ticket + ")"
+}
+
+// plannedDeclaration reports one planned manifest declaration: open until
+// code under the boundary derives it under the gap's subsumption rule, then
+// closed, or overdue once the block's by: day has ended.
+func (c *comparer) plannedDeclaration(b *graph.Node, rel, s string, reached bool, declared, derived []string, intended []string) {
+	by := ""
+	if m := c.manifestOf(b.CURIE); m != nil && m.Planned != nil {
+		by = m.Planned.By
+	}
+	cur := c.g.Curie(s)
+	f := Finding{Boundary: b.CURIE, Relation: rel, Concept: cur, Declared: c.curies(declared), Derived: c.curies(derived), Intended: intended, Path: b.File, Line: b.Line, By: by}
+	switch {
+	case reached:
+		f.Kind, f.Severity = KindPlannedClosed, "warning"
+		f.Msg = fmt.Sprintf("%s %s %s: move it from planned to %s in %s", b.CURIE, verb(rel), cur, rel, b.File)
+	case c.planOverdue(by):
+		f.Kind, f.Severity = KindPlanOverdue, "error"
+		f.Msg = fmt.Sprintf("%s planned to %s %s by %s and no code under it %s it yet", b.CURIE, planVerb(rel), cur, by, verb(rel))
+	default:
+		f.Kind, f.Severity = KindPlanned, "info"
+		f.Msg = fmt.Sprintf("%s plans to %s %s%s: no code under it %s it yet", b.CURIE, planVerb(rel), cur, planText(by, ""), verb(rel))
+	}
+	c.add(f)
+}
+
+// planVerb is verb(rel) in the infinitive: "plans to implement".
+func planVerb(rel string) string {
+	switch rel {
+	case "realizes":
+		return "implement"
+	case "produces":
+		return "produce"
+	case "consumes":
+		return "consume"
+	case "publishes":
+		return "publish"
+	case "subscribes":
+		return "subscribe to"
+	}
+	return rel
+}
+
 func andList(xs []string) string {
 	if len(xs) < 2 {
 		return strings.Join(xs, "")
@@ -334,9 +463,13 @@ func (c *comparer) boundaries() {
 	for _, b := range c.g.NodesOf(model.NodeBoundary) {
 		for _, rel := range ComparedRelations {
 			var declared []string
+			planned := map[string]bool{}
 			for _, e := range c.g.Out(b.ID, rel) {
 				if e.Source == graph.SourceDeclared {
 					declared = append(declared, e.O)
+					if e.Prov != nil && e.Prov.Rule == graph.RulePlanned {
+						planned[e.O] = true
+					}
 				}
 			}
 			// inherit means "what my nested boundaries declare" (realizes,
@@ -502,6 +635,12 @@ func (c *comparer) boundaries() {
 						reached = true
 						break
 					}
+				}
+				if planned[s] {
+					// A planned declaration is a plan item, not a gap, and
+					// closes under the same rule (ADR 0034).
+					c.plannedDeclaration(b, rel, s, reached, declared, derived, intended)
+					continue
 				}
 				if reached {
 					continue
@@ -1082,8 +1221,8 @@ func (c *comparer) flowShape(b, id string) bool {
 
 func (c *comparer) orphans() {
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Deprecated {
-			continue
+		if n.Imported || n.Deprecated || n.Planned {
+			continue // a planned concept is a plan item, not an orphan (ADR 0025 6.1)
 		}
 		if ok, _ := c.reachedByArtifact(n.ID); ok {
 			continue
@@ -1227,7 +1366,7 @@ func nameOf(cur string) string { p := strings.SplitN(cur, ":", 2); return p[len(
 // implements (or, for data, represents) them: a page with no engine behind it.
 func (c *comparer) presentedOnly() {
 	for _, n := range c.g.NodesOf(model.NodeConcept) {
-		if n.Imported || n.Internal || n.Deprecated || n.Kind == "event" {
+		if n.Imported || n.Internal || n.Deprecated || n.Planned || n.Kind == "event" {
 			continue
 		}
 		var by []string
@@ -1526,6 +1665,8 @@ func (c *comparer) metrics() {
 			m.Dangling++
 		case KindProposed:
 			m.ProposedConcepts++
+		case KindPlanned, KindPlanOverdue:
+			m.PlanItems++
 		}
 	}
 	// Review state per marker (not per target), and the files an accepted link covers.
@@ -1613,7 +1754,7 @@ func (c *comparer) metrics() {
 // nothing verifies, so each uncovered one is an orphan, untested, or held
 // back for the core concept it realizes, which is reported instead.
 func (c *comparer) inCoverage(n *graph.Node) bool {
-	if n.Imported || InternalExempt(n) || n.Deprecated || n.Proposed {
+	if n.Imported || InternalExempt(n) || n.Deprecated || n.Proposed || n.Planned {
 		return false
 	}
 	return n.Tier == model.TierImpl || c.implementedDirectly(n.ID)
@@ -1698,7 +1839,7 @@ func (c *comparer) waive() {
 }
 
 // FindingKinds are the kinds a finding can have, in the order --fail-on lists them.
-var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindOverdue, KindOutOfRange, KindDeprecatedUse, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindOverlap, KindStale, KindProposed, KindConsistent}
+var FindingKinds = []string{KindViolation, KindGap, KindValueDrift, KindDangling, KindOverdue, KindPlannedClosed, KindPlanOverdue, KindOutOfRange, KindDeprecatedUse, KindRogue, KindOrphan, KindUntested, KindPresentedOnly, KindOverlap, KindStale, KindProposed, KindPlanned, KindConsistent}
 
 // ParseFailOn splits a --fail-on list and rejects unknown kinds, so a typo
 // cannot silently disable part of a gate. "none" (or nothing) fails on nothing.

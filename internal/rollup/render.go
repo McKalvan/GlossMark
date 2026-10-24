@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var kindOrder = []string{KindViolation, KindValueDrift, KindOverdue, KindOutOfRange, KindGap, KindRogue, KindProposed, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested, KindDeprecatedUse, KindOverlap}
+var kindOrder = []string{KindViolation, KindValueDrift, KindOverdue, KindPlanOverdue, KindOutOfRange, KindGap, KindPlannedClosed, KindRogue, KindProposed, KindPlanned, KindDangling, KindStale, KindOrphan, KindPresentedOnly, KindUntested, KindDeprecatedUse, KindOverlap}
 
 var kindTitle = map[string]string{
 	KindViolation:     "Violations (boundary exceeds its declared capability)",
@@ -24,9 +24,12 @@ var kindTitle = map[string]string{
 	KindOverdue:       "Overdue retirements (retire-by passed, code still there)",
 	KindOutOfRange:    "Imports out of range",
 	KindDeprecatedUse: "Deprecated in use",
+	KindPlanned:       "Plan items (planned, nothing implements them yet)",
+	KindPlannedClosed: "Plan items closed (implemented: drop planned)",
+	KindPlanOverdue:   "Plan items overdue (by passed, nothing implements them)",
 }
 
-var kindGlyph = map[string]string{KindOverlap: "⇉", KindOverdue: "⌛", KindOutOfRange: "✗", KindDeprecatedUse: "~", KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
+var kindGlyph = map[string]string{KindPlanned: "◌", KindPlannedClosed: "●", KindPlanOverdue: "⌛", KindOverlap: "⇉", KindOverdue: "⌛", KindOutOfRange: "✗", KindDeprecatedUse: "~", KindViolation: "✗", KindGap: "○", KindRogue: "?", KindProposed: "?", KindDangling: "!", KindStale: "~", KindOrphan: "·", KindUntested: "△", KindPresentedOnly: "◇", KindValueDrift: "≠", KindConsistent: "✓"}
 
 // RenderText renders the report for a terminal.
 func RenderText(r *Report, all bool) string {
@@ -114,8 +117,8 @@ func RenderTextOpts(r *Report, opt TextOptions) string {
 	// prose included, moves it, so a committed drift output would change
 	// with every commit. gloss coverage and the JSON metrics carry it.
 	m := r.Metrics
-	fmt.Fprintf(&sb, "\nConcepts covered %s (%d/%d with an artifact and a verifier)   Orphans: %d   Rogue: %d   Violations: %d   Gaps: %d   Stale: %d   Untested: %d   Proposed links: %d   Proposed concepts: %d\n",
-		m.ConceptCoverage("%.0f%%"), m.ConceptsCovered, m.ConceptsInScope, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
+	fmt.Fprintf(&sb, "\nConcepts covered %s (%d/%d with an artifact and a verifier)   Orphans: %d   Rogue: %d   Violations: %d   Gaps: %d   Stale: %d   Untested: %d   Proposed links: %d   Proposed concepts: %d   Plan items: %d\n",
+		m.ConceptCoverage("%.0f%%"), m.ConceptsCovered, m.ConceptsInScope, m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts, m.PlanItems)
 	return sb.String()
 }
 
@@ -155,7 +158,7 @@ func RenderMarkdown(r *Report, all bool) string {
 		}
 	}
 	m := r.Metrics
-	fmt.Fprintf(&sb, "\nConcepts covered %s · Orphans %d · Rogue %d · Violations %d · Gaps %d · Stale %d · Untested %d · Proposed links %d · Proposed concepts %d\n",
-		m.ConceptCoverage("%.0f%%"), m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts)
+	fmt.Fprintf(&sb, "\nConcepts covered %s · Orphans %d · Rogue %d · Violations %d · Gaps %d · Stale %d · Untested %d · Proposed links %d · Proposed concepts %d · Plan items %d\n",
+		m.ConceptCoverage("%.0f%%"), m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Stale, m.Untested, m.Proposed, m.ProposedConcepts, m.PlanItems)
 	return sb.String()
 }

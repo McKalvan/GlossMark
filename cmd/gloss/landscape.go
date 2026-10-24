@@ -47,6 +47,13 @@ func cmdLandscape(args []string) int {
 		return fail(err)
 	}
 	rep := rollup.Compare(g, ws, rollup.Options{Policy: ws.Config.EffectivePolicy(), Now: time.Now()})
+	// An overdue plan is the owning repository's to fix: a warning here,
+	// not in the default --fail-on (ADR 0034 section 2).
+	for i := range rep.Findings {
+		if rep.Findings[i].Kind == rollup.KindPlanOverdue {
+			rep.Findings[i].Severity = "warning"
+		}
+	}
 	// Version state per repository, and who still uses deprecated concepts.
 	entries, imports, outOfRange := landscapeVersions(repos, wss)
 	rep.Findings = append(rep.Findings, outOfRange...)
