@@ -107,6 +107,25 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .chg .path{color:var(--muted);font-size:11px;word-break:break-all}
 .badge{display:inline-block;padding:0 5px;border-radius:8px;background:var(--line);font-size:11px;margin-left:4px}
 #sheetBtn{display:none}
+#ovBar{display:inline-flex;align-items:center;gap:4px}
+#ovBar[hidden]{display:none}
+#ovSel{max-width:300px}
+#ovBar button{padding:4px 7px}
+.hist{max-height:46vh;overflow-y:auto;border:1px solid var(--line);border-radius:6px;margin:6px 0}
+.hrow{display:block;user-select:none;padding:5px 8px;border-bottom:1px solid var(--line);cursor:pointer;color:var(--fg);text-decoration:none}
+.hrow:last-child{border-bottom:0}
+.hrow:hover{background:var(--bg)}
+.hrow.on{background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
+.hrow.dim{opacity:.6}
+.hrow .t{font-weight:600}
+.hrow .gate{font-size:10px;padding:0 4px;margin-right:4px}
+.cnt .a{color:var(--added)}.cnt .r{color:var(--removed)}.cnt .c{color:var(--changed)}
+table.vt{border-collapse:collapse;width:100%;margin:4px 0;font-size:11.5px}
+table.vt th{color:var(--muted);font-weight:500;text-align:right;padding:1px 4px}
+table.vt th:first-child,table.vt td:first-child{text-align:left}
+table.vt td{text-align:right;padding:1px 4px;border-top:1px solid var(--line)}
+table.vt tr.cur td{font-weight:650}
+.kinds{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
 /* Phones: one-line header and toolbar (the toolbar scrolls sideways), and the
    panel as a bottom sheet over the canvas, collapsed to its handle until tapped,
    so opening it does not resize the map. */
@@ -156,6 +175,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
   <input type="text" id="search" placeholder="Search id / label…" autocomplete="off">
   <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation">Filters</button>
   <span class="sep"></span>
+  <span id="ovBar" hidden><button id="ovOlder" type="button" title="Older commit ([)">◀</button><select id="ovSel" title="Overlay one commit's changes on the map (gloss view --history), or the --diff"></select><button id="ovNewer" type="button" title="Newer commit (])">▶</button></span>
   <select id="changesSel" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
     <option value="">All nodes</option><option value="0">Only changes</option><option value="1">Changes + 1 hop</option><option value="2">Changes + 2 hops</option><option value="3">Changes + 3 hops</option>
   </select>
@@ -216,7 +236,12 @@ const SLICEDEFS={seed:'What the slice was asked for.',housed:'A concept the seed
   part:'A part of a member (part-of).',realization:'An implementation concept that realizes a member.',published:'Linked to a member by published-as.',
   flow:'Reached along a followed flow relation.',artifact:'Code, docs, pages or infrastructure linked to a member.',test:'A test whose only links to members are verifies.',
   boundary:'A boundary that realizes, holds or flows a member, or contains a member artifact.',context:'Explains the feature without belonging to it: drawn faded and never expanded further.'};
-const diff=(data.diff&&typeof data.diff==='object')?data.diff:null;
+// The overlay is the --diff impact, one commit of the history, or the net of a
+// range of commits; diff is whichever is active (null: none).
+const BASEDIFF=(data.diff&&typeof data.diff==='object')?data.diff:null;
+const HISTORY=(data.history&&typeof data.history==='object')?data.history:null;
+const HIST=HISTORY&&Array.isArray(HISTORY.steps)?HISTORY.steps.filter(s=>s&&s.commit):[]; // newest first
+let diff=BASEDIFF;
 $('repo').textContent=data.repo?('repo: '+data.repo):'';
 $('generated').textContent=data.generated?('generated '+data.generated):'';
 if(!views.length){showMsg('No views to show. Declare views in the GlossMark config and re-run gloss view.');return;}
@@ -251,7 +276,7 @@ const GROUP='__placement:';
 /* Per-view diff overlay: sets of added/removed/changed ids and edge keys. */
 const ekey=e=>e.s+'|'+e.p+'|'+e.o;
 function diffFor(name){
-  const d={an:new Set(),rn:new Set(),cn:new Set(),ae:new Set(),re:new Map(),on:false};
+  const d={an:new Set(),rn:new Set(),cn:new Set(),ae:new Set(),aeRaw:new Map(),re:new Map(),on:false};
   if(!diff||!Array.isArray(diff.views))return d;
   const dv=diff.views.find(x=>x&&x.view===name);
   if(!dv)return d;
@@ -259,9 +284,127 @@ function diffFor(name){
   (dv.added_nodes||[]).forEach(x=>d.an.add(x));
   (dv.removed_nodes||[]).forEach(x=>d.rn.add(x));
   (dv.changed_nodes||[]).forEach(x=>d.cn.add(x));
-  (dv.added_edges||[]).forEach(e=>e&&d.ae.add(ekey(e)));
+  (dv.added_edges||[]).forEach(e=>{if(e){d.ae.add(ekey(e));d.aeRaw.set(ekey(e),e);}});
   (dv.removed_edges||[]).forEach(e=>e&&d.re.set(ekey(e),e));
   return d;
+}
+
+/* ---- history (gloss view --history, ADR 0040) ---- */
+// S.ov is the overlay: null, {k:'diff'} (the --diff impact), {k:'step',i} (one
+// commit against its parent; i indexes HIST, newest first) or {k:'range',a,b}
+// (the net of the commits from b, older, to a, newer, inclusive).
+const shortSha=c=>String(c||'').slice(0,7);
+const GATES=['AUTO','SOFT','HARD'];
+const stepImpact=st=>st&&st.impact&&typeof st.impact==='object'?st.impact:{changes:[],views:[]};
+const stepView=(st,name)=>(stepImpact(st).views||[]).find(x=>x&&x.view===name)||null;
+const maxGate=(a,b)=>GATES.indexOf(b)>GATES.indexOf(a)?b:a;
+const maxCrit=(a,b)=>critRank(b)>critRank(a)?b:a;
+// foldRange: the net change of steps b (older) .. a (newer). A node added and
+// removed inside the range is not in it; one removed and added back is
+// changed; an edge removed and added back is unchanged (ADR 0040 decision 8).
+function foldRange(a,b){
+  const list=HIST.slice(a,b+1).reverse(),vs=new Map();
+  let gate='AUTO',crit='',changes=[];
+  list.forEach(st=>{
+    const im=stepImpact(st);
+    gate=maxGate(gate,im.gate||'AUTO');crit=maxCrit(crit,im.criticality||'');
+    (im.changes||[]).forEach(c=>{if(c)changes.push(Object.assign({commit:st.commit},c));});
+    (im.views||[]).forEach(dv=>{
+      if(!dv||!dv.view)return;
+      let v=vs.get(dv.view);if(!v)vs.set(dv.view,v={n:new Map(),e:new Map()});
+      const nev=(id,t)=>{const r=v.n.get(id);if(r)r.last=t;else v.n.set(id,{first:t,last:t});};
+      const eev=(x,t)=>{if(!x)return;const k=ekey(x),r=v.e.get(k);if(r){r.last=t;r.edge=x;}else v.e.set(k,{first:t,last:t,edge:x});};
+      (dv.removed_nodes||[]).forEach(id=>nev(id,'removed'));(dv.added_nodes||[]).forEach(id=>nev(id,'added'));(dv.changed_nodes||[]).forEach(id=>nev(id,'changed'));
+      (dv.removed_edges||[]).forEach(x=>eev(x,'removed'));(dv.added_edges||[]).forEach(x=>eev(x,'added'));
+    });
+  });
+  const views=[];
+  vs.forEach((v,name)=>{
+    const d={view:name,added_nodes:[],removed_nodes:[],changed_nodes:[],added_edges:[],removed_edges:[]};
+    v.n.forEach((r,id)=>{const before=r.first!=='added',after=r.last!=='removed';
+      if(!before&&after)d.added_nodes.push(id);else if(before&&!after)d.removed_nodes.push(id);else if(before&&after)d.changed_nodes.push(id);});
+    v.e.forEach(r=>{const before=r.first!=='added',after=r.last!=='removed';
+      if(!before&&after)d.added_edges.push(r.edge);else if(before&&!after)d.removed_edges.push(r.edge);});
+    views.push(d);
+  });
+  const old=list[0]||{},imO=stepImpact(old),imN=stepImpact(list[list.length-1]);
+  const versions=[],realizations=[];list.forEach(st=>{const im=stepImpact(st);(im.versions||[]).forEach(x=>versions.push(x));(im.realizations||[]).forEach(x=>realizations.push(x));});
+  return {base:old.parent?shortSha(old.parent):shortSha(old.commit)+'^',gate,criticality:crit,changes,views,versions,realizations,before:imO.before,after:imN.after,views_changed:views.filter(d=>d.added_nodes.length+d.removed_nodes.length+d.changed_nodes.length+d.added_edges.length+d.removed_edges.length).map(d=>d.view)};
+}
+function overlayDiff(ov){
+  if(!ov)return null;
+  if(ov.k==='diff')return BASEDIFF;
+  if(ov.k==='step')return HIST[ov.i]?stepImpact(HIST[ov.i]):null;
+  if(ov.k==='range')return foldRange(ov.a,ov.b);
+  return null;
+}
+// laterThan: what in a view came after step i: the nodes and edges whose first
+// event in a newer step is added (so they were not there yet), and how many
+// whose first newer event is removed (there then, gone from this map now).
+function laterThan(i,name){
+  const nodes=new Set(),edges=new Set(),seenN=new Set(),seenE=new Set();let gone=0;
+  for(let j=i-1;j>=0;j--){
+    const dv=stepView(HIST[j],name);if(!dv)continue;
+    (dv.added_nodes||[]).forEach(id=>{if(!seenN.has(id)){seenN.add(id);nodes.add(id);}});
+    (dv.removed_nodes||[]).forEach(id=>{if(!seenN.has(id)){seenN.add(id);gone++;}});
+    (dv.added_edges||[]).forEach(x=>{const k=x&&ekey(x);if(k&&!seenE.has(k)){seenE.add(k);edges.add(k);}});
+    (dv.removed_edges||[]).forEach(x=>{const k=x&&ekey(x);if(k)seenE.add(k);});
+  }
+  return {nodes,edges,gone};
+}
+// The newest step the map is shown as of: the step, or a range's newer end.
+const asOfIndex=ov=>!ov?-1:ov.k==='step'?ov.i:ov.k==='range'?ov.a:-1;
+// Whole-graph counts of an impact: distinct ids across every view.
+function impactCounts(im){
+  const s={an:new Set(),rn:new Set(),cn:new Set(),ae:new Set(),re:new Set()};
+  (im&&Array.isArray(im.views)?im.views:[]).forEach(dv=>{if(!dv)return;
+    (dv.added_nodes||[]).forEach(x=>s.an.add(x));(dv.removed_nodes||[]).forEach(x=>s.rn.add(x));(dv.changed_nodes||[]).forEach(x=>s.cn.add(x));
+    (dv.added_edges||[]).forEach(x=>x&&s.ae.add(ekey(x)));(dv.removed_edges||[]).forEach(x=>x&&s.re.add(ekey(x)));});
+  return {an:s.an.size,rn:s.rn.size,cn:s.cn.size,ae:s.ae.size,re:s.re.size};
+}
+const cntHtml=c=>`<span class="cnt"><span class="a">+${c.an}</span> <span class="r">−${c.rn}</span> <span class="c">~${c.cn}</span> nodes · <span class="a">+${c.ae}</span> <span class="r">−${c.re}</span> edges</span>`;
+const histCounts=HIST.map(st=>impactCounts(stepImpact(st)));
+const anyCount=c=>c.an+c.rn+c.cn+c.ae+c.re>0;
+// countsLine: the node and edge counts, or how many changes touched nothing drawn.
+function countsLine(im,c){const n=(im&&im.changes||[]).length;
+  return (anyCount(c)?cntHtml(c)+' · ':'nothing drawn changed · ')+n+' change'+(n===1?'':'s');}
+function ovLabel(ov){
+  if(!ov)return '';
+  if(ov.k==='diff')return 'diff vs '+(BASEDIFF&&BASEDIFF.base||'base');
+  if(ov.k==='step'){const st=HIST[ov.i];return st?shortSha(st.commit)+' '+(st.title||''):'';}
+  return shortSha(HIST[ov.b]&&HIST[ov.b].commit)+'..'+shortSha(HIST[ov.a]&&HIST[ov.a].commit)+' ('+(ov.b-ov.a+1)+' commits)';
+}
+function stepIndex(ref){
+  if(!ref)return -1;ref=String(ref).toLowerCase();
+  return HIST.findIndex(st=>String(st.commit).toLowerCase().startsWith(ref));
+}
+// setOverlay: switch what the map overlays, keeping what is open and where.
+function setOverlay(ov,keepHash){
+  if(ov&&ov.k==='range'){if(ov.a>ov.b)ov={k:'range',a:ov.b,b:ov.a};if(ov.a===ov.b)ov={k:'step',i:ov.a};}
+  if(ov&&ov.k==='step'&&!HIST[ov.i])ov=null;
+  if(ov&&ov.k==='diff'&&!BASEDIFF)ov=null;
+  S.ov=ov;diff=overlayDiff(ov);
+  loadView(S.vi,true);syncOverlay();
+  if(!keepHash)writeHash();
+}
+function syncOverlay(){
+  const bar=$('ovBar'),s=$('ovSel');
+  bar.hidden=!HIST.length&&!BASEDIFF;if(bar.hidden)return;
+  let h='<option value="">No overlay</option>';
+  if(BASEDIFF)h+=`<option value="diff">Diff vs ${esc(BASEDIFF.base||'base')}</option>`;
+  if(S.ov&&S.ov.k==='range')h+=`<option value="range">${esc(ovLabel(S.ov))}</option>`;
+  HIST.forEach((st,i)=>{const t=String(st.title||'');h+=`<option value="s${i}">${esc(shortSha(st.commit))} ${esc(t.length>56?t.slice(0,54)+'…':t)}${st.impact&&st.impact.gate&&st.impact.gate!=='AUTO'?' · '+esc(st.impact.gate):''}</option>`;});
+  s.innerHTML=h;
+  s.value=!S.ov?'':S.ov.k==='diff'?'diff':S.ov.k==='range'?'range':'s'+S.ov.i;
+  const i=S.ov&&S.ov.k==='step'?S.ov.i:-1;
+  $('ovOlder').disabled=!HIST.length||i>=HIST.length-1;$('ovNewer').disabled=!HIST.length||i===0;
+}
+// stepOverlay: one commit older (+1) or newer (-1) than the one shown.
+function stepOverlay(dir){
+  if(!HIST.length)return;
+  const cur=S.ov&&S.ov.k==='step'?S.ov.i:S.ov&&S.ov.k==='range'?(dir>0?S.ov.b:S.ov.a):(dir>0?-1:HIST.length);
+  const i=Math.max(0,Math.min(HIST.length-1,cur+dir));
+  if(!(S.ov&&S.ov.k==='step'&&S.ov.i===i))setOverlay({k:'step',i});
 }
 
 /* ---- colours ---- */
@@ -288,7 +431,7 @@ const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
 const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set(),pub:new Set(),chg:new Set()});
-const S={deg:null,slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
+const S={ov:null,asOf:true,deg:null,slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},camMoved:false,theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
 const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage'),panel=$('panel');
@@ -300,15 +443,26 @@ let RC=new Map(); // rect cache for open boundaries, reset per frame
 function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
 /* ---- view loading ---- */
-function loadView(i){
+// loadView: show view i. keep (an overlay switch) keeps the open boxes,
+// positions, filters, focus and slice instead of starting at the top.
+function loadView(i,keep){
   S.vi=i;V=views[i]||{};
   const nodes=Array.isArray(V.nodes)?V.nodes.filter(n=>n&&n.id):[];
   const edges=Array.isArray(V.edges)?V.edges.filter(e=>e&&e.s&&e.o):[];
   D=diffFor(V.name);
+  // As of a commit: what a newer commit added is not there yet.
+  const ai=asOfIndex(S.ov),L=ai>=0&&S.asOf?laterThan(ai,V.name):{nodes:new Set(),edges:new Set(),gone:0};
+  D.later=L;
+  nodes.forEach(n=>{n._later=L.nodes.has(n.id)&&!D.an.has(n.id)&&!D.cn.has(n.id);});
+  edges.forEach(e=>{e._later=L.edges.has(ekey(e))&&!D.ae.has(ekey(e));});
   byId=new Map();nodes.forEach(n=>byId.set(n.id,n));
-  // Ghost nodes for removed ids so removed edges have endpoints.
+  // Ghost nodes for removed ids so removed edges have endpoints, and for ids
+  // an older commit added that this map no longer has (gone since).
   D.rn.forEach(id=>{if(!byId.has(id)){const g={id,label:id,type:'concept',kind:'',ghost:true};byId.set(id,g);nodes.push(g);}});
-  D.re.forEach((e,k)=>{if(!edges.some(x=>ekey(x)===k))edges.push(Object.assign({ghost:true,source:'declared'},e));});
+  D.an.forEach(id=>{if(!byId.has(id)){const g={id,label:id,type:'concept',kind:'',ghost:true,gone:true};byId.set(id,g);nodes.push(g);}});
+  const have=new Set(edges.map(ekey));
+  D.re.forEach((e,k)=>{if(!have.has(k)){have.add(k);edges.push(Object.assign({ghost:true,source:'declared'},e));}});
+  D.aeRaw.forEach((e,k)=>{if(have.has(k))return;have.add(k);edges.push(Object.assign({ghost:true,gone:true,source:'declared'},e));});
   // One always-open group per placement value that leaves concepts outside every box.
   [...new Set(nodes.filter(n=>n.type==='concept'&&n.placement&&n.placement!=='housed').map(n=>n.placement))].sort((a,b)=>placeRank(a)-placeRank(b)).forEach(v=>{
     const g={id:GROUP+v,label:'unplaced · '+v,type:'placement',placement:v,group:true,doc:PLACEDEFS[v]||''};byId.set(g.id,g);nodes.push(g);});
@@ -316,6 +470,20 @@ function loadView(i){
   nodes.forEach(n=>{if(n.parent===n.id||!byId.has(n.parent))n.parent='';if(n.boundary===n.id||!byId.has(n.boundary))n.boundary='';});
   V._nodes=nodes;V._edges=edges;
   markChanges();
+  const rels=new Set(edges.map(e=>e.p));
+  if(keep){
+    // Boxes and positions carry over by id; a relation new to the map is shown.
+    S.expanded=new Set([...S.expanded].filter(id=>byId.has(id)));groupIds().forEach(id=>S.expanded.add(id));
+    rels.forEach(r=>{if(!S.relsAll||!S.relsAll.has(r))S.rels.add(r);});S.relsAll=rels;
+    S.sel=S.sel&&S.sel.id&&byId.has(S.sel.id)?byId.get(S.sel.id):null;S.hover=null;
+    buildFilters();
+    if(S.deg!==null&&D.on){setDegree(S.deg);return;}
+    S.deg=null;syncChangesBtn();rebuild(false);
+    if(S.camMoved)draw();else fit();
+    renderPanel();
+    return;
+  }
+  S.relsAll=rels;
   // The top of the system: everything closed; drill in by clicking.
   S.expanded=groupIds();S.pos=new Map();S.pinned=new Set();S.sel=null;S.hover=null;S.focus=null;S.f=emptyFilters();
   S.rels=new Set(edges.map(e=>e.p));S.slice=null;S.deg=null;
@@ -355,8 +523,8 @@ function markChanges(){
   D.an.forEach(id=>set(id,'added'));D.rn.forEach(id=>set(id,'removed'));D.cn.forEach(id=>set(id,'changed'));
   V._edges.forEach(e=>{if(e.ghost||D.ae.has(ekey(e))||D.re.has(ekey(e))){set(e.s,'edge changed');set(e.o,'edge changed');}});
   // Breadth-first from every change over edges and part-of.
-  const adj=new Map(),link=(a,b)=>{if(!byId.has(a)||!byId.has(b))return;(adj.get(a)||adj.set(a,[]).get(a)).push(b);(adj.get(b)||adj.set(b,[]).get(b)).push(a);};
-  V._edges.forEach(e=>link(e.s,e.o));
+  const adj=new Map(),link=(a,b)=>{if(!byId.has(a)||!byId.has(b)||byId.get(a)._later||byId.get(b)._later)return;(adj.get(a)||adj.set(a,[]).get(a)).push(b);(adj.get(b)||adj.set(b,[]).get(b)).push(a);};
+  V._edges.forEach(e=>{if(!e._later)link(e.s,e.o);});
   V._nodes.forEach(n=>{if(n.type==='concept'&&n.parent)link(n.id,n.parent);});
   let front=V._nodes.filter(n=>CHG_ORDER.indexOf(n._chg)<=3);
   front.forEach(n=>{n._dist=0;});
@@ -393,6 +561,7 @@ function syncChangesBtn(){const b=$('changesSel');b.hidden=!D.on;b.value=S.deg==
 /* ---- filters ---- */
 function hiddenByFilter(n){
   if(n.group)return false;
+  if(n._later)return true; // not there yet at the commit the map is shown as of
   if(S.slice&&!S.slice.roles.has(n.id))return true;
   if(n.internal&&!S.internal)return true;
   const F=S.f;
@@ -417,7 +586,7 @@ const ONLY_TIP='Click to toggle, Shift+click to show only this';
 const pubState=n=>n.published?'published':'not published';
 function buildFilters(){
   const box=$('filters');box.innerHTML='';
-  const count=(f,label)=>{const m=new Map();V._nodes.forEach(n=>{if(n.group)return;const v=f(n);if(v===undefined)return;m.set(v,(m.get(v)||0)+1);});return m;};
+  const count=(f,label)=>{const m=new Map();V._nodes.forEach(n=>{if(n.group||n._later)return;const v=f(n);if(v===undefined)return;m.set(v,(m.get(v)||0)+1);});return m;};
   const groups=[
     {key:'type',label:'Type',counts:count(n=>n.type)},
     {key:'tier',label:'Tier',counts:count(n=>n.type==='concept'?(n.tier||''):undefined)},
@@ -514,7 +683,13 @@ function setSlice(seeds,keepHash){
   if(!keepHash)writeHash();
 }
 function writeHash(){
-  try{const h=S.slice?'#slice='+S.slice.seeds.map(encodeURIComponent).join(','):'';
+  try{const ps=[];
+    if(S.slice)ps.push('slice='+S.slice.seeds.map(encodeURIComponent).join(','));
+    const ov=S.ov;
+    if(ov&&ov.k==='step')ps.push('commit='+shortSha(HIST[ov.i].commit));
+    else if(ov&&ov.k==='range')ps.push('commit='+shortSha(HIST[ov.b].commit)+'..'+shortSha(HIST[ov.a].commit));
+    else if(!ov&&BASEDIFF)ps.push('commit=none');
+    const h=ps.length?'#'+ps.join('&'):'';
     if(location.hash!==h)history.replaceState(null,'',h||location.pathname+location.search);}catch(e){}
 }
 // The hash names a slice (#slice=a,b), a view (#view=engineering), whether
@@ -523,6 +698,16 @@ function writeHash(){
 function hashParam(k){
   const m=new RegExp('(?:^#|[&;])'+k+'=([^&;]*)').exec(location.hash||'');if(!m)return null;
   try{return decodeURIComponent(m[1]);}catch(e){return m[1];}
+}
+// ovFromHash: #commit=<sha>, <older>..<newer>, diff or none; undefined when
+// the hash names no commit this page has.
+function ovFromHash(){
+  const c=hashParam('commit');if(c==null)return undefined;
+  if(c===''||c==='none')return null;
+  if(c==='diff')return BASEDIFF?{k:'diff'}:undefined;
+  const m=c.split('..');
+  if(m.length===2){const b=stepIndex(m[0]),a=stepIndex(m[1]);if(a<0||b<0)return undefined;return a===b?{k:'step',i:a}:{k:'range',a:Math.min(a,b),b:Math.max(a,b)};}
+  const i=stepIndex(c);return i>=0?{k:'step',i}:undefined;
 }
 function viewFromHash(){const n=hashParam('view');const i=n?views.findIndex(v=>v&&v.name===n):-1;return i<0?0:i;}
 function readHash(){
@@ -604,7 +789,7 @@ function rebuild(seedAll){
   // Aggregate edges onto visible representatives.
   const agg=new Map();
   V._edges.forEach(e=>{
-    if(!S.rels.has(e.p))return;
+    if(!S.rels.has(e.p)||e._later)return;
     const a=repr(e.s),b=repr(e.o);
     if(!a||!b||a===b)return;
     // Containment is drawn as a box (or a faint link), not as an arrow: a housing
@@ -1041,6 +1226,58 @@ function setFocus(id){
   if(S.focus){let c=byId.get(S.focus);let g=0;while(c&&g++<64){S.expanded.add(c.id);c=c._c||containerOf(c);}}
   rebuild(false);fit();renderCrumbs();renderPanel();
 }
+const fmtDate=d=>String(d||'').replace('T',' ').slice(0,16);
+const gatePill=g=>g?`<span class="gate ${esc(g)}">${esc(g)}</span>`:'';
+const fmtN=v=>typeof v==='number'&&!Number.isInteger(v)?v.toFixed(1):esc(v);
+// commitURL: the commit on the code host, from the source-url template.
+function commitURL(sha){if(!srcURL||!sha)return '';const m=/^(https?:\/\/.+?)\/(?:-\/)?blob\//.exec(srcURL);return m?m[1]+(/\/-\/blob\//.test(srcURL)?'/-':'')+'/commit/'+encodeURIComponent(sha):'';}
+const METRICS=[['concepts','concepts'],['boundaries','boundaries'],['artifacts','artifacts'],['markers','markers'],['concept_coverage_pct','concept coverage %'],['coverage_pct','file coverage %'],
+  ['proposed','proposed links'],['stale','stale links'],['orphans','orphans'],['violations','violations'],['gaps','gaps'],['untested','untested'],['plan_items','plan items']];
+// overlayHtml: what the active overlay changed across the whole graph, not
+// only in this view: per view, per change kind, and the graph's own counts.
+function overlayHtml(){
+  if(!S.ov||!diff)return D.on?`<div style="margin-top:4px">${cntHtml({an:D.an.size,rn:D.rn.size,cn:D.cn.size,ae:D.ae.size,re:D.re.size})}</div>`:'';
+  const ov=S.ov;let h='';
+  if(ov.k==='step'){const st=HIST[ov.i],url=commitURL(st.commit);
+    h+=`<h2>Commit <span style="text-transform:none;letter-spacing:0">${ov.i+1} of ${HIST.length}, newest first</span></h2><div>${gatePill(diff.gate||'AUTO')} ${url?`<a class="mono" href="${esc(url)}" target="_blank" rel="noopener">${esc(shortSha(st.commit))}</a>`:`<b class="mono">${esc(shortSha(st.commit))}</b>`} ${esc(st.title)} ${critPill(diff.criticality)}</div>`;
+    h+=`<div class="via">${esc(fmtDate(st.date))} · ${esc(st.author)}${st.from?' · folds '+esc(shortSha(st.from))+'..'+esc(shortSha(st.commit)):''}${st.status&&st.status!=='built'?' · <b>'+esc(st.status)+'</b>'+(st.reason?': '+esc(st.reason):''):''}</div>`;
+    if(st.status==='unbuilt')h+=`<div class="via">Ontology files changed and the committed graph did not; its changes show on the next commit that rebuilt the graph.</div>`;
+  }else if(ov.k==='range'){const o=HIST[ov.b],n=HIST[ov.a];
+    h+=`<h2>Commits</h2><div>${gatePill(diff.gate||'AUTO')} <b class="mono">${esc(shortSha(o.commit))}..${esc(shortSha(n.commit))}</b> ${critPill(diff.criticality)}</div><div class="via">The net change of ${ov.b-ov.a+1} commits, ${esc(fmtDate(o.date))} to ${esc(fmtDate(n.date))}: what was added and removed again inside the range is left out.</div>`;
+  }else h+=`<h2>Diff</h2><div>${gatePill(diff.gate||'AUTO')} against <b class="mono">${esc(diff.base||'the base')}</b> ${critPill(diff.criticality)}</div>`;
+  h+=`<div style="margin-top:4px">Whole graph: ${countsLine(diff,impactCounts(diff))}</div>`;
+  const rows=(Array.isArray(diff.views)?diff.views:[]).filter(dv=>dv&&dv.view&&(dv.removed||(dv.added_nodes||[]).length+(dv.removed_nodes||[]).length+(dv.changed_nodes||[]).length+(dv.added_edges||[]).length+(dv.removed_edges||[]).length));
+  if(rows.length){
+    const len=a=>(a||[]).length;
+    h+=`<table class="vt"><tr><th>view</th><th title="nodes added">+n</th><th title="nodes removed">−n</th><th title="nodes changed">~n</th><th title="edges added">+e</th><th title="edges removed">−e</th></tr>${rows.map(dv=>{const vi=views.findIndex(v=>v&&v.name===dv.view);
+      return `<tr${dv.view===V.name?' class="cur"':''}><td>${vi>=0&&dv.view!==V.name?`<a class="n" data-view="${vi}">${esc(dv.view)}</a>`:esc(dv.view)}${dv.removed?' <span class="via">removed</span>':''}</td><td class="cnt"><span class="a">${len(dv.added_nodes)}</span></td><td class="cnt"><span class="r">${len(dv.removed_nodes)}</span></td><td class="cnt"><span class="c">${len(dv.changed_nodes)}</span></td><td class="cnt"><span class="a">${len(dv.added_edges)}</span></td><td class="cnt"><span class="r">${len(dv.removed_edges)}</span></td></tr>`;}).join('')}</table>`;
+  }else h+=`<div class="via">No view changed.</div>`;
+  const kc=new Map();(diff.changes||[]).forEach(c=>{if(c&&c.kind)kc.set(c.kind,(kc.get(c.kind)||0)+1);});
+  if(kc.size)h+=`<div class="kinds">${[...kc].sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(([k,n])=>`<span class="badge">${esc(k)} ${n}</span>`).join('')}</div>`;
+  const B=diff.before,A=diff.after;
+  if(B&&A){const ch=METRICS.filter(([k])=>B[k]!=null&&A[k]!=null&&B[k]!==A[k]);
+    if(ch.length)h+=`<dl>${ch.map(([k,l])=>`<dt>${esc(l)}</dt><dd>${fmtN(B[k])} → <b>${fmtN(A[k])}</b></dd>`).join('')}</dl>`;}
+  if(Array.isArray(diff.versions)&&diff.versions.length)h+=`<div class="via">versions: ${diff.versions.map(v=>esc(v.namespace)+' '+esc(v.from||'∅')+' → '+esc(v.to||'∅')+(v.ok===false?' <b style="color:var(--hard)">needs '+esc(v.required)+'</b>':'')).join(', ')}</div>`;
+  if(Array.isArray(diff.realizations)&&diff.realizations.length)h+=`<div class="via">moved: ${diff.realizations.slice(0,8).map(r=>esc(r.concept)+' {'+esc((r.before||[]).join(', '))+'} → {'+esc((r.after||[]).join(', '))+'}').join('; ')}${diff.realizations.length>8?'; …':''}</div>`;
+  h+=`<div class="via" style="margin-top:4px">In this view: ${cntHtml({an:D.an.size,rn:D.rn.size,cn:D.cn.size,ae:D.ae.size,re:D.re.size})}</div>`;
+  if(asOfIndex(ov)>=0){
+    const ln=V._nodes.filter(n=>n._later).length,le=V._edges.filter(e=>e._later).length,gone=D.later?D.later.gone:0;
+    h+=`<div style="margin-top:4px"><label><input type="checkbox" id="asOf"${S.asOf?' checked':''}> Map as of this commit</label></div><div class="via">${S.asOf?(ln||le?`Hides ${ln} node${ln===1?'':'s'} and ${le} edge${le===1?'':'s'} added by newer commits.`:'Nothing newer to hide in this view.')+(gone?` ${gone} node${gone===1?'':'s'} removed by newer commits ${gone===1?'is':'are'} not drawn.`:''):'Today’s map with this commit’s changes on it.'}</div>`;
+  }
+  h+=`<div class="acts">${ov.k!=='diff'?`<button data-ov="older"${ov.k==='step'&&ov.i>=HIST.length-1?' disabled':''}>◀ Older</button><button data-ov="newer"${ov.k==='step'&&ov.i===0?' disabled':''}>Newer ▶</button>`:''}<button data-ov="clear">Clear overlay</button></div>`;
+  return h;
+}
+// historyHtml: every commit, newest first, with its whole-graph counts.
+function historyHtml(){
+  if(!HIST.length)return BASEDIFF?`<div class="via" style="margin-top:6px">Run <span class="mono">gloss view --history</span> to step through every commit.</div>`:'';
+  const ov=S.ov;
+  let h=`<h2>History (${HIST.length} commit${HIST.length===1?'':'s'})</h2><div class="via">Click a commit to overlay it on the map; shift+click another to see the net change between them; [ and ] step older and newer.${HISTORY.truncated?' The clone is shallow, so older commits are missing.':''}</div><div class="hist">`;
+  HIST.forEach((st,i)=>{
+    const on=ov&&(ov.k==='step'&&ov.i===i||ov.k==='range'&&i>=ov.a&&i<=ov.b),g=stepImpact(st).gate||'AUTO';
+    h+=`<a class="hrow${on?' on':''}${st.status==='skipped'?' dim':''}" data-step="${i}"><div>${gatePill(g)}<span class="mono">${esc(shortSha(st.commit))}</span> <span class="t">${esc(st.title)}</span></div><div class="via">${esc(fmtDate(st.date))} · ${esc(st.author)}${st.status&&st.status!=='built'?' · '+esc(st.status):''}<br>${countsLine(stepImpact(st),histCounts[i])}</div></a>`;
+  });
+  return h+'</div>';
+}
 function renderPanel(){
   const sel=S.sel;let h='';
   if(V.doc||V.zoom)h+=`<h2>View</h2><div><b>${esc(V.name)}</b>${V.zoom?' <span class="badge">'+esc(V.zoom)+'</span>':''}</div><div style="color:var(--muted)">${esc(V.doc||'')}</div>`;
@@ -1049,7 +1286,7 @@ function renderPanel(){
     h+=`<h2>Slice</h2><div><b>${S.slice.seeds.map(esc).join(', ')}</b> <a class="n" data-clearslice="1">clear</a></div><div class="via">${SROLES.filter(r=>by.has(r)).map(r=>`<span title="${esc(SLICEDEFS[r]||'')}">${by.get(r)} ${esc(r)}</span>`).join(' · ')}</div>`;
     if(S.slice.missing.length)h+=`<div class="via">Not precomputed for ${S.slice.missing.map(esc).join(', ')}${SL&&SL.omitted?' (the index reached its size cap)':''}: run <span class="mono">gloss slice ${S.slice.missing.map(esc).join(' ')}</span>.</div>`;
   }
-  if(D.on)h+=`<div style="margin-top:4px"><span style="color:var(--added)">+${D.an.size} nodes, +${D.ae.size} edges</span> · <span style="color:var(--removed)">−${D.rn.size} nodes, −${D.re.size} edges</span> · <span style="color:var(--changed)">~${D.cn.size} changed</span></div>`;
+  h+=overlayHtml();
   if(sel&&sel.id){
     const n=sel;
     if(n.group){
@@ -1119,6 +1356,7 @@ function renderPanel(){
       const sorted=tops.slice().sort((a,b)=>critRank(b.criticality)-critRank(a.criticality)||(a.label||a.id).localeCompare(b.label||b.id));
       h+=`<ul>${sorted.map(b=>'<li>'+nodeLink(b)+' <span class="badge">'+esc(b.kind||'boundary')+'</span>'+(b._hidden?' <span class="via">'+b._hidden+' inside</span>':'')+(b.criticality?' '+critPill(b.criticality):'')+'</li>').join('')}</ul>`;
     }
+    h+=historyHtml();
     if(data.classified===0)h+=`<div class="via" style="margin-top:6px">Nothing is classified by criticality yet, so ordering by criticality has no effect. Run <span class="mono">gloss criticality suggest</span> for a first pass.</div>`;
     if(findings.length){
       const kinds=[...new Set(findings.map(f=>f.kind))];
@@ -1141,10 +1379,15 @@ function renderPanel(){
     ['HARD','SOFT','AUTO'].concat([...new Set(diff.changes.map(c=>c&&c.gate).filter(g=>g&&!['HARD','SOFT','AUTO'].includes(g)))]).forEach(g=>{
       const list=diff.changes.filter(c=>c&&(c.gate||'AUTO')===g);if(!list.length)return;
       h+=`<div style="margin:8px 0 4px"><span class="gate ${esc(g)}">${esc(g)}</span> <span class="badge">${list.length}</span></div>`;
-      list.forEach(c=>{h+=`<div class="chg ${esc(g)}"><div>${c.kind?'<b>'+esc(c.kind)+'</b> ':''}${esc(c.msg||'')}${c.criticality?' '+critPill(c.criticality):''}</div>${c.path?'<div class="path mono">'+esc(c.path)+(c.line?':'+esc(c.line):'')+'</div>':''}</div>`;});
+      list.slice(0,200).forEach(c=>{h+=`<div class="chg ${esc(g)}"><div>${c.commit?'<span class="mono via">'+esc(shortSha(c.commit))+'</span> ':''}${c.kind?'<b>'+esc(c.kind)+'</b> ':''}${esc(c.msg||'')}${c.criticality?' '+critPill(c.criticality):''}</div>${c.path?'<div class="path mono">'+esc(c.path)+(c.line?':'+esc(c.line):'')+'</div>':''}</div>`;});
+      if(list.length>200)h+=`<div class="via">… ${list.length-200} more ${esc(g)} changes</div>`;
     });
   }
+  const hs=$('panelBody').querySelector('.hist'),top=hs?hs.scrollTop:0;
   $('panelBody').innerHTML=h;
+  const hs2=$('panelBody').querySelector('.hist');
+  if(hs2){hs2.scrollTop=top;if(S.histScroll){const r=hs2.querySelector('.hrow.on');if(r){const a=r.offsetTop-hs2.offsetTop,b=a+r.offsetHeight;if(a<hs2.scrollTop||b>hs2.scrollTop+hs2.clientHeight)hs2.scrollTop=a-hs2.clientHeight/3;}}}
+  S.histScroll=false;
   sheetLabel();
 }
 // The bottom sheet's handle (phones): what is selected, and whether it is open.
@@ -1186,7 +1429,8 @@ const LEGEND=[
   {name:'Diff',diff:true,items:[
     ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.'],
     ['<i class="ln rem"></i>','removed','Red: removed since the base; a removed node is drawn hollow and dashed.'],
-    ['<span style="color:var(--changed)">◌</span>','changed','Orange dashed ring: a node whose definition changed since the base.']]},
+    ['<span style="color:var(--changed)">◌</span>','changed','Orange dashed ring: a node whose definition changed since the base.'],
+    ['<i class="sw c" style="background:transparent;border-color:var(--added);border-style:dashed"></i>','added, gone since','Green and dashed: a commit of the history added it and a newer one removed it, so today\u2019s map has no place for it; it floats at the top.']]},
 ];
 // Relation definitions, read as "A <relation> B" in the direction the edge is drawn.
 // Worded from docs/ADVANCED.md and internal/model/vocab.go.
@@ -1232,8 +1476,16 @@ function reveal(n){ // expand every container, then select and centre
   rebuild(false);S.sel=n;const p=centre(n);if(p){S.cam.x=cv.clientWidth/2-p.x*S.cam.k;S.cam.y=viewH()/2-p.y*S.cam.k;S.camMoved=true;}
   renderPanel();draw();
 }
+panel.addEventListener('change',ev=>{if(ev.target.id==='asOf'){S.asOf=ev.target.checked;loadView(S.vi,true);}});
 panel.addEventListener('toggle',ev=>{if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;},true);
 panel.addEventListener('click',ev=>{
+  const hr=ev.target.closest('[data-step]');
+  if(hr){ev.preventDefault();const i=+hr.dataset.step;
+    if(ev.shiftKey&&S.ovAnchor!=null&&S.ov&&S.ov.k!=='diff'&&S.ovAnchor!==i)setOverlay({k:'range',a:Math.min(S.ovAnchor,i),b:Math.max(S.ovAnchor,i)});
+    else{S.ovAnchor=i;if(!(S.ov&&S.ov.k==='step'&&S.ov.i===i))setOverlay({k:'step',i});}
+    return;}
+  const ob=ev.target.closest('button[data-ov]');
+  if(ob){const a=ob.dataset.ov;if(a==='clear')setOverlay(null);else{S.histScroll=true;stepOverlay(a==='older'?1:-1);}return;}
   const b=ev.target.closest('button[data-act]');
   if(b&&S.sel&&S.sel.id){
     const n=S.sel;
@@ -1249,6 +1501,7 @@ panel.addEventListener('click',ev=>{
   }
   const a=ev.target.closest('a.n');if(!a)return;
   if(a.dataset.clearslice){setSlice(null);return;}
+  if(a.dataset.view!=null){const vi=+a.dataset.view;if(views[vi]){sel.value=vi;loadView(vi);}return;}
   const n=byId.get(a.dataset.id);if(!n)return;
   reveal(n);
 });
@@ -1330,7 +1583,8 @@ cv.addEventListener('wheel',ev=>{
 },{passive:false});
 window.addEventListener('keydown',ev=>{if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
   if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
-  if(ev.key==='f')fit();});
+  if(ev.key==='f')fit();
+  if((ev.key==='['||ev.key===']')&&HIST.length){S.histScroll=true;stepOverlay(ev.key==='['?1:-1);}});
 // A resize (a phone turned sideways) refits the map unless the reader has panned or zoomed.
 new ResizeObserver(()=>{if(!S.camMoved&&VN.length)fit();else draw();}).observe(stage);
 
@@ -1340,6 +1594,10 @@ views.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textC
 sel.onchange=()=>loadView(+sel.value);
 $('search').oninput=ev=>{S.q=ev.target.value.trim().toLowerCase();draw();};
 $('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');};
+$('ovSel').onchange=ev=>{const v=ev.target.value;S.histScroll=true;
+  if(v==='')setOverlay(null);else if(v==='diff')setOverlay({k:'diff'});else if(v[0]==='s'){S.ovAnchor=+v.slice(1);setOverlay({k:'step',i:+v.slice(1)});}};
+$('ovOlder').onclick=()=>{S.histScroll=true;stepOverlay(1);};
+$('ovNewer').onclick=()=>{S.histScroll=true;stepOverlay(-1);};
 $('changesSel').onchange=ev=>setDegree(ev.target.value===''?null:+ev.target.value);
 $('expandAll').onclick=()=>{V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(false);fit();renderPanel();};
 $('collapseAll').onclick=()=>{S.expanded=groupIds();S.focus=null;rebuild(false);fit();renderPanel();};
@@ -1371,13 +1629,20 @@ window.glossViewer={
   filter(group,value){if(!S.f[group])return false;S.f[group].has(value)?S.f[group].delete(value):S.f[group].add(value);buildFilters();rebuild(false);renderPanel();draw();return true;},
   slice(seeds){setSlice(seeds&&seeds.length?seeds:null);return S.slice?[...S.slice.roles.keys()].sort():null;},
   sliceOf(seed){const m=sliceOf(seed);return m?m.map(x=>x.id).sort():null;},
-  state(){return {view:V.name,slice:S.slice?S.slice.seeds:null,focus:S.focus,expanded:[...S.expanded],nodes:VN.length,edges:VE.filter(e=>!e.contain).length};}
+  overlay(ref){if(ref===undefined)return S.ov?ovLabel(S.ov):null;const o=ref===null?null:ref==='diff'?{k:'diff'}:(()=>{const m=String(ref).split('..');if(m.length===2){const b=stepIndex(m[0]),a=stepIndex(m[1]);return a<0||b<0?undefined:{k:'range',a,b};}const i=stepIndex(ref);return i<0?undefined:{k:'step',i};})();
+    if(o===undefined)return false;setOverlay(o);return true;},
+  history(){return HIST.map(st=>({commit:st.commit,title:st.title,gate:stepImpact(st).gate||'AUTO'}));},
+  state(){return {view:V.name,overlay:S.ov?ovLabel(S.ov):null,slice:S.slice?S.slice.seeds:null,focus:S.focus,expanded:[...S.expanded],nodes:VN.length,edges:VE.filter(e=>!e.contain).length};}
 };
 
 /* ---- go ---- */
 applyTheme(saved);
-try{loadView(viewFromHash());sel.value=S.vi;if(hashParam('open')==='all')$('expandAll').onclick();{const c=hashParam('changes');if(c!=null&&D.on&&/^[0-3]$/.test(c))setDegree(+c);}const hs=readHash();if(hs&&SL)setSlice(hs,true);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
-window.addEventListener('hashchange',()=>{if(SL)setSlice(readHash(),true);});
+try{{const o=ovFromHash();S.ov=o!==undefined?o:BASEDIFF?{k:'diff'}:null;if(S.ov&&S.ov.k==='step')S.ovAnchor=S.ov.i;diff=overlayDiff(S.ov);}
+  loadView(viewFromHash());sel.value=S.vi;syncOverlay();S.histScroll=true;renderPanel();if(hashParam('open')==='all')$('expandAll').onclick();{const c=hashParam('changes');if(c!=null&&D.on&&/^[0-3]$/.test(c))setDegree(+c);}const hs=readHash();if(hs&&SL)setSlice(hs,true);}catch(e){showMsg('The viewer hit an error while rendering.\n'+e.message);console.error(e);}
+window.addEventListener('hashchange',()=>{
+  const o=ovFromHash();if(o!==undefined&&JSON.stringify(o)!==JSON.stringify(S.ov)){S.histScroll=true;setOverlay(o,true);}
+  const hs=readHash(),cur=S.slice?S.slice.seeds.join(','):null;
+  if(SL&&(hs?hs.join(','):null)!==cur)setSlice(hs,true);});
 })();
 </script>
 </body>

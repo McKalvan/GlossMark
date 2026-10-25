@@ -29,6 +29,9 @@ type Data struct {
 	Views     []*views.Projection `json:"views"`
 	// Diff is the optional impact report from gloss diff --format json.
 	Diff json.RawMessage `json:"diff,omitempty"`
+	// History is the optional gloss history --format json record (gloss view
+	// --history): each commit's impact, newest first, for the History panel.
+	History json.RawMessage `json:"history,omitempty"`
 	// Concepts holds what the concept pane shows, keyed by CURIE.
 	Concepts map[string]*ConceptDetail `json:"concepts,omitempty"`
 	// Findings are the drift findings, for the findings panel.
