@@ -28,7 +28,7 @@ type Options struct {
 	Core    string // core namespace prefix (default: guessed from the name)
 	Impl    string // implementation namespace prefix (default: core + "i")
 	IRIBase string // base for namespace IRIs (default https://onto.example.com/<name>/)
-	Version string // gloss release the CI job pins (default v0.2.0)
+	Version string // gloss release the CI job pins (default v0.3.0)
 	// BoundaryPrefix is the prefix of boundary names (default: the
 	// repository's own core prefix + "b").
 	BoundaryPrefix string
@@ -441,7 +441,7 @@ func Make(root string, opt Options) (*Plan, error) {
 	}
 	version := opt.Version
 	if version == "" {
-		version = "v0.2.0"
+		version = "v0.3.0"
 	}
 	bprefix := own + "b"
 	if len(imports) == 0 {

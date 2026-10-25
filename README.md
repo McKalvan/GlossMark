@@ -67,11 +67,11 @@ Tests existed before TDD. What changed was *when* they were written, and that is
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.2.0   # Linux/macOS binary into ~/.local/bin
-go install github.com/mckalvan/glossmark/cmd/gloss@v0.2.0                                          # with a Go toolchain
+curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh | sh -s -- v0.3.0   # Linux/macOS binary into ~/.local/bin
+go install github.com/mckalvan/glossmark/cmd/gloss@v0.3.0                                          # with a Go toolchain
 ```
 
-Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.2.0` downloads the same binary. Releases, grammar and file-format versions are pinned as described in [docs/VERSIONING.md](docs/VERSIONING.md).
+Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.3.0` downloads the same binary. Releases, grammar and file-format versions are pinned as described in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Try it
 
