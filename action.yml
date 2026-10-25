@@ -29,7 +29,7 @@ inputs:
     default: "true"
   version:
     description: gloss release to install. A tag (vX.Y.Z) downloads the release binary; source builds the Action's own checkout (uses ./ in the GlossMark repository); anything else (latest, a commit) is built with go install.
-    default: v0.2.0
+    default: v0.3.0
 runs:
   using: composite
   steps:

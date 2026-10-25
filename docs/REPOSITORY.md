@@ -43,7 +43,7 @@ The links were written by an agent (`GLOSS_ACTOR=agent:claude`), so the ledger r
 
 ## Versions
 
-`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.2.0`), pre-commit (`rev: v0.2.0`), `install.sh v0.2.0` or `go install ...@v0.2.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [VERSIONING.md](VERSIONING.md).
+`gloss version` prints the tool release, the grammar version and the file-format versions. Releases are git tags built by the release workflow; pin them in the Action (`uses: mckalvan/glossmark@v0.3.0`), pre-commit (`rev: v0.3.0`), `install.sh v0.3.0` or `go install ...@v0.3.0`. Repositories pin their grammar with `grammar: 1` in `glossmark.yaml`, importers pin ontology versions with ranges and `glossmark.lock`. See [VERSIONING.md](VERSIONING.md).
 
 ## Status
 
