@@ -43,10 +43,14 @@ var reviewTools = []tool{
 
 // toolList is every tool this backend serves.
 func (s *Server) toolList() []tool {
+	list := append([]tool{}, tools...)
 	if _, ok := s.backend.(Reviewer); ok {
-		return append(append(append([]tool{}, tools...), reviewTools...), browseTools...)
+		list = append(append(list, reviewTools...), browseTools...)
 	}
-	return tools
+	if _, ok := s.backend.(Historian); ok {
+		list = append(list, historyTools...)
+	}
+	return list
 }
 
 // callReview handles the review tools; handled is false for any other name.

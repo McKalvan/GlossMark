@@ -90,7 +90,7 @@ To adopt it on your own repository, `gloss init` scaffolds the files and the [Qu
 
 ## For agents
 
-`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server (`gloss mcp`) with concept search, `concepts_for_path`, `propose_link`, `propose_concept`, `impact_of`, `slice_of`, `drift` and the review tools. An agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server (`gloss mcp`) with concept search, `concepts_for_path`, `propose_link`, `propose_concept`, `impact_of`, `slice_of`, `history_of`, `drift` and the review tools. An agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
 
 ## Design in one paragraph
 

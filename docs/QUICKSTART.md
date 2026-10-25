@@ -147,6 +147,7 @@ gloss status                     # proposed / stale / rejected links; each propo
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings
 gloss diff --base origin/main --format json -o d.json && gloss view --diff d.json   # the map with the change overlaid: added green, removed red ghosts, changed dashed; the Changes selector (or #changes=0..3) shows only what changed (0: changed nodes and both ends of a changed edge) or that plus everything within 1 to 3 hops over edges and part-of, fainter with each hop, opening every box that holds them (a boundary is shown but does not pass a hop on, since its edges reach most of the system); the Change filter splits added, removed, changed, edge changed, 1, 2 and 3 away, and contains changes
+gloss history gm:Increment       # when a concept or boundary was added, changed, deprecated or removed, by whom and at which gate (ADR 0040)
 gloss coverage --fail-under 80   # headline: concepts with an artifact and a verifier (implementation concepts, internal ones only at high or critical, and core concepts code implements directly; n/a when none); files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
@@ -188,7 +189,7 @@ The briefing ranks concepts by relevance: those linked by code under the directo
 
 A proposed concept carries `proposed: true` and `proposed-by:` in the ontology file, the ontology's equivalent of `@gloss?`. It exists so links resolve, it shows in `gloss drift` and `gloss status`, and it is HARD until a human accepts it, so the proposal and its implementation ship in one PR. `search_concepts` matches aliases (`aliases: [borrower]` on `lib:Patron`), CamelCase words, stems and small typos, and follows `realizes`/`is-a` one hop, so an agent that asks for "pickup window" finds `hw:PickupClock`. `published: true` keeps only the published seam and `false` drops it; the viewer's Filters panel has the same Published row.
 
-Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept`, `slice_of` and `drift`. `gloss slice <curie>` (MCP `slice_of`, `gloss context --concept`) shows everything relevant to one feature; see [ADVANCED.md](ADVANCED.md#feature-slices-gloss-slice).
+Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept`, `slice_of`, `history_of` and `drift`. `gloss slice <curie>` (MCP `slice_of`, `gloss context --concept`) shows everything relevant to one feature; see [ADVANCED.md](ADVANCED.md#feature-slices-gloss-slice). `history_of` tells an agent how a concept got to where it is before it changes it; see [ADVANCED.md](ADVANCED.md#history-gloss-history).
 
 ## 7. Wire CI
 
