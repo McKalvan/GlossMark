@@ -146,6 +146,7 @@ gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR 
 gloss status                     # proposed / stale / rejected links; each proposal with its gate and the reason gloss diff gives ([HARD: outside allowed; conf 0.55 below threshold 0.70])
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings
+gloss diff --base origin/main --format json -o d.json && gloss view --diff d.json   # the map with the change overlaid: added green, removed red ghosts, changed dashed; the Changes selector (or #changes=0..3) shows only what changed (0: changed nodes and both ends of a changed edge) or that plus everything within 1 to 3 hops over edges and part-of, fainter with each hop, opening every box that holds them (a boundary is shown but does not pass a hop on, since its edges reach most of the system); the Change filter splits added, removed, changed, edge changed, 1, 2 and 3 away, and contains changes
 gloss coverage --fail-under 80   # headline: concepts with an artifact and a verifier (implementation concepts, internal ones only at high or critical, and core concepts code implements directly; n/a when none); files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
