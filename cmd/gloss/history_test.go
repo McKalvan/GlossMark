@@ -4,12 +4,15 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/mckalvan/glossmark/internal/gate"
 	"github.com/mckalvan/glossmark/internal/mcp"
+	"github.com/mckalvan/glossmark/internal/viewer"
 )
 
 // TestHistory: gloss history reads each commit's committed graph, reports
@@ -97,6 +100,56 @@ func TestHistory(t *testing.T) {
 	}
 	if got := run("--step", "commit").Step; got != "commit" {
 		t.Errorf("step %q, want commit from --step", got)
+	}
+}
+
+// TestViewHistory: gloss view --history embeds every step, AUTO ones
+// included, newest first, for the viewer's History panel; --history-range
+// bounds it, and without --history the page carries none.
+func TestViewHistory(t *testing.T) {
+	root, _, _ := historyRepo(t)
+	view := func(args ...string) viewer.Data {
+		t.Helper()
+		out := filepath.Join(t.TempDir(), "views.json")
+		if code := cmdView(append([]string{"--root", root, "--json", "-o", out}, args...)); code != 0 {
+			t.Fatalf("gloss view %v exited %d", args, code)
+		}
+		b, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d viewer.Data
+		if err := json.Unmarshal(b, &d); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	steps := func(d viewer.Data) []string {
+		t.Helper()
+		var h historyResult
+		if err := json.Unmarshal(d.History, &h); err != nil {
+			t.Fatalf("history: %v\n%s", err, d.History)
+		}
+		var ts []string
+		for _, st := range h.Steps {
+			if st.Impact == nil {
+				t.Errorf("%s: no impact to overlay", st.Title)
+			}
+			ts = append(ts, st.Title)
+		}
+		return ts
+	}
+	if got, want := steps(view("--history")), []string{"edit without build", "retire Doing", "add Other", "adopt"}; !slices.Equal(got, want) {
+		t.Errorf("steps %v, want %v", got, want)
+	}
+	if got, want := steps(view("--history", "--history-range", "HEAD~3..HEAD")), []string{"edit without build", "retire Doing"}; !slices.Equal(got, want) {
+		t.Errorf("ranged steps %v, want %v", got, want)
+	}
+	if d := view(); d.History != nil {
+		t.Errorf("history without --history: %s", d.History)
+	}
+	if code := cmdView([]string{"--root", root, "--json", "-o", filepath.Join(t.TempDir(), "v.json"), "--history", "--history-range", "--all"}); code != 2 {
+		t.Errorf("a flag as the range: exit %d, want 2", code)
 	}
 }
 

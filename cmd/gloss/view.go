@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mckalvan/glossmark/internal/model"
@@ -26,7 +27,13 @@ func cmdView(args []string) int {
 	asJSON := fs.Bool("json", false, "write only the data as JSON (views.json)")
 	inline := fs.Bool("inline", false, "embed the data in one self-contained viewer.html instead of viewer.html + views.js")
 	diffPath := fs.String("diff", "", "optional impact JSON from 'gloss diff --format json' to overlay")
+	withHistory := fs.Bool("history", false, "embed the gate of every commit (gloss history --all) for the viewer's History panel: overlay any commit, see the map as of it, or compare two")
+	historyRange := fs.String("history-range", "HEAD", "with --history, the git revision range to walk")
 	if err := parseFlags(fs, args); err != nil {
+		return 2
+	}
+	if strings.HasPrefix(*historyRange, "-") {
+		fmt.Fprintf(os.Stderr, "gloss view: history range %q is not a revision range\n", *historyRange)
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -54,6 +61,23 @@ func cmdView(args []string) int {
 		}
 		var raw json.RawMessage = b
 		data.Diff = raw
+	}
+	if *withHistory {
+		// Every step, AUTO ones included: the History panel is the whole
+		// record, not the gate's short list (ADR 0040).
+		mode, err := historyMode(p.WS, "")
+		if err != nil {
+			return fail(err)
+		}
+		h, err := runHistory(p.WS, *historyRange, mode, nil, true, false)
+		if err != nil {
+			return fail(err)
+		}
+		raw, err := json.Marshal(h)
+		if err != nil {
+			return fail(err)
+		}
+		data.History = raw
 	}
 	path := *out
 	if path == "" {

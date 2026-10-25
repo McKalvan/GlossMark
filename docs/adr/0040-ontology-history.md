@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Gating scope=file -->
 # ADR 0040: ontology history is the gate folded over commits
 
-Status: proposed, 2026-10-24; `gloss history` with `--format json` and MCP `history_of` (decisions 1 to 6) built 2026-10-24; ledger transitions appear where the gate reports them (accepted, stale), not yet merged by date. The pull-request comment (decision 7) built 2026-10-24 as `gloss diff --history N` (markdown, default 3).
+Status: proposed, 2026-10-24; `gloss history` with `--format json` and MCP `history_of` (decisions 1 to 6) built 2026-10-24; ledger transitions appear where the gate reports them (accepted, stale), not yet merged by date. The pull-request comment (decision 7) built 2026-10-24 as `gloss diff --history N` (markdown, default 3). The viewer's History panel (`gloss view --history`) built 2026-10-24.
 
 ## Context
 
@@ -50,7 +50,7 @@ What does not carry over is how `gloss diff` gets its base. It extracts the base
 - In a repository without `gloss build --check`, history is as good as its committed graphs. `unbuilt` steps say where it is not, and `--verify` repairs a range on demand.
 - History needs the commits. The Action's checkout must fetch enough history (`fetch-depth: 0`, or a depth that reaches the range); on a shallow clone `gloss history` reports the range as truncated instead of starting history at the shallow boundary.
 - `glossmark.yaml` gains a `history:` block; `schemas/` and FILE-FORMATS.md list it, and ADVANCED.md documents the command.
-- Out of scope here: a timeline scrubber in the viewer. The JSON of decision 6 is a list of the impacts `gloss view --diff` already overlays, so the viewer can step through it later without a new format.
+- A timeline in the viewer needed no new format: the JSON of decision 6 is a list of the impacts `gloss view --diff` already overlays. `gloss view --history` embeds it, and the History panel overlays any step, the map as of a step (what newer steps added hidden), or the net of a range of steps (decision 8).
 - Also out of scope: overlaying declared dates (`planned.by`, `retire-by`, waiver `expires`) on the commit timeline to show plan slippage ([ADR 0034](0034-ontology-first-increments.md), [ADR 0038](0038-planned-in-views.md)).
 
 ## Alternatives considered
