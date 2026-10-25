@@ -191,3 +191,37 @@ func TestHistoryOf(t *testing.T) {
 		t.Errorf("on a branch: %q steps %v, want merge base and [add Third]", h.Since, titles(h))
 	}
 }
+
+// TestDiffHistory: the markdown impact ends with each touched concept's last
+// N SOFT and HARD steps on the base, lineage followed, the PR's own commits
+// left out.
+func TestDiffHistory(t *testing.T) {
+	root, write, git := historyRepo(t)
+	git("checkout", "-q", "-b", "feature")
+	write("ontology/z.gloss.yaml", "version: 2.0.0\nconcepts:\n  Doing: { kind: process, doc: Does still., deprecated: true, replaced-by: z:Other }\n  Other: { kind: process, doc: Does it differently. }\n  Third: { kind: process, doc: New here. }\n")
+	if code := cmdBuild([]string{"--root", root, "-q"}); code != 0 {
+		t.Fatalf("gloss build exited %d", code)
+	}
+	git("commit", "-qam", "reword Other")
+	out, code := capture(t, "diff", "--root", root, "--base", "master", "--format", "markdown", "--fail-on", "none", "--history", "2")
+	if code != 0 {
+		t.Fatalf("gloss diff exited %d: %s", code, out)
+	}
+	_, hist, ok := strings.Cut(out, "### Recent history")
+	if !ok {
+		t.Fatalf("no recent history:\n%s", out)
+	}
+	for _, want := range []string{"<b>z:Other</b>: last 2 step(s)", "retire Doing", "add Other"} {
+		if !strings.Contains(hist, want) {
+			t.Errorf("recent history lacks %q:\n%s", want, hist)
+		}
+	}
+	for _, not := range []string{"adopt", "reword Other", "z:Third"} {
+		if strings.Contains(hist, not) {
+			t.Errorf("recent history has %q:\n%s", not, hist)
+		}
+	}
+	if out, _ := capture(t, "diff", "--root", root, "--base", "master", "--format", "markdown", "--fail-on", "none", "--history", "0"); strings.Contains(out, "Recent history") {
+		t.Errorf("--history 0 still renders history")
+	}
+}

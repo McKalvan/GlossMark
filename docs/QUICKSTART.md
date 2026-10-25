@@ -142,7 +142,7 @@ gloss check                      # lint: syntax, dangling refs, domain/range, ow
 gloss lock                       # pin imports: glossmark.lock + vendored copies in .glossmark/imports/ (--update to move)
 gloss build                      # .glossmark/graph.jsonl + context.jsonld + ledger.jsonl
 gloss drift                      # violations, gaps, orphans, rogues, stale, untested, metrics
-gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline)
+gloss diff --base origin/main    # AUTO/SOFT/HARD per change, views changed, PR comment (grouped by boundary; counts per boundary when the base has no graph, or --baseline; ends with each touched concept's recent history)
 gloss status                     # proposed / stale / rejected links; each proposal with its gate and the reason gloss diff gives ([HARD: outside allowed; conf 0.55 below threshold 0.70])
 gloss accept --policy            # accept every SOFT proposal (or: gloss accept <id|path:line>)
 gloss view                       # .glossmark/viewer.html + views.js, static, no server: boundaries are boxes, click to drill in, double-click to focus, click a concept for its code, tests and findings

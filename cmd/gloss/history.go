@@ -742,36 +742,176 @@ func renderHistory(h *historyResult) string {
 	}
 	for _, st := range h.Steps {
 		sb.WriteString("\n")
-		commit := short(st.Commit)
-		if st.From != "" {
-			commit = short(st.From) + ".." + commit
+		writeStep(&sb, st)
+	}
+	return sb.String()
+}
+
+// writeStep writes one step: its commit line, then its version bumps,
+// changes and realization changes.
+func writeStep(sb *strings.Builder, st historyStep) {
+	commit := short(st.Commit)
+	if st.From != "" {
+		commit = short(st.From) + ".." + commit
+	}
+	date, _, _ := strings.Cut(st.Date, "T")
+	fmt.Fprintf(sb, "%s  %s  %s  %s", date, commit, st.Author, st.Title)
+	if st.Impact != nil {
+		fmt.Fprintf(sb, "   gate %s", st.Impact.Gate)
+	}
+	sb.WriteString("\n")
+	if st.Status == "unbuilt" || st.Status == "skipped" {
+		fmt.Fprintf(sb, "  (%s: %s)\n", st.Status, st.Reason)
+	}
+	if st.Impact == nil {
+		return
+	}
+	for _, v := range st.Impact.Versions {
+		bump := v.Actual
+		if !v.OK {
+			bump += ", " + v.Required + " required"
 		}
-		date, _, _ := strings.Cut(st.Date, "T")
-		fmt.Fprintf(&sb, "%s  %s  %s  %s", date, commit, st.Author, st.Title)
-		if st.Impact != nil {
-			fmt.Fprintf(&sb, "   gate %s", st.Impact.Gate)
+		fmt.Fprintf(sb, "version %s %s → %s (%s)\n", v.Namespace, v.From, v.To, bump)
+	}
+	sb.WriteString(gate.RenderRows(st.Impact.Changes))
+	if len(st.Impact.Realizations) > 0 {
+		sb.WriteString("Realization changes:\n")
+		for _, r := range st.Impact.Realizations {
+			sb.WriteString("  " + r.String() + "\n")
 		}
-		sb.WriteString("\n")
-		if st.Status == "unbuilt" || st.Status == "skipped" {
-			fmt.Fprintf(&sb, "  (%s: %s)\n", st.Status, st.Reason)
-		}
-		if st.Impact == nil {
-			continue
-		}
-		for _, v := range st.Impact.Versions {
-			bump := v.Actual
-			if !v.OK {
-				bump += ", " + v.Required + " required"
+	}
+}
+
+// maxHistorySubjects and maxHistoryRows cap the PR comment's history: the
+// subjects it covers and the rows of each step.
+const maxHistorySubjects, maxHistoryRows = 15, 8
+
+// touchedSubjects is the concepts and boundaries an impact names that are in
+// one of gs, those of its highest-gated changes first.
+func touchedSubjects(im *gate.Impact, gs ...*graph.Graph) []string {
+	rank := map[string]int{}
+	add := func(x string, r int) {
+		for _, c := range strings.Split(x, ", ") {
+			c = strings.TrimSuffix(c, "?")
+			if c == "" {
+				continue
 			}
-			fmt.Fprintf(&sb, "version %s %s → %s (%s)\n", v.Namespace, v.From, v.To, bump)
-		}
-		sb.WriteString(gate.RenderRows(st.Impact.Changes))
-		if len(st.Impact.Realizations) > 0 {
-			sb.WriteString("Realization changes:\n")
-			for _, r := range st.Impact.Realizations {
-				sb.WriteString("  " + r.String() + "\n")
+			if old, ok := rank[c]; ok {
+				rank[c] = max(old, r)
+				continue
+			}
+			for _, g := range gs {
+				if n := g.NodeByCurie(c); n != nil && (n.NodeType == model.NodeConcept || n.NodeType == model.NodeBoundary) {
+					rank[c] = r
+					break
+				}
 			}
 		}
 	}
-	return sb.String()
+	order := map[gate.Class]int{gate.AUTO: 0, gate.SOFT: 1, gate.HARD: 2}
+	for _, ch := range im.Changes {
+		r := order[ch.Gate]
+		add(ch.Subject, r)
+		add(ch.Object, r)
+		add(ch.Boundary, r)
+	}
+	for _, r := range im.Realizations {
+		add(r.Concept, 0)
+	}
+	out := make([]string, 0, len(rank))
+	for c := range rank {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if rank[out[i]] != rank[out[j]] {
+			return rank[out[i]] > rank[out[j]]
+		}
+		return out[i] < out[j]
+	})
+	return out
+}
+
+// renderHistoryMarkdown is the PR comment's recent history (ADR 0040
+// decision 7): for each subject, its last n SOFT and HARD steps on base,
+// without their AUTO rows.
+func renderHistoryMarkdown(ws *load.Workspace, base string, subjects []string, n int) (string, error) {
+	if len(subjects) == 0 || n <= 0 {
+		return "", nil
+	}
+	more := 0
+	if len(subjects) > maxHistorySubjects {
+		subjects, more = subjects[:maxHistorySubjects], len(subjects)-maxHistorySubjects
+	}
+	mode, err := historyMode(ws, "")
+	if err != nil {
+		return "", err
+	}
+	h, err := runHistory(ws, base, mode, subjects, false, false)
+	if err != nil {
+		return "", err
+	}
+	replaced := map[string]string{}
+	for _, l := range h.Lineage {
+		if from, to, ok := strings.Cut(l, " → "); ok {
+			replaced[from] = to
+		}
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "\n### Recent history\n\nHow each concept and boundary this PR touches got here: its last %d SOFT and HARD steps on `%s` (`gloss history <curie>` for all of them).\n", n, base)
+	if h.Truncated {
+		sb.WriteString("\nShallow clone: history stops at the shallow boundary; check out with `fetch-depth: 0` for all of it.\n")
+	}
+	var none []string
+	for _, subj := range subjects {
+		keep := followSet([]string{subj}, replaced)
+		var steps []historyStep
+		for _, st := range h.Steps {
+			if st.Impact == nil {
+				continue
+			}
+			im := *st.Impact
+			filterImpact(&im, keep)
+			if im.Gate == gate.AUTO || len(im.Changes)+len(im.Realizations)+len(im.Versions) == 0 {
+				continue
+			}
+			var rows []gate.Change
+			for _, ch := range im.Changes {
+				if ch.Gate != gate.AUTO {
+					rows = append(rows, ch)
+				}
+			}
+			im.Changes = rows
+			st.Impact = &im
+			if steps = append(steps, st); len(steps) == n {
+				break
+			}
+		}
+		if len(steps) == 0 {
+			none = append(none, "`"+subj+"`")
+			continue
+		}
+		fmt.Fprintf(&sb, "\n<details><summary><b>%s</b>: last %d step(s)</summary>\n\n```text\n", subj, len(steps))
+		for i, st := range steps {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			cut := 0
+			if len(st.Impact.Changes) > maxHistoryRows {
+				cut = len(st.Impact.Changes) - maxHistoryRows
+				st.Impact.Changes = st.Impact.Changes[:maxHistoryRows]
+			}
+			writeStep(&sb, st)
+			if cut > 0 {
+				fmt.Fprintf(&sb, "… %d more: gloss history %s\n", cut, subj)
+			}
+		}
+		sb.WriteString("```\n</details>\n")
+	}
+	if len(none) > 0 {
+		fmt.Fprintf(&sb, "\nNo earlier SOFT or HARD steps: %s.\n", strings.Join(none, ", "))
+	}
+	if more > 0 {
+		fmt.Fprintf(&sb, "\n… and %d more subject(s): `gloss history <curie>`.\n", more)
+	}
+	return sb.String(), nil
 }

@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Gating scope=file -->
 # ADR 0040: ontology history is the gate folded over commits
 
-Status: proposed, 2026-10-24; `gloss history` with `--format json` and MCP `history_of` (decisions 1 to 6) built 2026-10-24; ledger transitions appear where the gate reports them (accepted, stale), not yet merged by date. The pull-request comment (decision 7) is next.
+Status: proposed, 2026-10-24; `gloss history` with `--format json` and MCP `history_of` (decisions 1 to 6) built 2026-10-24; ledger transitions appear where the gate reports them (accepted, stale), not yet merged by date. The pull-request comment (decision 7) built 2026-10-24 as `gloss diff --history N` (markdown, default 3).
 
 ## Context
 
