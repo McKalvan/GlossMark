@@ -34,6 +34,7 @@ func cmdDiff(args []string) int {
 	failOn := fs.String("fail-on", "HARD", "gate class that fails the command: HARD | SOFT | none")
 	out := fs.String("o", "", "also write the output to this file")
 	actor := fs.String("actor", "", "who made the change according to CI (agent:<name> or human:<name>); new links are gated as this actor too, whatever the committed ledger claims")
+	history := fs.Int("history", 3, "markdown: under the impact, the last N SOFT and HARD history steps on --base of each concept and boundary the change touches (0 leaves them out)")
 	baseline := fs.Bool("baseline", false, "report the whole tree as an adoption: counts per boundary and per view instead of per link (automatic when the base has no graph)")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
@@ -67,6 +68,13 @@ func cmdDiff(args []string) int {
 		enc.Encode(im)
 	case "markdown":
 		buf.WriteString(gate.RenderMarkdown(im))
+		if *history > 0 && im.Adoption == nil {
+			hist, err := renderHistoryMarkdown(head.WS, *base, touchedSubjects(im, baseGraph), *history)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "gloss diff: recent history left out:", err)
+			}
+			buf.WriteString(hist)
+		}
 	default:
 		buf.WriteString(gate.RenderText(im))
 	}

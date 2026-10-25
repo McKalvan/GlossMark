@@ -126,6 +126,8 @@ A step is `built` (read from the committed graphs), `verified` (`--verify`), `un
 
 MCP `history_of` (`curies`, `since`, `step`, `all`, `limit`) is the same history for an agent, compacted: each step keeps its commit, author, status, gate, version bumps, realization moves, views changed and its SOFT and HARD changes (AUTO ones too with `all`), at most `limit` steps (default 20, newest first, `more` counts the rest). Without `since` it starts at the merge base with the default branch when HEAD is ahead of it, so on a branch it is the branch's own history; otherwise just before the last commit that changed the `version:` of a namespace the subjects are in (every owned namespace without subjects), so the bump is included. `since` in the response says which.
 
+The PR comment (`gloss diff --format markdown`) ends with **Recent history**: for each concept and boundary the change touches (those of HARD changes first, at most 15), its last 3 SOFT and HARD steps on `--base`, lineage followed, AUTO rows left out. `--history N` sets the count; `--history 0` leaves the section out. The Action fetches the base without `--depth` when the checkout has full history, so check out with `fetch-depth: 0` for all of it; a shallow checkout gets a line saying the history is cut short.
+
 ## Files and version numbers
 
 Three kinds of file: `glossmark.yaml` (namespaces, policy), `*.gloss.yaml` (one per namespace, the concepts) and `.gloss.yaml` (one per boundary directory). Four numbers: the tool release, the grammar (`grammar: 1`), the file formats (`"format"` headers) and each namespace's semver. [FILE-FORMATS.md](FILE-FORMATS.md) and [VERSIONING.md](VERSIONING.md) have the details.

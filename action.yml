@@ -67,7 +67,14 @@ runs:
       if: github.event_name == 'pull_request'
       shell: bash
       env: { BASE_REF: "${{ github.base_ref }}" }
-      run: git fetch --no-tags --depth=200 origin "$BASE_REF"
+      # Depth only for a shallow checkout: --depth on a full clone would make it
+      # shallow and cut the comment's recent history short.
+      run: |
+        if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+          git fetch --no-tags --depth=200 origin "$BASE_REF"
+        else
+          git fetch --no-tags origin "$BASE_REF"
+        fi
     - name: gloss build --check
       if: inputs.check-graph == 'true'
       shell: bash
