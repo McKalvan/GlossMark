@@ -39,13 +39,13 @@ type helpEntry struct {
 // help is keyed by command name, in the order of helpGroups.
 var help = map[string]helpEntry{
 	// Start
-	"onboard": {line: "draft an ontology, boundary map, markers and the viewer in one run",
+	"onboard": {line: "draft ontology, boundary map, markers and viewer in one run",
 		usage: []string{"onboard [--namespace ns] [--top n] [--no-suggest] [--open]"},
 		more:  "For a repository with no GlossMark files: gloss init, the vocabulary it keeps, harvested candidates as proposed concepts, a boundary map from deploy manifests and Terraform, @gloss? markers, and the viewer. Everything is a proposal; gloss review decides.",
 		examples: []string{
 			"gloss onboard  # then open .glossmark/viewer.html",
-			"gloss onboard --namespace clinic --open  # name the core yourself; open the viewer",
-			"gloss onboard --no-suggest  # the ontology and the map, no markers yet",
+			"gloss onboard --namespace clinic --open  # name the core; open the viewer",
+			"gloss onboard --no-suggest  # no markers yet",
 		},
 		docs: "docs/QUICKSTART.md#0-scaffold"},
 	"init": {line: "scaffold a repository: config, manifests, CI, hook, first graph",

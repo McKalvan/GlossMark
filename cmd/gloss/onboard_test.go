@@ -16,13 +16,13 @@ import (
 func TestOnboard(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "invoicing")
 	writeTree(t, root, map[string]string{
-		"README.md":                               "# Invoicing\n\nCustomers receive an invoice for each order.\n\n## Invoice\n\nWhat a customer owes for one order.\n",
-		"services/billing/app/models.py":          "class Invoice:\n    \"\"\"What a customer owes for one order.\"\"\"\n    invoice_id: str\n    order_id: str\n\n\nclass Order:\n    \"\"\"A customer's purchase.\"\"\"\n    order_id: str\n",
-		"services/billing/app/invoicing.py":       "from .models import Invoice, Order\n\n\ndef issue_invoice(order: Order) -> Invoice:\n    \"\"\"Issue the invoice for an order.\"\"\"\n    return Invoice()\n",
+		"README.md":                                "# Invoicing\n\nCustomers receive an invoice for each order.\n\n## Invoice\n\nWhat a customer owes for one order.\n",
+		"services/billing/app/models.py":           "class Invoice:\n    \"\"\"What a customer owes for one order.\"\"\"\n    invoice_id: str\n    order_id: str\n\n\nclass Order:\n    \"\"\"A customer's purchase.\"\"\"\n    order_id: str\n",
+		"services/billing/app/invoicing.py":        "from .models import Invoice, Order\n\n\ndef issue_invoice(order: Order) -> Invoice:\n    \"\"\"Issue the invoice for an order.\"\"\"\n    return Invoice()\n",
 		"services/billing/tests/test_invoicing.py": "from app.invoicing import issue_invoice\n\n\ndef test_issue_invoice_for_order():\n    assert issue_invoice(None)\n",
-		"services/billing/pyproject.toml":         "[project]\nname = \"billing\"\n",
-		"db/migrations/001_invoices.sql":          "CREATE TABLE invoices (invoice_id text primary key, order_id text);\nCREATE TABLE orders (order_id text primary key);\n",
-		"deploy/k8s/billing.yaml":                 "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing\nspec:\n  replicas: 1\n",
+		"services/billing/pyproject.toml":          "[project]\nname = \"billing\"\n",
+		"db/migrations/001_invoices.sql":           "CREATE TABLE invoices (invoice_id text primary key, order_id text);\nCREATE TABLE orders (order_id text primary key);\n",
+		"deploy/k8s/billing.yaml":                  "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing\nspec:\n  replicas: 1\n",
 	})
 	out, code := capture(t, "onboard", "--root", root, "--no-git", "--namespace", "inv")
 	if code != 0 {
@@ -46,7 +46,7 @@ func TestOnboard(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".mcp.json")); err == nil {
 		t.Error("onboard installed the hook")
 	}
-	// Every concept is proposed, every marker a @gloss?.
+	// Every concept is proposed, every marker a proposal.
 	for _, f := range []string{"ontology/inv.gloss.yaml", "ontology/invi.gloss.yaml"} {
 		b, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
 		if strings.Count(string(b), "kind:") == 0 || strings.Count(string(b), "kind:") != strings.Count(string(b), "proposed: true") {
@@ -54,7 +54,7 @@ func TestOnboard(t *testing.T) {
 		}
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "deploy", "k8s", "billing.yaml"))
-	if !strings.Contains(string(b), "# @gloss? deploys .BillingService") {
+	if !strings.Contains(string(b), "? deploys .BillingService conf=") {
 		t.Errorf("no deploys proposal on the workload:\n%s", b)
 	}
 	if out, code := capture(t, "check", "--root", root); code != 0 || !strings.Contains(out, "0 errors") {
