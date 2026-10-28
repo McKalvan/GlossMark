@@ -366,3 +366,51 @@ func TestMentionsRoot(t *testing.T) {
 		}
 	}
 }
+
+// TestDoctorAdoption (issue #258): doctor names the level in force, the
+// rung the tree has reached and what the next one adds; a mismatch is an
+// Info with the line that fixes it, never a failure.
+func TestDoctorAdoption(t *testing.T) {
+	at := func(cfg string, manifest bool) Check {
+		t.Helper()
+		root := t.TempDir()
+		write := func(rel, content string) {
+			p := filepath.Join(root, rel)
+			os.MkdirAll(filepath.Dir(p), 0o755)
+			os.WriteFile(p, []byte(content), 0o644)
+		}
+		write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n"+cfg)
+		write("ontology/z.gloss.yaml", "concepts:\n  Thing: { kind: entity }\n")
+		if manifest {
+			write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\n")
+			write("svc/a.py", "# @gloss represents z:Thing scope=file\nclass T: pass\n")
+		}
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		rollup.Derive(res.Graph, ws.Vocab)
+		for _, c := range Run(ws, res.Graph, nil, Env{Actor: "agent:x", LookPath: func(string) (string, error) { return "", errors.New("none") }}) {
+			if c.Name == "adoption" {
+				return c
+			}
+		}
+		return Check{}
+	}
+	// Unset means level 3; a glossary-only tree is at 0: say so and name level 1.
+	if c := at("", false); c.Status != Info || !strings.Contains(c.Msg, "level 3 (full), adoption: unset") || !strings.Contains(c.Msg, "Written: level 0 (vocabulary)") || !strings.Contains(c.Msg, "Next, level 1 (manifests): write one .gloss.yaml manifest") || !strings.Contains(c.Fix, "set adoption: 0") {
+		t.Errorf("unset on a glossary = %+v", c)
+	}
+	// The level matches what is written.
+	if c := at("adoption: 0\n", false); c.Status != OK || !strings.Contains(c.Msg, "level 0 (vocabulary): nothing") || !strings.Contains(c.Msg, "Next, level 1") {
+		t.Errorf("level 0 = %+v", c)
+	}
+	if c := at("adoption: 1\n", true); c.Status != OK || !strings.Contains(c.Msg, "Written: level 1 (manifests) (1 manifest(s), 1 link(s) from code)") || !strings.Contains(c.Msg, "Next, level 2 (criticality)") || !strings.Contains(c.Msg, "(no criticality: declared)") {
+		t.Errorf("level 1 = %+v", c)
+	}
+	// The tree has more than the level enforces: suggest raising it.
+	if c := at("adoption: 0\n", true); c.Status != Info || !strings.Contains(c.Fix, "raise adoption: in glossmark.yaml to 1") {
+		t.Errorf("level 0 with manifests = %+v", c)
+	}
+}

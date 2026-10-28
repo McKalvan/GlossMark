@@ -79,6 +79,12 @@ func cmdCheck(args []string) int {
 		fmt.Fprintln(os.Stderr, "gloss check: "+hint)
 	}
 	if errs > 0 || (*warnErr && warns > 0) {
+		// At adoption level 0 the vocabulary is all there is: errors are
+		// reported, nothing fails, unless --strict asked for it.
+		if level := p.WS.Config.AdoptionLevel(); !model.AdoptionChecksFail(level) && !*warnErr {
+			fmt.Fprintln(os.Stderr, "gloss check: "+model.AdoptionNote(level, fmt.Sprintf("%s reported, none fails", plural(errs, "error"))))
+			return 0
+		}
 		return 1
 	}
 	return 0
