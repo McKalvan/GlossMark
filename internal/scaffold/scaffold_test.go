@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mckalvan/glossmark/internal/agents"
 	"github.com/mckalvan/glossmark/internal/check"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/load"
@@ -254,6 +255,14 @@ func TestInitThenCheck(t *testing.T) {
 		rollup.Derive(res.Graph, ws.Vocab)
 		for _, d := range append(res.Diags, check.Run(ws, res.Graph)...) {
 			t.Errorf("%s: %s", tc.name, d)
+		}
+		// A new repository starts on the starter relation profile (issue
+		// #261): its AGENTS.md snippet lists the starter relations only.
+		if ws.Config.RelationProfile() != model.ProfileStarter {
+			t.Errorf("%s: relations: %q, want starter", tc.name, ws.Config.Relations)
+		}
+		if s := agents.Snippet(ws, res.Graph, nil); !strings.Contains(s, "inline: `consumes`, `implements`, `produces`, `represents`, `verifies`. ") {
+			t.Errorf("%s: snippet does not list the starter relations:\n%s", tc.name, s)
 		}
 		// Boundary prefixes come from repo-iri: no urn fallback.
 		for _, n := range res.Graph.Nodes() {

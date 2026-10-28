@@ -471,6 +471,7 @@ func Make(root string, opt Options) (*Plan, error) {
 	var cfg strings.Builder
 	fmt.Fprintf(&cfg, `# glossmark.yaml: the namespaces this repository owns (docs/FILE-FORMATS.md).
 grammar: 1
+relations: starter           # implements, represents, verifies, produces, consumes, part-of, is-a; full unlocks the rest (docs/ADVANCED.md)
 repo-iri: %s                 # boundary prefixes such as %s: expand under it; no prefixes: needed
 owns:
 `, repoIRI, p.Boundary)
