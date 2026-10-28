@@ -29,6 +29,7 @@ func cmdView(args []string) int {
 	diffPath := fs.String("diff", "", "optional impact JSON from 'gloss diff --format json' to overlay")
 	withHistory := fs.Bool("history", false, "embed the gate of every commit (gloss history --all) for the viewer's History panel: overlay any commit, see the map as of it, or compare two")
 	historyRange := fs.String("history-range", "HEAD", "with --history, the git revision range to walk")
+	sourceURL := fs.String("source-url", "", "template the viewer links paths to, with {path} and {line} (e.g. https://github.com/o/r/blob/main/{path}#L{line}); default: source-url in glossmark.yaml, else vscode://file/<repository root>/{path}:{line}")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
@@ -48,7 +49,15 @@ func cmdView(args []string) int {
 		}
 	}
 	data := viewer.Data{Generated: time.Now().UTC().Format(time.RFC3339), Repo: filepath.Base(p.WS.Root), Views: views.ProjectAll(p.Graph, p.WS.Views),
-		Concepts: viewer.Details(p.Graph, rep), Findings: findings, SourceURL: p.WS.Config.SourceURL, Slices: viewer.Slices(p.Graph, viewer.SliceBudget)}
+		Concepts: viewer.Details(p.Graph, rep), Findings: findings, SourceURL: *sourceURL, Slices: viewer.Slices(p.Graph, viewer.SliceBudget)}
+	if data.SourceURL == "" {
+		data.SourceURL = p.WS.Config.SourceURL
+	}
+	if data.SourceURL == "" {
+		if abs, err := filepath.Abs(p.WS.Root); err == nil {
+			data.SourceURL = viewer.EditorURL(abs)
+		}
+	}
 	for _, n := range p.Graph.NodesOf(model.NodeConcept) {
 		if n.Criticality != "" && !n.Imported {
 			data.Classified++

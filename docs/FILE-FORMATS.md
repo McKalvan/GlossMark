@@ -27,7 +27,7 @@ suggest:                                        # gloss suggest's defaults for t
   calibration: glossmark.calibration.tsv        # the repository's measurement, written by gloss suggest --calibrate --write
 history:                                        # gloss history's defaults; flags override them
   step: commit                                  # commit (default) | first-parent | version
-source-url: https://github.com/acme/circulation/blob/main/{path}#L{line}   # viewer links paths to the code host
+source-url: https://github.com/acme/circulation/blob/main/{path}#L{line}   # viewer links paths to the code host; gloss view --source-url overrides it; unset, paths open in VS Code (vscode://file/<root>/{path}:{line})
 policy:
   # soft-conf-threshold: 0.7                    # a fixed SOFT threshold; only when suggest.auto-accept-precision is not set
   hard-paths: ["ontology/**", "**/.gloss.yaml", "glossmark.yaml"]

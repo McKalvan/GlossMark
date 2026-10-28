@@ -81,6 +81,8 @@ aside dt{color:var(--muted)}aside dd{margin:0;word-break:break-word}
 aside ul{margin:4px 0;padding-left:16px}aside li{margin:2px 0}
 aside .via{color:var(--muted);font-size:11px;word-break:break-all}
 aside .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+aside .ps{white-space:nowrap}aside .note{color:var(--muted);font-size:11px}
+aside a.src{color:var(--accent);text-decoration:none}aside a.src:hover{text-decoration:underline}
 aside a.n{color:var(--accent);cursor:pointer;text-decoration:none}aside a.n:hover{text-decoration:underline}
 aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .legend>span{display:inline-flex;align-items:center;gap:6px;margin:2px 12px 2px 0}
@@ -218,14 +220,18 @@ try{
 }
 const details=(data.concepts&&typeof data.concepts==='object')?data.concepts:{};
 const findings=Array.isArray(data.findings)?data.findings:[];
-/* Only an http(s) template links: a javascript: or data: source-url from the repository would run on click. */
-const srcURL=typeof data.sourceUrl==='string'&&/^https?:\/\//i.test(data.sourceUrl)?data.sourceUrl:'';
-/* A path:line, linked to the code host when glossmark.yaml sets source-url. */
+/* Only an http(s) or vscode://file/ template links: a javascript: or data: source-url from the repository would run on click. */
+const srcURL=typeof data.sourceUrl==='string'&&/^(https?:\/\/|vscode:\/\/file\/)/i.test(data.sourceUrl)?data.sourceUrl:'';
+const webSrc=/^https?:/i.test(srcURL);
+/* A path wraps only after a slash, never inside a name such as booking-api. */
+const pathHtml=p=>String(p).split('/').map(x=>`<span class="ps">${esc(x)}</span>`).join('/<wbr>');
+/* A path:line, linked to the code host (source-url in glossmark.yaml or gloss view
+   --source-url) or, by default, to the file in VS Code. */
 function srcLink(path,line){
-  const txt=esc(path)+(line?':'+esc(line):'');
+  const txt=pathHtml(path+(line?':'+line:''));
   if(!srcURL||!path)return `<span class="mono">${txt}</span>`;
   const url=srcURL.split('{path}').join(path.split('/').map(encodeURIComponent).join('/')).split('{line}').join(String(line||1));
-  return `<a class="mono" href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
+  return `<a class="mono src" href="${esc(url)}"${webSrc?' target="_blank" rel="noopener"':''} title="${esc(webSrc?'Open on the code host':'Open in the editor')}">${txt}</a>`;
 }
 const views=Array.isArray(data.views)?data.views:[];
 /* Precomputed feature slices (docs/adr/0023-feature-slices.md): for each concept and
@@ -1195,7 +1201,7 @@ const critPill=l=>l?`<span class="crit ${esc(l)}">${esc(l)}</span>`:'';
 function critText(n){if(!n.criticality)return '';return n.criticality+(n.criticalityFrom&&n.criticalityFrom!=='declared'?' (via '+n.criticalityFrom+')':n.criticalityFrom?' (declared)':'');}
 function nodeTip(n){
   if(n.group)return `<b>${esc(n.label)}</b><div class="def">${esc(n.doc)}</div><span class="k">${n._kids} concept${n._kids===1?'':'s'}</span>`;
-  let h=`<b>${esc(n.label||n.id)}</b><br><span class="k">${esc(n.id)}</span><br>${esc(n.type)}${n.kind?' · '+esc(n.kind):''}${n.tier?' · '+esc(n.tier):''}${n.ghost?' · <i>removed</i>':''}`;
+  let h=`<b>${esc(n.label||n.id)}</b><br>${n.label&&n.label!==n.id?`<span class="k">${esc(n.id)}</span><br>`:''}${esc(n.type)}${n.kind?' · '+esc(n.kind):''}${n.tier?' · '+esc(n.tier):''}${n.ghost?' · <i>removed</i>':''}`;
   if(n.criticality)h+=`<br><span class="k">criticality</span> ${esc(critText(n))}`;
   if(n.owner)h+=`<br><span class="k">owner</span> ${esc(n.owner)}`;
   if(n.published)h+=`<br><span class="k">published as</span> ${esc(n.publishedAs||'')}`;
@@ -1216,6 +1222,19 @@ function edgeTip(e){
   let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.planned?' · planned':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
   if(e.via&&e.via.size)h+=`<br><span class="k">via</span><ul>${[...e.via].slice(0,10).map(v=>'<li>'+esc(v)+'</li>').join('')}${e.via.size>10?'<li>…</li>':''}</ul>`;
   return h;
+}
+// housingHtml: the one "in boundary" answer for a concept or artifact: the box
+// it is drawn in, and whether a boundary's code realizes it there or it only
+// sits in the box that encloses what produces and uses it.
+const PLACING=new Set(['realizes','represents','holds']);
+function housingHtml(n){
+  const cb=n._c&&!n._c.group&&n._c.type==='boundary'?n._c:null,home=cb||(n.boundary&&byId.get(n.boundary))||null;
+  if(n.type==='artifact')return home?nodeLink(home):'<span class="via">none</span>';
+  const by=[...new Set(V._edges.filter(e=>e.o===n.id&&PLACING.has(e.p)&&byId.has(e.s)&&byId.get(e.s).type==='boundary').map(e=>e.s))].map(id=>byId.get(id));
+  if(!home)return '<span class="via">none: no boundary’s code realizes it</span>';
+  if(!by.length)return 'housed in '+nodeLink(home)+'<span class="note">; no boundary realizes it directly</span>';
+  const others=by.filter(b=>b!==home);
+  return nodeLink(home)+(others.length?'<div class="via">also realized or held by '+others.map(nodeLink).join(', ')+'</div>':'');
 }
 function nodeLink(n){return `<a class="n" data-id="${esc(n.id)}">${esc(n.label||n.id)}</a>`;}
 function renderCrumbs(){
@@ -1300,7 +1319,7 @@ function renderPanel(){
       const kids=(kidsOf.get(n.id)||[]).slice().sort((a,b)=>(a.label||a.id).localeCompare(b.label||b.id));
       h+=`<h2>Placement group</h2><div><b>${esc(n.label)}</b></div><div style="color:var(--muted)">${esc(n.doc)}</div><ul>${kids.map(k=>'<li>'+nodeLink(k)+(k.placementReason?' <div class="via">'+esc(k.placementReason)+'</div>':'')+'</li>').join('')}</ul>`;
     }else{
-    h+=`<h2>Selected ${esc(n.type)}</h2><div><b>${esc(n.label||n.id)}</b> ${critPill(n.criticality)}</div><div class="id">${esc(n.id)}</div>`;
+    h+=`<h2>Selected ${esc(n.type)}</h2><div><b>${esc(n.label||n.id)}</b> ${critPill(n.criticality)}</div>${n.label&&n.label!==n.id?`<div class="id">${esc(n.id)}</div>`:''}`;
     h+=`<div class="acts">`;
     if(n._kids)h+=`<button data-act="${S.expanded.has(n.id)?'close':'open'}">${S.expanded.has(n.id)?'Close':'Open'}</button>`;
     if(n.type==='boundary')h+=S.focus===n.id?`<button data-act="unfocus">Leave focus</button>`:`<button data-act="focus">Focus</button>`;
@@ -1311,10 +1330,10 @@ function renderPanel(){
     row('type',esc(n.type));row(n.type==='boundary'?'level':'kind',esc(n.kind));row('tier',esc(n.tier));row('ns',esc(n.ns));row('branch',n.branch&&n.branch!=='boundary'&&n.branch!=='artifact'?esc(n.branch):'');
     row('criticality',n.criticality?esc(critText(n)):'<span class="via">unclassified</span>');
     row('owner',esc(n.owner));
-    if(n._c&&!n._c.group)row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
+    if(n._c&&!n._c.group&&(n.type==='boundary'||n._c.type!=='boundary'))row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
     const whole=displacedFrom(n);
     if(whole)row('part of',nodeLink(whole)+'<div class="via">drawn in the boundary its code is in; it shares the colour of '+esc(whole.id)+'</div>');
-    else if(n.type!=='boundary'&&!n.ghost)row('in boundary','<span class="via">none: no boundary’s code realizes it</span>');
+    if(n.type!=='boundary'&&!n.ghost)row('in boundary',housingHtml(n));
     if(n.placement)row('placement',(n.placement==='housed'?'':'unplaced: ')+'<b>'+esc(n.placement)+'</b>'+(n.placementReason?'<div class="via">'+esc(n.placementReason)+'</div>':''));
     const sr=S.slice&&S.slice.roles.get(n.id);
     if(sr)row('slice role','<b title="'+esc(SLICEDEFS[sr.role]||'')+'">'+esc(sr.role)+'</b>'+(sr.member!==n.id?' <span class="via">as '+esc(sr.member)+'</span>':'')+(sr.via.length?'<div class="via">via '+sr.via.map(esc).join('<br>→ ')+'</div>':''));
@@ -1331,7 +1350,7 @@ function renderPanel(){
     row('doc',esc(n.doc));h+='</dl>';
     const dt=n.type==='concept'?details[n.id]:null;
     if(dt){
-      const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="via">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="via">proposed</span>':''}${l.via?' <span class="via">via '+esc(l.via)+'</span>':''}</li>`;
+      const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="note">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="note">proposed</span>':''}${l.via?' <span class="note">via '+esc(l.via)+'</span>':''}</li>`;
       if(dt.replaces&&dt.replaces.length)h+=`<h2>Replaces</h2><div class="mono">${dt.replaces.map(esc).join(', ')}</div>`;
       if(dt.realizes&&dt.realizes.length)h+=`<h2>Realizes</h2><div class="mono">${dt.realizes.map(esc).join(' → ')}</div>`;
       h+=`<h2>Artifacts (${(dt.artifacts||[]).length})</h2><ul>${(dt.artifacts||[]).map(linkLi).join('')||'<li class="via">no code links to it</li>'}</ul>`;
