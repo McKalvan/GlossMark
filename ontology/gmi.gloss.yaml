@@ -32,6 +32,11 @@ concepts:
   # The graph and what is derived from it
   CanonicalGraph:     { kind: resource, realizes: gm:Graph, doc: "The deterministic graph.jsonl record stream (nodes, then edges, with provenance) and its JSON-LD context." }
   Linter:             { kind: process, realizes: [gm:Lint, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:AllowedList], doc: "Where the tier, seam, own-subject and allowed-list constraints are enforced." }
+  SurfaceRules:
+    kind: process
+    part-of: Linter
+    realizes: gm:Lint
+    doc: "The marking rule of each ambiguous surface (a page, an admin value editor, a CLI, a BFF, a GraphQL gateway, a document renderer), recognised from a file's path and imports: gloss check hints GM250 to GM254 when a marker departs from it, gloss suggest and propose_link default to it (ADR 0041)."
   RollupEngine:       { kind: process, realizes: gm:Rollup, doc: "Derives boundary-level facts from code-level links: containment, realization lifted to cores, flows lifted to boundaries, implied relationships." }
   CriticalityStamper:
     kind: process
