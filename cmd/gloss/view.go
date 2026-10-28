@@ -29,7 +29,7 @@ func cmdView(args []string) int {
 	diffPath := fs.String("diff", "", "optional impact JSON from 'gloss diff --format json' to overlay")
 	withHistory := fs.Bool("history", false, "embed the gate of every commit (gloss history --all) for the viewer's History panel: overlay any commit, see the map as of it, or compare two")
 	historyRange := fs.String("history-range", "HEAD", "with --history, the git revision range to walk")
-	sourceURL := fs.String("source-url", "", "template the viewer links paths to, with {path} and {line} (e.g. https://github.com/o/r/blob/main/{path}#L{line}); default: source-url in glossmark.yaml, else vscode://file/<repository root>/{path}:{line}")
+	sourceURL := fs.String("source-url", "", "template the viewer links paths to, with {path} and {line} (e.g. https://github.com/o/r/blob/main/{path}#L{line}); or vscode to open paths in VS Code (embeds this machine's repository path); default: source-url in glossmark.yaml, else no links")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
@@ -53,7 +53,10 @@ func cmdView(args []string) int {
 	if data.SourceURL == "" {
 		data.SourceURL = p.WS.Config.SourceURL
 	}
-	if data.SourceURL == "" {
+	// The editor link embeds this machine's absolute path, so it is opt-in:
+	// a page published from CI must not carry it.
+	if data.SourceURL == "vscode" {
+		data.SourceURL = ""
 		if abs, err := filepath.Abs(p.WS.Root); err == nil {
 			data.SourceURL = viewer.EditorURL(abs)
 		}

@@ -41,8 +41,9 @@ type Data struct {
 	Findings []rollup.Finding `json:"findings,omitempty"`
 	// SourceURL is the template paths link to: gloss view --source-url, else
 	// source-url from glossmark.yaml
-	// ("https://github.com/o/r/blob/main/{path}#L{line}"), else EditorURL of
-	// the repository root. The viewer ignores a template that is not http,
+	// ("https://github.com/o/r/blob/main/{path}#L{line}"); "vscode" in either
+	// becomes EditorURL of the repository root; unset, paths are not links.
+	// The viewer ignores a template that is not http,
 	// https or vscode://file/.
 	SourceURL string `json:"sourceUrl,omitempty"`
 	// Classified counts concepts with a criticality, for the empty state.
