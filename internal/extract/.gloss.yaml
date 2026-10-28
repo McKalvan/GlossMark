@@ -3,7 +3,7 @@ boundary: arch:extract
 level: component
 label: extract
 part-of: arch:lib-reading
-realizes: [gmi:Extractor, gmi:ValueBinder]
+realizes: [gmi:Extractor, gmi:ValueBinder, gmi:LinkMapper]
 produces: [gm:Graph]
 default-namespace: gmi
 owner: glossmark

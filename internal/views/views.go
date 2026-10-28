@@ -1213,7 +1213,10 @@ func mixed(src map[string]bool) string {
 			return k
 		}
 	}
-	if src[graph.SourceInline] && !src[graph.SourceDeclared] && !src[graph.SourceDerived] {
+	if (src[graph.SourceInline] || src[graph.SourceManifest]) && !src[graph.SourceDeclared] && !src[graph.SourceDerived] {
+		if !src[graph.SourceInline] {
+			return graph.SourceManifest
+		}
 		return graph.SourceInline
 	}
 	return "mixed"

@@ -200,7 +200,7 @@ func Resolve(g *graph.Graph, root, arg string) ([]string, error) {
 		}
 		found = true
 		for _, e := range g.Out(a.ID, "") {
-			if e.Source != graph.SourceInline && e.Source != graph.SourceInferred {
+			if !graph.LinkSource(e.Source) && e.Source != graph.SourceInferred {
 				continue
 			}
 			if o := g.Node(e.O); o != nil && (o.NodeType == model.NodeConcept || o.NodeType == model.NodeBoundary) {
@@ -288,7 +288,7 @@ func Compute(g *graph.Graph, seeds []string, opt Options) *Slice {
 		case model.NodeArtifact:
 			// An artifact seed stands for the concepts it links to.
 			for _, e := range g.Out(s, "") {
-				if (e.Source == graph.SourceInline || e.Source == graph.SourceInferred) && b.concept(e.O) && b.add(e.O, RoleSeed, s, b.step(s, e.P, e.O)) {
+				if (graph.LinkSource(e.Source) || e.Source == graph.SourceInferred) && b.concept(e.O) && b.add(e.O, RoleSeed, s, b.step(s, e.P, e.O)) {
 					frontier = append(frontier, e.O)
 				}
 			}
@@ -365,7 +365,7 @@ func Compute(g *graph.Graph, seeds []string, opt Options) *Slice {
 	}
 	for _, m := range append(append([]string{}, concepts...), inside...) {
 		for _, e := range g.In(m, "") {
-			if e.Source != graph.SourceInline && e.Source != graph.SourceInferred || !artifactRels[e.P] || !b.isType(e.S, model.NodeArtifact) {
+			if !graph.LinkSource(e.Source) && e.Source != graph.SourceInferred || !artifactRels[e.P] || !b.isType(e.S, model.NodeArtifact) {
 				continue
 			}
 			b.add(e.S, RoleArtifact, m, b.step(e.S, e.P, m))
