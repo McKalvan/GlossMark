@@ -245,7 +245,7 @@ var stopNames = map[string]bool{"service": true, "services": true, "worker": tru
 // phraseWords mark a candidate as a phrase from a doc or the UI rather
 // than a name: harvest keeps such runs when the code uses them too.
 var phraseWords = map[string]bool{"the": true, "a": true, "an": true, "and": true, "or": true, "of": true, "to": true, "in": true, "on": true, "by": true,
-	"with": true, "for": true, "at": true, "from": true, "when": true, "it": true, "what": true, "how": true, "if": true, "as": true, "is": true, "are": true, "not": true, "no": true, "your": true, "my": true, "our": true, "this": true, "that": true}
+	"with": true, "for": true, "at": true, "from": true, "when": true, "it": true, "what": true, "how": true, "if": true, "as": true, "is": true, "are": true, "not": true, "your": true, "my": true, "our": true, "this": true, "that": true}
 
 // conceptName turns a cluster's name into a concept name: singular,
 // PascalCase, or "" when it names no concept worth drafting.

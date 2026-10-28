@@ -137,16 +137,16 @@ func writeTree(t *testing.T, root string, files map[string]string) {
 // a model and a test, a Kubernetes deployment for it, a Terraform queue, a
 // glossary and a README that uses the vocabulary.
 var tree = map[string]string{
-	"README.md": "# Invoicing\n\nCustomers receive an invoice for each order. An overdue invoice blocks new orders.\n\n## Invoice\n\nWhat a customer owes for one order.\n\n## Order\n\nA customer's purchase.\n",
-	"docs/glossary.md": "# Glossary\n\n## Customer\n\nDef. A person or company that places orders.\n\n## Dunning\n\nDef. Chasing an overdue invoice.\nKind: process\n",
-	"services/billing/app/models.py": "class Invoice:\n    \"\"\"What a customer owes for one order.\"\"\"\n    invoice_id: str\n    order_id: str\n    customer_id: str\n\n\nclass Order:\n    \"\"\"A customer's purchase.\"\"\"\n    order_id: str\n    customer_id: str\n\n\nclass Customer:\n    \"\"\"A person or company that places orders.\"\"\"\n    customer_id: str\n",
-	"services/billing/app/invoicing.py": "from .models import Invoice, Order\n\n\ndef issue_invoice(order: Order) -> Invoice:\n    \"\"\"Issue the invoice for an order.\"\"\"\n    return Invoice()\n",
+	"README.md":                                "# Invoicing\n\nCustomers receive an invoice for each order. An overdue invoice blocks new orders.\n\n## Invoice\n\nWhat a customer owes for one order.\n\n## Order\n\nA customer's purchase.\n",
+	"docs/glossary.md":                         "# Glossary\n\n## Customer\n\nDef. A person or company that places orders.\n\n## Dunning\n\nDef. Chasing an overdue invoice.\nKind: process\n",
+	"services/billing/app/models.py":           "class Invoice:\n    \"\"\"What a customer owes for one order.\"\"\"\n    invoice_id: str\n    order_id: str\n    customer_id: str\n\n\nclass Order:\n    \"\"\"A customer's purchase.\"\"\"\n    order_id: str\n    customer_id: str\n\n\nclass Customer:\n    \"\"\"A person or company that places orders.\"\"\"\n    customer_id: str\n",
+	"services/billing/app/invoicing.py":        "from .models import Invoice, Order\n\n\ndef issue_invoice(order: Order) -> Invoice:\n    \"\"\"Issue the invoice for an order.\"\"\"\n    return Invoice()\n",
 	"services/billing/tests/test_invoicing.py": "from app.invoicing import issue_invoice\n\n\ndef test_issue_invoice_for_order():\n    assert issue_invoice(None)\n",
-	"services/billing/pyproject.toml": "[project]\nname = \"billing\"\n",
-	"db/migrations/001_invoices.sql": "CREATE TABLE invoices (invoice_id text primary key, order_id text, customer_id text);\nCREATE TABLE orders (order_id text primary key, customer_id text);\n",
-	"deploy/k8s/billing.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing\nspec:\n  replicas: 1\n",
-	"docker-compose.yml": "services:\n  postgres:\n    image: postgres:16\n  billing:\n    build: ./services/billing\n",
-	"infra/queue.tf": "resource \"aws_sqs_queue\" \"invoice_events\" {\n  name = \"invoice-events\"\n}\n\nresource \"aws_iam_role\" \"billing\" {\n  name = \"billing\"\n}\n",
+	"services/billing/pyproject.toml":          "[project]\nname = \"billing\"\n",
+	"db/migrations/001_invoices.sql":           "CREATE TABLE invoices (invoice_id text primary key, order_id text, customer_id text);\nCREATE TABLE orders (order_id text primary key, customer_id text);\n",
+	"deploy/k8s/billing.yaml":                  "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: billing\nspec:\n  replicas: 1\n",
+	"docker-compose.yml":                       "services:\n  postgres:\n    image: postgres:16\n  billing:\n    build: ./services/billing\n",
+	"infra/queue.tf":                           "resource \"aws_sqs_queue\" \"invoice_events\" {\n  name = \"invoice-events\"\n}\n\nresource \"aws_iam_role\" \"billing\" {\n  name = \"billing\"\n}\n",
 }
 
 // TestRun: on a repository with no GlossMark files, Run scaffolds it,
@@ -210,7 +210,7 @@ func TestRun(t *testing.T) {
 			t.Errorf("%s: %v\n%s", rel, err, b)
 		}
 	}
-	if b, _ := os.ReadFile(filepath.Join(root, "db", ".gloss.yaml")); strings.Contains(string(b), "realizes:") {
+	if b, _ := os.ReadFile(filepath.Join(root, "db", ".gloss.yaml")); strings.Contains(string(b), "\nrealizes:") {
 		t.Errorf("db/ (no program) realizes something:\n%s", b)
 	}
 	// Idempotent: the second run drafts nothing new.
@@ -226,7 +226,7 @@ func TestRun(t *testing.T) {
 		t.Errorf("second run changed the core tier: %d → %d", len(core.Concepts), len(core2.Concepts))
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "deploy", ".gloss.yaml"))
-	if strings.Count(string(b), "realizes:") != 1 {
+	if strings.Count(string(b), "\nrealizes:") != 1 {
 		t.Errorf("second run duplicated realizes:\n%s", b)
 	}
 }
