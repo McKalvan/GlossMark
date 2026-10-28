@@ -65,7 +65,7 @@ func ConceptStatus(g *graph.Graph, rep *Report) []ConceptStatusRow {
 		others := 0 // links that do not implement it: config, surfaces, uses
 		for _, id := range ids {
 			for _, e := range g.In(id, "") {
-				if e.Source != graph.SourceInline && e.Source != graph.SourceInferred {
+				if !graph.LinkSource(e.Source) && e.Source != graph.SourceInferred {
 					continue
 				}
 				if a := g.Node(e.S); a == nil || a.NodeType != model.NodeArtifact {
