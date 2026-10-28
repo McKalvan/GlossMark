@@ -102,7 +102,7 @@ func TestAdoptionLadder(t *testing.T) {
 	if r.errors == 0 || r.checkFails || len(r.failing) != 0 || r.enforced != gate.AUTO {
 		t.Errorf("level 0: %+v", r)
 	}
-	if !strings.Contains(r.doctorMsg, "level 0 (vocabulary): nothing") || !strings.Contains(r.doctorMsg, "Next, level 1 (manifests)") {
+	if !strings.Contains(r.doctorMsg, "level 0 (vocabulary) fails on nothing") || !strings.Contains(r.doctorMsg, "Next, level 1 (manifests)") {
 		t.Errorf("level 0 doctor: %s", r.doctorMsg)
 	}
 	// Level 1: check fails on the dangling reference; drift (the gap on lib:Hold) warns only; the gate is advisory.
@@ -135,7 +135,7 @@ func TestAdoptionLadder(t *testing.T) {
 	if !r.checkFails || !has(gaps, "lib:Hold") || r.enforced != r.gate || r.gate != gate.HARD {
 		t.Errorf("level 3: %+v gaps %v", r, gaps)
 	}
-	if !strings.Contains(r.doctorMsg, "level 3 (full): everything") || !strings.Contains(r.doctorMsg, "Written: level 3 (full)") || strings.Contains(r.doctorMsg, "Next,") {
+	if !strings.Contains(r.doctorMsg, "level 3 (full) fails on everything") || !strings.Contains(r.doctorMsg, "Written: level 3 (full)") || strings.Contains(r.doctorMsg, "Next,") {
 		t.Errorf("level 3 doctor: %s", r.doctorMsg)
 	}
 }

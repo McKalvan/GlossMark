@@ -91,7 +91,7 @@ func (d *doctor) adoption() {
 	if !cfg.AdoptionSet() {
 		in += ", adoption: unset"
 	}
-	msg := fmt.Sprintf("%s: %s. Written: %s (%s)", in, model.AdoptionLevels[level].Enforces, model.AdoptionName(obs.Level), obs.Has[obs.Level])
+	msg := fmt.Sprintf("%s fails on %s. Written: %s (%s)", in, model.AdoptionLevels[level].Enforces, model.AdoptionName(obs.Level), obs.Has[obs.Level])
 	if obs.Level < model.AdoptionFull {
 		next := model.AdoptionLevels[obs.Level+1]
 		msg += fmt.Sprintf(". Next, level %d (%s): write %s; you get %s", next.Level, next.Name, next.Write, next.Get)

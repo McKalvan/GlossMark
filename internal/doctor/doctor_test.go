@@ -111,6 +111,13 @@ func TestDoctor(t *testing.T) {
 	git("commit", "-q", "-m", "fixed")
 	by = run("agent:claude-code", true)
 	for name, c := range by {
+		// adoption: is unset and the tree is at level 1: worth knowing, nothing to fix.
+		if name == "adoption" {
+			if c.Status != Info || !strings.Contains(c.Msg, "Written: level 1 (manifests)") {
+				t.Errorf("adoption = %+v, want info at level 1", c)
+			}
+			continue
+		}
 		if c.Status != OK {
 			t.Errorf("%s = %+v, want ok", name, c)
 		}
@@ -403,7 +410,7 @@ func TestDoctorAdoption(t *testing.T) {
 		t.Errorf("unset on a glossary = %+v", c)
 	}
 	// The level matches what is written.
-	if c := at("adoption: 0\n", false); c.Status != OK || !strings.Contains(c.Msg, "level 0 (vocabulary): nothing") || !strings.Contains(c.Msg, "Next, level 1") {
+	if c := at("adoption: 0\n", false); c.Status != OK || !strings.Contains(c.Msg, "level 0 (vocabulary) fails on nothing") || !strings.Contains(c.Msg, "Next, level 1") {
 		t.Errorf("level 0 = %+v", c)
 	}
 	if c := at("adoption: 1\n", true); c.Status != OK || !strings.Contains(c.Msg, "Written: level 1 (manifests) (1 manifest(s), 1 link(s) from code)") || !strings.Contains(c.Msg, "Next, level 2 (criticality)") || !strings.Contains(c.Msg, "(no criticality: declared)") {
