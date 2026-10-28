@@ -914,7 +914,10 @@ function measure(){
   VN.forEach(n=>{
     const lab=shortLabel(n);
     n._lw=ctx.measureText(lab).width;
-    if(n.type==='boundary'){n._w=Math.max(80,Math.min(320,n._lw*1.3+44));n._h=32;n._r=Math.hypot(n._w,n._h)/2;n._hw=n._w/2+4;n._hh=n._h/2+4;}
+    // A placement group's frame is at least as wide as its title and count, at
+    // the zoomed-out font, so the dashed border never runs through the text.
+    if(n.group){const c=(kidsOf.get(n.id)||[]).length+' concepts';ctx.font='10px system-ui,sans-serif';n._tw=(n._lw+ctx.measureText(c).width+36)*1.5;ctx.font='12px system-ui,sans-serif';}
+    if(n.type==='boundary'){n._w=Math.max(80,Math.min(340,n._lw*1.5+40));n._h=32;n._r=Math.hypot(n._w,n._h)/2;n._hw=n._w/2+4;n._hh=n._h/2+4;}
     else if(n.type==='artifact'){n._w=n._h=12;n._r=7;n._hw=Math.max(8,n._lw/2+2);n._hh=16;}
     else{n._r=n._kids?16:13;n._w=n._h=n._r*2;n._hw=Math.max(n._r+4,n._lw/2+2);n._hh=n._r+12;}
   });
@@ -999,7 +1002,7 @@ function layout(all){
       x0=Math.min(x0,p.x-hw);x1=Math.max(x1,p.x+hw);y0=Math.min(y0,p.y-top);y1=Math.max(y1,p.y+bot);});
     const cx=(x0+x1)/2,cy=(y0+y1)/2;
     items.forEach((it,j)=>{it._lx=P[j].x-cx;it._ly=P[j].y-cy;});
-    return {w:(x1-x0)+2*PAD,h:(y1-y0)+2*PAD+TITLE};
+    return {w:Math.max((x1-x0)+2*PAD,(Cn&&Cn._tw)||0),h:(y1-y0)+2*PAD+TITLE};
   }
   doGroup('');
   const place=(cid,base)=>{(groups.get(cid)||[]).forEach(it=>{const p={x:base.x+it._lx,y:base.y+it._ly};S.pos.set(it.id,p);if(it._open)place(it.id,p);});};
@@ -1051,6 +1054,7 @@ function rectOf(b){
     });
     if(x0>x1)r={x:p.x-60,y:p.y-30-TITLE,w:120,h:60+TITLE};
     else r={x:x0-PAD,y:y0-PAD-TITLE,w:(x1-x0)+2*PAD,h:(y1-y0)+2*PAD+TITLE};
+    if(b._tw&&r.w<b._tw){r.x-=(b._tw-r.w)/2;r.w=b._tw;}
   }
   RC.set(b.id,r);return r;
 }
@@ -1193,9 +1197,13 @@ function draw(){
     ctx.globalAlpha=nodeAlpha(b);
     if(b.group){ // placement group: a dashed frame with its value and count
       ctx.strokeStyle=hl?C.select:C.muted;ctx.lineWidth=(hl?2:1.2)*u;ctx.setLineDash([6,4]);roundRect(r.x,r.y,r.w,r.h,10);ctx.stroke();ctx.setLineDash([]);
-      ctx.font=(12*u)+'px system-ui,sans-serif';ctx.fillStyle=hl?C.select:C.muted;ctx.fillText(b.label,r.x+10*u,r.y+TITLE/2);
-      const n=(kidsOf.get(b.id)||[]).filter(k=>k._vis&&k._lc===b).length,tx=r.x+18*u+ctx.measureText(b.label).width;
-      ctx.font=(10*u)+'px system-ui,sans-serif';ctx.fillText(n+' concept'+(n===1?'':'s'),tx,r.y+TITLE/2);
+      const n=(kidsOf.get(b.id)||[]).filter(k=>k._vis&&k._lc===b).length,cnt=n+' concept'+(n===1?'':'s');
+      ctx.font=(12*u)+'px system-ui,sans-serif';const lw=ctx.measureText(b.label).width,tx=r.x+18*u+lw;
+      ctx.font=(10*u)+'px system-ui,sans-serif';const end=tx+ctx.measureText(cnt).width;
+      // Zoomed out, the text can outgrow the frame: a halo keeps the border off it.
+      if(end>r.x+r.w-6){ctx.fillStyle=C.bg;ctx.fillRect(r.x+6*u,r.y+TITLE/2-8*u,end-r.x,16*u);}
+      ctx.fillStyle=hl?C.select:C.muted;ctx.fillText(cnt,tx,r.y+TITLE/2);
+      ctx.font=(12*u)+'px system-ui,sans-serif';ctx.fillText(b.label,r.x+10*u,r.y+TITLE/2);
       return;
     }
     ctx.fillStyle=C.bOpen;roundRect(r.x,r.y,r.w,r.h,10);ctx.fill();
@@ -1208,7 +1216,8 @@ function draw(){
     ctx.fillStyle=hl?C.select:C.label;
     const title=fitText(shortLabel(b),r.w-(cc?70*u:20*u));ctx.fillText(title,tx,r.y+TITLE/2);tx+=ctx.measureText(title).width+8*u;
     ctx.font=(10*u)+'px system-ui,sans-serif';ctx.fillStyle=C.muted;
-    const sub=(b.kind||'boundary')+(b._hidden?' · '+b._hidden+' more inside':'');
+    // An open box shows its members; only what the view folds into it is unseen.
+    const nf=(b.folded&&b.folded.length)||0,sub=(b.kind||'boundary')+(nf?' · '+nf+' folded':'');
     if(tx+ctx.measureText(sub).width<r.x+r.w-60*u){ctx.fillText(sub,tx,r.y+TITLE/2);}
     if(cc){const t=b.criticality.toUpperCase();ctx.font=(9.5*u)+'px system-ui,sans-serif';const w=ctx.measureText(t).width+10*u;
       ctx.fillStyle=cc;roundRect(r.x+r.w-w-8*u,r.y+(TITLE-14*u)/2,w,14*u,4*u);ctx.fill();ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText(t,r.x+r.w-w/2-8*u,r.y+TITLE/2);ctx.textAlign='left';}
@@ -1230,7 +1239,7 @@ function draw(){
       const head=(p,q)=>{const ang=Math.atan2(p.y-q.y,p.x-q.x),s=(6+ctx.lineWidth)*u;ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(p.x,p.y);
         ctx.lineTo(p.x-s*Math.cos(ang-.45),p.y-s*Math.sin(ang-.45));ctx.lineTo(p.x-s*Math.cos(ang+.45),p.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill();};
       if(e.bundle.some(m=>m.s===e.s))head(b,a);if(e.bundle.some(m=>m.s===e.o))head(a,b);
-      labels.push({x:(a.x+b.x)/2,y:(a.y+b.y)/2,t:k>=1.25||hl?e.p:'\u00d7'+e.count,hl,alpha:ctx.globalAlpha});
+      labels.push({at:t=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t}),t:k>=1.25||hl?e.p:'\u00d7'+e.count,hl,alpha:ctx.globalAlpha});
       return;
     }
     if(selNode&&!hl)alpha*=.5;
@@ -1250,7 +1259,7 @@ function draw(){
       const ang=Math.atan2(b.y-cy,b.x-cx),s=(6+ctx.lineWidth)*u;
       ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(b.x,b.y);
       ctx.lineTo(b.x-s*Math.cos(ang-.45),b.y-s*Math.sin(ang-.45));ctx.lineTo(b.x-s*Math.cos(ang+.45),b.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill();
-      if(k>=1.25||hl)labels.push({x:(a.x+2*cx+b.x)/4,y:(a.y+2*cy+b.y)/4,t:e.p+(e.count>1?' ×'+e.count:'')+(e.lifted?' ↑':''),hl,alpha:ctx.globalAlpha});
+      if(k>=1.25||hl)labels.push({at:t=>({x:(1-t)*(1-t)*a.x+2*(1-t)*t*cx+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*cy+t*t*b.y}),t:e.p+(e.count>1?' ×'+e.count:'')+(e.lifted?' ↑':''),hl,alpha:ctx.globalAlpha});
     }
   });
   // nodes (closed boundaries, concepts, artifacts)
@@ -1292,7 +1301,7 @@ function draw(){
     if(!manyLabels||hl||(q&&match(n))){
       ctx.fillStyle=C.label;ctx.textAlign='center';
       if(n.type==='boundary'){ctx.textBaseline='middle';
-        const lab=shortLabel(n),room=n._w-(n._kids?30*u:16*u);let text=lab;
+        const lab=shortLabel(n),room=n._w-(n._kids?24*u:12*u);let text=lab;
         // Too wide at the legible size: shrink to at most 80%, then cut in the middle.
         if(n._lw*u>room){const f=Math.max(.8,room/(n._lw*u));ctx.font=(12*u*f)+'px system-ui,sans-serif';text=fitText(lab,room);}
         ctx.fillText(text,p.x+(n._kids?-7*u:0),p.y);ctx.font=(12*u)+'px system-ui,sans-serif';
@@ -1310,9 +1319,16 @@ function draw(){
   ctx.font=(10*u)+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   // A label that would overlap one already drawn is left out (highlighted ones first);
   // the tooltip and the panel still name the relation.
+  // Nodes and their labels are taken first; each edge label tries its midpoint,
+  // then points further along the edge.
   const taken=[];
-  labels.sort((a,b)=>(b.hl?1:0)-(a.hl?1:0)).forEach(l=>{const w=ctx.measureText(l.t).width+8*u,r={x0:l.x-w/2,x1:l.x+w/2,y0:l.y-7.5*u,y1:l.y+7.5*u};
-    if(taken.some(o=>o.x0<r.x1&&r.x0<o.x1&&o.y0<r.y1&&r.y0<o.y1))return;taken.push(r);ctx.globalAlpha=l.alpha;ctx.fillStyle=C.halo;roundRect(l.x-w/2,l.y-7.5*u,w,15*u,4*u);ctx.fill();ctx.fillStyle=l.hl?C.select:C.muted;ctx.fillText(l.t,l.x,l.y);});
+  VN.forEach(n=>{if(n._open)return;const p=S.pos.get(n.id);if(!p)return;
+    if(n.type==='boundary')taken.push({x0:p.x-n._w/2,x1:p.x+n._w/2,y0:p.y-n._h/2,y1:p.y+n._h/2});
+    else{const hw=Math.max(n._r,n._lw*u/2+3);taken.push({x0:p.x-hw,x1:p.x+hw,y0:p.y-n._r,y1:p.y+n._h/2+3*u+15*u});}});
+  const free=r=>!taken.some(o=>o.x0<r.x1&&r.x0<o.x1&&o.y0<r.y1&&r.y0<o.y1);
+  labels.sort((a,b)=>(b.hl?1:0)-(a.hl?1:0)).forEach(l=>{const w=ctx.measureText(l.t).width+8*u;
+    let r=null;for(const t of [.5,.4,.6,.3,.7]){const q=l.at(t),c={x0:q.x-w/2,x1:q.x+w/2,y0:q.y-7.5*u,y1:q.y+7.5*u,x:q.x,y:q.y};if(free(c)){r=c;break;}}
+    if(!r)return;taken.push(r);ctx.globalAlpha=l.alpha;ctx.fillStyle=C.halo;roundRect(r.x0,r.y0,w,15*u,4*u);ctx.fill();ctx.fillStyle=l.hl?C.select:C.muted;ctx.fillText(l.t,r.x,r.y);});
   ctx.globalAlpha=1;
   const nb2=VN.filter(n=>n.type==='boundary').length;
   $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(DE.hidden?` · ${DE.hidden} derived or lifted hidden until a node is selected or hovered`:'')+(filtersActive()?' · filtered':'')+(S.slice?' · slice':'');
