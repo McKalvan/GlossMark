@@ -86,6 +86,10 @@ aside a.src{color:var(--accent);text-decoration:none}aside a.src:hover{text-deco
 aside a.n{color:var(--accent);cursor:pointer;text-decoration:none}aside a.n:hover{text-decoration:underline}
 aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .legend>span{display:inline-flex;align-items:center;gap:6px;margin:2px 12px 2px 0}
+#legendBox{margin-top:14px}#legendBox>summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650;margin-bottom:6px}
+#legendBox>summary .n{text-transform:none;letter-spacing:0;font-weight:400}
+.sw.f{border-width:1.5px;width:12px;height:12px}.sw.f+.sw.f{margin-left:-4px}
+.bdg{display:inline-block;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--muted);color:#fff;font-size:10px;line-height:16px;text-align:center;font-style:normal}
 .legend .defs{margin-top:6px}.legend .defs summary{cursor:pointer;color:var(--accent)}
 .legend .defs h3{font-size:11px;font-weight:650;color:var(--muted);margin:8px 0 2px}
 .legend .defs dl{grid-template-columns:1fr;gap:0}.legend .defs dt{color:var(--fg);display:flex;align-items:center;gap:6px;margin-top:4px}
@@ -98,7 +102,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .sw.pl{background:color-mix(in srgb,var(--boundary-fill) 25%,transparent)}.sw.pl.od{outline:2px dashed var(--hard);outline-offset:1px}
 .sw.k{background:transparent;border-width:2.5px}
 .sw.k.low{border-color:var(--crit-low)}.sw.k.medium{border-color:var(--crit-medium)}.sw.k.high{border-color:var(--crit-high)}.sw.k.critical{border-color:var(--crit-critical)}
-.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}.ln.pl{opacity:.45}
+.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dd{border-top:0;height:2px;background:repeating-linear-gradient(90deg,var(--edge) 0 10px,transparent 10px 13px,var(--edge) 13px 15px,transparent 15px 18px)}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}.ln.pl{opacity:.45}
 .ln.add{border-color:var(--added)}.ln.rem{border-color:var(--removed)}
 .gate{font-weight:650;padding:1px 6px;border-radius:4px;color:#fff;font-size:11px}
 .gate.HARD{background:var(--hard)}.gate.SOFT{background:var(--soft)}.gate.AUTO{background:var(--auto)}
@@ -444,6 +448,8 @@ const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage'),panel=$('
 const coarse=!!(window.matchMedia&&matchMedia('(pointer: coarse)').matches);
 let lastPtr='mouse'; // the last pointer type: touch gets wider hit targets
 let RC=new Map(); // rect cache for open boundaries, reset per frame
+// The legend starts folded; opening it is remembered in this browser.
+let legendOpen=false;try{legendOpen=localStorage.getItem('gloss-legend')==='open';}catch(e){}
 
 /* Deterministic PRNG so the layout is the same on every load. */
 function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -1396,9 +1402,12 @@ function renderPanel(){
       });
     }
   }
-  const groups=LEGEND.filter(g=>(!g.diff||D.on)&&(!g.unplaced||V._nodes.some(n=>n.group)));
-  h+=`<h2>Legend</h2><div class="legend">${groups.map(g=>g.items.map(([sw,l,d])=>`<span title="${esc(d)}">${sw}${esc(l)}</span>`).join('')).join('<br>')}`;
-  h+=`<details class="defs"${S.legendOpen?' open':''}><summary>What these mean</summary>${groups.map(g=>`<h3>${esc(g.name)}</h3>${g.note?`<p>${esc(g.note)}</p>`:''}<dl>${g.items.map(([sw,l,d])=>`<dt>${sw}${esc(l)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>`).join('')}<h3>Relations</h3><p>Read each edge as A, relation, B in the direction of its arrow.</p><dl>${[...new Set(V._edges.map(e=>e.p))].sort().map(r=>`<dt>${esc(r)}</dt><dd>${esc(relDef(r))}</dd>`).join('')}</dl></details></div>`;
+  // Only what the map shows now: an entry for an encoding nothing on screen uses is noise.
+  const LN=VN.filter(n=>!n.group&&!n._later),LE=VE.filter(e=>!e.contain);
+  const groups=LEGEND.filter(g=>!g.diff||D.on).map(g=>({...g,items:g.items.filter(it=>!it[3]||it[3](LN,LE))})).filter(g=>g.items.length);
+  const relsShown=[...new Set(LE.map(e=>e.p))].sort(),nItems=groups.reduce((a,g)=>a+g.items.length,0);
+  h+=`<details id="legendBox"${legendOpen?' open':''}><summary>Legend <span class="n">· ${nItems} on the map</span></summary><div class="legend">${groups.map(g=>g.items.map(([sw,l,d])=>`<span title="${esc(d)}">${sw}${esc(l)}</span>`).join('')).join('<br>')}`;
+  h+=`<details class="defs"${S.legendOpen?' open':''}><summary>What these mean</summary>${groups.map(g=>`<h3>${esc(g.name)}</h3>${g.note?`<p>${esc(g.note)}</p>`:''}<dl>${g.items.map(([sw,l,d])=>`<dt>${sw}${esc(l)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>`).join('')}${relsShown.length?`<h3>Relations</h3><p>Read each edge as A, relation, B in the direction of its arrow.</p><dl>${relsShown.map(r=>`<dt>${esc(r)}</dt><dd>${esc(relDef(r))}</dd>`).join('')}</dl>`:''}</details></div></details>`;
   if(diff&&Array.isArray(diff.changes)&&diff.changes.length){
     h+=`<h2>Changes (${diff.changes.length})${diff.criticality?' '+critPill(diff.criticality):''}</h2>`;
     if(Array.isArray(diff.critical)&&diff.critical.length)h+=`<div class="via" style="margin-bottom:6px">criticality touched: ${diff.critical.slice(0,8).map(c=>esc(c.curie)+' '+esc(c.level)).join(', ')}${diff.critical.length>8?', …':''}</div>`;
@@ -1426,37 +1435,43 @@ function sheetLabel(){
 $('sheetBtn').addEventListener('click',()=>{panel.classList.toggle('min');panel.scrollTop=0;sheetLabel();});
 // Legend items: swatch, label and a definition worded as in docs/GRAPH.md,
 // docs/GOVERNANCE.md, docs/MARKING.md and docs/ADVANCED.md.
+// Each item may end with a test (visible nodes, visible edges) => shown: the
+// legend lists only what the current map draws.
+const any=(f)=>(N)=>N.some(f),anyE=(f)=>(N,E)=>E.some(f);
+const isC=n=>n.type==='concept'&&!n.ghost;
 const LEGEND=[
   {name:'Shapes',items:[
-    ['<i class="sw r"></i>','closed boundary','A boundary (a directory with a .gloss.yaml manifest) drawn as one box with its contents hidden; its outline colour is its criticality. Click to open it.'],
-    ['<i class="sw o"></i>','open boundary','An opened boundary: a box around the concepts its code realizes or represents and the boundaries nested in it.'],
-    ['<i class="sw c"></i>','concept','A term the ontology (*.gloss.yaml) defines: an entity, process, capability, event, measure, constraint, resource or system-type.'],
-    ['<i class="sw a"></i>','artifact','A function, class, file, test or page that a @gloss marker links to a concept or boundary.']]},
+    ['<i class="sw r"></i>','closed boundary','A boundary (a directory with a .gloss.yaml manifest) drawn as one box with its contents hidden; its outline colour is its criticality. Click to open it.',any(n=>n.type==='boundary'&&!n._open)],
+    ['<i class="sw o"></i>','open boundary','An opened boundary: a box around the concepts its code realizes or represents and the boundaries nested in it.',any(n=>n.type==='boundary'&&n._open)],
+    ['<i class="sw c"></i>','concept','A term the ontology (*.gloss.yaml) defines: an entity, process, capability, event, measure, constraint, resource or system-type.',any(isC)],
+    ['<i class="sw a"></i>','artifact','A function, class, file, test or page that a @gloss marker links to a concept or boundary.',any(n=>n.type==='artifact')]]},
+  {name:'Fill and badges',items:[
+    ['<i class="sw c f" style="background:hsl(30 var(--node-sat) var(--node-light))"></i><i class="sw c f" style="background:hsl(140 var(--node-sat) var(--node-light))"></i><i class="sw c f" style="background:hsl(250 var(--node-sat) var(--node-light))"></i>','fill colour','The colour of a concept\u2019s is-a family: concepts with the same taxonomy root share a hue. It identifies, it does not rank. A part drawn outside its whole takes the whole\u2019s colour; an implementation-tier concept is paler.',any(isC)],
+    ['<i class="bdg">3</i>','number badge','How much is tucked inside a closed boundary or concept: its hidden members plus what the view folds into it (implementation concepts folded into the core concept they realize, nested boundaries folded at this zoom). Open it, or read the list in the panel.',any(n=>n._hidden>0&&!n._open)]]},
   {name:'Concept styles',items:[
-    ['<i class="sw c i"></i>','implementation tier','Dashed outline: a concept in an implementation-tier namespace (such as impl:), a mechanism such as a handler, pipeline or queue that realizes a core concept.'],
-    ['<i class="sw c p"></i>','published','Gold ring: a concept written as published: { as: core:X }, the only seam between tiers and across repositories.'],
-    ['<i class="sw c pl"></i>','planned',PLANDEFS.planned],
-    ['<i class="sw c pl od"></i>','overdue',PLANDEFS.overdue]]},
-  {name:'Placement',unplaced:true,items:PLACEMENTS.map(v=>[v==='housed'?'<i class="sw o"></i>':'<i class="sw u"></i>',v,PLACEDEFS[v]]),
+    ['<i class="sw c i"></i>','implementation tier','Dashed outline: a concept in an implementation-tier namespace (such as impl:), a mechanism such as a handler, pipeline or queue that realizes a core concept.',any(n=>isC(n)&&n.tier==='implementation')],
+    ['<i class="sw c p"></i>','published','Gold ring: a concept written as published: { as: core:X }, the only seam between tiers and across repositories.',any(n=>n.published)],
+    ['<i class="sw c pl"></i>','planned',PLANDEFS.planned,any(n=>planState(n)==='planned')],
+    ['<i class="sw c pl od"></i>','overdue',PLANDEFS.overdue,any(n=>planState(n)==='overdue')],
+    ['<i class="sw c" style="border-style:dotted"></i>','deprecated','Dotted outline: being retired (deprecated, often with replaced-by); the panel names what takes over.',any(n=>n.deprecated)]]},
+  {name:'Placement',items:PLACEMENTS.map(v=>[v==='housed'?'<i class="sw o"></i>':'<i class="sw u"></i>',v,PLACEDEFS[v],any(n=>isC(n)&&n.placement===v&&v!=='housed')]),
    note:'A concept no boundary houses is drawn in a dashed group outside the boxes, one group per value. The first value that applies wins, in this order.'},
-  {name:'Criticality',items:[
-    ['<i class="sw c k low"></i>','low','A mistake here is an annoyance: telemetry, dashboards, internal tooling.'],
-    ['<i class="sw c k medium"></i>','medium','A mistake here degrades the product.'],
-    ['<i class="sw c k high"></i>','high','A mistake here costs money, trust or compliance: PII, access control, audit.'],
-    ['<i class="sw c k critical"></i>','critical','A mistake here moves money, breaks the law or stops the business.']],
+  {name:'Criticality',items:CRIT.map(l=>['<i class="sw c k '+l+'"></i>',l,{low:'A mistake here is an annoyance: telemetry, dashboards, internal tooling.',medium:'A mistake here degrades the product.',
+    high:'A mistake here costs money, trust or compliance: PII, access control, audit.',critical:'A mistake here moves money, breaks the law or stops the business.'}[l],any(n=>n.criticality===l)]),
    note:'Rings on concepts and artifacts, outline colour on boundaries. No ring means unclassified.'},
   {name:'Edges',items:[
-    ['<i class="ln"></i>','declared','Solid line: declared in an ontology file or a boundary manifest.'],
-    ['<i class="ln thin"></i>','inline','Thin line: from a @gloss marker in the code.'],
-    ['<i class="ln d"></i>','derived','Dashed line: derived by the rollup rules (such as the realization lift); written by the tool, never by hand.'],
-    ['<i class="ln dot"></i>','proposed','Dotted line: a proposal (@gloss? or a proposed: true entry) that a human has not yet accepted.'],
-    ['<i class="ln pl"></i>','planned','Faint line: declared only in a manifest\u2019s planned: block, capability the boundary will have.'],
-    ['<i class="ln thick"></i>','lifted','Thick line marked ↑: a boundary’s links to several concepts lifted to their least common subsumer (is-a); the panel lists the originals under via.']]},
+    ['<i class="ln"></i>','declared','Solid line: declared in an ontology file or a boundary manifest.',anyE(e=>e.source==='declared'&&!e.proposed)],
+    ['<i class="ln thin"></i>','inline','Thin line: from a @gloss marker in the code.',anyE(e=>e.source==='inline'&&!e.proposed)],
+    ['<i class="ln d"></i>','derived','Dashed line: derived by the rollup rules (such as the realization lift); written by the tool, never by hand.',anyE(e=>e.source==='derived'&&!e.proposed)],
+    ['<i class="ln dd"></i>','mixed','Dash-dot line: several underlying edges from different sources (declared, inline, derived) drawn as one; the panel lists them.',anyE(e=>e.source==='mixed'&&!e.proposed)],
+    ['<i class="ln dot"></i>','proposed','Dotted line: a proposal (@gloss? or a proposed: true entry) that a human has not yet accepted.',anyE(e=>e.proposed&&e.diff!=='removed')],
+    ['<i class="ln pl"></i>','planned','Faint line: declared only in a manifest\u2019s planned: block, capability the boundary will have.',anyE(e=>e.planned)],
+    ['<i class="ln thick"></i>','lifted','Thick line marked \u2191: a boundary\u2019s links to several concepts lifted to their least common subsumer (is-a); the panel lists the originals under via.',anyE(e=>e.lifted)]]},
   {name:'Diff',diff:true,items:[
-    ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.'],
-    ['<i class="ln rem"></i>','removed','Red: removed since the base; a removed node is drawn hollow and dashed.'],
-    ['<span style="color:var(--changed)">◌</span>','changed','Orange dashed ring: a node whose definition changed since the base.'],
-    ['<i class="sw c" style="background:transparent;border-color:var(--added);border-style:dashed"></i>','added, gone since','Green and dashed: a commit of the history added it and a newer one removed it, so today\u2019s map has no place for it; it floats at the top.']]},
+    ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.',(N,E)=>N.some(n=>n._diff==='added')||E.some(e=>e.diff==='added')],
+    ['<i class="ln rem"></i>','removed','Red: removed since the base; a removed node is drawn hollow and dashed.',(N,E)=>N.some(n=>n._diff==='removed')||E.some(e=>e.diff==='removed')],
+    ['<span style="color:var(--changed)">\u25cc</span>','changed','Orange dashed ring: a node whose definition changed since the base.',any(n=>n._diff==='changed')],
+    ['<i class="sw c" style="background:transparent;border-color:var(--added);border-style:dashed"></i>','added, gone since','Green and dashed: a commit of the history added it and a newer one removed it, so today\u2019s map has no place for it; it floats at the top.',any(n=>n.gone)]]},
 ];
 // Relation definitions, read as "A <relation> B" in the direction the edge is drawn.
 // Worded from docs/ADVANCED.md and internal/model/vocab.go.
@@ -1503,7 +1518,9 @@ function reveal(n){ // expand every container, then select and centre
   renderPanel();draw();
 }
 panel.addEventListener('change',ev=>{if(ev.target.id==='asOf'){S.asOf=ev.target.checked;loadView(S.vi,true);}});
-panel.addEventListener('toggle',ev=>{if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;},true);
+panel.addEventListener('toggle',ev=>{
+  if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;
+  if(ev.target.id==='legendBox'){legendOpen=ev.target.open;try{localStorage.setItem('gloss-legend',legendOpen?'open':'closed');}catch(e){}}},true);
 panel.addEventListener('click',ev=>{
   const hr=ev.target.closest('[data-step]');
   if(hr){ev.preventDefault();const i=+hr.dataset.step;
