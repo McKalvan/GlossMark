@@ -155,6 +155,7 @@ gloss history gm:Increment       # when a concept or boundary was added, changed
 gloss coverage --fail-under 80   # headline: concepts with an artifact and a verifier (implementation concepts, internal ones only at high or critical, and core concepts code implements directly; n/a when none); files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
+gloss report compliance --format html -o compliance.html   # per rule: code, tests, published value, who decided each link and why, open findings and waivers (docs/GOVERNANCE.md)
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift, import versions, deprecated concepts still in use
 gloss mcp                        # MCP server on stdio for agents
