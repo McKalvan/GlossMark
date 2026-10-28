@@ -122,6 +122,11 @@
         }
       }
     },
+    "links": {
+      "description": "Links from code anywhere in the repository to concepts, as a manifest's links: for its directory (docs/adr/0041-manifest-links.md): each entry maps a path glob (relative to the repository root) or a declaration symbol to concepts under one or more relations; a bare .Name resolves in the default-namespace of the matched file's own manifest. See manifest.schema.json#/$defs/link.",
+      "type": "array",
+      "items": { "$ref": "manifest.schema.json#/$defs/link" }
+    },
     "history": {
       "description": "The repository's defaults for gloss history (ADR 0040). Command-line flags override them.",
       "type": "object",

@@ -88,6 +88,11 @@
       "description": "Globs (relative to this directory) of generated files the scanner ignores.",
       "$ref": "#/$defs/stringOrList"
     },
+    "links": {
+      "description": "Links from code beneath this directory to concepts, written here instead of as inline markers (docs/adr/0041-manifest-links.md). Each entry maps a path glob (every scanned file it matches, at file scope) or a declaration symbol (anchored to that declaration in every file beneath the directory, or beneath path when both are given) to concepts under one or more relations. A mapped link is anchored, fingerprinted, reviewed and gated as a marker is; the graph records it with source manifest and the entry's location in prov.from. An inline marker on the same artifact overrides a mapped link of the same relation. An entry that names neither path nor symbol, or no relation, is an error (GM125); one that matches no file or declaration is a warning (GM126).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/link" }
+    },
     "owner": {
       "description": "Team or actor that owns the boundary; becomes an owns edge from an actor node.",
       "type": "string"
@@ -136,6 +141,41 @@
     }
   },
   "$defs": {
+    "link": {
+      "description": "One links: entry (model.Link). Every key other than path, symbol, proposed, conf and note is a relation a marker could carry (implements, represents, verifies, ...) with its concept or list of concepts; a bare .Name resolves in the manifest's default-namespace.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "A glob over the files beneath the directory holding this file (gitignore-style: * within a segment, ** across; without / it matches a basename at any depth). Alone, every matching scanned file is linked at file scope; with symbol it narrows where the symbol is looked for.",
+          "type": "string",
+          "minLength": 1
+        },
+        "symbol": {
+          "description": "A declaration name as the anchorer records it (catalog_book, Service.Cancel, resource.aws_dynamodb_table.loans, table.loans). The link anchors to that declaration, as a marker above it would, in every file beneath the directory (or beneath path).",
+          "type": "string",
+          "minLength": 1
+        },
+        "proposed": {
+          "description": "The link awaits review, as @gloss? does; gloss accept drops it.",
+          "type": "boolean"
+        },
+        "conf": {
+          "description": "Confidence in [0, 1], as a marker's conf= key.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "note": {
+          "description": "The author's rationale, as a marker's note= key.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": { "$ref": "#/$defs/stringOrList" },
+      "anyOf": [
+        { "required": ["path"] },
+        { "required": ["symbol"] }
+      ]
+    },
     "stringOrList": {
       "description": "A single string or a list of strings (model.StringList).",
       "anyOf": [

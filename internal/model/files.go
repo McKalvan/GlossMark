@@ -81,6 +81,9 @@ type Config struct {
 	Suggest *SuggestConfig `yaml:"suggest,omitempty" json:"suggest,omitempty"`
 	// History tunes gloss history (ADR 0040).
 	History *HistoryConfig `yaml:"history,omitempty" json:"history,omitempty"`
+	// Links maps paths and symbols anywhere in the repository to concepts,
+	// as a manifest's links: does for its directory (ADR 0041).
+	Links []*Link `yaml:"links,omitempty" json:"links,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
@@ -259,6 +262,10 @@ func LoadConfig(path string) (*Config, error) {
 	c.Dir = filepath.Dir(path)
 	if c.Grammar == 0 {
 		c.Grammar = 1
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal(b, &root); err == nil {
+		linkLines(&root, c.Links)
 	}
 	if c.Grammar < 0 {
 		return nil, fmt.Errorf("%s: grammar must be a positive integer", path)
@@ -679,6 +686,10 @@ type Manifest struct {
 	// drift reports as a plan item instead of a gap until code under the
 	// boundary derives it (ADR 0034).
 	Planned *PlannedDecl `yaml:"planned,omitempty" json:"planned,omitempty"`
+	// Links maps paths (globs, relative to the manifest's directory) and
+	// symbols under the directory to concepts, in place of inline markers
+	// (ADR 0041).
+	Links []*Link `yaml:"links,omitempty" json:"links,omitempty"`
 
 	// Path is the manifest file; Dir its directory relative to the repo root (slash-separated, "" for root).
 	Path string `yaml:"-" json:"-"`
@@ -839,6 +850,86 @@ func (m *Manifest) lists() map[string]StringList {
 	}
 }
 
+// Link is one links: entry of a manifest or of glossmark.yaml: a path glob
+// or a declaration symbol mapped to concepts under one or more relations,
+// written where an inline marker would otherwise go (ADR 0041). Every key
+// but path, symbol, proposed, conf and note is a relation, as on a concept.
+type Link struct {
+	// Path is a glob over the files beneath the directory of the file that
+	// holds the entry (gitignore-style: * within a segment, ** across; a
+	// pattern without / matches a basename at any depth). Alone it links
+	// every matching file at file scope; with Symbol it narrows the files
+	// the symbol is looked for in.
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+	// Symbol is a declaration name as the anchorer records it (catalog_book,
+	// Service.Cancel, resource.aws_dynamodb_table.loans); the link anchors
+	// to that declaration in every file beneath the directory that holds
+	// it, as a marker above it would.
+	Symbol   string   `yaml:"symbol,omitempty" json:"symbol,omitempty"`
+	Proposed bool     `yaml:"proposed,omitempty" json:"proposed,omitempty"`
+	Conf     *float64 `yaml:"conf,omitempty" json:"conf,omitempty"`
+	Note     string   `yaml:"note,omitempty" json:"note,omitempty"`
+	// Relations holds every other key: relation name → targets.
+	Relations map[string]StringList `yaml:",inline" json:"relations,omitempty"`
+
+	// Line and EndLine span the entry in its file (not serialized).
+	Line    int `yaml:"-" json:"-"`
+	EndLine int `yaml:"-" json:"-"`
+}
+
+// RelationNames returns the entry's relation keys, sorted.
+func (l *Link) RelationNames() []string {
+	out := make([]string, 0, len(l.Relations))
+	for k := range l.Relations {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Where names the entry the way diagnostics do: its path glob, its symbol,
+// or both.
+func (l *Link) Where() string {
+	switch {
+	case l.Path != "" && l.Symbol != "":
+		return fmt.Sprintf("symbol %q in %q", l.Symbol, l.Path)
+	case l.Symbol != "":
+		return fmt.Sprintf("symbol %q", l.Symbol)
+	}
+	return fmt.Sprintf("path %q", l.Path)
+}
+
+// linkLines records, on each decoded links: entry, the lines its mapping
+// spans in the file, so a diagnostic and a review command find the entry.
+func linkLines(doc *yaml.Node, links []*Link) {
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return
+	}
+	mn := doc.Content[0]
+	for i := 0; i+1 < len(mn.Content); i += 2 {
+		if mn.Content[i].Value != "links" || mn.Content[i+1].Kind != yaml.SequenceNode {
+			continue
+		}
+		for j, item := range mn.Content[i+1].Content {
+			if j < len(links) && links[j] != nil {
+				links[j].Line, links[j].EndLine = item.Line, lastLine(item)
+			}
+		}
+	}
+}
+
+// lastLine is the last line a YAML node's content reaches.
+func lastLine(n *yaml.Node) int {
+	end := n.Line
+	if n.Kind == yaml.ScalarNode {
+		end += strings.Count(strings.TrimRight(n.Value, "\n"), "\n")
+	}
+	for _, c := range n.Content {
+		end = max(end, lastLine(c))
+	}
+	return end
+}
+
 // UnknownKey is a top-level manifest key the format does not define.
 type UnknownKey struct {
 	Key  string
@@ -905,6 +996,7 @@ func LoadManifest(path string) (*Manifest, []UnknownKey, error) {
 		}
 	}
 	m.Path = path
+	linkLines(&doc, m.Links)
 	if m.Boundary == "" {
 		return nil, unknown, fmt.Errorf("%s: boundary is required", path)
 	}
@@ -1112,6 +1204,9 @@ type LedgerEntry struct {
 	ReviewReason      string   `json:"review_reason,omitempty"` // gloss reject --reason; Rationale is the author's note=
 	Gate              string   `json:"gate,omitempty"`
 	LastSeen          string   `json:"last_seen,omitempty"`
+	// Source is "manifest" for a link a links: entry maps (ADR 0041); empty
+	// for an inline marker.
+	Source string `json:"source,omitempty"`
 	// Value and Live record, for a value binding (marker id value:<curie>),
 	// the ontology value and the bound code line when last accepted.
 	Value string `json:"value,omitempty"`

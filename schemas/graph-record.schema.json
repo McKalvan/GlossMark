@@ -349,11 +349,12 @@
           "$ref": "#/$defs/iri"
         },
         "source": {
-          "description": "Where the edge came from: declared (ontology files and manifests), inline (@gloss markers), derived (rollup rules) or inferred (inferrers such as test paths).",
+          "description": "Where the edge came from: declared (ontology files and manifests), inline (@gloss markers), manifest (a links: entry in a manifest or glossmark.yaml mapping a path or symbol to the concept, docs/adr/0041-manifest-links.md; prov.from names the entry), derived (rollup rules) or inferred (inferrers such as test paths).",
           "type": "string",
           "enum": [
             "declared",
             "inline",
+            "manifest",
             "derived",
             "inferred"
           ]
@@ -443,6 +444,11 @@
         "alias": {
           "description": "The relation as written when the marker used an alias stored as its canonical relation (tests, stored as verifies).",
           "type": "string"
+        },
+        "from": {
+          "description": "For a manifest link (and the edges inferred from it): the file and line of the links: entry that maps it, path:line, since path and line name the code it anchors to.",
+          "type": "string",
+          "pattern": "^.+:[0-9]+$"
         }
       }
     }
