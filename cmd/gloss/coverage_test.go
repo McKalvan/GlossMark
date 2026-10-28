@@ -22,7 +22,7 @@ func TestCoverageCountsDirectCoreImplementations(t *testing.T) {
 		code       int
 		want       string
 	}{
-		{"implements a core concept", "# @gloss implements hp:Pricing\ndef quote_view(): pass\n", 0, "concepts 100.0% (1 of 1 "},
+		{"implements a core concept", "# @gloss implements hp:Pricing\ndef quote_view(): pass\n", 0, "concepts 100% (1 of 1 "},
 		{"presents only", "# @gloss presents hp:Pricing\ndef quote_view(): pass\n", 0, "concepts n/a (0 of 0 "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
