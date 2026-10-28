@@ -148,6 +148,9 @@ func (b *mcpBackend) Impact(props []mcp.Proposal) (any, error) {
 		cls, why := gate.ClassifyLink(g, ws, e, pol)
 		item["gate"] = string(cls)
 		item["reasons"] = why
+		if ws.Config.RelationProfile() == model.ProfileStarter && !model.InStarter(p.Relation) {
+			item["hint"] = fmt.Sprintf("%s is outside the starter relation profile; gloss check hints at it (GM250) until %s says relations: full", p.Relation, load.ConfigName)
+		}
 		if on := g.Node(oiri); on != nil {
 			item["target_kind"] = on.Kind
 			if len(rel.RangeKinds) > 0 && on.Kind != "" && !containsStr(rel.RangeKinds, on.Kind) {

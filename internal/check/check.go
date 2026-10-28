@@ -562,6 +562,21 @@ func danglingReference(g *graph.Graph, curie string) string {
 	return msg
 }
 
+// starterHint is GM250's message: under the starter relation profile
+// (glossmark.yaml relations: starter, issue #261) a relation outside
+// model.StarterRelations still builds its edge, so the graph is the same
+// under either profile, but gloss check says where the switch is. It is a
+// hint, not a warning: --strict does not fail on it. "" when the profile
+// is full or the relation is in it.
+//
+// @gloss implements gmi:RelationProfile scope=symbol
+func (c *checker) starterHint(rel string) string {
+	if c.ws == nil || c.ws.Config.RelationProfile() != model.ProfileStarter || model.InStarter(rel) {
+		return ""
+	}
+	return fmt.Sprintf("%s is outside the starter relation profile (%s); set relations: full in %s to use it, or write one of the starter relations", rel, strings.Join(model.StarterRelations, ", "), load.ConfigName)
+}
+
 // minRun is the shortest run of identical markers GM131 reports.
 const minRun = 3
 
@@ -596,6 +611,9 @@ func (c *checker) edges() {
 			if sn != nil && sn.NodeType == model.NodeBoundary && !rel.Manifest && e.P != "part-of" {
 				c.add(path, line, "error", "GM203", fmt.Sprintf("relation %q cannot be declared in a manifest", e.P))
 			}
+		}
+		if msg := c.starterHint(e.P); msg != "" {
+			c.add(path, line, "hint", "GM250", msg)
 		}
 		// Object resolution. A replaced-by successor need not be loaded:
 		// GM341 judges a concept's, and a boundary's may be in another repo.

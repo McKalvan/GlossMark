@@ -24,16 +24,7 @@ func Snippet(ws *load.Workspace, g *graph.Graph, m *model.Manifest) string {
 	sb.WriteString("- Write `@gloss?` for links you are proposing; a human accepts them with `gloss accept`. Never write a bare `@gloss` for a link you are not sure of.\n")
 	sb.WriteString("- " + ProposalSentence + "\n")
 	sb.WriteString("- Relations you may use inline: ")
-	var inl []string
-	for _, r := range ws.Vocab.Names() {
-		// tests is an accepted alias of verifies that check asks to replace
-		// (GM240); the snippet names only the relation to write.
-		if rel := ws.Vocab.Get(r); rel != nil && rel.Inline && r != "tests" {
-			inl = append(inl, "`"+r+"`")
-		}
-	}
-	sb.WriteString(strings.Join(inl, ", "))
-	sb.WriteString(". Use `implements` for behaviour, `represents` for data shapes, `verifies` in tests, `provisions`/`configures`/`deploys` in IaC, config and CI.\n")
+	sb.WriteString(RelationGuidance(ws) + "\n")
 	if m != nil {
 		fmt.Fprintf(&sb, "- This directory is boundary `%s` (%s)", m.Boundary, m.Level)
 		if m.DefaultNamespace != "" {
@@ -112,6 +103,25 @@ func Snippet(ws *load.Workspace, g *graph.Graph, m *model.Manifest) string {
 		sb.WriteString("\n")
 	}
 	return sb.String()
+}
+
+// RelationGuidance is the sentence that lists the inline relations an agent
+// may write and what each is for, under the repository's relation profile
+// (glossmark.yaml relations:, issue #261): the starter list names the switch
+// to the rest, the full list the IaC, config and CI relations. The snippet
+// and the MCP server's instructions share it. tests is the accepted alias of
+// verifies that check asks to replace (GM240), so neither names it.
+func RelationGuidance(ws *load.Workspace) string {
+	profile := ws.Config.RelationProfile()
+	var inl []string
+	for _, r := range ws.Vocab.InlineNames(profile) {
+		inl = append(inl, "`"+r+"`")
+	}
+	s := strings.Join(inl, ", ")
+	if profile == model.ProfileStarter {
+		return s + ". Use `implements` for behaviour, `represents` for data shapes, `verifies` in tests, `produces`/`consumes` for what code emits and reads. This repository uses the starter relation profile; the rest (`presents`, `hosts`, `configures`, `documents`, ...) need `relations: full` in " + load.ConfigName + "."
+	}
+	return s + ". Use `implements` for behaviour, `represents` for data shapes, `verifies` in tests, `provisions`/`configures`/`deploys` in IaC, config and CI."
 }
 
 func codeList(xs []string) string {
