@@ -28,11 +28,16 @@ const (
 	evData         = "data"           // the body touches a table that represents an entity the concept works on
 	evNamePartial  = "name-partial"   // the declaration's words are part of the concept name (appointment: AppointmentReminding)
 	evNameOverlap  = "name-overlap"   // some words shared, neither name holds the other
+	// Evidence read from a spec (#260, ADR 0041).
+	evAsyncAPI = "asyncapi" // the code names a channel or a message of the AsyncAPI contract
+	evOpenAPI  = "openapi"  // the code declares a route the OpenAPI spec maps to a process
+	evRoute    = "route"    // the code declares a route whose path names the concept
+	evSchema   = "schema"   // the type maps to a table that represents the entity
 )
 
 var strength = map[string]int{
-	evNamedInDoc: 110, evNameExact: 100, evAliasExact: 95, evNameContains: 80, evAliasContain: 75,
-	evCalls: 85, evTopic: 65, evDoc: 60, evData: 45, evNamePartial: 40, evNameOverlap: 30,
+	evNamedInDoc: 110, evNameExact: 100, evAliasExact: 95, evSchema: 92, evAsyncAPI: 90, evOpenAPI: 88, evCalls: 85,
+	evNameContains: 80, evAliasContain: 75, evTopic: 65, evDoc: 60, evRoute: 50, evData: 45, evNamePartial: 40, evNameOverlap: 30,
 }
 
 // DefaultStopwords is programming vocabulary that never matches a concept
