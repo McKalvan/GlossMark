@@ -43,11 +43,16 @@ func cmdCheck(args []string) int {
 	diags := append([]marker.Diagnostic{}, p.Diags...)
 	diags = append(diags, check.Run(p.WS, p.Graph)...)
 	printDiags(diags)
-	errs, warns := 0, 0
+	errs, warns, hints := 0, 0, 0
 	for _, d := range diags {
-		if d.Severity == "error" {
+		switch d.Severity {
+		case "error":
 			errs++
-		} else {
+		case "hint":
+			// A hint (GM250, the starter relation profile) names a switch,
+			// not a defect: --strict leaves it alone.
+			hints++
+		default:
 			warns++
 		}
 	}
@@ -71,6 +76,9 @@ func cmdCheck(args []string) int {
 		}
 	}
 	summary := fmt.Sprintf("gloss check: %s, %s", plural(errs, "error"), plural(warns, "warning"))
+	if hints > 0 {
+		summary += ", " + plural(hints, "hint")
+	}
 	if proposals > 0 || rogues > 0 {
 		summary += fmt.Sprintf("; %s, %s (run gloss status)", plural(proposals, "proposal"), plural(rogues, "rogue"))
 	}
