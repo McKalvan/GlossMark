@@ -74,7 +74,7 @@ canvas.drag{cursor:grabbing}canvas.hit{cursor:pointer}
 #hint{position:absolute;right:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none;text-align:right}
 aside{width:340px;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:10px 14px;font-size:12px}
 aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 6px}
-aside h2:first-child{margin-top:0}
+aside h2:first-child{margin-top:0}#panelTop:not(:empty)+#selPane h2:first-child{margin-top:14px}
 aside .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}
 aside dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0}
 aside dt{color:var(--muted)}aside dd{margin:0;word-break:break-word}
@@ -84,6 +84,18 @@ aside .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 aside .ps{white-space:nowrap}aside .note{color:var(--muted);font-size:11px}
 aside a.src{color:var(--accent);text-decoration:none}aside a.src:hover{text-decoration:underline}
 aside a.n{color:var(--accent);cursor:pointer;text-decoration:none}aside a.n:hover{text-decoration:underline}
+#navBox{margin:10px 0}#navBox>summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650}
+#navBox>summary .n{text-transform:none;letter-spacing:0;font-weight:400}
+#navTree{list-style:none;margin:4px 0;padding:0;max-height:40vh;overflow-y:auto}
+#navTree ul{list-style:none;margin:0;padding-left:14px}
+#navTree li{margin:0}
+#navTree .ti{display:flex;align-items:center;gap:5px;padding:1px 4px;border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#navTree .ti:hover{background:var(--bg)}
+#navTree [aria-selected="true"]>.ti{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+#navTree li:focus{outline:none}#navTree li:focus-visible>.ti{outline:2px solid var(--accent);outline-offset:-2px}
+#navTree .tw{width:10px;color:var(--muted);flex:none;text-align:center}
+#navTree .k{color:var(--muted);font-size:11px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .legend>span{display:inline-flex;align-items:center;gap:6px;margin:2px 12px 2px 0}
 #legendBox{margin-top:14px}#legendBox>summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650;margin-bottom:6px}
@@ -173,34 +185,34 @@ table.vt tr.cur td{font-weight:650}
   <span class="meta" id="generated"></span>
   <span class="meta" id="nsNote"></span>
   <span class="spacer"></span>
-  <label class="meta">View <select id="viewSel"></select></label>
-  <button id="themeBtn" title="Cycle theme: auto / light / dark">Theme: auto</button>
+  <label class="meta">View <select id="viewSel" aria-label="View"></select></label>
+  <button id="themeBtn" title="Cycle theme: auto / light / dark" aria-label="Theme: auto (cycle auto, light, dark)">Theme: auto</button>
 </header>
 <div class="bar">
   <span id="crumbs"></span>
   <span class="sep"></span>
-  <input type="text" id="search" placeholder="Search id / label…" autocomplete="off">
-  <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation">Filters</button>
+  <input type="text" id="search" placeholder="Search id / label…" autocomplete="off" aria-label="Search nodes by id or label">
+  <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation" aria-expanded="false" aria-controls="filters">Filters</button>
   <span class="sep"></span>
-  <span id="ovBar" hidden><button id="ovOlder" type="button" title="Older commit ([)">◀</button><select id="ovSel" title="Overlay one commit's changes on the map (gloss view --history), or the --diff"></select><button id="ovNewer" type="button" title="Newer commit (])">▶</button></span>
-  <select id="changesSel" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
+  <span id="ovBar" hidden><button id="ovOlder" type="button" title="Older commit ([)" aria-label="Older commit" aria-keyshortcuts="[">◀</button><select id="ovSel" title="Overlay one commit's changes on the map (gloss view --history), or the --diff" aria-label="Overlay"></select><button id="ovNewer" type="button" title="Newer commit (])" aria-label="Newer commit" aria-keyshortcuts="]">▶</button></span>
+  <select id="changesSel" aria-label="Show changes within" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
     <option value="">All nodes</option><option value="0">Only changes</option><option value="1">Changes + 1 hop</option><option value="2">Changes + 2 hops</option><option value="3">Changes + 3 hops</option>
   </select>
   <button id="expandAll" title="Open every boundary and part-of tree">Expand all</button>
   <button id="collapseAll" title="Back to the top: every boundary closed">Collapse all</button>
-  <button id="fit" title="Fit to window (f)">Fit</button>
-  <button id="relayout">Re-layout</button>
+  <button id="fit" title="Fit to window (f)" aria-label="Fit the map to the window" aria-keyshortcuts="f">Fit</button>
+  <button id="relayout" title="Lay the map out again, unpinning dragged nodes">Re-layout</button>
 </div>
-<div id="filters"></div>
+<div id="filters" role="region" aria-label="Filters"></div>
 <main>
   <div id="stage">
-    <canvas id="cv"></canvas>
+    <canvas id="cv" role="img" aria-label="Map"></canvas>
     <div id="tip"></div>
     <div id="msg"></div>
     <div id="status"></div>
     <div id="hint"></div>
   </div>
-  <aside id="panel" class="min"><button id="sheetBtn" type="button" aria-expanded="false"><span class="t"></span><span class="c"></span></button><div id="panelBody"></div></aside>
+  <aside id="panel" class="min"><button id="sheetBtn" type="button" aria-expanded="false"><span class="t"></span><span class="c"></span></button><div id="panelBody"><div id="panelTop"></div><div id="selPane" aria-live="polite" aria-label="Selection details"></div><details id="navBox" open><summary>Outline <span class="n"></span></summary><ul id="navTree" role="tree" aria-label="Nodes on the map; arrow keys move, Enter selects, right and left open and close"></ul></details><div id="panelRest"></div></div></aside>
 </main>
 <script id="gloss-data" type="application/json">__GLOSS_DATA__</script>
 <!--GLOSS_DATA_SCRIPT-->
@@ -858,6 +870,8 @@ function rebuild(seedAll){
   else hideMsg();
   if(S.sel&&!(S.sel.id?byId.get(S.sel.id)&&byId.get(S.sel.id)._vis:VE.includes(S.sel)))S.sel=null;
   renderCrumbs();
+  const nb=VN.filter(n=>n.type==='boundary').length;
+  cv.setAttribute('aria-label',`Map of the ${V.name||''} view: ${VN.filter(n=>!n.group).length} nodes, ${nb} boundar${nb===1?'y':'ies'}, ${VE.filter(e=>!e.contain).length} edges${S.focus?', focused on '+(byId.get(S.focus).label||S.focus):''}. The Outline in the side panel lists them for the keyboard.`);
 }
 function measure(){
   ctx.font='12px system-ui,sans-serif';
@@ -1259,9 +1273,9 @@ function housingHtml(n){
   if(!home)return '<span class="via">none: no boundary’s code realizes it</span>';
   if(!by.length)return 'housed in '+nodeLink(home)+'<span class="note">; no boundary realizes it directly</span>';
   const others=by.filter(b=>b!==home);
-  return nodeLink(home)+(others.length?'<div class="via">also realized or held by '+others.map(nodeLink).join(', ')+'</div>':'');
+  return nodeLink(home)+(others.length?'<div class="note">also realized or held by '+others.map(nodeLink).join(', ')+'</div>':'');
 }
-function nodeLink(n){return `<a class="n" data-id="${esc(n.id)}">${esc(n.label||n.id)}</a>`;}
+function nodeLink(n){return `<a class="n" data-id="${esc(n.id)}" tabindex="0" role="link">${esc(n.label||n.id)}</a>`;}
 function renderCrumbs(){
   const box=$('crumbs');let h=`<a data-focus="" class="${S.focus?'':'cur'}" title="Whole view">All</a>`;
   if(S.focus&&byId.has(S.focus)){
@@ -1338,6 +1352,9 @@ function renderPanel(){
     if(S.slice.missing.length)h+=`<div class="via">Not precomputed for ${S.slice.missing.map(esc).join(', ')}${SL&&SL.omitted?' (the index reached its size cap)':''}: run <span class="mono">gloss slice ${S.slice.missing.map(esc).join(' ')}</span>.</div>`;
   }
   h+=overlayHtml();
+  // The selection goes to its own live region, so a screen reader hears what
+  // was selected and not the whole panel again.
+  const topH=h;h='';
   if(sel&&sel.id){
     const n=sel;
     if(n.group){
@@ -1397,16 +1414,17 @@ function renderPanel(){
     if(e.proposed)h+='<dt>proposed</dt><dd>yes</dd>';if(e.planned)h+='<dt>planned</dt><dd>yes</dd>';if(e.lifted)h+='<dt>lifted</dt><dd>yes</dd>';if(e.diff)h+=`<dt>diff</dt><dd>${esc(e.diff)}</dd>`;
     if(e.rerouted)h+=`<dt>underlying</dt><dd>${e.parts.map(p=>esc(p.s)+' → '+esc(p.o)).join('<br>')}</dd>`;
     if(e.via.size)h+=`<dt>via</dt><dd class="via">${[...e.via].map(esc).join('<br>')}</dd>`;h+='</dl>';
-  }else{
+  }
+  const selH=h;h=topH;
+  if(!sel){
     const tops=VN.filter(n=>n.type==='boundary'&&!n._lc),loose=VN.filter(n=>n.type==='concept'&&n._lc&&n._lc.group);
     h+=`<h2>Where you are</h2><div style="color:var(--muted)">`;
     if(S.focus&&byId.has(S.focus))h+=`Focused on <b>${esc(byId.get(S.focus).label||S.focus)}</b>: its contents and what they connect to. `;
     else h+=`The top of the system: ${tops.length} top-level boundar${tops.length===1?'y':'ies'}${loose.length?` and ${loose.length} unplaced concept${loose.length===1?'':'s'} outside them (${VN.filter(n=>n.group).map(g=>loose.filter(k=>k._lc===g).length+' '+esc(g.placement)).join(', ')||'no placement'})`:''}. `;
-    h+=coarse?`Tap a boundary to open it, double-tap to focus on it. Drag to pan, pinch to zoom.</div>`:`Click a boundary to open it, double-click to focus on it. Drag to pan, wheel to zoom, Esc to step back.</div>`;
-    if(tops.length){
-      const sorted=tops.slice().sort((a,b)=>critRank(b.criticality)-critRank(a.criticality)||(a.label||a.id).localeCompare(b.label||b.id));
-      h+=`<ul>${sorted.map(b=>'<li>'+nodeLink(b)+' <span class="badge">'+esc(b.kind||'boundary')+'</span>'+(b._hidden?' <span class="via">'+b._hidden+' inside</span>':'')+(b.criticality?' '+critPill(b.criticality):'')+'</li>').join('')}</ul>`;
-    }
+    h+=coarse?`Tap a boundary to open it, double-tap to focus on it. Drag to pan, pinch to zoom.</div>`:`Click a boundary to open it, double-click to focus on it. Drag to pan, wheel to zoom, Esc to step back. The outline below lists the same nodes for the keyboard.</div>`;
+  }
+  const midH=h;h='';
+  if(!sel){
     h+=historyHtml();
     if(data.classified===0)h+=`<div class="via" style="margin-top:6px">Nothing is classified by criticality yet, so ordering by criticality has no effect. Run <span class="mono">gloss criticality suggest</span> for a first pass.</div>`;
     if(findings.length){
@@ -1438,12 +1456,80 @@ function renderPanel(){
     });
   }
   const hs=$('panelBody').querySelector('.hist'),top=hs?hs.scrollTop:0;
-  $('panelBody').innerHTML=h;
+  $('panelTop').innerHTML=midH;
+  if(S.selH!==selH){$('selPane').innerHTML=selH;S.selH=selH;}
+  $('panelRest').innerHTML=h;
+  renderNav();
   const hs2=$('panelBody').querySelector('.hist');
   if(hs2){hs2.scrollTop=top;if(S.histScroll){const r=hs2.querySelector('.hrow.on');if(r){const a=r.offsetTop-hs2.offsetTop,b=a+r.offsetHeight;if(a<hs2.scrollTop||b>hs2.scrollTop+hs2.clientHeight)hs2.scrollTop=a-hs2.clientHeight/3;}}}
   S.histScroll=false;
   sheetLabel();
 }
+/* ---- outline: the map as a keyboard tree (role=tree, roving tabindex) ---- */
+// It lists what the canvas draws, nested as drawn; arrow keys move, Right and
+// Left open and close, Enter or Space selects (the canvas follows), Home/End.
+let navFocus=null,navSel=null; // the tree item that holds the tab stop; the selection it last followed
+function navKids(n){return VN.filter(k=>(n?k._lc===n:!k._lc)).sort((a,b)=>(a.group?1:0)-(b.group?1:0)||(a.type===b.type?0:a.type==='boundary'?-1:1)||critRank(b.criticality)-critRank(a.criticality)||shortLabel(a).localeCompare(shortLabel(b)));}
+function renderNav(){
+  const tree=$('navTree'),had=tree.contains(document.activeElement);
+  const sid=S.sel&&S.sel.id?S.sel.id:null;
+  // A selection made on the canvas moves the tab stop to it.
+  if(sid!==navSel){navSel=sid;if(sid)navFocus=sid;}
+  if(!navFocus||!byId.has(navFocus)||!byId.get(navFocus)._vis)navFocus=sid&&byId.get(sid)._vis?sid:null;
+  let first=null;
+  const item=(n,lvl)=>{
+    if(!first)first=n.id;
+    const kids=n._open||n.group?navKids(n):[],can=!n.group&&n._kids>0;
+    const kind=n.group?'group':n.type==='boundary'?(n.kind||'boundary'):n.type==='artifact'?'artifact':(n.kind||'concept');
+    const lab=n.group?n.label:shortLabel(n);
+    return `<li role="treeitem" data-id="${esc(n.id)}" aria-level="${lvl}" aria-selected="${n.id===sid}"${can||n.group?` aria-expanded="${n.group||n._open}"`:''} aria-label="${esc((n.group?n.label:(n.label||n.id))+', '+kind+(n.criticality?', '+n.criticality+' criticality':'')+(can&&!n._open?', '+n._hidden+' inside':''))}" tabindex="-1"><span class="ti" title="${esc(n.label||n.id)}"><span class="tw" aria-hidden="true">${can?(n._open?'▾':'▸'):''}</span>${esc(lab)} <span class="k">${esc(kind)}${n.criticality?' · '+esc(n.criticality):''}${can&&!n._open&&n._hidden?' · '+n._hidden+' inside':''}</span></span>${kids.length?`<ul role="group">${kids.map(k=>item(k,lvl+1)).join('')}</ul>`:''}</li>`;
+  };
+  tree.innerHTML=navKids(null).map(n=>item(n,1)).join('');
+  $('navBox').querySelector('.n').textContent='· '+VN.filter(n=>!n.group).length+' nodes';
+  const stop=tree.querySelector(`li[data-id="${CSS.escape(navFocus||first||'')}"]`)||tree.querySelector('li');
+  if(stop){stop.tabIndex=0;if(had)stop.focus({preventScroll:true});
+    const t=stop.offsetTop-tree.offsetTop,r=stop.querySelector(".ti").offsetHeight;if(t<tree.scrollTop||t+r>tree.scrollTop+tree.clientHeight)tree.scrollTop=t-tree.clientHeight/3;}
+}
+const navItems=()=>[...$('navTree').querySelectorAll('li[role=treeitem]')];
+function navMove(li){if(!li)return;navItems().forEach(x=>x.tabIndex=-1);li.tabIndex=0;navFocus=li.dataset.id;li.focus();}
+// navSelect: select a node from the outline and centre the canvas on it.
+function navSelect(n){
+  S.sel=n;navFocus=n.id;
+  const p=centre(n);if(p){S.cam.x=cv.clientWidth/2-p.x*S.cam.k;S.cam.y=viewH()/2-p.y*S.cam.k;S.camMoved=true;}
+  renderPanel();draw();
+}
+$('navTree').addEventListener('keydown',ev=>{
+  const li=ev.target.closest('li[role=treeitem]');if(!li)return;
+  const n=byId.get(li.dataset.id);if(!n)return;
+  const all=navItems(),i=all.indexOf(li);
+  let done=true;
+  switch(ev.key){
+    case 'ArrowDown':navMove(all[i+1]);break;
+    case 'ArrowUp':navMove(all[i-1]);break;
+    case 'Home':navMove(all[0]);break;
+    case 'End':navMove(all[all.length-1]);break;
+    case 'ArrowRight':
+      if(!n.group&&n._kids&&!n._open){navFocus=n.id;S.expanded.add(n.id);rebuild(false);renderPanel();draw();}
+      else{const c=li.querySelector('li[role=treeitem]');if(c)navMove(c);}
+      break;
+    case 'ArrowLeft':
+      if(!n.group&&n._open){navFocus=n.id;collapse(n);rebuild(false);renderPanel();draw();}
+      else{const up=li.parentElement.closest('li[role=treeitem]');if(up)navMove(up);}
+      break;
+    case 'Enter':case ' ':navSelect(n);break;
+    default:done=false;
+  }
+  if(done){ev.preventDefault();ev.stopPropagation();}
+});
+$('navTree').addEventListener('click',ev=>{
+  const li=ev.target.closest('li[role=treeitem]');if(!li)return;
+  const n=byId.get(li.dataset.id);if(!n)return;
+  navItems().forEach(x=>x.tabIndex=-1);li.tabIndex=0;
+  if(ev.target.closest('.tw')&&!n.group&&n._kids){navFocus=n.id;toggle(n);return;}
+  navSelect(n);
+});
+// Links in the panel are keyboard targets too: Enter follows them.
+panel.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.matches('a.n')){ev.preventDefault();ev.target.click();}});
 // The bottom sheet's handle (phones): what is selected, and whether it is open.
 function sheetLabel(){
   const s=S.sel,open=!panel.classList.contains('min');
@@ -1656,7 +1742,7 @@ const sel=$('viewSel');
 views.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=(v&&v.name)||('view '+(i+1));sel.appendChild(o);});
 sel.onchange=()=>loadView(+sel.value);
 $('search').oninput=ev=>{hideTip();S.q=ev.target.value.trim().toLowerCase();draw();};
-$('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');};
+$('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');$('filtersBtn').setAttribute('aria-expanded',String($('filters').classList.contains('on')));};
 $('ovSel').onchange=ev=>{const v=ev.target.value;S.histScroll=true;
   if(v==='')setOverlay(null);else if(v==='diff')setOverlay({k:'diff'});else if(v[0]==='s'){S.ovAnchor=+v.slice(1);setOverlay({k:'step',i:+v.slice(1)});}};
 $('ovOlder').onclick=()=>{S.histScroll=true;stepOverlay(1);};
@@ -1668,7 +1754,7 @@ $('fit').onclick=fit;
 $('relayout').onclick=()=>{S.pinned.clear();rebuild(true);fit();};
 const themes=['auto','light','dark'];
 function applyTheme(t){S.theme=t;if(t==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t);
-  $('themeBtn').textContent='Theme: '+t;readTheme();draw();try{localStorage.setItem('gloss-theme',t);}catch(e){}}
+  $('themeBtn').textContent='Theme: '+t;$('themeBtn').setAttribute('aria-label','Theme: '+t+' (cycle auto, light, dark)');readTheme();draw();try{localStorage.setItem('gloss-theme',t);}catch(e){}}
 $('themeBtn').onclick=()=>applyTheme(themes[(themes.indexOf(S.theme)+1)%3]);
 let saved='auto';try{saved=localStorage.getItem('gloss-theme')||'auto';}catch(e){}
 if(!themes.includes(saved))saved='auto';
