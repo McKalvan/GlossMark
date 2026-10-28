@@ -13,7 +13,7 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 | `internal/review` | `gloss review` (experimental, [ADR 0033](adr/0033-review-sessions.md)): the review queue, decisions by gate authority, agent recommendations and an undo journal |
 | `internal/tui` | The interactive terminal for `gloss review`, hand-rolled on `golang.org/x/term`; `gloss review --format frame` renders one frame of it without a terminal |
 | `internal/browse` | The read-only graph browser: `gloss review node`, the terminal's Browse tab, `browse_node` |
-| `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
+| `internal/check`, `internal/surface`, `internal/rollup`, `internal/gate` | Lint rules, the surface rules (which surface a file is and the relation it takes, [ADR 0041](adr/0041-surface-rules.md)), rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
 | `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](adr/0025-deriving-the-ontology.md), experimental) |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` and `derive-ontology` (deriving the core and implementation tiers from an existing application, [ADR 0025](adr/0025-deriving-the-ontology.md)), installed by `gloss hook install --skill` (`--cursor` adds a Cursor rule that points at them), before `gloss init` too |
