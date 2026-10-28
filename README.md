@@ -91,7 +91,7 @@ cd ..
 ../../gloss landscape circulation holds-worker   # cross-repo context map; the HoldReady gap closes
 ```
 
-To adopt it on your own repository, `gloss init` scaffolds the files and the [Quickstart](docs/QUICKSTART.md) walks the first ontology; the `adopt-glossmark` and `derive-ontology` skills (`gloss hook install --skill`) let an agent do the first pass, `review-glossmark` lets it work the review queue after that, and `curate-increment` plans a feature in the ontology before it is built. The [showcase](https://github.com/McKalvan/glossmark-examples) has five realistic adoptions to copy from: a monorepo, three repositories sharing one core, an event-driven system, an agent-heavy repository and a brownfield legacy stack.
+To adopt it on your own repository, `gloss init` scaffolds the files and the [Quickstart](docs/QUICKSTART.md) walks the first ontology; it is as easy to leave as to try: markers are comments, `gloss strip` removes every one of them with the tool's own files after a final export, and [docs/LEAVING.md](docs/LEAVING.md) says what stays and what goes; the `adopt-glossmark` and `derive-ontology` skills (`gloss hook install --skill`) let an agent do the first pass, `review-glossmark` lets it work the review queue after that, and `curate-increment` plans a feature in the ontology before it is built. The [showcase](https://github.com/McKalvan/glossmark-examples) has five realistic adoptions to copy from: a monorepo, three repositories sharing one core, an event-driven system, an agent-heavy repository and a brownfield legacy stack.
 
 ## For agents
 
@@ -108,5 +108,5 @@ Not every subsystem carries the same risk. `criticality: low | medium | high | c
 ## More
 
 - [docs/REPOSITORY.md](docs/REPOSITORY.md): what is in this repository, GlossMark applied to itself (this tree is its own first user and CI holds it to the strictest gate), versions and roadmap status.
-- Docs: [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Glossary](docs/GLOSSARY.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
+- Docs: [Quickstart](docs/QUICKSTART.md) · [Trying it safely, leaving](docs/LEAVING.md) · [When to mark](docs/MARKING.md) · [Glossary](docs/GLOSSARY.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
 - [glossmark-examples](https://github.com/McKalvan/glossmark-examples): the showcase behind the screenshots, and a lab that turns rough edges into issues.
