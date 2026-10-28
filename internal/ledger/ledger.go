@@ -190,10 +190,14 @@ func Open(path string) (*Ledger, error) {
 	return l, sc.Err()
 }
 
-// Save writes the ledger sorted by marker id, if anything changed.
+// Save writes the ledger sorted by marker id, if anything changed or the
+// file does not exist yet: a repository with no markers still gets the
+// header-only ledger gloss init promises (issue #230).
 func (l *Ledger) Save() error {
 	if !l.dirty {
-		return nil
+		if _, err := os.Stat(l.Path); err == nil {
+			return nil
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(l.Path), 0o755); err != nil {
 		return err
