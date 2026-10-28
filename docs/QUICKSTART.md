@@ -123,7 +123,7 @@ Agents write `@gloss?` for links they propose. The one proposal workflow, which 
 On an existing codebase, let the tool draft the first pass and review it rather than writing every marker by hand:
 
 ```sh
-gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public surfaces, from names, docstrings, tables touched and test calls
+gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public surfaces, from names, docstrings, tables touched, test calls and specs (AsyncAPI, OpenAPI, routes, Kafka topics, ORM tables; --source to pick)
 git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
 gloss hook install --skill           # installs the adopt-glossmark, derive-ontology, review-glossmark and curate-increment skills: the whole adoption, deriving the ontology from what exists, working the review queue after, and planning each feature in the ontology before it is built, as agent workflows (works before gloss init)
 gloss hook install --skill --cursor  # the same for Cursor: an always-applied rule in .cursor/rules/glossmark.mdc that points at the skills
