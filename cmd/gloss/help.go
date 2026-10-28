@@ -47,8 +47,9 @@ var help = map[string]helpEntry{
 			"gloss init --import ../platform  # import a sibling's core, not own one",
 		},
 		docs: "docs/QUICKSTART.md#0-scaffold"},
-	"doctor": {line: "check the setup end to end; one line per check with its fix, and the adoption level with what the next one adds",
+	"doctor": {line: "check the setup end to end; one line per check with its fix",
 		usage:    []string{"doctor [--format text|json]"},
+		more:     "The last line is the adoption level in force (adoption: in glossmark.yaml), the rung the tree has reached and what the next one adds (docs/QUICKSTART.md).",
 		examples: []string{"gloss doctor", "gloss doctor --format json"},
 		docs:     "docs/QUICKSTART.md#6-run-the-tooling"},
 
