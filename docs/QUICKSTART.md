@@ -95,7 +95,7 @@ default-namespace: circ
 
 ## 5. Mark the code
 
-Five relations cover almost every marker; learn these and ignore the rest until you need them ([MARKING.md](MARKING.md) says when to mark, [ADVANCED.md](ADVANCED.md) has everything else):
+Five relations cover almost every marker; learn these and ignore the rest until you need them ([MARKING.md](MARKING.md) says when to mark, [ADVANCED.md](ADVANCED.md) has everything else). `gloss init` wrote `relations: starter` into `glossmark.yaml`, so `gloss check` hints when a marker uses one of the rest; `relations: full` unlocks them ([ADVANCED.md](ADVANCED.md#relation-profiles)):
 
 ```python
 # @gloss implements .CheckoutHandler         # the code that does the work (handler, pipeline, module)
