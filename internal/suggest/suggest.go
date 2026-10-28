@@ -44,6 +44,10 @@ type Proposal struct {
 	Scope string `json:"scope,omitempty"`
 	// Basis is the calibration bucket conf was read from: evidence/role.
 	Basis string `json:"basis"`
+	// Source is where the evidence came from: code (names, docstrings,
+	// tables touched, test calls), asyncapi, openapi, route, topic or
+	// schema (#260). gloss suggest --eval reports precision per source.
+	Source string `json:"source"`
 	// Context is evidence that informs the review without choosing the
 	// target, such as the tables the declaration touches.
 	Context string `json:"context,omitempty"`
@@ -69,6 +73,9 @@ type Options struct {
 	// rejected (same marker id, or same anchor fingerprint, relation and
 	// target) is not proposed again.
 	Ledger map[string]*model.LedgerEntry
+	// Sources keeps only the proposals of these sources (gloss suggest
+	// --source); empty keeps every source.
+	Sources []string
 }
 
 // DefaultMinConf drops the evidence that is wrong more often than right
@@ -88,6 +95,9 @@ const Coverage = `relations: implements (SQL functions and procedures too), repr
 roles, subnet groups, policies and other resources that only support one), documents (Markdown headings),
 deploys (Kubernetes workloads), presents and hosts (page and layout components), subscribes, consumes and publishes
 (listener annotations and producer or consumer calls); one scope=file or scope=block marker stands for a run.
+specs: an AsyncAPI contract (documents per channel; publishes and subscribes on the code that names a channel or a
+message), an OpenAPI spec (documents per operation, represents per schema, implements on the handler of a covered
+route), Strimzi KafkaTopic resources (provisions), ORM table mappings (represents); --source picks sources.
 targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts.
 files: .py .ts .tsx .js .jsx .mjs .go .rs .java .kt .rb .cs .php .swift .scala .tf .sql .proto .prisma .feature .sh .md .yaml
 never proposed: configures, publishes-value, instructs, may-modify, produces; sidecars, JSON, Dockerfiles, CI workflows`
@@ -96,6 +106,7 @@ type runner struct {
 	ws      *load.Workspace
 	g       *graph.Graph
 	m       *matcher
+	specs   *specs
 	allowed map[*model.Manifest]rollup.Allowed
 	// linked maps a symbol's last part to the targets implements links
 	// give it, for tests that call it; tables maps a table name to the
@@ -125,6 +136,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		stop = ws.Config.Suggest.Stopwords
 	}
 	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
+	r.specs = indexSpecs(ws, g, r.m)
 	type link struct{ fp, rel, target string }
 	rejected := map[link]bool{}
 	for _, e := range opt.Ledger {
@@ -184,34 +196,58 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		var ps []Proposal
 		var decls []marker.Decl
 		ext := strings.ToLower(filepath.Ext(f.rel))
-		if ext == ".yaml" || ext == ".yml" {
-			decls = workloads(f.lines)
-		} else {
+		switch {
+		case ext == ".yaml" || ext == ".yml":
+			if sf := r.specs.files[f.rel]; sf != nil {
+				decls = sf.decls
+			} else {
+				decls = workloads(f.lines)
+			}
+		default:
 			decls = marker.Declarations(f.rel, f.lines, f.style)
 		}
 		for _, d := range decls {
 			if marked[fmt.Sprintf("%s#%d", f.rel, d.Line)] {
 				continue
 			}
-			role := roleWorkload
-			if d.Kind != "workload" {
+			var role string
+			switch d.Kind {
+			case "workload":
+				role = roleWorkload
+			case "topic":
+				role = roleResource
+			case "channel":
+				role = roleChannel
+			case "operation":
+				role = roleOperation
+			case "schema":
+				role = roleSchema
+			default:
 				var ok bool
 				if role, ok = surface(d, f.lines, f.rel, f.test); !ok {
 					continue
 				}
 			}
-			p, ok := r.propose(f, d, role)
-			if !ok || p.Conf < opt.MinConf {
-				continue
+			var found []Proposal
+			if p, ok := r.propose(f, d, role); ok {
+				found = append(found, p)
 			}
-			if le := opt.Ledger[extract.MarkerID(f.rel, p.Relation, []string{p.Target}, d.Symbol, "symbol")]; (le != nil && le.Status == model.StatusRejected) ||
-				rejected[link{d.Fingerprint, p.Relation, p.Target}] {
-				skipped++
-				continue
+			if role == roleFunc || role == roleMember {
+				found = append(found, r.proposeFlows(f, d, role)...)
 			}
-			ps = append(ps, p)
+			for _, p := range found {
+				if p.Conf < opt.MinConf {
+					continue
+				}
+				if le := opt.Ledger[extract.MarkerID(f.rel, p.Relation, []string{p.Target}, d.Symbol, "symbol")]; (le != nil && le.Status == model.StatusRejected) ||
+					rejected[link{d.Fingerprint, p.Relation, p.Target}] {
+					skipped++
+					continue
+				}
+				ps = append(ps, p)
+			}
 		}
-		ps = collapse(f, dedupeMembers(ps, decls))
+		ps = collapse(f, dedupeMembers(r.plumbing(dedupeLinks(ps)), decls))
 		parentAt := map[int]string{}
 		for _, d := range decls {
 			parentAt[d.Insert] = d.Parent
@@ -231,10 +267,75 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		}
 		out = append(out, ps...)
 	}
+	if len(opt.Sources) > 0 {
+		var kept []Proposal
+		for _, p := range out {
+			if contains(opt.Sources, p.Source) {
+				kept = append(kept, p)
+			}
+		}
+		out = kept
+	}
 	if out == nil {
 		out = []Proposal{}
 	}
 	return out, skipped, nil
+}
+
+// plumbing drops the flow a declaration gets for only naming a channel
+// when another declaration of the file tells that channel's messages
+// apart in the same direction: subscribe([filed_topic, ...]) opens the
+// subscription, handle(record_name) is where the events are handled, and
+// the marker belongs there.
+func (r *runner) plumbing(ps []Proposal) []Proposal {
+	if r.specs.empty() {
+		return ps
+	}
+	type key struct {
+		ch  *channel
+		rel string
+	}
+	handled := map[key]bool{}
+	level := func(p Proposal) (key, bool) {
+		if p.Source != SourceAsyncAPI || !strings.HasPrefix(p.Matched, evAsyncAPI+":") {
+			return key{}, false
+		}
+		term, _, _ := strings.Cut(strings.TrimPrefix(p.Matched, evAsyncAPI+":"), "<")
+		if ch := r.specs.channels[term]; ch != nil {
+			return key{ch, p.Relation}, false
+		}
+		return key{r.specs.channelOf(term), p.Relation}, true
+	}
+	for _, p := range ps {
+		if k, msg := level(p); msg && k.ch != nil {
+			handled[k] = true
+		}
+	}
+	var out []Proposal
+	for _, p := range ps {
+		if k, msg := level(p); !msg && handled[k] {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// dedupeLinks drops a proposal that repeats another's line, relation and
+// target: the flow a spec infers and the topic the body names are one
+// link. The stronger-sourced one, read first, stays.
+func dedupeLinks(ps []Proposal) []Proposal {
+	seen := map[string]bool{}
+	var out []Proposal
+	for _, p := range ps {
+		k := fmt.Sprintf("%d\x00%s\x00%s", p.Line, p.Relation, p.Target)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 // callableConf is the conf a link suggest proposes itself must reach
@@ -306,34 +407,88 @@ func (r *runner) propose(f *file, d marker.Decl, role string) (Proposal, bool) {
 			sym = d.Symbol[strings.Index(d.Symbol, ":")+1:]
 		}
 		sym = testSubject(sym)
+	case roleChannel, roleOperation, roleSchema:
+		sym = d.Symbol
+	}
+	if d.Kind == "topic" {
+		// A Kafka topic resource is named after its topic: claims.filed.v1.
+		sym = d.Symbol[strings.Index(d.Symbol, "/")+1:]
 	}
 	body := bodyOf(f.lines, d)
 	consumer, producer := flow(d, body)
 	var hits []hit
-	if role != roleHeading && role != roleWorkload {
-		hits = append(hits, r.m.namedInDoc(d.Symbol, d.Parent)...)
+	source := SourceCode
+	switch {
+	case d.Kind == "topic":
+		source = SourceTopic
+		hits = r.topicResourceHits(sym)
+	case role == roleChannel:
+		source = SourceAsyncAPI
+		if ch := r.specs.channels[d.Symbol]; ch != nil && ch.target != nil {
+			hits = append(hits, hit{c: ch.target, kind: evAsyncAPI, terms: strings.Join(ch.messages, ",")})
+		}
+	case role == roleOperation, role == roleSchema:
+		source = SourceOpenAPI
+		hits = append(hits, r.m.nameHits(sym)...)
+		hits = append(hits, r.m.docHits(d.Doc)...)
+		if role == roleOperation {
+			for _, o := range r.specs.ops {
+				if o.id == sym || o.method+" "+o.path == sym {
+					hits = append(hits, r.m.nameHits(pathWords(o.path))...)
+				}
+			}
+		}
+		hits = r.specKinds(role, hits)
+	default:
+		if role == roleTable {
+			source = SourceSchema
+		}
+		if role != roleHeading && role != roleWorkload {
+			hits = append(hits, r.m.namedInDoc(d.Symbol, d.Parent)...)
+		}
+		hits = append(hits, r.m.nameHits(sym)...)
 	}
-	hits = append(hits, r.m.nameHits(sym)...)
 	if role == rolePage || role == roleShell {
 		// A component named Page takes its meaning from its route.
 		hits = append(hits, r.m.nameHits(filepath.Base(filepath.Dir(f.rel)))...)
 	}
-	hits = append(hits, r.m.docHits(d.Doc)...)
 	context := ""
 	switch {
+	case role == roleChannel, role == roleOperation, role == roleSchema, d.Kind == "topic":
 	case role == roleTest:
+		hits = append(hits, r.m.docHits(d.Doc)...)
 		hits = append(hits, r.callHits(body, lastPart(d.Symbol), strings.Join(f.lines, "\n"))...)
-	case role != roleHeading && role != roleWorkload && role != roleTable:
-		dh, ctx := r.dataHits(body)
-		hits = append(hits, dh...)
-		context = ctx
+	default:
+		hits = append(hits, r.m.docHits(d.Doc)...)
+		if role != roleHeading && role != roleWorkload && role != roleTable {
+			dh, ctx := r.dataHits(body)
+			hits = append(hits, dh...)
+			context = ctx
+		}
+		if role == roleType {
+			hits = append(hits, r.schemaHits(body)...)
+		}
+		if role == roleFunc || role == roleMember {
+			hits = append(hits, r.routeHits(d, body)...)
+		}
 	}
-	if consumer || producer {
+	// A listener's or producer's topic literal is weaker evidence than the
+	// contract that names the topic's events: when the contract covers the
+	// declaration (proposeFlows), the literal adds nothing.
+	if (consumer || producer) && len(r.specs.flows(f, d, body)) == 0 {
 		hits = append(hits, r.topicHits(d, body)...)
 	}
 	h, rel, tie, ok := r.choose(f, d, role, hits, consumer, producer)
 	if !ok {
 		return Proposal{}, false
+	}
+	switch h.kind {
+	case evSchema:
+		source = SourceSchema
+	case evOpenAPI:
+		source = SourceOpenAPI
+	case evRoute:
+		source = SourceRoute
 	}
 	target := h.c.curie
 	if f.m != nil && f.m.DefaultNamespace != "" && strings.HasPrefix(target, f.m.DefaultNamespace+":") {
@@ -343,12 +498,189 @@ func (r *runner) propose(f *file, d marker.Decl, role string) (Proposal, bool) {
 	if tie {
 		basis += "/tie"
 	}
-	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: target, Matched: h.matched(), Basis: basis, Context: context, Conf: confFor(basis)}
+	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: target, Matched: h.matched(), Basis: basis, Source: source, Context: context, Conf: confFor(basis)}
+	if role == roleChannel || role == roleOperation || role == roleSchema {
+		// A spec item is a YAML block, not a declaration the anchorer knows.
+		p.Scope = "block"
+	}
 	if h.c.n.Deprecated {
 		p.Deprecated, p.Note = true, deprecatedNote(h.c.n)
 	}
 	p.Marker = markerLine(f.style, d.Indent, p)
 	return p, true
+}
+
+// proposeFlows proposes the publishes and subscribes links the AsyncAPI
+// contract implies for a function that names one of its channels: one per
+// message the code names on the channel, else one for the channel's own
+// event (#260). A flow is a link of its own beside whatever the
+// declaration implements, so each is a proposal of its own.
+func (r *runner) proposeFlows(f *file, d marker.Decl, role string) []Proposal {
+	body := bodyOf(f.lines, d)
+	var out []Proposal
+	for _, ref := range r.specs.flows(f, d, body) {
+		var targets []*concept
+		var names []string
+		for name := range ref.messages {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			targets = append(targets, ref.messages[name])
+		}
+		if len(targets) == 0 && ref.ch.target != nil {
+			targets, names = []*concept{ref.ch.target}, []string{ref.ch.address}
+		}
+		for i, c := range targets {
+			if !r.usable(f, c, ref.dir) {
+				continue
+			}
+			target := c.curie
+			if f.m != nil && f.m.DefaultNamespace != "" && strings.HasPrefix(target, f.m.DefaultNamespace+":") {
+				target = "." + strings.TrimPrefix(target, f.m.DefaultNamespace+":")
+			}
+			basis := evAsyncAPI + "/" + role
+			terms := names[i]
+			if via := ref.via[names[i]]; via != "" && via != terms {
+				terms += "<" + via
+			}
+			p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: ref.dir, Target: target, Matched: evAsyncAPI + ":" + terms, Basis: basis, Source: SourceAsyncAPI, Conf: confFor(basis)}
+			if c.n.Deprecated {
+				p.Deprecated, p.Note = true, deprecatedNote(c.n)
+			}
+			p.Marker = markerLine(f.style, d.Indent, p)
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// specKinds keeps the hits a spec item can document or represent: an
+// operation a process or a capability (or the mechanism that realizes
+// one), a schema an entity, an event or a measure.
+func (r *runner) specKinds(role string, hits []hit) []hit {
+	var out []hit
+	for _, h := range hits {
+		switch role {
+		case roleOperation:
+			if r.specs.processLike(h.c) {
+				out = append(out, h)
+			}
+		case roleSchema:
+			switch h.c.n.Kind {
+			case "entity", "event", "measure":
+				out = append(out, h)
+			}
+		}
+	}
+	return out
+}
+
+// topicWords are the words a topic resource's name shares with any topic:
+// they never tell one from another.
+var topicWords = map[string]bool{"topic": true, "queue": true, "stream": true, "channel": true, "event": true, "kafka": true, "subject": true}
+
+// topicResourceHits finds the resource concepts a Kafka topic's name
+// stands up: every distinguishing word of the concept's name is in the
+// topic's (claims.filed.v1: FiledTopic). With several, the ones that cover
+// the most of the topic's name are kept.
+func (r *runner) topicResourceHits(name string) []hit {
+	toks := mcp.Tokens(stripVersion(name))
+	if len(toks) == 0 {
+		return nil
+	}
+	have := map[string]bool{}
+	for _, t := range toks {
+		have[t] = true
+	}
+	var out []hit
+	best := 0
+	for _, c := range r.m.concepts {
+		if c.n.Kind != "resource" {
+			continue
+		}
+		var own []string
+		for _, t := range c.toks {
+			if !topicWords[t] {
+				own = append(own, t)
+			}
+		}
+		if len(own) == 0 || !r.m.nonStop(own) {
+			continue
+		}
+		all := true
+		for _, t := range own {
+			all = all && have[t]
+		}
+		if !all {
+			continue
+		}
+		if len(own) > best {
+			best, out = len(own), nil
+		}
+		if len(own) == best {
+			out = append(out, hit{c: c, kind: evTopic, terms: name})
+		}
+	}
+	return out
+}
+
+var tableMapping = regexp.MustCompile(`__tablename__\s*=\s*["'](\w+)["']|@Table\s*\(\s*(?:name\s*=\s*)?["'](\w+)["']|\b(?:table_name|tableName|db_table|__table__)\s*[:=]\s*["'](\w+)["']|@@map\s*\(\s*["'](\w+)["']\s*\)`)
+
+// schemaHits finds the entity a type maps to a table of (__tablename__,
+// @Table(name), tableName, db_table): the entity a represents link already
+// binds the table to, else the one the table's name is.
+func (r *runner) schemaHits(body string) []hit {
+	var out []hit
+	for _, m := range tableMapping.FindAllStringSubmatch(body, -1) {
+		name := m[1] + m[2] + m[3] + m[4]
+		if cur, ok := r.tables[strings.ToLower(name)]; ok {
+			if c := r.m.byCurie[cur]; c != nil {
+				out = append(out, hit{c: c, kind: evSchema, terms: name})
+				continue
+			}
+		}
+		bare := name
+		for _, p := range []string{"tbl_", "tb_", "t_"} {
+			if strings.HasPrefix(strings.ToLower(bare), p) && len(bare) > len(p) {
+				bare = bare[len(p):]
+				break
+			}
+		}
+		for _, h := range r.m.nameHits(bare) {
+			if (h.kind == evNameExact || h.kind == evAliasExact) && (h.c.n.Kind == "entity" || h.c.n.Kind == "event") {
+				out = append(out, hit{c: h.c, kind: evSchema, terms: name})
+			}
+		}
+	}
+	return out
+}
+
+// routeHits finds the process a handler's route implements: the one the
+// OpenAPI spec's matching operation documents, else, with no spec, the
+// one the path's own words name.
+func (r *runner) routeHits(d marker.Decl, body string) []hit {
+	rs := routes(d, body)
+	if len(rs) == 0 {
+		return nil
+	}
+	var out []hit
+	for _, rt := range rs {
+		if !r.specs.empty() {
+			if o := r.specs.operationFor(rt); o != nil {
+				if o.target != nil {
+					out = append(out, hit{c: o.target, kind: evOpenAPI, terms: strings.TrimSpace(rt.method + " " + rt.path)})
+				}
+				continue
+			}
+		}
+		for _, h := range r.m.nameHits(pathWords(rt.path)) {
+			if (h.kind == evNameExact || h.kind == evAliasExact || h.kind == evNameContains || h.kind == evNamePartial) && r.specs.processLike(h.c) {
+				out = append(out, hit{c: h.c, kind: evRoute, terms: strings.TrimSpace(rt.method + " " + rt.path)})
+			}
+		}
+	}
+	return out
 }
 
 // deprecatedNote tells the reviewer the target is deprecated and what
@@ -526,6 +858,10 @@ func relationFor(role, declKind, conceptKind string, impl, consumer, producer bo
 		return "presents"
 	case roleShell:
 		return "hosts"
+	case roleChannel, roleOperation:
+		return "documents"
+	case roleSchema:
+		return "represents"
 	}
 	switch {
 	case consumer && conceptKind == "event":
@@ -819,8 +1155,15 @@ func workloads(lines []string) []marker.Decl {
 				name = strings.Trim(strings.TrimSpace(strings.TrimPrefix(t, "name:")), `"'`)
 			}
 		}
+		declKind := "workload"
 		switch kind {
 		case "Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job", "Rollout", "Service", "KnativeService":
+		case "KafkaTopic":
+			// A Strimzi topic stands up the topic it names (provisions).
+			declKind = "topic"
+			if t := topicName(lines[start:end]); t != "" {
+				name = t
+			}
 		default:
 			return
 		}
@@ -834,7 +1177,7 @@ func workloads(lines []string) []marker.Decl {
 		if first >= end {
 			return
 		}
-		out = append(out, marker.Decl{Symbol: kind + "/" + name, Kind: "workload", Line: first + 1, End: end, Insert: first + 1})
+		out = append(out, marker.Decl{Symbol: kind + "/" + name, Kind: declKind, Line: first + 1, End: end, Insert: first + 1})
 	}
 	for k, l := range lines {
 		if strings.TrimSpace(l) == "---" {
@@ -844,6 +1187,17 @@ func workloads(lines []string) []marker.Decl {
 	}
 	flush(len(lines))
 	return out
+}
+
+// topicName is spec.topicName of a KafkaTopic document, when set.
+func topicName(lines []string) string {
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		if strings.HasPrefix(t, "topicName:") && strings.HasPrefix(l, "  ") {
+			return strings.Trim(strings.TrimSpace(strings.TrimPrefix(t, "topicName:")), `"'`)
+		}
+	}
+	return ""
 }
 
 func contains(xs []string, x string) bool {

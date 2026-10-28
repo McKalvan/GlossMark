@@ -160,6 +160,17 @@ type Report struct {
 	Labels   int     // labels in the truth set
 	Recalled int     // labels some correct proposal states
 	ByBasis  map[string]*BandRow
+	// BySource counts per inference source (code, asyncapi, openapi,
+	// route, topic, schema; #260): its proposals, the labels its correct
+	// proposals recall, and what the rule in force auto-accepts of it.
+	BySource map[string]*SourceRow
+}
+
+// SourceRow counts one source's proposals.
+type SourceRow struct {
+	BandRow
+	Recalled int
+	Auto     BandRow
 }
 
 // BandRow counts verdicts in one band.
@@ -202,7 +213,7 @@ func (r *BandRow) add(s Scored) {
 // Evaluate builds the calibration report of a scored batch under the
 // auto-accept rule in force.
 func Evaluate(name string, scored []Scored, labels []Label, rule calib.AutoAccept) Report {
-	rep := Report{Name: name, Rule: rule, Labels: len(labels), ByBasis: map[string]*BandRow{}}
+	rep := Report{Name: name, Rule: rule, Labels: len(labels), ByBasis: map[string]*BandRow{}, BySource: map[string]*SourceRow{}}
 	target := rule.Target
 	if rule.Fixed || target <= 0 {
 		target = calib.DefaultPrecision
@@ -239,8 +250,14 @@ func Evaluate(name string, scored []Scored, labels []Label, rule calib.AutoAccep
 			rep.ByBasis[s.Basis] = b
 		}
 		b.add(s)
+		src := rep.source(s)
+		src.add(s)
+		if s.AutoAccepts(rule.Threshold) {
+			src.Auto.add(s)
+		}
 	}
 	recalled := map[Label]bool{}
+	bySource := map[string]map[Label]bool{}
 	for _, l := range labels {
 		for _, s := range scored {
 			if s.Verdict != Correct || s.Path != l.Path || s.Relation != l.Relation || s.Full != l.Target {
@@ -248,11 +265,31 @@ func Evaluate(name string, scored []Scored, labels []Label, rule calib.AutoAccep
 			}
 			if l.Symbol == "*" || s.Symbol == l.Symbol || s.Scope == "file" {
 				recalled[l] = true
+				if bySource[s.Source] == nil {
+					bySource[s.Source] = map[Label]bool{}
+				}
+				bySource[s.Source][l] = true
 			}
 		}
 	}
 	rep.Recalled = len(recalled)
+	for src, ls := range bySource {
+		rep.BySource[src].Recalled = len(ls)
+	}
 	return rep
+}
+
+func (r *Report) source(s Scored) *SourceRow {
+	name := s.Source
+	if name == "" {
+		name = SourceCode
+	}
+	row := r.BySource[name]
+	if row == nil {
+		row = &SourceRow{}
+		r.BySource[name] = row
+	}
+	return row
 }
 
 // Target is the precision the report's gate checks: the configured
@@ -326,6 +363,24 @@ func (r Report) BandTable() string {
 		row(name, b)
 	}
 	row("all", r.All)
+	return sb.String()
+}
+
+// SourceTable renders precision and recall per inference source (#260):
+// what each kind of spec contributed, how often it was right, how many
+// labels it recalled and how much of it the rule in force auto-accepts.
+func (r Report) SourceTable() string {
+	var sb strings.Builder
+	keys := make([]string, 0, len(r.BySource))
+	for k := range r.BySource {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	fmt.Fprintf(&sb, "  %-10s %5s %7s %5s %5s %9s %9s %9s %12s\n", "source", "n", "correct", "near", "wrong", "precision", "recalled", "auto", "auto prec.")
+	for _, k := range keys {
+		b := r.BySource[k]
+		fmt.Fprintf(&sb, "  %-10s %5d %7d %5d %5d %9s %9s %9d %12s\n", k, b.N, b.Correct, b.Near, b.Wrong, pct(b.Correct, b.N), fmt.Sprintf("%d/%d", b.Recalled, r.Labels), b.Auto.N, pct(b.Auto.Correct, b.Auto.N))
+	}
 	return sb.String()
 }
 

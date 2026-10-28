@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/mckalvan/glossmark/internal/calib"
@@ -17,7 +19,7 @@ import (
 )
 
 func init() {
-	register(command{"suggest", "propose @gloss? markers for unmarked declarations from names, docstrings, tables touched and calls; prints a patch (--write to apply, --format json, --eval labels.tsv, --calibrate, --concepts)", cmdSuggest})
+	register(command{"suggest", "propose @gloss? markers for unmarked declarations from names, docstrings, tables touched, calls and specs (AsyncAPI, OpenAPI, routes, topics, ORM tables); prints a patch (--write to apply, --format json, --source, --eval labels.tsv, --calibrate, --concepts)", cmdSuggest})
 }
 
 // suggestReport is gloss suggest --format json: the auto-accept rule in
@@ -37,6 +39,7 @@ func cmdSuggest(args []string) int {
 	eval := fs.String("eval", "", "score the proposals against a labels file (path, symbol or *, relation, target; tab-separated) and print precision and auto-accept rate per confidence band; with --calibrate, the labels to score against")
 	calibrate := fs.Bool("calibrate", false, "measure suggest on this workspace: strip its markers in a temporary copy, suggest on it, and score against its own links (or suggest.labels, or --eval); --write saves the counts to suggest.calibration")
 	labels := fs.Bool("labels", false, "print the workspace's own links as a labels file for --eval on a marker-stripped copy")
+	source := fs.String("source", "", "keep only the proposals of these inference sources, comma-separated: "+strings.Join(suggest.Sources, ", ")+" (default: every source)")
 	concepts := fs.Bool("concepts", false, "propose new concepts (ns:NEW:Name) from clusters of declarations that share tables and docstring words, for gloss propose --from-new")
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "usage: gloss suggest [flags] [paths]\n\n%s\n\nRepository defaults for --min-conf, --auto-accept-precision and the labels and calibration files live under suggest: in glossmark.yaml; flags override them.\n\nflags:\n", suggest.Coverage)
@@ -58,6 +61,17 @@ func cmdSuggest(args []string) int {
 	if set["auto-accept-precision"] && (*precision <= 0 || *precision > 1) {
 		fmt.Fprintln(os.Stderr, "gloss suggest: --auto-accept-precision must be in (0, 1]")
 		return 2
+	}
+	var sources []string
+	if *source != "" {
+		for _, src := range strings.Split(*source, ",") {
+			src = strings.TrimSpace(src)
+			if !slices.Contains(suggest.Sources, src) {
+				fmt.Fprintf(os.Stderr, "gloss suggest: --source %q is not a source; use one of %s\n", src, strings.Join(suggest.Sources, ", "))
+				return 2
+			}
+			sources = append(sources, src)
+		}
 	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
@@ -95,9 +109,9 @@ func cmdSuggest(args []string) int {
 		return 0
 	}
 	if *calibrate {
-		return suggestCalibrate(p, *eval, *write, *format, rule)
+		return suggestCalibrate(p, *eval, *write, *format, rule, sources)
 	}
-	opt := suggest.Options{MinConf: *minConf, Ledger: p.Ledger.Entries}
+	opt := suggest.Options{MinConf: *minConf, Ledger: p.Ledger.Entries, Sources: sources}
 	if *eval != "" {
 		opt.MinConf = 0.01 // the report shows every band
 	}
@@ -126,6 +140,7 @@ func cmdSuggest(args []string) int {
 			return printJSON(rep)
 		}
 		fmt.Print(rep.String())
+		fmt.Print(rep.SourceTable())
 		fmt.Print(rep.BasisTable())
 	case *write:
 		if err := suggest.Write(p.WS.Root, ps); err != nil {
@@ -173,7 +188,7 @@ func cmdSuggest(args []string) int {
 
 // suggestCalibrate is gloss suggest --calibrate: the calibration harness
 // on this workspace.
-func suggestCalibrate(p *pipeline, evalPath string, write bool, format string, rule calib.AutoAccept) int {
+func suggestCalibrate(p *pipeline, evalPath string, write bool, format string, rule calib.AutoAccept, sources []string) int {
 	cfg := p.WS.Config
 	if evalPath == "" && cfg.Suggest != nil && cfg.Suggest.Labels != "" {
 		evalPath = cfg.SuggestPath(cfg.Suggest.Labels)
@@ -187,7 +202,7 @@ func suggestCalibrate(p *pipeline, evalPath string, write bool, format string, r
 		}
 		name = evalPath
 	}
-	m, err := suggest.SelfEval(p.WS, p.Graph, ls)
+	m, err := suggest.SelfEval(p.WS, p.Graph, ls, sources)
 	if err != nil {
 		return fail(err)
 	}
@@ -209,6 +224,7 @@ func suggestCalibrate(p *pipeline, evalPath string, write bool, format string, r
 		return printJSON(rep)
 	}
 	fmt.Print(rep.String())
+	fmt.Print(rep.SourceTable())
 	fmt.Print(rep.BasisTable())
 	return 0
 }
