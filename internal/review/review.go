@@ -104,6 +104,14 @@ func (it *Item) Action(name string) *Action {
 	return nil
 }
 
+// NeedsDecision reports whether the item asks a reviewer to decide
+// something (a proposed link or concept, a stale link, a drifted value, a
+// rogue ns:NEW: target, a recommendation) rather than report a standing
+// finding, which is fixed in code or waived.
+func (it *Item) NeedsDecision() bool {
+	return it.Kind != KindFinding || it.Finding == rollup.KindRogue
+}
+
 // Decision is one decision or edit, the line format of gloss review apply and
 // the arguments of the review_decide MCP tool.
 type Decision struct {

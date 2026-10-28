@@ -5,7 +5,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/mckalvan/glossmark/internal/review"
 )
@@ -33,8 +32,9 @@ func plain(s string) line               { return line{{s, ""}} }
 func styled(style, s string) line       { return line{{s, style}} }
 func (l line) add(style, s string) line { return append(l, seg{s, style}) }
 
-// render fits a line to w cells (truncating with …, padding with spaces)
-// and applies its styles unless color is off.
+// renderLine fits a line to w cells (truncating with …, padding with
+// spaces, a wide rune counting two) and applies its styles unless color
+// is off.
 func (a *App) renderLine(l line, w int, base string) string {
 	var b strings.Builder
 	left := w
@@ -42,17 +42,13 @@ func (a *App) renderLine(l line, w int, base string) string {
 	if color && base != "" {
 		b.WriteString(base)
 	}
-	for i, s := range l {
+	for _, s := range l {
 		t := strings.ReplaceAll(s.text, "\t", "    ")
-		n := utf8.RuneCountInString(t)
-		if n > left {
-			r := []rune(t)
-			if left > 0 {
-				t = string(r[:left-1]) + "…"
-			} else {
-				t = ""
-			}
-			n = left
+		n := strWidth(t)
+		cut := n > left
+		if cut {
+			t = truncRight(t, left)
+			n = strWidth(t)
 		}
 		if color && s.style != "" {
 			b.WriteString(s.style)
@@ -62,7 +58,7 @@ func (a *App) renderLine(l line, w int, base string) string {
 			b.WriteString(stReset + base)
 		}
 		left -= n
-		if left == 0 && i < len(l)-1 {
+		if cut || left == 0 {
 			break
 		}
 	}
@@ -96,30 +92,60 @@ func (a *App) Render(w, h int) string {
 	return strings.Join(rows, "\r\n")
 }
 
+// header counts the queue by group: the decisions by kind, the findings
+// in one number, and how many of the opening decisions are decided.
 func (a *App) header() line {
 	counts := map[string]int{}
-	for _, it := range a.items {
-		counts[it.Kind]++
+	var order []string
+	decisions, findings := 0, 0
+	for i := range a.items {
+		it := &a.items[i]
+		if !it.NeedsDecision() {
+			findings++
+			continue
+		}
+		decisions++
+		k := tag(*it)
+		if counts[k] == 0 {
+			order = append(order, k)
+		}
+		counts[k]++
 	}
 	l := plain(" ").add(stBold, "gloss review").add("", " │ "+a.opt.Actor+" │ ")
-	var parts []string
-	for _, k := range review.Kinds {
-		if n := counts[k]; n > 0 {
-			s := shortKind(k)
-			if n > 1 && k == review.KindFinding {
-				s += "s"
-			}
-			parts = append(parts, fmt.Sprintf("%d %s", n, s))
+	// Progress first: on a narrow terminal the breakdown is what gets cut.
+	if done, total, arrived := a.progress(); total > 0 || arrived > 0 {
+		p := fmt.Sprintf("%d of %d decided", done, total)
+		if arrived > 0 {
+			p += fmt.Sprintf(" · %d new", arrived)
 		}
+		l = l.add(stBold, p).add("", " │ ")
+	}
+	var parts []string
+	if decisions > 0 {
+		var ks []string
+		for _, k := range order {
+			ks = append(ks, fmt.Sprintf("%d %s", counts[k], k))
+		}
+		parts = append(parts, fmt.Sprintf("%d %s: %s", decisions, plural(decisions, "decision"), strings.Join(ks, " · ")))
+	}
+	if findings > 0 {
+		parts = append(parts, fmt.Sprintf("%d %s", findings, plural(findings, "finding")))
 	}
 	if len(parts) == 0 {
 		parts = []string{"nothing waits on review"}
 	}
-	l = l.add("", strings.Join(parts, " · "))
+	l = l.add("", strings.Join(parts, " │ "))
 	if n := a.eng.UndoDepth(); n > 0 {
 		l = l.add("", fmt.Sprintf(" │ %d to undo", n))
 	}
 	return l
+}
+
+func plural(n int, s string) string {
+	if n == 1 {
+		return s
+	}
+	return s + "s"
 }
 
 func (a *App) filterLine() line {
@@ -145,7 +171,7 @@ func (a *App) filterLine() line {
 func (a *App) body(w, h int) []string {
 	var rows []string
 	if w >= 110 {
-		lw := w * 2 / 5
+		lw := w / 2
 		dw := w - lw - 1
 		list := a.listRows(lw, h)
 		det := a.detailRows(dw, h)
@@ -167,19 +193,73 @@ func (a *App) body(w, h int) []string {
 	return append(rows, a.detailRows(w, h-lh-1)...)
 }
 
-func (a *App) listRows(w, h int) []string {
-	if a.cur < a.top {
-		a.top = a.cur
+// listRow is a row of the list: an item (an index into visible) or the
+// header of a group.
+type listRow struct {
+	vi     int // -1 for a header
+	header line
+}
+
+// listLayout puts a header above each group of visible items: Decisions,
+// then Findings.
+func (a *App) listLayout() []listRow {
+	var rows []listRow
+	for vi, i := range a.visible {
+		dec := a.items[i].NeedsDecision()
+		if vi == 0 || dec != a.items[a.visible[vi-1]].NeedsDecision() {
+			n := 0
+			for _, j := range a.visible[vi:] {
+				if a.items[j].NeedsDecision() == dec {
+					n++
+				}
+			}
+			h := styled(stBold, " Findings").add(stDim, fmt.Sprintf(" · %d: fix in code, or w waive", n))
+			if dec {
+				h = styled(stBold, " Decisions").add(stDim, fmt.Sprintf(" · %d waiting on a reviewer", n))
+			}
+			rows = append(rows, listRow{vi: -1, header: h})
+		}
+		rows = append(rows, listRow{vi: vi})
 	}
-	if a.cur >= a.top+h {
-		a.top = a.cur - h + 1
+	return rows
+}
+
+func (a *App) listRows(w, h int) []string {
+	layout := a.listLayout()
+	at := 0
+	for r, lr := range layout {
+		if lr.vi == a.cur {
+			at = r
+		}
+	}
+	if at < a.top {
+		a.top = at
+		// The first item of a group brings its header into view.
+		if at > 0 && layout[at-1].vi < 0 {
+			a.top = at - 1
+		}
+	}
+	if at >= a.top+h {
+		a.top = at - h + 1
+	}
+	if a.top > max(0, len(layout)-h) {
+		a.top = max(0, len(layout)-h)
+	}
+	gw := 4
+	for _, i := range a.visible {
+		gw = max(gw, strWidth(gateLabel(&a.items[i])))
 	}
 	var rows []string
 	if len(a.visible) == 0 {
 		rows = append(rows, a.renderLine(styled(stDim, " nothing to review here"), w, ""))
 	}
-	for vi := a.top; vi < len(a.visible) && len(rows) < h; vi++ {
-		it := a.items[a.visible[vi]]
+	for r := a.top; r < len(layout) && len(rows) < h; r++ {
+		if layout[r].vi < 0 {
+			rows = append(rows, a.renderLine(layout[r].header, w, ""))
+			continue
+		}
+		vi := layout[r].vi
+		it := &a.items[a.visible[vi]]
 		mark, base := "  ", ""
 		if vi == a.cur {
 			mark, base = "▸ ", stReverse
@@ -188,8 +268,14 @@ func (a *App) listRows(w, h int) []string {
 		if it.Recommendation != nil {
 			rec = "★"
 		}
-		l := plain(mark).add(gateStyle(it.Gate), fmt.Sprintf("%-4s", it.Gate)).add("", " "+rec+" ").add(stCyan, fmt.Sprintf("%-9s", tag(it))).add("", " "+listText(it))
-		rows = append(rows, a.renderLine(l, w, base))
+		l := append(plain(mark), gateSegs(it, gw)...)
+		l = l.add("", " "+rec+" ").add(stCyan, fmt.Sprintf("%-9s", tag(*it))).add("", " ")
+		used := 0
+		for _, sg := range l {
+			used += strWidth(sg.text)
+		}
+		head, where := listText(*it)
+		rows = append(rows, a.renderLine(l.add("", fitPair(head, where, w-used)), w, base))
 	}
 	for len(rows) < h {
 		rows = append(rows, strings.Repeat(" ", w))
@@ -302,10 +388,30 @@ func (a *App) footer() line {
 		}
 		return styled(st, " "+a.status)
 	}
+	return styled(stDim, " "+strings.Join(a.footerKeys(), "  "))
+}
+
+// footerKeys are the keys that do something now: the selected item's
+// actions (those gloss review --format json lists), the keys that read
+// it, then the global ones.
+func (a *App) footerKeys() []string {
+	var ks []string
 	if it := a.Selected(); it != nil {
-		return styled(stDim, " "+hints(it)+"  o open  n link  v viewer  u undo  q quit")
+		if h := hints(it); h != "" {
+			ks = append(ks, h)
+		}
+		if c, _ := a.conceptOf(it); c != "" && !strings.Contains(c, ":NEW:") {
+			ks = append(ks, "e doc")
+		}
+		if it.Path != "" {
+			ks = append(ks, "o open")
+		}
 	}
-	return styled(stDim, " n link  u undo  R reload  q quit")
+	ks = append(ks, "n link", "v viewer")
+	if a.eng.UndoDepth() > 0 {
+		ks = append(ks, "u undo")
+	}
+	return append(ks, "? help", "q quit")
 }
 
 var helpText = []string{
@@ -326,7 +432,13 @@ var helpText = []string{
 	"  R             reload           q, ctrl-c   quit",
 	"",
 	"Gates: AUTO and SOFT actions are open to agents; HARD ones (\"human\") are a person's decision.",
-	"An agent's HARD decision waits here as a recommendation (★). Every decision can be undone.",
+	"The list shows one gate when all an item's actions carry it, else the range (SOFT/HARD);",
+	"the detail shows each action's. An agent's HARD decision waits here as a recommendation (★).",
+	"",
+	"Decisions (proposed links and concepts, stale links, drifted values, rogue ns:NEW: targets,",
+	"recommendations) come first; \"2 of 4 decided\" counts those of the opening queue that have left",
+	"it, and undo puts one back. Findings (orphan, untested, violation, gap, ...) are fixed in code",
+	"or waived; docs/GLOSSARY.md says what each kind means. Every decision can be undone.",
 	"",
 	"Any key closes this help.",
 }
@@ -374,6 +486,51 @@ func gateStyle(g string) string {
 	return ""
 }
 
+var gateRank = map[string]int{"AUTO": 1, "SOFT": 2, "HARD": 3}
+
+// gateRange is the loosest and the strictest gate of an item's actions.
+// Dismissing a recommendation leaves the item as it was, so it counts only
+// on an item it is the only action of.
+func gateRange(it *review.Item) (string, string) {
+	lo, hi := "", ""
+	for _, act := range it.Actions {
+		if act.Name == review.ActDismiss && len(it.Actions) > 1 || gateRank[act.Gate] == 0 {
+			continue
+		}
+		if lo == "" || gateRank[act.Gate] < gateRank[lo] {
+			lo = act.Gate
+		}
+		if hi == "" || gateRank[act.Gate] > gateRank[hi] {
+			hi = act.Gate
+		}
+	}
+	if lo == "" {
+		return it.Gate, it.Gate
+	}
+	return lo, hi
+}
+
+// gateLabel is the list's gate column: the gate when all the item's
+// actions carry one, else the range: SOFT/HARD for a rogue, whose propose
+// is SOFT and waive HARD.
+func gateLabel(it *review.Item) string {
+	lo, hi := gateRange(it)
+	if lo == hi {
+		return lo
+	}
+	return lo + "/" + hi
+}
+
+// gateSegs is gateLabel in color, padded to w cells.
+func gateSegs(it *review.Item, w int) line {
+	lo, hi := gateRange(it)
+	l := line{{lo, gateStyle(lo)}}
+	if lo != hi {
+		l = l.add("", "/").add(gateStyle(hi), hi)
+	}
+	return l.add("", strings.Repeat(" ", max(0, w-strWidth(gateLabel(it)))))
+}
+
 func diffStyle(l string) string {
 	switch {
 	case strings.HasPrefix(l, "commit "):
@@ -415,15 +572,44 @@ func tag(it review.Item) string {
 	return shortKind(it.Kind)
 }
 
-// listText is an item's line in the list: where it is and what it says.
-func listText(it review.Item) string {
-	switch it.Kind {
-	case review.KindProposedLink, review.KindStaleLink:
-		return fmt.Sprintf("%s:%d %s %s", it.Path, it.Line, it.Relation, strings.Join(it.Targets, ", "))
-	case review.KindProposedConcept, review.KindValueDrift:
-		return it.Concept
+// listText is an item's line in the list: what it says, then where it is
+// (path:line) when that is what tells it from its neighbours.
+func listText(it review.Item) (string, string) {
+	where := ""
+	if it.Path != "" {
+		where = fmt.Sprintf("%s:%d", it.Path, it.Line)
 	}
-	return strings.TrimPrefix(it.Summary, it.Finding+": ")
+	switch {
+	case it.Kind == review.KindProposedLink || it.Kind == review.KindStaleLink:
+		return it.Relation + " " + strings.Join(it.Targets, ", "), where
+	case it.Finding == "rogue" && it.Relation != "":
+		return it.Relation + " " + it.Concept, where
+	case it.Kind == review.KindProposedConcept || it.Kind == review.KindValueDrift:
+		return it.Concept, ""
+	}
+	return strings.TrimPrefix(it.Summary, it.Finding+": "), ""
+}
+
+// fitPair fits head and tail into w cells, two spaces apart. When they do
+// not fit, the tail (a path) is cut from the left, down to …/file:line,
+// and then the head is cut from the right.
+func fitPair(head, tail string, w int) string {
+	if tail == "" {
+		return head
+	}
+	hw, tw := strWidth(head), strWidth(tail)
+	if hw+2+tw <= w {
+		return head + "  " + tail
+	}
+	floor := tw
+	if i := strings.LastIndex(tail, "/"); i >= 0 {
+		floor = min(tw, 1+strWidth(tail[i:]))
+	}
+	tb := max(w-hw-2, floor)
+	if w-2-tb < 1 {
+		return truncLeft(tail, w)
+	}
+	return truncRight(head, w-2-tb) + "  " + truncLeft(tail, tb)
 }
 
 // wrap breaks text into lines of at most w cells at spaces.
@@ -438,7 +624,7 @@ func wrap(text string, w int, style string) []line {
 			switch {
 			case cur == "":
 				cur = word
-			case utf8.RuneCountInString(cur)+1+utf8.RuneCountInString(word) <= w:
+			case strWidth(cur)+1+strWidth(word) <= w:
 				cur += " " + word
 			default:
 				out = append(out, styled(style, cur))

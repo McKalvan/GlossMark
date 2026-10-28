@@ -134,7 +134,8 @@ func TestRenderFrame(t *testing.T) {
 			t.Errorf("row %d is %d cells: %q", i, n, r)
 		}
 	}
-	for _, want := range []string{"human:alice", "1 proposed · 1 stale · 1 finding", "▸ HARD ★ proposed  b.py:3 implements i:NEW:X",
+	for _, want := range []string{"human:alice", "0 of 2 decided │ 2 decisions: 1 stale · 1 proposed │ 1 finding",
+		" Decisions · 2", " Findings · 1", "AUTO/SOFT   stale     implements .Doer  a.py:1", "▸ HARD      ★ proposed  implements i:NEW:X  b.py:3",
 		"agent:bot recommends reject: no such concept", "i:Doer", "Does the thing.", "+added", "a accept [HARD] human  new concept"} {
 		if !strings.Contains(frame, want) {
 			t.Errorf("frame lacks %q:\n%s", want, frame)
@@ -213,5 +214,129 @@ func TestCursorMovesOn(t *testing.T) {
 	a.Reload()
 	if it := a.Selected(); it == nil || it.ID != "m-1" {
 		t.Errorf("cursor clamps to the list: %+v", it)
+	}
+}
+
+// mixed is a queue whose engine order puts a rogue after a finding.
+func mixed() []review.Item {
+	waive := review.Action{Name: review.ActWaive, Gate: "HARD"}
+	return []review.Item{
+		{ID: "m-1", Kind: review.KindProposedLink, Path: "services/circulation/loans/renew.py", Line: 1, Relation: "implements", Targets: []string{"lib:Renewal"}, Gate: "SOFT",
+			Actions: []review.Action{{Name: review.ActAccept, Gate: "SOFT", AgentMay: true}, {Name: review.ActReject, Gate: "SOFT", AgentMay: true}}},
+		{ID: "finding:orphan:lib:Hold", Kind: review.KindFinding, Finding: "orphan", Concept: "lib:Hold", Path: "ontology/lib.gloss.yaml", Line: 4,
+			Summary: "orphan: lib:Hold: orphan concept", Gate: "HARD", Actions: []review.Action{waive}},
+		{ID: "finding:rogue:x", Kind: review.KindFinding, Finding: "rogue", Concept: "circ:NEW:DamageCheck", Relation: "implements",
+			Path: "services/circulation/loans/returns.py", Line: 10, Summary: "rogue: x", Gate: "SOFT",
+			Actions: []review.Action{{Name: review.ActPropose, Gate: "SOFT", AgentMay: true}, waive}},
+	}
+}
+
+func TestGroupsAndProgress(t *testing.T) {
+	f := &fakeEngine{items: mixed()}
+	a := newApp(f)
+	var ids []string
+	for _, i := range a.visible {
+		ids = append(ids, a.items[i].ID)
+	}
+	if got := strings.Join(ids, " "); got != "m-1 finding:rogue:x finding:orphan:lib:Hold" {
+		t.Fatalf("decisions first, then findings: %s", got)
+	}
+	if f.items[1].ID != "finding:orphan:lib:Hold" {
+		t.Error("the engine's own order must stay as it was")
+	}
+	frame := a.Render(120, 20)
+	for _, want := range []string{"0 of 2 decided", " Decisions · 2", " Findings · 1", "SOFT/HARD   rogue"} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("frame lacks %q:\n%s", want, frame)
+		}
+	}
+	// The rogue is proposed: it leaves, and the proposed concept arrives.
+	f.items = []review.Item{f.items[0], f.items[1], {ID: "concept:circ:DamageCheck", Kind: review.KindProposedConcept, Concept: "circ:DamageCheck", Gate: "HARD",
+		Actions: []review.Action{{Name: review.ActAccept, Gate: "HARD"}}}}
+	a.Reload()
+	if h := a.renderLine(a.header(), 200, ""); !strings.Contains(h, "1 of 2 decided · 1 new") {
+		t.Errorf("after propose: %s", h)
+	}
+	// Undo puts the rogue back; it counts as open again.
+	f.items = mixed()
+	a.Reload()
+	if h := a.renderLine(a.header(), 200, ""); !strings.Contains(h, "0 of 2 decided │") {
+		t.Errorf("after undo: %s", h)
+	}
+}
+
+// The gate column shows the range of an item's gates when they differ;
+// dismissing a recommendation does not count.
+func TestGateLabel(t *testing.T) {
+	q, m := queue(), mixed()
+	for _, c := range []struct {
+		it   review.Item
+		want string
+	}{{q[0], "AUTO/SOFT"}, {q[1], "HARD"}, {q[2], "HARD"}, {m[0], "SOFT"}, {m[2], "SOFT/HARD"}} {
+		if got := gateLabel(&c.it); got != c.want {
+			t.Errorf("%s: gate %q, want %q", c.it.ID, got, c.want)
+		}
+	}
+}
+
+// The footer lists what the selected item allows, as its actions say,
+// then the keys that work anywhere.
+func TestFooterFollowsItem(t *testing.T) {
+	a := newApp(&fakeEngine{items: mixed()})
+	foot := func() string { return strings.Join(a.footerKeys(), "  ") }
+	if got := foot(); !strings.HasPrefix(got, "a accept  r reject  ") || strings.Contains(got, "w waive") || strings.Contains(got, "u undo") {
+		t.Errorf("proposed link: %s", got)
+	}
+	a.Update(R('j'))
+	if got := foot(); !strings.HasPrefix(got, "p propose  w waive  ") || strings.Contains(got, "a accept") {
+		t.Errorf("rogue: %s", got)
+	}
+	a.Update(R('j'))
+	if got := foot(); got != "w waive  e doc  o open  n link  v viewer  ? help  q quit" {
+		t.Errorf("orphan: %s", got)
+	}
+}
+
+func TestHelpPointsToGlossary(t *testing.T) {
+	a := newApp(&fakeEngine{items: queue()})
+	a.Update(R('?'))
+	if frame := a.Render(120, 40); !strings.Contains(frame, "docs/GLOSSARY.md") {
+		t.Errorf("help lacks the glossary:\n%s", frame)
+	}
+}
+
+// Rows that differ only in the file name keep it: the path is cut from
+// the left, after the relation and target.
+func TestListKeepsFileNames(t *testing.T) {
+	for _, c := range []struct {
+		head, tail string
+		w          int
+		want       string
+	}{
+		{"implements lib:Renewal", "services/circulation/loans/renew.py:1", 61, "implements lib:Renewal  services/circulation/loans/renew.py:1"},
+		{"implements lib:Renewal", "services/circulation/loans/renew.py:1", 44, "implements lib:Renewal  …/loans/renew.py:1"},
+		{"implements lib:Renewal", "services/circulation/loans/returns.py:10", 32, "implements lib…  …/returns.py:10"},
+		{"x", "日本語/ファイル.py:3", 12, "…ァイル.py:3"},
+	} {
+		got := fitPair(c.head, c.tail, c.w)
+		if got != c.want || strWidth(got) > c.w {
+			t.Errorf("fitPair(%d) = %q (%d cells), want %q", c.w, got, strWidth(got), c.want)
+		}
+	}
+}
+
+// Wide runes take two cells and combining marks none: a row stays
+// exactly w cells.
+func TestRenderWideRunes(t *testing.T) {
+	a := newApp(&fakeEngine{})
+	for _, s := range []string{"日本語のパス/ファイル.py", "cafe\u0301 résumé", "emoji 🎉 ok", "ab日"} {
+		for w := 1; w < 30; w++ {
+			if got := strWidth(a.renderLine(plain(s), w, "")); got != w {
+				t.Errorf("%q at %d: %d cells", s, w, got)
+			}
+		}
+	}
+	if got := truncLeft("a/日本/ファイル.py", 14); got != "…/ファイル.py" {
+		t.Errorf("truncLeft: %q", got)
 	}
 }
