@@ -14,12 +14,12 @@ import (
 )
 
 func init() {
-	register(command{"check", "lint: syntax, dangling refs, domain/range, own-subject rule, tiers, allowed lists", cmdCheck})
+	register(command{"check", "lint: syntax, dangling refs, domain/range, own-subject rule, tiers, allowed lists; surface-rule hints never fail", cmdCheck})
 }
 
 func cmdCheck(args []string) int {
 	fs, root := newFlags("check")
-	warnErr := fs.Bool("strict", false, "treat warnings as errors")
+	warnErr := fs.Bool("strict", false, "treat warnings as errors (hints never fail)")
 	explain := fs.Bool("explain", false, "print the effective allowed set of every manifest (declared, or derived from what it declares) and why each entry is in it")
 	format := fs.String("format", "text", "--explain output: text | json")
 	if err := parseFlags(fs, args); err != nil {
@@ -43,11 +43,14 @@ func cmdCheck(args []string) int {
 	diags := append([]marker.Diagnostic{}, p.Diags...)
 	diags = append(diags, check.Run(p.WS, p.Graph)...)
 	printDiags(diags)
-	errs, warns := 0, 0
+	errs, warns, hints := 0, 0, 0
 	for _, d := range diags {
-		if d.Severity == "error" {
+		switch d.Severity {
+		case "error":
 			errs++
-		} else {
+		case "hint":
+			hints++
+		default:
 			warns++
 		}
 	}
@@ -71,6 +74,11 @@ func cmdCheck(args []string) int {
 		}
 	}
 	summary := fmt.Sprintf("gloss check: %s, %s", plural(errs, "error"), plural(warns, "warning"))
+	if hints > 0 {
+		// A hint is a surface rule the marker departs from (MARKING.md,
+		// Surfaces): advice, never a failure.
+		summary += fmt.Sprintf(", %s", plural(hints, "hint"))
+	}
 	if proposals > 0 || rogues > 0 {
 		summary += fmt.Sprintf("; %s, %s (run gloss status)", plural(proposals, "proposal"), plural(rogues, "rogue"))
 	}
