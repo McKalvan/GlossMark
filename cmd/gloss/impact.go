@@ -231,7 +231,7 @@ func cmdHook(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if err := installHooks(p.WS.Root, *actor, !*noHook, !*noMCP); err != nil {
+	if err := installHooks(p.WS.Root, glossCommand(), *actor, !*noHook, !*noMCP); err != nil {
 		return fail(err)
 	}
 	if *cursor {
@@ -241,7 +241,7 @@ func cmdHook(args []string) int {
 			}
 		}
 		if !*noMCP {
-			if err := registerMCP(p.WS.Root, filepath.Join(".cursor", "mcp.json"), glossCommand(), cursorActor); err != nil {
+			if err := registerMCP(p.WS.Root, filepath.Join(".cursor", "mcp.json"), cursorActor); err != nil {
 				return fail(err)
 			}
 		}
@@ -322,16 +322,18 @@ func installCursorRule(root, actor string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(cursorRule(actor, glossCommand())), 0o644); err != nil {
+	// Committed like .mcp.json, so it names gloss, not this machine's path.
+	if err := os.WriteFile(path, []byte(cursorRule(actor, "gloss")), 0o644); err != nil {
 		return err
 	}
 	fmt.Printf("gloss hook: Cursor rule written to %s (Cursor has no SessionStart hook; the rule asks the agent for gloss context)\n", relOrAbs(root, path))
 	return nil
 }
 
-// glossCommand is how the hook and the MCP server invoke gloss: by name when
-// PATH finds this binary, else by this binary's absolute path, so another
+// glossCommand is how this machine's hook invokes gloss: by name when PATH
+// finds this binary, else by this binary's absolute path, so another
 // program named gloss earlier on PATH cannot silently stand in (issue #37).
+// Only the uncommitted .claude/settings.local.json gets the path (#226).
 func glossCommand() string {
 	self, err := os.Executable()
 	if err != nil {
@@ -376,52 +378,94 @@ func hookCommand(actor, bin string) string {
 }
 
 // installHooks registers the SessionStart hook and the MCP server for a
-// repository, both running with GLOSS_ACTOR=actor.
-func installHooks(root, actor string, hook, mcp bool) error {
-	bin := glossCommand()
+// repository, both running with GLOSS_ACTOR=actor. bin is glossCommand():
+// the committed files always run gloss by name, so a clone on another
+// machine works; when PATH does not find this binary, the hook that runs it
+// by path goes to .claude/settings.local.json, which is not committed
+// (issue #226).
+func installHooks(root, bin, actor string, hook, mcp bool) error {
 	if hook {
 		path := filepath.Join(root, ".claude", "settings.json")
-		settings := map[string]any{}
-		if b, err := os.ReadFile(path); err == nil {
-			json.Unmarshal(b, &settings)
-		}
-		hooks, _ := settings["hooks"].(map[string]any)
-		if hooks == nil {
-			hooks = map[string]any{}
-		}
-		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": hookCommand(actor, bin)}}}
-		list, _ := hooks["SessionStart"].([]any)
-		present := false
-		for i, it := range list {
-			if b, _ := json.Marshal(it); strings.Contains(string(b), "gloss context") {
-				// An earlier install: replace it so the actor line is current.
-				list[i] = entry
-				present = true
-			}
-		}
-		if !present {
-			list = append(list, entry)
-		}
-		hooks["SessionStart"] = list
-		settings["hooks"] = hooks
-		if err := writeJSON(path, settings); err != nil {
+		if err := registerHook(path, hookCommand(actor, "gloss")); err != nil {
 			return err
 		}
 		fmt.Printf("gloss hook: SessionStart hook registered in %s\n", relOrAbs(root, path))
+		local := filepath.Join(root, ".claude", "settings.local.json")
+		if bin != "gloss" {
+			if err := registerHook(local, hookCommand(actor, bin)); err != nil {
+				return err
+			}
+			fmt.Printf("gloss hook: PATH does not find this gloss, so the hook in %s (not committed) runs %s\n", relOrAbs(root, local), bin)
+			if exec.Command("git", "-C", root, "rev-parse", "--git-dir").Run() == nil &&
+				exec.Command("git", "-C", root, "check-ignore", "-q", local).Run() != nil {
+				fmt.Println("gloss hook: add .claude/settings.local.json to .gitignore; it holds this machine's path")
+			}
+		} else if _, err := os.Stat(local); err == nil {
+			// gloss is on PATH now: drop the path an earlier install wrote.
+			if err := registerHook(local, ""); err != nil {
+				return err
+			}
+		}
 	}
 	if mcp {
-		if err := registerMCP(root, ".mcp.json", bin, actor); err != nil {
+		if err := registerMCP(root, ".mcp.json", actor); err != nil {
 			return err
 		}
+	}
+	if bin != "gloss" && mcp {
+		fmt.Printf("gloss hook: the MCP server runs gloss by name: put %s on PATH\n", filepath.Dir(bin))
 	}
 	fmt.Printf("gloss hook: new sessions will receive 'gloss context' for their directory and write links as %s (the hook exports it to the session's shell); agents can call search_concepts, concepts_for_path, propose_link, propose_concept, impact_of, slice_of, history_of\n", actor)
 	fmt.Println("gloss hook: commit .glossmark/ledger.jsonl; it is the review record (accepted, rejected, stale) and who wrote each link")
 	return nil
 }
 
+// registerHook puts command in the SessionStart hooks of a Claude Code
+// settings file, replacing an earlier gloss context hook; an empty command
+// only removes that hook.
+func registerHook(path, command string) error {
+	settings := map[string]any{}
+	if b, err := os.ReadFile(path); err == nil {
+		json.Unmarshal(b, &settings)
+	}
+	hooks, _ := settings["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+	entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": command}}}
+	old, _ := hooks["SessionStart"].([]any)
+	list := []any{}
+	present := false
+	for _, it := range old {
+		if s, _ := json.Marshal(it); strings.Contains(string(s), "gloss context") || strings.Contains(string(s), "gloss") && strings.Contains(string(s), " context --dir") {
+			// An earlier install: replace it so the actor line is current.
+			if command != "" && !present {
+				list = append(list, entry)
+			}
+			present = true
+			continue
+		}
+		list = append(list, it)
+	}
+	if command != "" && !present {
+		list = append(list, entry)
+	}
+	if command == "" && !present {
+		return nil
+	}
+	hooks["SessionStart"] = list
+	if len(list) == 0 {
+		delete(hooks, "SessionStart")
+	}
+	settings["hooks"] = hooks
+	return writeJSON(path, settings)
+}
+
 // registerMCP adds the glossmark server to an MCP config file (rel to root)
-// in the mcpServers format Claude Code and Cursor share.
-func registerMCP(root, rel, bin, actor string) error {
+// in the mcpServers format Claude Code and Cursor share. The file is
+// committed, so the server runs gloss by name; a path an earlier install
+// wrote is replaced, a command of the user's own is kept.
+func registerMCP(root, rel, actor string) error {
 	path := filepath.Join(root, rel)
 	cfg := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil {
@@ -435,8 +479,8 @@ func registerMCP(root, rel, bin, actor string) error {
 	if srv == nil {
 		srv = map[string]any{"args": []string{"mcp"}}
 	}
-	if c, _ := srv["command"].(string); c == "" || c == "gloss" {
-		srv["command"] = bin
+	if c, _ := srv["command"].(string); c == "" || strings.HasPrefix(filepath.Base(c), "gloss") {
+		srv["command"] = "gloss"
 	}
 	env, _ := srv["env"].(map[string]any)
 	if env == nil {

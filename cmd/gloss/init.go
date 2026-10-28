@@ -19,6 +19,7 @@ func cmdInit(args []string) int {
 	dry := fs.Bool("dry-run", false, "print the plan and write nothing")
 	name := fs.String("name", "", "repository name (default: the directory name)")
 	core := fs.String("core", "", "core namespace prefix (default: guessed from the name, or the imported core namespace)")
+	fs.StringVar(core, "namespace", "", "same as --core: the core namespace prefix; implementation and boundary prefixes follow it (ns+i, ns+b)")
 	impl := fs.String("impl", "", "implementation namespace prefix (default: core + i)")
 	bprefix := fs.String("boundary-prefix", "", "boundary prefix (default: core + b)")
 	iri := fs.String("iri", "", "base IRI shared by sibling repositories: namespaces become <iri><prefix>/, the repository <iri><name>/ (default https://onto.example.com/<name>/)")
@@ -46,7 +47,11 @@ func cmdInit(args []string) int {
 		fmt.Printf("  then   gloss lock (pins %s: glossmark.lock, .glossmark/imports/)\n", strings.Join(plan.Imported, ":, "))
 	}
 	if !*noHook {
-		fmt.Println("  then   gloss hook install (.claude/settings.json, .mcp.json; --no-hook to skip)")
+		local := ""
+		if glossCommand() != "gloss" {
+			local = ", .claude/settings.local.json"
+		}
+		fmt.Println("  then   gloss hook install (.claude/settings.json, .mcp.json" + local + "; --no-hook to skip)")
 	}
 	fmt.Println("  then   gloss build (.glossmark/graph.jsonl, .glossmark/ledger.jsonl)")
 	if *dry {
@@ -62,7 +67,7 @@ func cmdInit(args []string) int {
 		}
 	}
 	if !*noHook {
-		if err := installHooks(plan.Root, *actor, true, true); err != nil {
+		if err := installHooks(plan.Root, glossCommand(), *actor, true, true); err != nil {
 			return fail(err)
 		}
 	}
@@ -73,13 +78,18 @@ func cmdInit(args []string) int {
 	if err := writeGraph(p.Graph, p.WS.StatePath("graph.jsonl")); err != nil {
 		return fail(err)
 	}
-	next := "name the core concepts in ontology/" + plan.Core + ".gloss.yaml"
-	if len(plan.Imported) > 0 {
-		next = "name the mechanisms in ontology/" + plan.Impl + ".gloss.yaml (realizes: " + plan.Core + ":...)"
-	}
+	// The path the tooling supports (issue #227): draft, review, mark.
+	draft := "draft concepts from the code: gloss suggest --concepts, or let an agent interview you with the adopt-glossmark skill (gloss hook install --skill)"
 	if len(plan.Vocabulary) > 0 {
-		next = "import the vocabulary (" + strings.Join(plan.Vocabulary, "; ") + "), review the guessed kinds"
+		draft = "import the vocabulary (" + strings.Join(plan.Vocabulary, "; ") + "); gloss suggest --concepts drafts more from the code"
 	}
-	fmt.Println("gloss init: done; graph built. Next: " + next + ", mark the code (docs/MARKING.md), then gloss check && gloss build && gloss drift")
+	target := "ontology/" + plan.Core + ".gloss.yaml (the domain) and ontology/" + plan.Impl + ".gloss.yaml (the mechanisms)"
+	if len(plan.Imported) > 0 {
+		target = "ontology/" + plan.Impl + ".gloss.yaml (the mechanisms, realizes: " + plan.Core + ":...)"
+	}
+	fmt.Println("gloss init: done; graph built. Next:")
+	fmt.Println("  1. " + draft)
+	fmt.Println("  2. review the drafts and write the ones you keep into " + target)
+	fmt.Println("  3. gloss suggest proposes @gloss? markers for the code (--write inserts them; docs/MARKING.md), then gloss check && gloss build && gloss drift")
 	return 0
 }

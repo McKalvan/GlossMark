@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/mckalvan/glossmark/internal/check"
+	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
 )
@@ -74,8 +75,22 @@ func cmdCheck(args []string) int {
 		summary += fmt.Sprintf("; %s, %s (run gloss status)", plural(proposals, "proposal"), plural(rogues, "rogue"))
 	}
 	fmt.Fprintln(os.Stderr, summary)
+	if hint := emptyOntologyHint(p.Graph); hint != "" {
+		fmt.Fprintln(os.Stderr, "gloss check: "+hint)
+	}
 	if errs > 0 || (*warnErr && warns > 0) {
 		return 1
 	}
 	return 0
+}
+
+// emptyOntologyHint names the next command when the workspace defines no
+// concepts of its own, the state gloss init leaves (issue #227); "" otherwise.
+func emptyOntologyHint(g *graph.Graph) string {
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if !n.Imported {
+			return ""
+		}
+	}
+	return "0 concepts defined. Draft some with gloss suggest --concepts (or the adopt-glossmark skill: gloss hook install --skill)"
 }
