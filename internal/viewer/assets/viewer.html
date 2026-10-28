@@ -772,6 +772,7 @@ function hiddenDesc(n){let c=0;(kidsOf.get(n.id)||[]).forEach(k=>{if(!k._vis)c++
 function descendants(n,out){(kidsOf.get(n.id)||[]).forEach(k=>{out.push(k);descendants(k,out);});return out;}
 
 function rebuild(seedAll){
+  hideTip();
   const nodes=V._nodes;
   nodes.forEach(n=>{n._c=null;n._ext=false;n._open=false;});
   nodes.forEach(n=>{n._c=containerOf(n);});
@@ -1184,6 +1185,12 @@ function hitEdge(w){
 }
 
 /* ---- tooltip / panel ---- */
+// hideTip: the hover card belongs to the pointer over the canvas. Anything else
+// (a press, a key, the toolbar, a rebuild) takes it down, or it outlives its node.
+function hideTip(){tip.style.display='none';S.hover=null;}
+// Outside the canvas, any press or focus change hides it.
+document.addEventListener('pointerdown',ev=>{if(ev.target!==cv)hideTip();},true);
+document.addEventListener('focusin',hideTip);
 const critPill=l=>l?`<span class="crit ${esc(l)}">${esc(l)}</span>`:'';
 function critText(n){if(!n.criticality)return '';return n.criticality+(n.criticalityFrom&&n.criticalityFrom!=='declared'?' (via '+n.criticalityFrom+')':n.criticalityFrom?' (declared)':'');}
 function nodeTip(n){
@@ -1517,9 +1524,10 @@ cv.addEventListener('pointerdown',ev=>{
   pts.set(ev.pointerId,{x:ev.offsetX,y:ev.offsetY});
   if(pts.size>=2){ // a second finger: stop dragging, start pinching
     cv.setPointerCapture(ev.pointerId);
-    if(pts.size===2){drag=null;moved=true;tip.style.display='none';const g=pinchGeom();pinch={...g,cam:{...S.cam}};}
+    if(pts.size===2){drag=null;moved=true;hideTip();const g=pinchGeom();pinch={...g,cam:{...S.cam}};}
     return;
   }
+  hideTip(); // a press selects, pans or drags: the hover card would cover what changes
   const w=toWorld(ev.offsetX,ev.offsetY),n=hitNode(w);
   drag={sx:ev.offsetX,sy:ev.offsetY,cam:{...S.cam},node:n,lx:w.x,ly:w.y};
   moved=false;cv.classList.add('drag');cv.setPointerCapture(ev.pointerId);
@@ -1539,7 +1547,7 @@ cv.addEventListener('pointermove',ev=>{
     if(!moved)return;
     if(drag.node){const w=toWorld(ev.offsetX,ev.offsetY);moveSubtree(drag.node,w.x-drag.lx,w.y-drag.ly);drag.lx=w.x;drag.ly=w.y;S.pinned.add(drag.node.id);}
     else{S.cam.x=drag.cam.x+dx;S.cam.y=drag.cam.y+dy;S.camMoved=true;}
-    tip.style.display='none';draw();return;
+    hideTip();draw();return;
   }
   if(ev.pointerType!=='mouse'&&ev.pointerType)return; // no hover on touch
   const w=toWorld(ev.offsetX,ev.offsetY),h=hitNode(w)||hitEdge(w);
@@ -1548,7 +1556,7 @@ cv.addEventListener('pointermove',ev=>{
   if(h){tip.innerHTML=h.id?nodeTip(h):edgeTip(h);tip.style.display='block';
     const r=stage.getBoundingClientRect(),tx=Math.min(ev.offsetX+14,r.width-tip.offsetWidth-6),ty=Math.min(ev.offsetY+14,r.height-tip.offsetHeight-6);
     tip.style.left=Math.max(0,tx)+'px';tip.style.top=Math.max(0,ty)+'px';}
-  else tip.style.display='none';
+  else hideTip();
 });
 // A single click selects and (after a short wait, so a double-click can cancel
 // it) opens or closes the node; a double-click focuses a boundary.
@@ -1575,13 +1583,13 @@ function collapse(n){if(n.group)return;S.expanded.delete(n.id);descendants(n,[])
 // After a pinch, the fingers lift one by one; none of them is a tap.
 cv.addEventListener('pointerup',ev=>{pts.delete(ev.pointerId);if(pinch||moved&&!drag){if(pts.size<2)pinch=null;return;}endDrag(ev);});
 cv.addEventListener('pointercancel',ev=>{pts.delete(ev.pointerId);if(pts.size<2)pinch=null;drag=null;cv.classList.remove('drag');});
-cv.addEventListener('pointerleave',()=>{if(!drag){S.hover=null;tip.style.display='none';draw();}});
+cv.addEventListener('pointerleave',()=>{hideTip();draw();});
 cv.addEventListener('wheel',ev=>{
-  ev.preventDefault();
+  ev.preventDefault();hideTip();
   const f=Math.exp(-ev.deltaY*0.0015),k=Math.min(8,Math.max(.05,S.cam.k*f)),r=k/S.cam.k;
   S.cam.x=ev.offsetX-(ev.offsetX-S.cam.x)*r;S.cam.y=ev.offsetY-(ev.offsetY-S.cam.y)*r;S.cam.k=k;S.camMoved=true;draw();
 },{passive:false});
-window.addEventListener('keydown',ev=>{if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
+window.addEventListener('keydown',ev=>{hideTip();if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
   if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
   if(ev.key==='f')fit();
   if((ev.key==='['||ev.key===']')&&HIST.length){S.histScroll=true;stepOverlay(ev.key==='['?1:-1);}});
@@ -1592,7 +1600,7 @@ new ResizeObserver(()=>{if(!S.camMoved&&VN.length)fit();else draw();}).observe(s
 const sel=$('viewSel');
 views.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=(v&&v.name)||('view '+(i+1));sel.appendChild(o);});
 sel.onchange=()=>loadView(+sel.value);
-$('search').oninput=ev=>{S.q=ev.target.value.trim().toLowerCase();draw();};
+$('search').oninput=ev=>{hideTip();S.q=ev.target.value.trim().toLowerCase();draw();};
 $('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');};
 $('ovSel').onchange=ev=>{const v=ev.target.value;S.histScroll=true;
   if(v==='')setOverlay(null);else if(v==='diff')setOverlay({k:'diff'});else if(v[0]==='s'){S.ovAnchor=+v.slice(1);setOverlay({k:'step',i:+v.slice(1)});}};
