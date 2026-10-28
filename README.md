@@ -95,7 +95,7 @@ To adopt it on your own repository, `gloss init` scaffolds the files and the [Qu
 
 ## For agents
 
-`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server (`gloss mcp`) with concept search, `concepts_for_path`, `propose_link`, `propose_concept`, `impact_of`, `slice_of`, `history_of`, `drift` and the review tools. An agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience).
+`gloss hook install` registers a SessionStart hook that briefs an agent on the directory it is working in (boundary, allowed targets, remits, concepts, current state) and an MCP server (`gloss mcp`) with concept search, `concepts_for_path`, `propose_link`, `propose_concept`, `impact_of`, `slice_of`, `history_of`, `drift` and the review tools. An agent re-confirms stale links and decides SOFT proposals itself, and records a recommendation for a person on anything HARD. See [docs/QUICKSTART.md](docs/QUICKSTART.md#agent-experience). `gloss hook install --agent claude-code|cursor|copilot` writes the ready-made integration for each agent (a Claude Code plugin, a Cursor rule, Copilot instructions, each with its MCP config) as committed files; see [docs/AGENTS.md](docs/AGENTS.md).
 
 ## Design in one paragraph
 

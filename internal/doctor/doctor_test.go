@@ -366,3 +366,88 @@ func TestMentionsRoot(t *testing.T) {
 		}
 	}
 }
+
+// TestDoctorIntegrations (issue #267): one line per ready-made integration
+// gloss hook install --agent wrote, none for one that is not there; each
+// warns on a missing piece or an absolute path, and when no hook is in
+// .claude/settings.json the integrations stand in for it.
+func TestDoctorIntegrations(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	run := func() map[string]Check {
+		t.Helper()
+		d := &doctor{ws: &load.Workspace{Root: root}}
+		d.hook()
+		d.integrations()
+		out := map[string]Check{}
+		for _, c := range d.out {
+			out[c.Name] = c
+		}
+		return out
+	}
+	hook := func(bin string) string {
+		return `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo export GLOSS_ACTOR=agent:claude-code >> \"${CLAUDE_ENV_FILE:-/dev/null}\"; GLOSS_ACTOR=agent:claude-code ` + bin + ` context --dir \"$PWD\""}]}]}}`
+	}
+	mcp := func(key, bin, actor string) string {
+		return `{"` + key + `":{"glossmark":{"command":"` + bin + `","args":["mcp"],"env":{"GLOSS_ACTOR":"` + actor + `"}}}}`
+	}
+	// Nothing installed: the agent hook line warns, no integration lines.
+	cs := run()
+	if c := cs["agent hook"]; c.Status != Warn {
+		t.Errorf("nothing = %+v", c)
+	}
+	for _, n := range []string{"claude-code plugin", "cursor", "copilot"} {
+		if _, ok := cs[n]; ok {
+			t.Errorf("%s reported though not installed", n)
+		}
+	}
+	// The three integrations, complete and by name.
+	write(".claude/plugins/glossmark/.claude-plugin/plugin.json", `{"name":"glossmark","version":"1"}`)
+	for _, s := range skillNames {
+		write(".claude/plugins/glossmark/skills/"+s+"/SKILL.md", "---\nname: "+s+"\n---\n")
+	}
+	write(".claude/plugins/glossmark/hooks/hooks.json", hook("gloss"))
+	write(".claude/plugins/glossmark/.mcp.json", mcp("mcpServers", "gloss", "agent:claude-code"))
+	write(".claude-plugin/marketplace.json", `{"name":"repo-plugins","owner":{"name":"x"},"plugins":[{"name":"glossmark","source":"./.claude/plugins/glossmark"}]}`)
+	write(".cursor/rules/glossmark.mdc", "---\nalwaysApply: true\n---\n- run `GLOSS_ACTOR=agent:cursor gloss context --dir <dir>`\n")
+	write(".cursor/mcp.json", mcp("mcpServers", "gloss", "agent:cursor"))
+	write(".github/copilot-instructions.md", "# Rules\n\n## GlossMark\n\n- ask concepts_for_path first\n")
+	write(".vscode/mcp.json", mcp("servers", "gloss", "agent:copilot"))
+	cs = run()
+	if c := cs["agent hook"]; c.Status != OK || !strings.Contains(c.Msg, "the Claude Code plugin, the Cursor rule, the Copilot instructions installed instead") {
+		t.Errorf("stand-in = %+v", c)
+	}
+	if c := cs["claude-code plugin"]; c.Status != OK || !strings.Contains(c.Msg, "claude plugin install glossmark@repo-plugins") {
+		t.Errorf("plugin = %+v", c)
+	}
+	if c := cs["cursor"]; c.Status != OK {
+		t.Errorf("cursor = %+v", c)
+	}
+	if c := cs["copilot"]; c.Status != OK {
+		t.Errorf("copilot = %+v", c)
+	}
+	// Absolute paths, a missing skill, a missing actor and an unlisted
+	// plugin each warn with the install command as the fix.
+	write(".claude/plugins/glossmark/hooks/hooks.json", hook("/opt/gm/gloss"))
+	os.Remove(filepath.Join(root, ".claude/plugins/glossmark/skills/curate-increment/SKILL.md"))
+	write(".claude-plugin/marketplace.json", `{"name":"repo-plugins","plugins":[]}`)
+	write(".vscode/mcp.json", mcp("servers", "C:\\\\tools\\\\gloss.exe", "agent:copilot"))
+	write(".cursor/mcp.json", `{"mcpServers":{"glossmark":{"command":"gloss","args":["mcp"]}}}`)
+	cs = run()
+	c := cs["claude-code plugin"]
+	for _, want := range []string{"skills missing: curate-increment", "hooks/hooks.json runs /opt/gm/gloss", "does not list the plugin"} {
+		if c.Status != Warn || !strings.Contains(c.Msg, want) || c.Fix != "gloss hook install --agent claude-code" {
+			t.Errorf("plugin lacks %q: %+v", want, c)
+		}
+	}
+	if c := cs["copilot"]; c.Status != Warn || !strings.Contains(c.Msg, `.vscode/mcp.json runs C:\tools\gloss.exe`) || c.Fix != "gloss hook install --agent copilot" {
+		t.Errorf("copilot = %+v", c)
+	}
+	if c := cs["cursor"]; c.Status != Warn || !strings.Contains(c.Msg, "sets no GLOSS_ACTOR") || c.Fix != "gloss hook install --agent cursor" {
+		t.Errorf("cursor = %+v", c)
+	}
+}
