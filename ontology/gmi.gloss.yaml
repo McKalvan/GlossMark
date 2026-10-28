@@ -63,6 +63,7 @@ concepts:
   LandscapeAssembler: { kind: process, realizes: gm:Landscape, doc: "Unions sibling repositories' graphs by IRI; realizes the landscape itself, there is no separate federation process yet." }
   # Onboarding
   Scaffolder:         { kind: process, realizes: gm:Onboarding, doc: "gloss init: config, tier files, manifests, views, CI job and hook in one command." }
+  Bootstrapper:       { kind: process, realizes: gm:Onboarding, produces: [gm:ProposedLink], doc: "gloss onboard: on a repository with no GlossMark files, the scaffold, the vocabulary it keeps, harvested candidates as proposed concepts, a boundary map read from deploy manifests and Terraform, suggested @gloss? markers and the viewer, in one run; everything it writes is a proposal (ADR 0041)." }
   MarkerSuggester:    { kind: process, realizes: gm:Onboarding, doc: "gloss suggest: proposed links for unmarked public surfaces, from names, docstrings, the tables they touch and the code their tests call." }
   SuggestCalibration: { kind: process, part-of: MarkerSuggester, realizes: gm:Onboarding, doc: "gloss suggest --eval, --calibrate and the calibration harness: precision and auto-accept rate per confidence band on labelled links, the counts conf is read from, and the auto-accept threshold derived from a precision target." }
   DefaultSoftThreshold:

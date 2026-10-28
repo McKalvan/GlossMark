@@ -69,6 +69,10 @@ type Options struct {
 	// rejected (same marker id, or same anchor fingerprint, relation and
 	// target) is not proposed again.
 	Ledger map[string]*model.LedgerEntry
+	// Proposed makes proposed: true concepts targets too. gloss onboard sets
+	// it: its vocabulary is all proposals, and every link to one is HARD at
+	// the gate, so nothing is accepted without a review (ADR 0030).
+	Proposed bool
 }
 
 // DefaultMinConf drops the evidence that is wrong more often than right
@@ -88,7 +92,7 @@ const Coverage = `relations: implements (SQL functions and procedures too), repr
 roles, subnet groups, policies and other resources that only support one), documents (Markdown headings),
 deploys (Kubernetes workloads), presents and hosts (page and layout components), subscribes, consumes and publishes
 (listener annotations and producer or consumer calls); one scope=file or scope=block marker stands for a run.
-targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts.
+targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts (gloss onboard includes them: its vocabulary is all proposals).
 files: .py .ts .tsx .js .jsx .mjs .go .rs .java .kt .rb .cs .php .swift .scala .tf .sql .proto .prisma .feature .sh .md .yaml
 never proposed: configures, publishes-value, instructs, may-modify, produces; sidecars, JSON, Dockerfiles, CI workflows`
 
@@ -124,7 +128,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	if ws.Config.Suggest != nil {
 		stop = ws.Config.Suggest.Stopwords
 	}
-	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
+	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop, opt.Proposed), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
 	type link struct{ fp, rel, target string }
 	rejected := map[link]bool{}
 	for _, e := range opt.Ledger {
