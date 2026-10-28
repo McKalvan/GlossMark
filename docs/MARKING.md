@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Link scope=file -->
 # When to mark, and with what
 
-Five relations cover almost every marker in a real repository. Learn these first; the rest are on the [advanced page](ADVANCED.md).
+Five relations cover almost every marker in a real repository. Learn these first; the rest are on the [advanced page](ADVANCED.md). A repository `gloss init` set up starts on the starter relation profile (`relations: starter` in `glossmark.yaml`): `gloss check` hints at a relation outside `implements`, `represents`, `verifies`, `produces`, `consumes` and `part-of` until the file says `relations: full` ([ADVANCED.md](ADVANCED.md#relation-profiles)).
 
 | Write | On | Meaning |
 | --- | --- | --- |
