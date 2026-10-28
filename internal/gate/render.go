@@ -216,6 +216,9 @@ func tagFor(ch Change) string {
 		}
 	default:
 		parts = append(parts, "HARD: "+strings.Join(ch.Reasons, "; "))
+		if ch.Owner != "" {
+			parts = append(parts, "owner "+ch.Owner)
+		}
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
 }

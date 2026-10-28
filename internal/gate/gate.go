@@ -69,6 +69,9 @@ type Change struct {
 	// Boundary is the boundary whose manifest encloses Path ("" for ontology
 	// files, manifests and glossmark.yaml); the PR comment groups by it.
 	Boundary string `json:"boundary,omitempty"`
+	// Owner names who decides a HARD change: the owner of the boundary the
+	// change is under, else the owner of the subject's namespace (#272).
+	Owner string `json:"owner,omitempty"`
 	// Criticality is the highest governance level among the change's subject,
 	// object and the boundary of its path; CriticalityFrom names the node that
 	// carries it. See docs/GOVERNANCE.md.
@@ -244,11 +247,45 @@ func Classify(base, head *graph.Graph, ws *load.Workspace, opt Options) *Impact 
 				ch.Boundary = m.Boundary
 			}
 		}
+		if ch.Gate == HARD {
+			ch.Owner = ownerOf(ws, *ch)
+		}
 	}
 	if opt.Adoption {
 		c.adoption()
 	}
 	return im
+}
+
+// ownerOf names who decides a change: for an edit to an ontology file, the
+// owner: of the namespace it declares; otherwise the owner: of the manifest
+// the changed path is under, else the owner: of the namespace the subject (a
+// concept CURIE) belongs to; "" when nothing names one.
+func ownerOf(ws *load.Workspace, ch Change) string {
+	nsOwner := func() string {
+		for _, cur := range []string{ch.Subject, ch.Object} {
+			if ns, _, ok := strings.Cut(cur, ":"); ok {
+				if d, ok := ws.Config.Owns[ns]; ok && d.Owner != "" {
+					return d.Owner
+				}
+			}
+		}
+		return ""
+	}
+	for _, d := range ws.Config.Owns {
+		if d.File != "" && ch.Path == d.File {
+			if d.Owner != "" {
+				return d.Owner
+			}
+			break
+		}
+	}
+	if ch.Path != "" {
+		if m := ws.ManifestFor(ch.Path); m != nil && m.Owner != "" {
+			return m.Owner
+		}
+	}
+	return nsOwner()
 }
 
 // adoption replaces the per-link changes with counts per boundary and per
