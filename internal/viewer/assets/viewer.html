@@ -1066,9 +1066,8 @@ function viewH(){return cv.clientHeight-(getComputedStyle(panel).position==='abs
 function centre(n){if(n._open){const r=rectOf(n);return {x:r.x+r.w/2,y:r.y+r.h/2};}return S.pos.get(n.id);}
 // fit: the whole map in the window. On a narrow screen the automatic fit (not
 // the Fit button or f, which pass whole) stops at a readable zoom and centres
-// on the largest top-level box (its top left corner when it is larger than the
-// window, so its title shows) instead of shrinking the
-// map until no label can be read.
+// on the largest top-level box (its top edge when it is taller than the
+// window) instead of shrinking the map until no label can be read.
 const MIN_READ=.7;
 function fit(whole){
   if(!VN.length)return;
@@ -1081,7 +1080,7 @@ function fit(whole){
     const box=n=>n._open?rectOf(n):(p=>({x:p.x-n._w/2,y:p.y-n._h/2,w:n._w,h:n._h}))(S.pos.get(n.id));
     const tops=VN.filter(n=>!n._lc&&n.type==='boundary').map(box).sort((a,b)=>b.w*b.h-a.w*a.h);
     const r=tops[0]||{x:x0,y:y0,w:x1-x0,h:y1-y0},kk=MIN_READ;
-    S.cam={k:kk,x:r.w*kk>W-16?8-r.x*kk:W/2-(r.x+r.w/2)*kk,y:r.h*kk>H-24?12-r.y*kk:H/2-(r.y+r.h/2)*kk};S.camMoved=false;
+    S.cam={k:kk,x:W/2-(r.x+r.w/2)*kk,y:r.h*kk>H-24?12-r.y*kk:H/2-(r.y+r.h/2)*kk};S.camMoved=false;
     draw();return;
   }
   S.cam={k,x:W/2-(x0+x1)/2*k,y:H/2-(y0+y1)/2*k};S.camMoved=false;
