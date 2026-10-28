@@ -71,7 +71,7 @@ type Diagnostic struct {
 	Path     string `json:"path"`
 	Line     int    `json:"line"`
 	Col      int    `json:"col,omitempty"`
-	Severity string `json:"severity"` // warning | error
+	Severity string `json:"severity"` // error | warning | hint (never fails a run)
 	Code     string `json:"code"`
 	Msg      string `json:"msg"`
 }

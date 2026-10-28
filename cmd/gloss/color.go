@@ -17,11 +17,14 @@ func colorOn(f *os.File) bool {
 }
 
 // severityColor colours the severity word of a diagnostic line ("path:1:
-// error: ..."): errors red, warnings amber.
+// error: ..."): errors red, warnings amber, hints cyan.
 func severityColor(line, sev string) string {
 	style := "\x1b[1;33m"
-	if sev == "error" {
+	switch sev {
+	case "error":
 		style = "\x1b[1;31m"
+	case "hint":
+		style = "\x1b[1;36m"
 	}
 	return strings.Replace(line, ": "+sev+": ", ": "+style+sev+"\x1b[0m: ", 1)
 }
