@@ -44,6 +44,10 @@ concepts:
     kind: process
     internal: true
     doc: "One-line setup checks, each with its fix."
+  AgentBenchmark:
+    kind: process
+    internal: true
+    doc: "The agent benchmark (#271): tickets against the showcase repositories with the domain pitfalls each sets, the scorer that reads an agent's tree through the linter, the drift report and the gate, and the runner that compares agents with and without GlossMark context."
   # Review
   ReviewLedger:       { kind: resource, realizes: gm:Ledger, publishes: [gm:LinkStale], doc: "The .glossmark/ledger.jsonl record of each link's review state, reviewer, reason and anchor fingerprint." }
   ReviewCommands:     { kind: process, realizes: gm:Review, doc: "accept, reject and status." }
