@@ -672,12 +672,15 @@ function buildFilters(){
   const row=document.createElement('div');row.className='fgroup';
   const gl=document.createElement('span');gl.className='gl';gl.textContent='Flags';row.appendChild(gl);
   const l=document.createElement('label');l.innerHTML='<input type="checkbox" id="internal"> show internal mechanisms';row.appendChild(l);
+  const l2=document.createElement('label');l2.title='On a map of more than '+QUIET+' edges, derived and lifted edges are drawn only for the selected or hovered node';
+  l2.innerHTML='<input type="checkbox" id="allEdges"> every derived and lifted edge';row.appendChild(l2);
   const reset=document.createElement('button');reset.textContent='Reset filters';reset.style.marginLeft='auto';
   reset.onclick=()=>{S.f=emptyFilters();S.deg=null;S.rels=new Set(V._edges.map(e=>e.p));S.internal=false;buildFilters();rebuild(false);syncChangesBtn();renderPanel();draw();};
   row.appendChild(reset);
   box.appendChild(row);
   $('internal').checked=S.internal;
   $('internal').onchange=ev=>{S.internal=ev.target.checked;rebuild(false);renderPanel();draw();};
+  $('allEdges').checked=!!S.allEdges;$('allEdges').onchange=ev=>{S.allEdges=ev.target.checked;draw();};
 }
 function filtersActive(){return Object.values(S.f).some(s=>s.size)||S.rels.size!==new Set(V._edges.map(e=>e.p)).size;}
 
@@ -1099,6 +1102,33 @@ function edgeGeom(e){
   const cx=mx-dy/d*(e.off||0)*2,cy=my+dx/d*(e.off||0)*2;
   return {a:anchor(e.s,ps,cx,cy),b:anchor(e.o,po,cx,cy),cx,cy,port:null};
 }
+// drawnEdges: what the edge pass draws and hit-tests. On a dense map (more
+// than QUIET edges) derived and lifted edges appear only for the selected or
+// hovered node, and edges between the same two nodes are bundled into one
+// with a count unless one of the two is selected; the panel lists them all.
+const QUIET=30;
+let BUN=new Map(); // bundles by node pair, kept between frames so hover and selection hold
+function edgeQuiet(){return !S.allEdges&&VE.filter(e=>!e.contain).length>QUIET;}
+function drawnEdges(){
+  const sn=S.sel&&S.sel.id?S.sel:null,hv=S.hover&&S.hover.id?S.hover:null,quiet=edgeQuiet();
+  const near=e=>(sn&&(e.s===sn||e.o===sn))||(hv&&(e.s===hv||e.o===hv));
+  const out=[],pairs=new Map();let hidden=0;
+  VE.forEach(e=>{
+    if(e.contain){out.push(e);return;}
+    if(quiet&&(e.source==='derived'||e.lifted)&&!near(e)&&S.sel!==e){hidden++;return;}
+    if(near(e)||S.sel===e||e.s._open||e.o._open){out.push(e);return;}
+    const k=e.s.id<e.o.id?e.s.id+'|'+e.o.id:e.o.id+'|'+e.s.id;
+    (pairs.get(k)||pairs.set(k,[]).get(k)).push(e);
+  });
+  const keep=new Map();
+  pairs.forEach((list,k)=>{
+    if(list.length===1){out.push(list[0]);return;}
+    const b=BUN.get(k)||{s:list[0].s,o:list[0].o,off:0,source:'bundle',via:new Set(),parts:[]};
+    b.bundle=list;b.count=list.length;b.p=list.length+' relations';keep.set(k,b);out.push(b);
+  });
+  BUN=keep;out.hidden=hidden;
+  return out;
+}
 function draw(){
   const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
   if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
@@ -1142,13 +1172,24 @@ function draw(){
     if(b.published){ctx.strokeStyle=C.gold;ctx.lineWidth=2.5*u;roundRect(r.x-4,r.y-4,r.w+8,r.h+8,13);ctx.stroke();}
     if(b._diff==='changed'){ctx.strokeStyle=C.changed;ctx.lineWidth=2*u;ctx.setLineDash([3,3]);roundRect(r.x-7,r.y-7,r.w+14,r.h+14,15);ctx.stroke();ctx.setLineDash([]);}
   });
-  // edges
+  // edges; their labels are drawn after the nodes so no node covers them
+  const labels=[];
   ctx.lineCap='round';ctx.font=(10*u)+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  VE.forEach(e=>{
+  const DE=drawnEdges();
+  DE.forEach(e=>{
     const gm=edgeGeom(e);if(!gm)return;
     const {a,b,cx,cy,port}=gm;
     let alpha=Math.min(nodeAlpha(e.s),nodeAlpha(e.o));
     const hl=selEdge===e||(selNode&&(e.s===selNode||e.o===selNode))||S.hover===e;
+    if(e.bundle){ // several relations between one pair: one thicker line, arrows where they point
+      ctx.globalAlpha=selNode&&!hl?alpha*.5:alpha;ctx.strokeStyle=hl?C.select:C.edge;ctx.lineWidth=(1.6+Math.min(2.4,(e.count-1)*.6))*(hl?1.4:1);
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      const head=(p,q)=>{const ang=Math.atan2(p.y-q.y,p.x-q.x),s=(6+ctx.lineWidth)*u;ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(p.x,p.y);
+        ctx.lineTo(p.x-s*Math.cos(ang-.45),p.y-s*Math.sin(ang-.45));ctx.lineTo(p.x-s*Math.cos(ang+.45),p.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill();};
+      if(e.bundle.some(m=>m.s===e.s))head(b,a);if(e.bundle.some(m=>m.s===e.o))head(a,b);
+      labels.push({x:(a.x+b.x)/2,y:(a.y+b.y)/2,t:k>=1.25||hl?e.p:'\u00d7'+e.count,hl,alpha:ctx.globalAlpha});
+      return;
+    }
     if(selNode&&!hl)alpha*=.5;
     if(e.contain)alpha*=.8;
     if(e.planned)alpha*=.45;
@@ -1166,10 +1207,7 @@ function draw(){
       const ang=Math.atan2(b.y-cy,b.x-cx),s=(6+ctx.lineWidth)*u;
       ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(b.x,b.y);
       ctx.lineTo(b.x-s*Math.cos(ang-.45),b.y-s*Math.sin(ang-.45));ctx.lineTo(b.x-s*Math.cos(ang+.45),b.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill();
-      if(k>=1.25||hl){ // relation label
-        const lx=(a.x+2*cx+b.x)/4,ly=(a.y+2*cy+b.y)/4,t=e.p+(e.count>1?' ×'+e.count:'')+(e.lifted?' ↑':''),w=ctx.measureText(t).width+6;
-        ctx.fillStyle=C.halo;ctx.fillRect(lx-w/2,ly-7*u,w,14*u);ctx.fillStyle=hl?C.select:C.muted;ctx.fillText(t,lx,ly);
-      }
+      if(k>=1.25||hl)labels.push({x:(a.x+2*cx+b.x)/4,y:(a.y+2*cy+b.y)/4,t:e.p+(e.count>1?' ×'+e.count:'')+(e.lifted?' ↑':''),hl,alpha:ctx.globalAlpha});
     }
   });
   // nodes (closed boundaries, concepts, artifacts)
@@ -1225,9 +1263,16 @@ function draw(){
       ctx.fillStyle='#fff';ctx.textBaseline='middle';ctx.fillText(t,bx,by+.5);
     }
   });
+  // relation labels at each edge's midpoint, on a halo, above the nodes
+  ctx.font=(10*u)+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  // A label that would overlap one already drawn is left out (highlighted ones first);
+  // the tooltip and the panel still name the relation.
+  const taken=[];
+  labels.sort((a,b)=>(b.hl?1:0)-(a.hl?1:0)).forEach(l=>{const w=ctx.measureText(l.t).width+8*u,r={x0:l.x-w/2,x1:l.x+w/2,y0:l.y-7.5*u,y1:l.y+7.5*u};
+    if(taken.some(o=>o.x0<r.x1&&r.x0<o.x1&&o.y0<r.y1&&r.y0<o.y1))return;taken.push(r);ctx.globalAlpha=l.alpha;ctx.fillStyle=C.halo;roundRect(l.x-w/2,l.y-7.5*u,w,15*u,4*u);ctx.fill();ctx.fillStyle=l.hl?C.select:C.muted;ctx.fillText(l.t,l.x,l.y);});
   ctx.globalAlpha=1;
   const nb2=VN.filter(n=>n.type==='boundary').length;
-  $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(filtersActive()?' · filtered':'')+(S.slice?' · slice':'');
+  $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(DE.hidden?` · ${DE.hidden} derived or lifted hidden until a node is selected or hovered`:'')+(filtersActive()?' · filtered':'')+(S.slice?' · slice':'');
   $('hint').textContent=S.focus?'Esc leaves focus':S.slice?'Esc clears the slice':(VN.some(n=>n.type==='boundary'&&!n._open&&n._kids)?'click a boundary to open it · double-click to focus · alt+click to slice':'alt+click a node to slice on it');
 }
 
@@ -1251,7 +1296,7 @@ function hitNode(w){
 function hitEdge(w){
   const tol=(lastPtr==='mouse'?7:14)/S.cam.k;let best=null,bd=tol;
   RC=new Map();
-  VE.forEach(e=>{if(e.contain)return;const gm=edgeGeom(e);if(!gm)return;const {a,b,cx,cy}=gm;
+  drawnEdges().forEach(e=>{if(e.contain)return;const gm=edgeGeom(e);if(!gm)return;const {a,b,cx,cy}=gm;
     for(let t=0;t<=1;t+=.05){const u=1-t,x=u*u*a.x+2*u*t*cx+t*t*b.x,y=u*u*a.y+2*u*t*cy+t*t*b.y,dd=Math.hypot(w.x-x,w.y-y);if(dd<bd){bd=dd;best=e;}}});
   return best;
 }
@@ -1284,6 +1329,7 @@ function nodeTip(n){
   return h;
 }
 function edgeTip(e){
+  if(e.bundle)return `<b>${esc(e.s.label||e.s.id)}</b> \u21c4 <b>${esc(e.o.label||e.o.id)}</b><br><span class="k">${e.count} relations, bundled; click for each</span><ul>${e.bundle.map(m=>'<li>'+esc(m.s===e.s?'\u2192 ':'\u2190 ')+esc(m.p)+' <span class="k">'+esc(m.source)+(m.count>1?' \u00d7'+m.count:'')+'</span></li>').join('')}</ul>`;
   const iface=(e.s._open&&under(e.o,e.s))||(e.o._open&&under(e.s,e.o));
   let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.planned?' · planned':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
   if(e.via&&e.via.size)h+=`<br><span class="k">via</span><ul>${[...e.via].slice(0,10).map(v=>'<li>'+esc(v)+'</li>').join('')}${e.via.size>10?'<li>…</li>':''}</ul>`;
@@ -1435,6 +1481,9 @@ function renderPanel(){
     h+=`<h2>Outgoing (${out.length})</h2><ul>${out.map(e=>edgeLi(e,e.o,'→')).join('')||'<li class="via">none</li>'}</ul>`;
     h+=`<h2>Incoming (${inn.length})</h2><ul>${inn.map(e=>edgeLi(e,e.s,'←')).join('')||'<li class="via">none</li>'}</ul>`;
     }
+  }else if(sel&&sel.bundle){
+    const e=sel;
+    h+=`<h2>Selected edges (${e.count})</h2><div>${nodeLink(e.s)} <b>\u21c4</b> ${nodeLink(e.o)}</div><ul>${e.bundle.map(m=>`<li>${nodeLink(m.s)} <b title="${esc(relDef(m.p))}">\u2014${esc(m.p)}\u2192</b> ${nodeLink(m.o)} <span class="via">${esc(m.source)}${m.proposed?' · proposed':''}${m.lifted?' · lifted':''}${m.count>1?' · ×'+m.count:''}</span></li>`).join('')}</ul><div class="via">Select either node to draw them one by one.</div>`;
   }else if(sel){
     const e=sel;
     h+=`<h2>Selected edge</h2><div>${nodeLink(e.s)} <b>—${esc(e.p)}→</b> ${nodeLink(e.o)}</div><dl><dt>meaning</dt><dd>${esc(relDef(e.p))}</dd><dt>source</dt><dd>${esc(e.source)}</dd><dt>count</dt><dd>${e.count}</dd>`;
