@@ -126,6 +126,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .chg .path{color:var(--muted);font-size:11px;word-break:break-all}
 .badge{display:inline-block;padding:0 5px;border-radius:8px;background:var(--line);font-size:11px;margin-left:4px}
 #sheetBtn{display:none}
+#moreBtn{display:none}#moreBox{display:contents}
 #ovBar{display:inline-flex;align-items:center;gap:4px}
 #ovBar[hidden]{display:none}
 #ovSel{max-width:300px}
@@ -157,15 +158,20 @@ table.vt tr.cur td{font-weight:650}
   #generated,#nsNote{display:none}
   #repo{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   header .spacer{flex:1 1 0;min-width:0}
-  header label.meta{flex:none}
-  #themeBtn{flex:none}
-  .bar{flex-wrap:nowrap;overflow-x:auto;padding:6px 12px;scrollbar-width:none}
-  .bar::-webkit-scrollbar{display:none}
-  .bar>*{flex:none}
+  header label.meta{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:4px}
+  #viewSel{min-width:0;max-width:150px}
+  @media (max-width:440px){#repo{display:none}}
+  #themeBtn{flex:none}#themeBtn .tl{display:none}
+  /* The toolbar wraps instead of scrolling; Expand all, Collapse all and
+     Re-layout sit behind the ⋯ button on a row of their own. */
+  .bar{flex-wrap:wrap;row-gap:6px;padding:6px 12px}
+  .bar>*{flex:none}.bar .sep{display:none}
+  #moreBtn{display:inline-block}#moreBox{display:none}
+  .bar.more #moreBox{display:flex;flex-basis:100%;gap:8px}
   #crumbs{flex-wrap:nowrap;white-space:nowrap}
   /* 16px keeps iOS from zooming the page when a field gets focus. */
   select,input[type=text]{font-size:16px;padding:3px 6px}
-  input[type=text]{min-width:0;width:140px}
+  input[type=text]{min-width:0;width:130px}
   #filters{padding-left:12px;padding-right:12px;max-height:40vh;overflow-y:auto}
   .chip{padding:3px 10px}
   #status{bottom:50px}
@@ -187,7 +193,7 @@ table.vt tr.cur td{font-weight:650}
   <span class="meta" id="nsNote"></span>
   <span class="spacer"></span>
   <label class="meta">View <select id="viewSel" aria-label="View"></select></label>
-  <button id="themeBtn" title="Cycle theme: auto / light / dark" aria-label="Theme: auto (cycle auto, light, dark)">Theme: auto</button>
+  <button id="themeBtn" title="Cycle theme: auto / light / dark" aria-label="Theme: auto (cycle auto, light, dark)">◐ <span class="tl">Theme: </span><span class="tv">auto</span></button>
 </header>
 <div class="bar">
   <span id="crumbs"></span>
@@ -200,10 +206,13 @@ table.vt tr.cur td{font-weight:650}
   <select id="changesSel" aria-label="Show changes within" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
     <option value="">All nodes</option><option value="0">Only changes</option><option value="1">Changes + 1 hop</option><option value="2">Changes + 2 hops</option><option value="3">Changes + 3 hops</option>
   </select>
+  <button id="fit" title="Fit to window (f)" aria-label="Fit the map to the window" aria-keyshortcuts="f">Fit</button>
+  <button id="moreBtn" type="button" title="More: expand, collapse, re-layout" aria-label="More map actions" aria-expanded="false" aria-controls="moreBox">⋯</button>
+  <span id="moreBox">
   <button id="expandAll" title="Open every boundary and part-of tree">Expand all</button>
   <button id="collapseAll" title="Back to the top: every boundary closed">Collapse all</button>
-  <button id="fit" title="Fit to window (f)" aria-label="Fit the map to the window" aria-keyshortcuts="f">Fit</button>
   <button id="relayout" title="Lay the map out again, unpinning dragged nodes">Re-layout</button>
+  </span>
 </div>
 <div id="filters" role="region" aria-label="Filters"></div>
 <main>
@@ -1027,13 +1036,26 @@ function rectOf(b){
 // viewH: the canvas height not covered by the bottom sheet (phones only).
 function viewH(){return cv.clientHeight-(getComputedStyle(panel).position==='absolute'?panel.offsetHeight:0);}
 function centre(n){if(n._open){const r=rectOf(n);return {x:r.x+r.w/2,y:r.y+r.h/2};}return S.pos.get(n.id);}
-function fit(){
+// fit: the whole map in the window. On a narrow screen the automatic fit (not
+// the Fit button or f, which pass whole) stops at a readable zoom and centres
+// on the largest top-level box (its top left corner when it is larger than the
+// window, so its title shows) instead of shrinking the
+// map until no label can be read.
+const MIN_READ=.7;
+function fit(whole){
   if(!VN.length)return;
   RC=new Map();
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   VN.forEach(n=>{if(n._open){const r=rectOf(n);x0=Math.min(x0,r.x);x1=Math.max(x1,r.x+r.w);y0=Math.min(y0,r.y);y1=Math.max(y1,r.y+r.h);return;}
     const p=S.pos.get(n.id);x0=Math.min(x0,p.x-n._w/2);x1=Math.max(x1,p.x+n._w/2);y0=Math.min(y0,p.y-n._h/2);y1=Math.max(y1,p.y+n._h/2+16);});
   const W=cv.clientWidth,H=viewH(),m=Math.min(120,Math.min(W,H)*.12),k=Math.min(1.5,Math.max(.08,Math.min(W/(x1-x0+m),H/(y1-y0+m))));
+  if(whole!==true&&W<600&&k<MIN_READ){
+    const box=n=>n._open?rectOf(n):(p=>({x:p.x-n._w/2,y:p.y-n._h/2,w:n._w,h:n._h}))(S.pos.get(n.id));
+    const tops=VN.filter(n=>!n._lc&&n.type==='boundary').map(box).sort((a,b)=>b.w*b.h-a.w*a.h);
+    const r=tops[0]||{x:x0,y:y0,w:x1-x0,h:y1-y0},kk=MIN_READ;
+    S.cam={k:kk,x:r.w*kk>W-16?8-r.x*kk:W/2-(r.x+r.w/2)*kk,y:r.h*kk>H-24?12-r.y*kk:H/2-(r.y+r.h/2)*kk};S.camMoved=false;
+    draw();return;
+  }
   S.cam={k,x:W/2-(x0+x1)/2*k,y:H/2-(y0+y1)/2*k};S.camMoved=false;
   draw();
 }
@@ -1808,7 +1830,7 @@ cv.addEventListener('wheel',ev=>{
 },{passive:false});
 window.addEventListener('keydown',ev=>{hideTip();if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
   if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
-  if(ev.key==='f')fit();
+  if(ev.key==='f')fit(true);
   if(ev.key==='/'&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey){ev.preventDefault();$('search').focus();$('search').select();}
   if((ev.key==='['||ev.key===']')&&HIST.length){S.histScroll=true;stepOverlay(ev.key==='['?1:-1);}});
 // A resize (a phone turned sideways) refits the map unless the reader has panned or zoomed.
@@ -1831,11 +1853,12 @@ $('ovNewer').onclick=()=>{S.histScroll=true;stepOverlay(-1);};
 $('changesSel').onchange=ev=>setDegree(ev.target.value===''?null:+ev.target.value);
 $('expandAll').onclick=()=>{V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(false);fit();renderPanel();};
 $('collapseAll').onclick=()=>{S.expanded=groupIds();S.focus=null;rebuild(false);fit();renderPanel();};
-$('fit').onclick=fit;
+$('fit').onclick=()=>fit(true);
+$('moreBtn').onclick=()=>{const on=document.querySelector('.bar').classList.toggle('more');$('moreBtn').setAttribute('aria-expanded',String(on));$('moreBtn').classList.toggle('on',on);};
 $('relayout').onclick=()=>{S.pinned.clear();rebuild(true);fit();};
 const themes=['auto','light','dark'];
 function applyTheme(t){S.theme=t;if(t==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t);
-  $('themeBtn').textContent='Theme: '+t;$('themeBtn').setAttribute('aria-label','Theme: '+t+' (cycle auto, light, dark)');readTheme();draw();try{localStorage.setItem('gloss-theme',t);}catch(e){}}
+  $('themeBtn').querySelector('.tv').textContent=t;$('themeBtn').setAttribute('aria-label','Theme: '+t+' (cycle auto, light, dark)');readTheme();draw();try{localStorage.setItem('gloss-theme',t);}catch(e){}}
 $('themeBtn').onclick=()=>applyTheme(themes[(themes.indexOf(S.theme)+1)%3]);
 let saved='auto';try{saved=localStorage.getItem('gloss-theme')||'auto';}catch(e){}
 if(!themes.includes(saved))saved='auto';
