@@ -104,6 +104,9 @@ aside a.n{color:var(--accent);cursor:pointer;text-decoration:none}aside a.n:hove
 #navTree .tw{width:10px;color:var(--muted);flex:none;text-align:center}
 #navTree .k{color:var(--muted);font-size:11px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+aside h2 a.gl{text-transform:none;letter-spacing:0;font-weight:400;margin-left:6px}
+aside details>summary .note{display:block;margin:1px 0 2px 14px;font-weight:400}
+aside .kdef{margin:2px 0 4px 14px;color:var(--muted);font-size:11px}aside .kdef b{color:var(--fg);font-weight:600}aside .kdef a{color:var(--accent)}
 aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .legend>span{display:inline-flex;align-items:center;gap:6px;margin:2px 12px 2px 0}
 #legendBox{margin-top:14px}#legendBox>summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650;margin-bottom:6px}
@@ -1564,12 +1567,13 @@ function renderPanel(){
     if(data.classified===0)h+=`<div class="via" style="margin-top:6px">Nothing is classified by criticality yet, so ordering by criticality has no effect. Run <span class="mono">gloss criticality suggest</span> for a first pass.</div>`;
     if(findings.length){
       const kinds=[...new Set(findings.map(f=>f.kind))];
-      h+=`<h2>Drift (${findings.length})</h2>`;
+      h+=`<h2>Drift (${findings.length}) <a class="n gl" href="${GLOSSARY}" target="_blank" rel="noopener" title="Every drift kind explained, in docs/GLOSSARY.md">what these mean</a></h2>`;
       kinds.forEach(k=>{
         const list=findings.filter(f=>f.kind===k);
-        h+=`<details${k==='violation'||k==='gap'||k==='dangling'?' open':''}><summary><b>${esc(k)}</b> <span class="badge">${list.length}</span></summary><ul>${list.slice(0,25).map(f=>{
+        const dd=DRIFTDEFS[k];
+        h+=`<details${k==='violation'||k==='gap'||k==='dangling'?' open':''}><summary><b>${esc(k)}</b> <span class="badge">${list.length}</span>${dd?` <span class="note">${esc(dd[0])}</span>`:''}</summary>${dd?`<div class="kdef"><b>Next:</b> ${esc(dd[1])} <a href="${GLOSSARY}#${encodeURIComponent(k)}" target="_blank" rel="noopener">More</a></div>`:''}<ul>${list.slice(0,25).map(f=>{
           const c=f.concept&&byId.has(f.concept)?nodeLink(byId.get(f.concept)):(f.concept?'<span class="mono">'+esc(f.concept)+'</span>':'');
-          return '<li>'+(f.boundary?esc(f.boundary)+' ':'')+c+' <div class="via">'+esc(f.msg||'')+'</div>'+(f.path?'<div>'+srcLink(f.path,f.line)+'</div>':'')+'</li>';
+          return '<li>'+(f.boundary?esc(f.boundary)+' ':'')+c+' <div class="note">'+esc(f.msg||'')+'</div>'+(f.path?'<div>'+srcLink(f.path,f.line)+'</div>':'')+'</li>';
         }).join('')}${list.length>25?'<li class="via">… '+(list.length-25)+' more</li>':''}</ul></details>`;
       });
     }
@@ -1713,6 +1717,28 @@ const LEGEND=[
     ['<span style="color:var(--changed)">\u25cc</span>','changed','Orange dashed ring: a node whose definition changed since the base.',any(n=>n._diff==='changed')],
     ['<i class="sw c" style="background:transparent;border-color:var(--added);border-style:dashed"></i>','added, gone since','Green and dashed: a commit of the history added it and a newer one removed it, so today\u2019s map has no place for it; it floats at the top.',any(n=>n.gone)]]},
 ];
+// Drift kinds: what each means and what to do next, worded from the finding
+// kinds table in docs/ADVANCED.md; docs/GLOSSARY.md has an anchor per kind.
+const GLOSSARY='https://github.com/mckalvan/glossmark/blob/main/docs/GLOSSARY.md';
+const DRIFTDEFS={
+  'violation':['A boundary\u2019s code realizes, produces, consumes, publishes or subscribes something its manifest does not declare.','Declare it in the manifest if it belongs there, or move or unlink the code.'],
+  'gap':['A manifest declares something no code under the boundary implements.','Implement it, mark it planned: with a date, or drop the declaration.'],
+  'value-drift':['The code a published value is bound to changed and the ontology value did not.','Update value: in the ontology, or revert the code.'],
+  'dangling':['A marker, manifest entry or ontology relation names a concept that does not exist.','Fix the name, or propose the concept with @gloss? ns:NEW:Name.'],
+  'overdue':['A deprecated boundary is past its retire-by date and still has code.','Finish the migration, or move retire-by with the owner\u2019s agreement.'],
+  'planned-closed':['Code now implements something marked planned.','Drop planned (gloss accept --planned ns:X), or move the manifest entry to its plain list.'],
+  'plan-overdue':['A plan item\u2019s by date has passed and nothing implements it.','Build it, or move the date on the plan.'],
+  'overlap':['Two boundaries, neither inside the other, both realize or hold the same concept through their own code.','If one replaces the other, mark the old manifest deprecated: with replaced-by: and retire-by:; otherwise decide which boundary owns the concept.'],
+  'rogue':['A ns:NEW:Name proposal: a concept someone asked the namespace owner to add.','The owner adds the concept to the ontology or rejects the link.'],
+  'orphan':['A concept nothing is built for: no code links to it or to anything realizing it.','Link the code that implements it, mark it planned:, or remove the concept.'],
+  'untested':['Code reaches the concept but no test verifies it.','Add a test with a verifies marker.'],
+  'presented-only':['A page presents the concept (or a shell hosts it) but nothing implements it.','Link the code behind it with implements, or check that the page is meant to exist.'],
+  'unguarded':['A handler under a guarded-by boundary lacks the guard\u2019s decorator its neighbours carry.','Add the decorator, or confirm the guard is applied another way.'],
+  'stale':['An accepted link whose anchored code changed since it was accepted.','Check the link still holds, then gloss accept --stale <paths>.'],
+  'proposed':['An ontology entry marked proposed: true, awaiting acceptance.','Review it, then gloss accept --concept, or remove it.'],
+  'planned':['A planned concept or manifest declaration nothing implements yet.','Nothing, until its by date; build it before then.'],
+  'out-of-range':['An importer resolves a namespace version outside its declared range.','Bump the import range or pin a version inside it.'],
+  'deprecated-use':['Something still references a deprecated concept.','Move the reference to its replacement.']};
 // Relation definitions, read as "A <relation> B" in the direction the edge is drawn.
 // Worded from docs/ADVANCED.md and internal/model/vocab.go.
 const RELDEFS={
