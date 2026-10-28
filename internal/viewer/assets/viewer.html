@@ -44,6 +44,7 @@ select,input[type=text],button{font:inherit;color:var(--fg);background:var(--bg)
 button{cursor:pointer}button:hover{border-color:var(--accent)}
 button.on{border-color:var(--accent);color:var(--accent)}
 input[type=text]{min-width:160px}
+#searchInfo{color:var(--muted);white-space:nowrap}#searchInfo:empty{display:none}
 #crumbs{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 #crumbs a{color:var(--accent);cursor:pointer;text-decoration:none;padding:2px 4px;border-radius:4px}
 #crumbs a:hover{background:var(--bg)}
@@ -191,7 +192,8 @@ table.vt tr.cur td{font-weight:650}
 <div class="bar">
   <span id="crumbs"></span>
   <span class="sep"></span>
-  <input type="text" id="search" placeholder="Search id / label…" autocomplete="off" aria-label="Search nodes by id or label">
+  <input type="text" id="search" placeholder="Search id / label…  ( / )" autocomplete="off" aria-label="Search nodes by id or label; Enter and Shift+Enter step through matches" aria-keyshortcuts="/" aria-describedby="searchInfo">
+  <span id="searchInfo" class="meta" aria-live="polite"></span>
   <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation" aria-expanded="false" aria-controls="filters">Filters</button>
   <span class="sep"></span>
   <span id="ovBar" hidden><button id="ovOlder" type="button" title="Older commit ([)" aria-label="Older commit" aria-keyshortcuts="[">◀</button><select id="ovSel" title="Overlay one commit's changes on the map (gloss view --history), or the --diff" aria-label="Overlay"></select><button id="ovNewer" type="button" title="Newer commit (])" aria-label="Newer commit" aria-keyshortcuts="]">▶</button></span>
@@ -454,7 +456,7 @@ const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
 const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set(),pub:new Set(),chg:new Set()});
-const S={ov:null,asOf:true,deg:null,slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
+const S={mi:-1,ov:null,asOf:true,deg:null,slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},camMoved:false,theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
 const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage'),panel=$('panel');
@@ -515,7 +517,7 @@ function loadView(i,keep){
   S.relsAll=rels;
   // The top of the system: everything closed; drill in by clicking.
   S.expanded=groupIds();S.pos=new Map();S.pinned=new Set();S.sel=null;S.hover=null;S.focus=null;S.f=emptyFilters();
-  S.rels=new Set(edges.map(e=>e.p));S.slice=null;S.deg=null;
+  S.rels=new Set(edges.map(e=>e.p));S.slice=null;S.deg=null;S.mi=-1;
   rng=mulberry(hash(V.name||'view')+1);
   buildFilters();syncChangesBtn();
   rebuild(true);
@@ -870,6 +872,7 @@ function rebuild(seedAll){
   else hideMsg();
   if(S.sel&&!(S.sel.id?byId.get(S.sel.id)&&byId.get(S.sel.id)._vis:VE.includes(S.sel)))S.sel=null;
   renderCrumbs();
+  if(S.q)searchInfo();
   const nb=VN.filter(n=>n.type==='boundary').length;
   cv.setAttribute('aria-label',`Map of the ${V.name||''} view: ${VN.filter(n=>!n.group).length} nodes, ${nb} boundar${nb===1?'y':'ies'}, ${VE.filter(e=>!e.contain).length} edges${S.focus?', focused on '+(byId.get(S.focus).label||S.focus):''}. The Outline in the side panel lists them for the keyboard.`);
 }
@@ -1032,6 +1035,27 @@ function fit(){
   draw();
 }
 
+/* ---- search ---- */
+// A node matches when the query is in its id or label. Matches inside closed
+// boxes are counted, their boxes ringed, and Enter steps to them, opening boxes.
+const matchQ=n=>!!S.q&&((n.id||'').toLowerCase().includes(S.q)||(n.label||'').toLowerCase().includes(S.q));
+function matchList(){return S.q?V._nodes.filter(n=>!n.group&&!n._later&&matchQ(n)).sort((a,b)=>shortLabel(a).localeCompare(shortLabel(b))):[];}
+// holdsMatch: the closed nodes drawn in place of matches they hide.
+function holdsMatch(){const out=new Set();if(!S.q)return out;
+  V._nodes.forEach(n=>{if(!n.group&&!n._vis&&!n._later&&matchQ(n)&&!hiddenByFilter(n)){const r=repr(n.id);if(r&&!r._open&&r!==n)out.add(r.id);}});return out;}
+function searchInfo(){
+  const el=$('searchInfo');if(!S.q){el.textContent='';return;}
+  const L=matchList(),filt=L.filter(hiddenByFilter).length,inside=L.filter(n=>!n._vis&&!hiddenByFilter(n)).length,steps=L.length-filt;
+  el.textContent=!L.length?'no matches':(S.mi>=0&&steps?(S.mi+1)+' of ':'')+L.length+' match'+(L.length===1?'':'es')+(inside?' \u00b7 '+inside+' inside closed boxes':'')+(filt?' \u00b7 '+filt+' filtered out':'');
+  el.title=steps?'Enter: next match, Shift+Enter: previous; boxes open as needed':'';
+}
+// stepMatch: select the next (+1) or previous (-1) match, opening what holds it.
+function stepMatch(dir){
+  const L=matchList().filter(n=>!hiddenByFilter(n));if(!L.length)return;
+  S.mi=S.mi<0?(dir>0?0:L.length-1):(S.mi+dir+L.length)%L.length;
+  reveal(L[S.mi]);searchInfo();
+}
+
 /* ---- drawing ---- */
 function edgeDash(e){
   if(e.contain)return [2,4];
@@ -1086,8 +1110,8 @@ function draw(){
   ctx.translate(x,y);ctx.scale(k,k);
   const sel=S.sel,q=S.q,selNode=sel&&sel.id?sel:null,selEdge=sel&&!sel.id?sel:null;
   const nb=new Set();if(selNode)VE.forEach(e=>{if(e.s===selNode)nb.add(e.o.id);if(e.o===selNode)nb.add(e.s.id);});
-  const match=n=>!q||(n.id||'').toLowerCase().includes(q)||(n.label||'').toLowerCase().includes(q);
-  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;if(S.slice&&!n.group){const r=S.slice.roles.get(n.id);if(r&&r.role==='context')a*=.45;}if(S.deg!==null&&n._dist>0&&n._dist<Infinity)a*=[1,.55,.38,.26][n._dist];return a;};
+  const match=n=>!q||matchQ(n),holds=holdsMatch();
+  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n)&&!holds.has(n.id))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;if(S.slice&&!n.group){const r=S.slice.roles.get(n.id);if(r&&r.role==='context')a*=.45;}if(S.deg!==null&&n._dist>0&&n._dist<Infinity)a*=[1,.55,.38,.26][n._dist];return a;};
   // open boundaries, outermost first
   const open=VN.filter(n=>n._open).sort((a,b)=>depthOf(a)-depthOf(b));
   ctx.textAlign='left';ctx.textBaseline='middle';
@@ -1177,6 +1201,9 @@ function draw(){
       if(n.type==='boundary')ctx.roundRect(p.x-n._w/2-4,p.y-n._h/2-4,n._w+8,n._h+8,11);else ctx.arc(p.x,p.y,ring+1,0,Math.PI*2);ctx.stroke();}
     if(n._diff==='changed'){ctx.strokeStyle=C.changed;ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.beginPath();
       if(n.type==='boundary')ctx.roundRect(p.x-n._w/2-7,p.y-n._h/2-7,n._w+14,n._h+14,13);else ctx.arc(p.x,p.y,ring+5,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
+    if(holds.has(n.id)){ // a closed box or whole holding search matches
+      ctx.strokeStyle=C.select;ctx.lineWidth=2.5;ctx.setLineDash([5,3]);ctx.beginPath();
+      if(n.type==='boundary')ctx.roundRect(p.x-n._w/2-9,p.y-n._h/2-9,n._w+18,n._h+18,14);else ctx.arc(p.x,p.y,ring+8,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
     if(n.type==='concept'&&n._kids){ // expand marker
       ctx.strokeStyle=col.stroke;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(p.x-5,p.y);ctx.lineTo(p.x+5,p.y);
       if(!S.expanded.has(n.id)){ctx.moveTo(p.x,p.y-5);ctx.lineTo(p.x,p.y+5);}ctx.stroke();}
@@ -1733,6 +1760,7 @@ cv.addEventListener('wheel',ev=>{
 window.addEventListener('keydown',ev=>{hideTip();if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
   if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
   if(ev.key==='f')fit();
+  if(ev.key==='/'&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey){ev.preventDefault();$('search').focus();$('search').select();}
   if((ev.key==='['||ev.key===']')&&HIST.length){S.histScroll=true;stepOverlay(ev.key==='['?1:-1);}});
 // A resize (a phone turned sideways) refits the map unless the reader has panned or zoomed.
 new ResizeObserver(()=>{if(!S.camMoved&&VN.length)fit();else draw();}).observe(stage);
@@ -1741,7 +1769,11 @@ new ResizeObserver(()=>{if(!S.camMoved&&VN.length)fit();else draw();}).observe(s
 const sel=$('viewSel');
 views.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=(v&&v.name)||('view '+(i+1));sel.appendChild(o);});
 sel.onchange=()=>loadView(+sel.value);
-$('search').oninput=ev=>{hideTip();S.q=ev.target.value.trim().toLowerCase();draw();};
+$('search').oninput=ev=>{hideTip();S.q=ev.target.value.trim().toLowerCase();S.mi=-1;searchInfo();draw();};
+$('search').addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'){ev.preventDefault();stepMatch(ev.shiftKey?-1:1);}
+  else if(ev.key==='Escape'&&ev.target.value){ev.preventDefault();ev.target.value='';S.q='';S.mi=-1;searchInfo();draw();}
+});
 $('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');$('filtersBtn').setAttribute('aria-expanded',String($('filters').classList.contains('on')));};
 $('ovSel').onchange=ev=>{const v=ev.target.value;S.histScroll=true;
   if(v==='')setOverlay(null);else if(v==='diff')setOverlay({k:'diff'});else if(v[0]==='s'){S.ovAnchor=+v.slice(1);setOverlay({k:'step',i:+v.slice(1)});}};
