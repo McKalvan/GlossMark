@@ -180,7 +180,12 @@ func writeGraph(g *graph.Graph, path string) error {
 }
 
 func printDiags(diags []marker.Diagnostic) {
+	col := colorOn(os.Stderr)
 	for _, d := range diags {
+		if col {
+			fmt.Fprintln(os.Stderr, severityColor(d.String(), d.Severity))
+			continue
+		}
 		fmt.Fprintln(os.Stderr, d.String())
 	}
 }

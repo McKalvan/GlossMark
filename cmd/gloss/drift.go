@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
+	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
@@ -27,6 +29,7 @@ func cmdDrift(args []string) int {
 	failOn := fs.String("fail-on", "violation,value-drift,gap,dangling,overdue,planned-closed,plan-overdue", "comma-separated finding kinds that fail the command")
 	all := fs.Bool("all", false, "also list consistent pairs")
 	ids := fs.Bool("ids", false, "end each finding with its id, the key policy.waivers names (text output; JSON always has it)")
+	explain := fs.Bool("explain", false, "print each finding's precise message, with the derived and declared sets (text output; JSON always has it)")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
@@ -49,13 +52,35 @@ func cmdDrift(args []string) int {
 	case "markdown":
 		fmt.Print(rollup.RenderMarkdown(rep, *all))
 	default:
-		fmt.Print(rollup.RenderTextOpts(rep, rollup.TextOptions{All: *all, IDs: *ids}))
+		manifests := map[string]string{}
+		for _, m := range p.WS.Manifests {
+			manifests[m.Boundary] = m.Path
+		}
+		fmt.Print(rollup.RenderTextOpts(rep, rollup.TextOptions{All: *all, IDs: *ids, Guide: true, Explain: *explain, Manifests: manifests, Color: colorOn(os.Stdout)}))
+		if ownConcepts(p.Graph) == 0 {
+			fmt.Println("\nNo concepts are defined yet, so there is nothing to compare. Draft some with gloss suggest --concepts.")
+		}
 	}
-	if n := len(rep.Failing(kinds)); n > 0 {
-		fmt.Fprintf(os.Stderr, "gloss drift: %s (%s)\n", plural(n, "failing finding"), *failOn)
+	if failing := rep.Failing(kinds); len(failing) > 0 {
+		msg := "gloss drift: " + rollup.FailSummary(failing, kinds)
+		if colorOn(os.Stderr) {
+			msg = "\x1b[1;31m" + msg + "\x1b[0m"
+		}
+		fmt.Fprintln(os.Stderr, msg)
 		return 1
 	}
 	return 0
+}
+
+// ownConcepts counts the concepts the workspace defines, imports left out.
+func ownConcepts(g *graph.Graph) int {
+	n := 0
+	for _, c := range g.NodesOf(model.NodeConcept) {
+		if !c.Imported {
+			n++
+		}
+	}
+	return n
 }
 
 func cmdCoverage(args []string) int {
@@ -133,14 +158,22 @@ func cmdCoverage(args []string) int {
 		enc.SetIndent("", "  ")
 		enc.Encode(m)
 	} else {
-		fmt.Printf("concepts %s (%d of %d concepts in scope have an artifact and a verifier: implementation concepts, and core concepts code implements directly)\n", m.ConceptCoverage("%.1f%%"), m.ConceptsCovered, m.ConceptsInScope)
+		// Whole percentages, as in gloss drift; JSON keeps the precise value.
+		fmt.Printf("concepts %s (%d of %d concepts in scope have an artifact and a verifier: implementation concepts, and core concepts code implements directly)\n", m.ConceptCoverage("%.0f%%"), m.ConceptsCovered, m.ConceptsInScope)
 		scope := "in-scope files"
 		if *changedOnly {
 			scope = "files changed since " + *base
 		}
-		fmt.Printf("files %.1f%% (%d of %d %s carry an accepted link)\n", m.CoveragePct, m.CoveredFiles, m.InScopeFiles, scope)
-		fmt.Printf("markers %d (%d targets): accepted %d, proposed %d, stale %d, rejected %d; proposed concepts %d; review backlog oldest %d days\n", m.Markers, m.Targets, m.Accepted, m.Proposed, m.Stale, m.Rejected, m.ProposedConcepts, m.BacklogOldestDay)
+		fmt.Printf("files %.0f%% (%d of %d %s carry an accepted link)\n", m.CoveragePct, m.CoveredFiles, m.InScopeFiles, scope)
+		backlog := ""
+		if m.Proposed > 0 {
+			backlog = fmt.Sprintf("; review backlog oldest %d days", m.BacklogOldestDay)
+		}
+		fmt.Printf("markers %d (%d targets): accepted %d, proposed %d, stale %d, rejected %d; proposed concepts %d%s\n", m.Markers, m.Targets, m.Accepted, m.Proposed, m.Stale, m.Rejected, m.ProposedConcepts, backlog)
 		fmt.Printf("orphans %d, rogues %d, violations %d, gaps %d, untested %d, dangling %d; open plan items %d (planned concepts are out of the denominator)\n", m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Untested, m.Dangling, m.PlanItems)
+		if hint := emptyOntologyHint(p.Graph); hint != "" {
+			fmt.Fprintln(os.Stderr, "gloss coverage: "+hint)
+		}
 	}
 	// With nothing in scope coverage is n/a, which no threshold fails.
 	if threshold > 0 && m.ConceptsInScope > 0 && m.ConceptCoveragePct < threshold {

@@ -181,6 +181,73 @@ func TestDoctorWaivers(t *testing.T) {
 	}
 }
 
+// TestDoctorHookPaths: the MCP server is found when .mcp.json runs gloss by
+// an absolute path (issue #225), an absolute path in committed agent config
+// is a warning, and the uncommitted settings.local.json hook counts (#226).
+func TestDoctorHookPaths(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	hook := func() Check {
+		t.Helper()
+		d := &doctor{ws: &load.Workspace{Root: root}}
+		d.hook()
+		return d.out[0]
+	}
+	cmd := func(bin string) string {
+		return `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo export GLOSS_ACTOR=agent:claude-code >> \"${CLAUDE_ENV_FILE:-/dev/null}\"; GLOSS_ACTOR=agent:claude-code ` + bin + ` context --dir \"$PWD\""}]}]}}`
+	}
+	mcp := func(bin string) string {
+		return `{"mcpServers":{"glossmark":{"command":"` + bin + `","args":["mcp"],"env":{"GLOSS_ACTOR":"agent:claude-code"}}}}`
+	}
+	write(".claude/settings.json", cmd("/tmp/claude-0/gloss"))
+	write(".mcp.json", mcp("/tmp/claude-0/gloss"))
+	if c := hook(); c.Status != Warn || strings.Contains(c.Msg, "no MCP server") || !strings.Contains(c.Msg, ".mcp.json runs /tmp/claude-0/gloss") || !strings.Contains(c.Msg, ".claude/settings.json runs /tmp/claude-0/gloss") {
+		t.Errorf("absolute paths = %+v", c)
+	}
+	// What gloss hook install now writes when PATH does not find it.
+	write(".claude/settings.json", cmd("gloss"))
+	write(".claude/settings.local.json", cmd("'/opt/my tools/gloss'"))
+	write(".mcp.json", mcp("gloss"))
+	if c := hook(); c.Status != OK {
+		t.Errorf("by name, local path = %+v", c)
+	}
+	// Only the local hook, and a server under another name that runs gloss.
+	write(".claude/settings.json", `{}`)
+	write(".mcp.json", `{"mcpServers":{"gm":{"command":"C:\\tools\\gloss.exe","args":["mcp"],"env":{"GLOSS_ACTOR":"agent:x"}}}}`)
+	if c := hook(); c.Status != Warn || !strings.Contains(c.Msg, `.mcp.json runs C:\tools\gloss.exe`) {
+		t.Errorf("local hook, Windows path = %+v", c)
+	}
+	// A server that is not gloss does not count.
+	write(".mcp.json", `{"mcpServers":{"other":{"command":"/usr/bin/glossary","args":["mcp"]}}}`)
+	if c := hook(); c.Status != Warn || !strings.Contains(c.Msg, "no MCP server") {
+		t.Errorf("unrelated server = %+v", c)
+	}
+}
+
+// TestDoctorActorUnset: an unset GLOSS_ACTOR is information, not a pass and
+// not a failure (issue #230).
+func TestDoctorActorUnset(t *testing.T) {
+	root := t.TempDir()
+	cmd := exec.Command("git", "init", "-q", root)
+	if err := cmd.Run(); err != nil {
+		t.Skip("git unavailable")
+	}
+	exec.Command("git", "-C", root, "config", "user.name", "Alice").Run()
+	d := &doctor{ws: &load.Workspace{Root: root}}
+	d.actor()
+	c := d.out[0]
+	if c.Status != Info || !strings.Contains(c.Msg, "human:alice") || Failed(d.out) {
+		t.Errorf("unset actor = %+v", c)
+	}
+	if s := String(d.out); !strings.HasPrefix(s, "· GLOSS_ACTOR: unset") {
+		t.Errorf("rendered = %q", s)
+	}
+}
+
 // TestDoctorAutoAccept (ADR 0024): doctor reports the auto-accept rule in
 // force, and warns when no conf meets the target or when the precision
 // target overrides soft-conf-threshold.

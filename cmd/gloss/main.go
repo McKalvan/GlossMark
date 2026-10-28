@@ -5,13 +5,18 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/mckalvan/glossmark/internal/check"
 )
 
+// command is a subcommand. short is its one-paragraph description, printed
+// by 'gloss <name> -h'; the one-line summary 'gloss -h' lists is in help.
 type command struct {
 	name  string
 	short string
@@ -27,9 +32,12 @@ func main() {
 }
 
 func run(args []string) int {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		usage()
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || (args[0] == "help" && len(args) == 1) {
+		usage(os.Stderr)
 		return 0
+	}
+	if args[0] == "help" {
+		args = []string{args[1], "-h"}
 	}
 	if args[0] == "--version" || args[0] == "-v" {
 		args = append([]string{"version"}, args[1:]...)
@@ -37,33 +45,42 @@ func run(args []string) int {
 	sort.Slice(commands, func(i, j int) bool { return commands[i].name < commands[j].name })
 	for _, c := range commands {
 		if c.name == args[0] {
-			return c.run(args[1:])
+			if help[c.name].noFlags && len(args) > 1 && isHelpFlag(args[1]) {
+				commandHelp(os.Stderr, nil, c.name, nil)
+				return 0
+			}
+			helped = false
+			code := c.run(args[1:])
+			if helped {
+				return 0 // -h is not a usage error
+			}
+			return code
 		}
 	}
-	fmt.Fprintf(os.Stderr, "gloss: unknown command %q\n\n", args[0])
-	usage()
+	names := make([]string, len(commands))
+	for i, c := range commands {
+		names[i] = c.name
+	}
+	if near := check.Closest(args[0], names); near != "" {
+		fmt.Fprintf(os.Stderr, "gloss: unknown command %q; did you mean %q?\n", args[0], near)
+	} else {
+		fmt.Fprintf(os.Stderr, "gloss: unknown command %q\n", args[0])
+	}
+	fmt.Fprintln(os.Stderr, "Run 'gloss -h' for the list.")
 	return 2
 }
 
-func usage() {
-	sort.Slice(commands, func(i, j int) bool { return commands[i].name < commands[j].name })
-	fmt.Fprintln(os.Stderr, "gloss — GlossMark: comment-native code ontology")
-	fmt.Fprintln(os.Stderr, "\nUsage: gloss <command> [flags]\n\nCommands:")
-	w := 0
-	for _, c := range commands {
-		if len(c.name) > w {
-			w = len(c.name)
-		}
-	}
-	for _, c := range commands {
-		fmt.Fprintf(os.Stderr, "  %-*s  %s\n", w, c.name, c.short)
-	}
-	fmt.Fprintln(os.Stderr, "\nRun 'gloss <command> -h' for flags. Set GLOSS_ACTOR (human:alice, agent:claude-code@model) for ledger attribution.")
-}
+func isHelpFlag(s string) bool { return s == "-h" || s == "-help" || s == "--help" }
 
-// newFlags returns a FlagSet with the shared --root flag.
+// helped is set when parseFlags answered -h, so run exits 0 although the
+// command returns its usage-error code.
+var helped bool
+
+// newFlags returns a FlagSet with the shared --root flag. Its Usage is left
+// nil so parseFlags can tell whether the command set its own.
 func newFlags(name string) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet("gloss "+name, flag.ContinueOnError)
+	fs.Usage = nil
 	root := fs.String("root", "", "repository root (default: nearest glossmark.yaml above the working directory)")
 	return fs, root
 }
@@ -71,11 +88,16 @@ func newFlags(name string) (*flag.FlagSet, *string) {
 // parseFlags parses flags wherever they appear among the positional
 // arguments ("gloss import <file> --namespace ns"); the flag package alone
 // stops at the first positional. A "--" ends flag parsing as usual. Afterwards
-// fs.Args() holds the positionals in their original order.
+// fs.Args() holds the positionals in their original order. -h prints the
+// command's help (commandHelp) above its flags, or above the usage the
+// command set itself.
 func parseFlags(fs *flag.FlagSet, args []string) error {
+	own := fs.Usage
+	fs.Usage = func() { commandHelp(fs.Output(), fs, strings.TrimPrefix(fs.Name(), "gloss "), own) }
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
+			helped = errors.Is(err, flag.ErrHelp)
 			return err
 		}
 		rest := fs.Args()

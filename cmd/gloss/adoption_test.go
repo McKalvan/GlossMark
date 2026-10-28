@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mckalvan/glossmark/internal/model"
+	"github.com/mckalvan/glossmark/internal/rollup"
 )
 
 // captureStderr returns what f writes to stderr.
@@ -119,6 +120,45 @@ func TestDriftIDs(t *testing.T) {
 	}
 	if strings.Contains(plain, "Files ") {
 		t.Errorf("the drift trailer carries file coverage:\n%s", plain)
+	}
+}
+
+// TestDriftGuidedText: drift's text says what happened and what to do, a
+// next step under each heading, set notation only with --explain, no
+// colour when piped, and an exit line that counts what failed by kind
+// (issues #234, #235, #237, #253, #254).
+func TestDriftGuidedText(t *testing.T) {
+	root := workspace(t, "library/circulation")
+	var code int
+	var out, explained string
+	errOut := captureStderr(t, func() { code, out = gloss(t, "drift", "--root", root) })
+	if code != 1 {
+		t.Fatalf("drift exited %d, want 1", code)
+	}
+	if want := "gloss drift: failed: 2 violations, 1 gap (fail-on: violation, value-drift, gap, dangling, overdue, planned-closed, plan-overdue)\n"; errOut != want {
+		t.Errorf("exit line:\n got %q\nwant %q", errOut, want)
+	}
+	for _, want := range []string{
+		"acme:circulation-svc now produces lib:Laptop (proposed link), which its manifest does not allow. Add it to produces: in services/circulation/.gloss.yaml, or move the code.",
+		"acme:library-platform declares publishes lib:HoldReady, but no code under it publishes it. Implement it, or remove it from publishes: in .gloss.yaml.",
+		"→ Widen the manifest or move the code; gloss review to waive.",
+		"→ Add a verifies marker on a test that exercises it.",
+		"  lib:HoldReady: no code links to it",
+		"  implements circ:NEW:DamageCheck: not in the ontology",
+		"What these mean: " + rollup.GlossaryURL,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("drift text lacks %q:\n%s", want, out)
+		}
+	}
+	for _, noise := range []string{"⊄", "rollup:", "orphan concept,", "rogue concept;", "\x1b["} {
+		if strings.Contains(out, noise) {
+			t.Errorf("drift text carries %q:\n%s", noise, out)
+		}
+	}
+	captureStderr(t, func() { _, explained = gloss(t, "drift", "--explain", "--root", root) })
+	if !strings.Contains(explained, "rollup: produces {lib:Item}") || !strings.Contains(explained, "→ Widen the manifest") {
+		t.Errorf("drift --explain lacks the sets or the hints:\n%s", explained)
 	}
 }
 

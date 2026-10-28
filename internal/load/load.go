@@ -66,7 +66,7 @@ func FindRoot(start string) (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("no %s found in %s or any parent", ConfigName, start)
+			return "", fmt.Errorf("no %s found in %s or any parent; run gloss init to set up this repository (or pass --root)", ConfigName, start)
 		}
 		dir = parent
 	}

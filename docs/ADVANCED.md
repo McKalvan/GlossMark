@@ -52,6 +52,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 ## Finding kinds (`gloss drift`)
 
+[GLOSSARY.md](GLOSSARY.md#finding-kinds) gives each kind in one line with what to do about it. The text output writes each finding that way, with a next step under each heading; `gloss drift --explain` prints the precise message instead, with the declared and derived sets (`rollup: produces {lib:Item} (from ...) ⊄ declared`), which `--format json` always carries as `msg`.
+
 | Kind | Meaning | Fails by default |
 | --- | --- | :-: |
 | violation | a boundary's code realizes, produces, consumes, publishes or subscribes something its manifest does not declare, or a concept its code implements intends a flow the manifest neither covers nor refines | ✓ |

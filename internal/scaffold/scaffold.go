@@ -64,8 +64,11 @@ type Plan struct {
 	Name     string
 	Core     string
 	Impl     string
-	Boundary string   // boundary prefix
-	Dirs     []string // manifest directories, slash-separated and relative to Root
+	Boundary string // boundary prefix
+	// Guessed is set when the core prefix was derived from the name, not
+	// given or imported; the plan then says how to choose it (issue #229).
+	Guessed bool
+	Dirs    []string // manifest directories, slash-separated and relative to Root
 	// Utility lists directories named like shared code (utils/, core/, ...)
 	// with no entry point: no manifest, they stay under their parent.
 	Utility []string
@@ -454,7 +457,8 @@ func Make(root string, opt Options) (*Plan, error) {
 		return nil, fmt.Errorf("the boundary prefix must differ from the namespace prefixes (%q)", bprefix)
 	}
 	dirs, utility := planDirs(root)
-	p := &Plan{Root: root, Name: name, Core: core, Impl: impl, Boundary: bprefix, Dirs: dirs, Utility: utility, Imported: imported}
+	p := &Plan{Root: root, Name: name, Core: core, Impl: impl, Boundary: bprefix, Dirs: dirs, Utility: utility, Imported: imported,
+		Guessed: opt.Core == "" && len(imports) == 0}
 	if g := GitRoot(root); g != "" && g != root {
 		p.GitRoot = g
 	}
@@ -544,8 +548,10 @@ part-of: %s
 default-namespace: %s
 `, d, p.Boundary, child, rootB, impl)})
 	}
-	// .gitignore: the viewer only. The graph and the ledger are committed.
-	ignore := []string{".glossmark/viewer.html", ".glossmark/views.js", ".glossmark/views.json"}
+	// .gitignore: the viewer, and the per-machine hook gloss hook install
+	// writes when PATH does not find gloss. The graph and the ledger are
+	// committed.
+	ignore := []string{".glossmark/viewer.html", ".glossmark/views.js", ".glossmark/views.json", ".claude/settings.local.json"}
 	gi, _ := os.ReadFile(filepath.Join(root, ".gitignore"))
 	var missing []string
 	for _, l := range ignore {
@@ -555,15 +561,15 @@ default-namespace: %s
 	}
 	switch {
 	case len(missing) == 0:
-		add(File{Path: ".gitignore", Action: Skip, Note: "already ignores the viewer"})
+		add(File{Path: ".gitignore", Action: Skip, Note: "already ignores the viewer and .claude/settings.local.json"})
 	case len(gi) == 0:
-		add(File{Path: ".gitignore", Action: Create, Content: "# GlossMark: the viewer is generated; graph.jsonl and ledger.jsonl are committed\n" + strings.Join(missing, "\n") + "\n"})
+		add(File{Path: ".gitignore", Action: Create, Content: "# GlossMark: the viewer is generated, settings.local.json is per machine; graph.jsonl and ledger.jsonl are committed\n" + strings.Join(missing, "\n") + "\n"})
 	default:
 		pre := "\n"
 		if strings.HasSuffix(string(gi), "\n") {
 			pre = ""
 		}
-		add(File{Path: ".gitignore", Action: Append, Content: pre + "# GlossMark: the viewer is generated; graph.jsonl and ledger.jsonl are committed\n" + strings.Join(missing, "\n") + "\n"})
+		add(File{Path: ".gitignore", Action: Append, Content: pre + "# GlossMark: the viewer is generated, settings.local.json is per machine; graph.jsonl and ledger.jsonl are committed\n" + strings.Join(missing, "\n") + "\n"})
 	}
 	// Task runner.
 	mk, mkErr := os.ReadFile(filepath.Join(root, "Makefile"))
@@ -621,6 +627,9 @@ jobs:
 func (p *Plan) String() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "repository %s: core %s:, implementation %s:, boundaries %s:\n", p.Name, p.Core, p.Impl, p.Boundary)
+	if p.Guessed {
+		fmt.Fprintf(&sb, "  (prefixes guessed from the name %q; every marker will carry them. Choose your own with --namespace <ns> (implementation <ns>i:, boundaries <ns>b:), --impl and --boundary-prefix; try a choice with --dry-run)\n", p.Name)
+	}
 	for _, f := range p.Files {
 		fmt.Fprintf(&sb, "  %-6s %s", f.Action, f.Path)
 		if f.Note != "" {

@@ -9,6 +9,7 @@ package doctor
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +30,7 @@ import (
 // Status of one check.
 const (
 	OK   = "ok"
+	Info = "info" // nothing to fix, but worth knowing; never fails the run
 	Warn = "warn"
 	Fail = "fail"
 )
@@ -134,7 +136,7 @@ func (d *doctor) waivers() {
 func String(checks []Check) string {
 	var sb strings.Builder
 	for _, c := range checks {
-		glyph := map[string]string{OK: "✓", Warn: "!", Fail: "✗"}[c.Status]
+		glyph := map[string]string{OK: "✓", Info: "·", Warn: "!", Fail: "✗"}[c.Status]
 		fmt.Fprintf(&sb, "%s %s: %s", glyph, c.Name, c.Msg)
 		if c.Fix != "" {
 			fmt.Fprintf(&sb, " → %s", c.Fix)
@@ -180,7 +182,7 @@ func (d *doctor) binary() {
 	}
 	// The hook and the MCP server run whatever `gloss` PATH finds, so ask it
 	// what it is instead of reporting this build's version.
-	fix := "put GlossMark's gloss first on PATH, or re-run gloss hook install, which writes this binary's absolute path when PATH finds another"
+	fix := "put GlossMark's gloss first on PATH (the MCP server runs gloss by name; gloss hook install points only the hook, in the uncommitted .claude/settings.local.json, at this binary's absolute path)"
 	first, err := d.env.Version(p)
 	got := strings.Fields(first)
 	if err != nil || len(got) != 2 || got[0] != "gloss" {
@@ -217,14 +219,21 @@ func (d *doctor) actor() {
 		d.add("GLOSS_ACTOR", Warn, "unset and git user.name is empty: new markers would be attributed to human:unknown", "git config user.name, or export GLOSS_ACTOR")
 		return
 	}
-	d.add("GLOSS_ACTOR", OK, fmt.Sprintf("unset; new markers by a human are attributed to %s. Agents need it set (gloss hook install writes it into the MCP server and exports it to the agent's shell from the SessionStart hook)", def), "")
+	d.add("GLOSS_ACTOR", Info, fmt.Sprintf("unset; new markers by a human are attributed to %s. Agents need it set (gloss hook install writes it into the MCP server and exports it to the agent's shell from the SessionStart hook)", def), "")
 }
 
 func (d *doctor) hook() {
-	settings, _ := os.ReadFile(filepath.Join(d.ws.Root, ".claude", "settings.json"))
-	mcp, _ := os.ReadFile(filepath.Join(d.ws.Root, ".mcp.json"))
-	hasHook := bytes.Contains(settings, []byte("gloss context"))
-	hasMCP := bytes.Contains(mcp, []byte(`"gloss"`))
+	read := func(rel string) []byte {
+		b, _ := os.ReadFile(filepath.Join(d.ws.Root, filepath.FromSlash(rel)))
+		return b
+	}
+	hooks, bins := glossHooks(read(".claude/settings.json"))
+	// When PATH does not find this gloss, gloss hook install writes the hook
+	// with its absolute path to the uncommitted settings.local.json.
+	local, _ := glossHooks(read(".claude/settings.local.json"))
+	hooks = append(hooks, local...)
+	srv, hasMCP := glossMCP(read(".mcp.json"))
+	hasHook := len(hooks) > 0
 	if !hasHook && !hasMCP {
 		// Cursor has no SessionStart hook: gloss hook install --cursor writes
 		// a rule that asks the agent for the briefing instead.
@@ -247,23 +256,115 @@ func (d *doctor) hook() {
 	case !hasMCP:
 		d.add("agent hook", Warn, "SessionStart hook registered but no MCP server in .mcp.json", "gloss hook install")
 	default:
+		cmds := strings.Join(hooks, "\n")
 		missing := []string{}
-		if !bytes.Contains(settings, []byte("GLOSS_ACTOR=")) {
+		if !strings.Contains(cmds, "GLOSS_ACTOR=") {
 			missing = append(missing, "the hook command")
 		}
-		if !bytes.Contains(mcp, []byte("GLOSS_ACTOR")) {
+		if _, ok := srv.Env["GLOSS_ACTOR"]; !ok {
 			missing = append(missing, ".mcp.json env")
 		}
 		if len(missing) > 0 {
 			d.add("agent hook", Warn, "installed, but GLOSS_ACTOR is missing from "+strings.Join(missing, " and ")+": links an agent writes are attributed to the git user", "gloss hook install (rewrites both with GLOSS_ACTOR=agent:claude-code)")
 			return
 		}
-		if !bytes.Contains(settings, []byte("CLAUDE_ENV_FILE")) {
+		// Committed files run gloss by name: a path to one machine's binary
+		// fails silently on every other clone (issue #226).
+		var abs []string
+		for _, b := range bins {
+			if absPath(b) {
+				abs = append(abs, ".claude/settings.json runs "+b)
+			}
+		}
+		if absPath(srv.Command) {
+			abs = append(abs, ".mcp.json runs "+srv.Command)
+		}
+		if len(abs) > 0 {
+			d.add("agent hook", Warn, strings.Join(abs, ", ")+": committed agent config names gloss by an absolute path, which a teammate's clone does not have", "gloss hook install (committed files then run gloss by name; a path this machine needs goes to the uncommitted .claude/settings.local.json)")
+			return
+		}
+		if !strings.Contains(cmds, "CLAUDE_ENV_FILE") {
 			d.add("agent hook", Warn, "the hook sets GLOSS_ACTOR for the briefing only: a gloss build the agent runs from its shell is attributed to the git user", "gloss hook install (the hook then exports GLOSS_ACTOR through $CLAUDE_ENV_FILE)")
 			return
 		}
 		d.add("agent hook", OK, "SessionStart hook and MCP server registered with GLOSS_ACTOR", "")
 	}
+}
+
+// hookBinRe finds the program a hook command runs `context` with: a word,
+// or a single-quoted path with spaces.
+var hookBinRe = regexp.MustCompile(`('[^']*'|[^\s';]+)\s+context\b`)
+
+// glossHooks returns the SessionStart hook commands in a Claude Code settings
+// file that run gloss context, and the gloss each one runs.
+func glossHooks(b []byte) (cmds, bins []string) {
+	var s struct {
+		Hooks struct {
+			SessionStart []struct {
+				Hooks []struct {
+					Command string `json:"command"`
+				} `json:"hooks"`
+			} `json:"SessionStart"`
+		} `json:"hooks"`
+	}
+	json.Unmarshal(b, &s)
+	for _, e := range s.Hooks.SessionStart {
+		for _, h := range e.Hooks {
+			if m := hookBinRe.FindStringSubmatch(h.Command); m != nil && isGloss(m[1]) {
+				cmds = append(cmds, h.Command)
+				bins = append(bins, strings.Trim(m[1], "'"))
+			}
+		}
+	}
+	return cmds, bins
+}
+
+// mcpServer is one entry of an mcpServers file.
+type mcpServer struct {
+	Command string         `json:"command"`
+	Args    []string       `json:"args"`
+	Env     map[string]any `json:"env"`
+}
+
+// glossMCP finds the server that runs gloss mcp in an mcpServers file: the
+// one gloss hook install names glossmark, or any whose command is gloss by
+// name or by path (issue #225), with mcp among its args.
+func glossMCP(b []byte) (mcpServer, bool) {
+	var c struct {
+		Servers map[string]mcpServer `json:"mcpServers"`
+	}
+	json.Unmarshal(b, &c)
+	names := make([]string, 0, len(c.Servers))
+	for n := range c.Servers {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		s := c.Servers[n]
+		hasMCP := false
+		for _, a := range s.Args {
+			hasMCP = hasMCP || a == "mcp"
+		}
+		if hasMCP && (n == "glossmark" || isGloss(s.Command)) {
+			return s, true
+		}
+	}
+	return mcpServer{}, false
+}
+
+// isGloss reports whether a command names gloss, by name or by path.
+func isGloss(cmd string) bool {
+	cmd = strings.Trim(cmd, `'"`)
+	if i := strings.LastIndexAny(cmd, `/\`); i >= 0 {
+		cmd = cmd[i+1:]
+	}
+	return cmd == "gloss" || cmd == "gloss.exe"
+}
+
+// absPath reports whether a command is an absolute path (/usr/local/bin/gloss,
+// ~/bin/gloss, C:\tools\gloss.exe) rather than a name PATH resolves.
+func absPath(cmd string) bool {
+	return strings.HasPrefix(cmd, "/") || strings.HasPrefix(cmd, "~") || len(cmd) > 2 && cmd[1] == ':' && (cmd[2] == '\\' || cmd[2] == '/')
 }
 
 func (d *doctor) graph() {

@@ -498,22 +498,25 @@ func runRemedy(nested bool) string {
 // unknownRelation is GM200's message. It lists the relations valid where the
 // edge was written. On a concept it shows how to declare the relation, since a
 // declared relation is usable only in ontology files; an inline marker cannot
-// use one (#161).
+// use one (#161). When one of those relations is a likely typo of p, it names
+// that one instead of the list (#233).
 func unknownRelation(v *model.Vocabulary, p, source string, sn *graph.Node) string {
 	where := func(r *model.Relation) bool { return true }
-	advice := ""
+	declare, advice := "", ""
 	switch {
 	case source == graph.SourceInline:
 		where = func(r *model.Relation) bool { return r.Inline }
 		advice = "an inline marker takes one of"
 	case sn != nil && sn.NodeType == model.NodeConcept:
 		where = func(r *model.Relation) bool { return r.Ontology }
-		advice = fmt.Sprintf("declare it in an ontology file (relations: { %s: { doc: \"...\" } }, see docs/FILE-FORMATS.md) or use one of", p)
+		declare = fmt.Sprintf("declare it in an ontology file (relations: { %s: { doc: \"...\" } }, see docs/FILE-FORMATS.md)", p)
+		advice = declare + " or use one of"
 	case sn != nil && sn.NodeType == model.NodeBoundary:
 		where = func(r *model.Relation) bool { return r.Manifest }
 		advice = "a manifest takes one of"
 	default:
-		advice = "declare it under relations: in an ontology file or use one of"
+		declare = "declare it under relations: in an ontology file"
+		advice = declare + " or use one of"
 	}
 	var names []string
 	for _, n := range v.Names() {
@@ -521,7 +524,42 @@ func unknownRelation(v *model.Vocabulary, p, source string, sn *graph.Node) stri
 			names = append(names, n)
 		}
 	}
+	if near := Closest(p, names); near != "" {
+		if declare != "" {
+			return fmt.Sprintf("unknown relation %q; did you mean %q? (or %s)", p, near, declare)
+		}
+		return fmt.Sprintf("unknown relation %q; did you mean %q?", p, near)
+	}
 	return fmt.Sprintf("unknown relation %q; %s: %s", p, advice, strings.Join(names, ", "))
+}
+
+// danglingReference is GM215's message. When a concept or boundary in the
+// same namespace is a likely typo of the missing name, by its name or one of
+// its aliases, it names that node (#233).
+func danglingReference(g *graph.Graph, curie string) string {
+	msg := fmt.Sprintf("dangling reference: %s does not exist", curie)
+	ns, name, ok := strings.Cut(curie, ":")
+	if !ok {
+		return msg
+	}
+	var keys []string
+	owner := map[string]string{}
+	for _, n := range g.Nodes() {
+		nns, nname, ok := strings.Cut(n.CURIE, ":")
+		if !ok || nns != ns || n.NodeType == model.NodeArtifact {
+			continue
+		}
+		for _, k := range append([]string{nname}, n.Aliases...) {
+			if _, seen := owner[k]; !seen {
+				owner[k] = n.CURIE
+				keys = append(keys, k)
+			}
+		}
+	}
+	if near := Closest(name, keys); near != "" {
+		return msg + "; did you mean " + owner[near] + "?"
+	}
+	return msg
 }
 
 // minRun is the shortest run of identical markers GM131 reports.
@@ -592,7 +630,7 @@ func (c *checker) edges() {
 			if sn != nil && sn.NodeType == model.NodeBoundary && e.P == "part-of" {
 				continue
 			}
-			c.add(path, line, "error", "GM215", fmt.Sprintf("dangling reference: %s does not exist", c.g.Curie(e.O)))
+			c.add(path, line, "error", "GM215", danglingReference(c.g, c.g.Curie(e.O)))
 			continue
 		}
 		if sn == nil {

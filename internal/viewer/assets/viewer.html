@@ -44,6 +44,7 @@ select,input[type=text],button{font:inherit;color:var(--fg);background:var(--bg)
 button{cursor:pointer}button:hover{border-color:var(--accent)}
 button.on{border-color:var(--accent);color:var(--accent)}
 input[type=text]{min-width:160px}
+#searchInfo{color:var(--muted);white-space:nowrap}#searchInfo:empty{display:none}
 #crumbs{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 #crumbs a{color:var(--accent);cursor:pointer;text-decoration:none;padding:2px 4px;border-radius:4px}
 #crumbs a:hover{background:var(--bg)}
@@ -51,12 +52,19 @@ input[type=text]{min-width:160px}
 #crumbs .arr{color:var(--muted)}
 #crumbs .slicechip{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 4px 1px 8px;border-radius:12px;border:1px solid var(--accent);color:var(--accent);font-size:11.5px}
 #crumbs .slicechip a{padding:0 5px;border-radius:10px}
-#filters{display:none;flex-direction:column;gap:4px;padding:6px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12px}
+/* Filters open as a sheet over the left of the map, so the canvas keeps its size. */
+#filters{display:none;position:absolute;z-index:5;top:0;left:0;bottom:0;width:min(420px,100%);overflow-y:auto;flex-direction:column;gap:6px;padding:8px 14px 12px;border-right:1px solid var(--line);background:var(--panel);font-size:12px;box-shadow:6px 0 18px rgba(0,0,0,.14)}
 #filters.on{display:flex}
+#filters .fhead{display:flex;align-items:center;justify-content:space-between;font-weight:650}
+#fBody{display:flex;flex-direction:column;gap:6px}
+#fActive{color:var(--muted);white-space:nowrap}
+#fActive button{border:0;background:none;color:var(--accent);padding:0;text-decoration:underline}
+#filtersBtn.act{border-color:var(--accent);color:var(--accent)}
 .fgroup{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .fgroup .gl{color:var(--muted);min-width:80px;text-transform:uppercase;font-size:10.5px;letter-spacing:.04em}
 .chip{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:12px;border:1px solid var(--line);background:var(--bg);cursor:pointer;user-select:none;font-size:11.5px;line-height:1.5}
 .chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));background:color-mix(in srgb,var(--accent) 9%,var(--bg))}
 .chip.off{opacity:.45;text-decoration:line-through}
 .chip .n{color:var(--muted);font-size:10.5px}
 .chip .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -74,16 +82,37 @@ canvas.drag{cursor:grabbing}canvas.hit{cursor:pointer}
 #hint{position:absolute;right:10px;bottom:8px;font-size:11px;color:var(--muted);pointer-events:none;text-align:right}
 aside{width:340px;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:10px 14px;font-size:12px}
 aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 6px}
-aside h2:first-child{margin-top:0}
+aside h2:first-child{margin-top:0}#panelTop:not(:empty)+#selPane h2:first-child{margin-top:14px}
 aside .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}
 aside dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0}
 aside dt{color:var(--muted)}aside dd{margin:0;word-break:break-word}
 aside ul{margin:4px 0;padding-left:16px}aside li{margin:2px 0}
 aside .via{color:var(--muted);font-size:11px;word-break:break-all}
 aside .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+aside .ps{white-space:nowrap}aside .note{color:var(--muted);font-size:11px}
+aside a.src{color:var(--accent);text-decoration:none}aside a.src:hover{text-decoration:underline}
 aside a.n{color:var(--accent);cursor:pointer;text-decoration:none}aside a.n:hover{text-decoration:underline}
+#navBox{margin:10px 0}#navBox>summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650}
+#navBox>summary .n{text-transform:none;letter-spacing:0;font-weight:400}
+#navTree{list-style:none;margin:4px 0;padding:0;max-height:40vh;overflow-y:auto}
+#navTree ul{list-style:none;margin:0;padding-left:14px}
+#navTree li{margin:0}
+#navTree .ti{display:flex;align-items:center;gap:5px;padding:1px 4px;border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#navTree .ti:hover{background:var(--bg)}
+#navTree [aria-selected="true"]>.ti{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+#navTree li:focus{outline:none}#navTree li:focus-visible>.ti{outline:2px solid var(--accent);outline-offset:-2px}
+#navTree .tw{width:10px;color:var(--muted);flex:none;text-align:center}
+#navTree .k{color:var(--muted);font-size:11px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+aside h2 a.gl{text-transform:none;letter-spacing:0;font-weight:400;margin-left:6px}
+aside details>summary .note{display:block;margin:1px 0 2px 14px;font-weight:400}
+aside .kdef{margin:2px 0 4px 14px;color:var(--muted);font-size:11px}aside .kdef b{color:var(--fg);font-weight:600}aside .kdef a{color:var(--accent)}
 aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .legend>span{display:inline-flex;align-items:center;gap:6px;margin:2px 12px 2px 0}
+#legendBox{margin-top:14px}#legendBox>summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650;margin-bottom:6px}
+#legendBox>summary .n{text-transform:none;letter-spacing:0;font-weight:400}
+.sw.f{border-width:1.5px;width:12px;height:12px}.sw.f+.sw.f{margin-left:-4px}
+.bdg{display:inline-block;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--muted);color:#fff;font-size:10px;line-height:16px;text-align:center;font-style:normal}
 .legend .defs{margin-top:6px}.legend .defs summary{cursor:pointer;color:var(--accent)}
 .legend .defs h3{font-size:11px;font-weight:650;color:var(--muted);margin:8px 0 2px}
 .legend .defs dl{grid-template-columns:1fr;gap:0}.legend .defs dt{color:var(--fg);display:flex;align-items:center;gap:6px;margin-top:4px}
@@ -96,7 +125,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .sw.pl{background:color-mix(in srgb,var(--boundary-fill) 25%,transparent)}.sw.pl.od{outline:2px dashed var(--hard);outline-offset:1px}
 .sw.k{background:transparent;border-width:2.5px}
 .sw.k.low{border-color:var(--crit-low)}.sw.k.medium{border-color:var(--crit-medium)}.sw.k.high{border-color:var(--crit-high)}.sw.k.critical{border-color:var(--crit-critical)}
-.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}.ln.pl{opacity:.45}
+.ln{display:inline-block;width:28px;border-top:2px solid var(--edge)}.ln.d{border-top-style:dashed}.ln.dd{border-top:0;height:2px;background:repeating-linear-gradient(90deg,var(--edge) 0 10px,transparent 10px 13px,var(--edge) 13px 15px,transparent 15px 18px)}.ln.dot{border-top-style:dotted}.ln.thin{border-top-width:1px}.ln.thick{border-top-width:3.5px}.ln.pl{opacity:.45}
 .ln.add{border-color:var(--added)}.ln.rem{border-color:var(--removed)}
 .gate{font-weight:650;padding:1px 6px;border-radius:4px;color:#fff;font-size:11px}
 .gate.HARD{background:var(--hard)}.gate.SOFT{background:var(--soft)}.gate.AUTO{background:var(--auto)}
@@ -107,6 +136,7 @@ aside .acts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 .chg .path{color:var(--muted);font-size:11px;word-break:break-all}
 .badge{display:inline-block;padding:0 5px;border-radius:8px;background:var(--line);font-size:11px;margin-left:4px}
 #sheetBtn{display:none}
+#moreBtn{display:none}#moreBox{display:contents}
 #ovBar{display:inline-flex;align-items:center;gap:4px}
 #ovBar[hidden]{display:none}
 #ovSel{max-width:300px}
@@ -135,19 +165,24 @@ table.vt tr.cur td{font-weight:650}
   main{position:relative}
   header{gap:8px;padding:6px 12px;flex-wrap:nowrap}
   header h1{font-size:14px}
-  #generated{display:none}
+  #generated,#nsNote{display:none}
   #repo{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   header .spacer{flex:1 1 0;min-width:0}
-  header label.meta{flex:none}
-  #themeBtn{flex:none}
-  .bar{flex-wrap:nowrap;overflow-x:auto;padding:6px 12px;scrollbar-width:none}
-  .bar::-webkit-scrollbar{display:none}
-  .bar>*{flex:none}
+  header label.meta{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:4px}
+  #viewSel{min-width:0;max-width:150px}
+  @media (max-width:440px){#repo{display:none}}
+  #themeBtn{flex:none}#themeBtn .tl{display:none}
+  /* The toolbar wraps instead of scrolling; Expand all, Collapse all and
+     Re-layout sit behind the ⋯ button on a row of their own. */
+  .bar{flex-wrap:wrap;row-gap:6px;padding:6px 12px}
+  .bar>*{flex:none}.bar .sep{display:none}
+  #moreBtn{display:inline-block}#moreBox{display:none}
+  .bar.more #moreBox{display:flex;flex-basis:100%;gap:8px}
   #crumbs{flex-wrap:nowrap;white-space:nowrap}
   /* 16px keeps iOS from zooming the page when a field gets focus. */
   select,input[type=text]{font-size:16px;padding:3px 6px}
-  input[type=text]{min-width:0;width:140px}
-  #filters{padding-left:12px;padding-right:12px;max-height:40vh;overflow-y:auto}
+  input[type=text]{min-width:0;width:130px}
+  #filters{padding-left:12px;padding-right:12px;width:100%;bottom:auto;max-height:65%;border-right:0;border-bottom:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.14)}
   .chip{padding:3px 10px}
   #status{bottom:50px}
   aside{position:absolute;left:0;right:0;bottom:0;width:auto;height:48%;border-left:0;border-top:1px solid var(--line);padding:0 14px 12px;z-index:4;box-shadow:0 -6px 18px rgba(0,0,0,.12)}
@@ -165,35 +200,41 @@ table.vt tr.cur td{font-weight:650}
   <h1>GlossMark</h1>
   <span class="meta" id="repo"></span>
   <span class="meta" id="generated"></span>
+  <span class="meta" id="nsNote"></span>
   <span class="spacer"></span>
-  <label class="meta">View <select id="viewSel"></select></label>
-  <button id="themeBtn" title="Cycle theme: auto / light / dark">Theme: auto</button>
+  <label class="meta">View <select id="viewSel" aria-label="View"></select></label>
+  <button id="themeBtn" title="Cycle theme: auto / light / dark" aria-label="Theme: auto (cycle auto, light, dark)">◐ <span class="tl">Theme: </span><span class="tv">auto</span></button>
 </header>
 <div class="bar">
   <span id="crumbs"></span>
   <span class="sep"></span>
-  <input type="text" id="search" placeholder="Search id / label…" autocomplete="off">
-  <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation">Filters</button>
+  <input type="text" id="search" placeholder="Search id / label…  ( / )" autocomplete="off" aria-label="Search nodes by id or label; Enter and Shift+Enter step through matches" aria-keyshortcuts="/" aria-describedby="searchInfo">
+  <span id="searchInfo" class="meta" aria-live="polite"></span>
+  <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation" aria-expanded="false" aria-controls="filters">Filters</button>
+  <span id="fActive" hidden><span class="t"></span> · <button type="button" id="fReset">Reset</button></span>
   <span class="sep"></span>
-  <span id="ovBar" hidden><button id="ovOlder" type="button" title="Older commit ([)">◀</button><select id="ovSel" title="Overlay one commit's changes on the map (gloss view --history), or the --diff"></select><button id="ovNewer" type="button" title="Newer commit (])">▶</button></span>
-  <select id="changesSel" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
+  <span id="ovBar" hidden><button id="ovOlder" type="button" title="Older commit ([)" aria-label="Older commit" aria-keyshortcuts="[">◀</button><select id="ovSel" title="Overlay one commit's changes on the map (gloss view --history), or the --diff" aria-label="Overlay"></select><button id="ovNewer" type="button" title="Newer commit (])" aria-label="Newer commit" aria-keyshortcuts="]">▶</button></span>
+  <select id="changesSel" aria-label="Show changes within" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
     <option value="">All nodes</option><option value="0">Only changes</option><option value="1">Changes + 1 hop</option><option value="2">Changes + 2 hops</option><option value="3">Changes + 3 hops</option>
   </select>
+  <button id="fit" title="Fit to window (f)" aria-label="Fit the map to the window" aria-keyshortcuts="f">Fit</button>
+  <button id="moreBtn" type="button" title="More: expand, collapse, re-layout" aria-label="More map actions" aria-expanded="false" aria-controls="moreBox">⋯</button>
+  <span id="moreBox">
   <button id="expandAll" title="Open every boundary and part-of tree">Expand all</button>
   <button id="collapseAll" title="Back to the top: every boundary closed">Collapse all</button>
-  <button id="fit" title="Fit to window (f)">Fit</button>
-  <button id="relayout">Re-layout</button>
+  <button id="relayout" title="Lay the map out again, unpinning dragged nodes">Re-layout</button>
+  </span>
 </div>
-<div id="filters"></div>
 <main>
   <div id="stage">
-    <canvas id="cv"></canvas>
+    <canvas id="cv" role="img" aria-label="Map"></canvas>
+    <div id="filters" role="region" aria-label="Filters"><div class="fhead">Filters <button type="button" id="fClose" aria-label="Close filters" title="Close (Esc)">×</button></div><div id="fBody"></div></div>
     <div id="tip"></div>
     <div id="msg"></div>
     <div id="status"></div>
     <div id="hint"></div>
   </div>
-  <aside id="panel" class="min"><button id="sheetBtn" type="button" aria-expanded="false"><span class="t"></span><span class="c"></span></button><div id="panelBody"></div></aside>
+  <aside id="panel" class="min"><button id="sheetBtn" type="button" aria-expanded="false"><span class="t"></span><span class="c"></span></button><div id="panelBody"><div id="panelTop"></div><div id="selPane" aria-live="polite" aria-label="Selection details"></div><details id="navBox" open><summary>Outline <span class="n"></span></summary><ul id="navTree" role="tree" aria-label="Nodes on the map; arrow keys move, Enter selects, right and left open and close"></ul></details><div id="panelRest"></div></div></aside>
 </main>
 <script id="gloss-data" type="application/json">__GLOSS_DATA__</script>
 <!--GLOSS_DATA_SCRIPT-->
@@ -218,14 +259,18 @@ try{
 }
 const details=(data.concepts&&typeof data.concepts==='object')?data.concepts:{};
 const findings=Array.isArray(data.findings)?data.findings:[];
-/* Only an http(s) template links: a javascript: or data: source-url from the repository would run on click. */
-const srcURL=typeof data.sourceUrl==='string'&&/^https?:\/\//i.test(data.sourceUrl)?data.sourceUrl:'';
-/* A path:line, linked to the code host when glossmark.yaml sets source-url. */
+/* Only an http(s) or vscode://file/ template links: a javascript: or data: source-url from the repository would run on click. */
+const srcURL=typeof data.sourceUrl==='string'&&/^(https?:\/\/|vscode:\/\/file\/)/i.test(data.sourceUrl)?data.sourceUrl:'';
+const webSrc=/^https?:/i.test(srcURL);
+/* A path wraps only after a slash, never inside a name such as booking-api. */
+const pathHtml=p=>String(p).split('/').map(x=>`<span class="ps">${esc(x)}</span>`).join('/<wbr>');
+/* A path:line, linked to the code host (source-url in glossmark.yaml or gloss view
+   --source-url) or, by default, to the file in VS Code. */
 function srcLink(path,line){
-  const txt=esc(path)+(line?':'+esc(line):'');
+  const txt=pathHtml(path+(line?':'+line:''));
   if(!srcURL||!path)return `<span class="mono">${txt}</span>`;
   const url=srcURL.split('{path}').join(path.split('/').map(encodeURIComponent).join('/')).split('{line}').join(String(line||1));
-  return `<a class="mono" href="${esc(url)}" target="_blank" rel="noopener">${txt}</a>`;
+  return `<a class="mono src" href="${esc(url)}"${webSrc?' target="_blank" rel="noopener"':''} title="${esc(webSrc?'Open on the code host':'Open in the editor')}">${txt}</a>`;
 }
 const views=Array.isArray(data.views)?data.views:[];
 /* Precomputed feature slices (docs/adr/0023-feature-slices.md): for each concept and
@@ -431,13 +476,15 @@ const critColour=l=>l&&C.crit[l]?C.crit[l]:null;
 
 /* ---- state ---- */
 const emptyFilters=()=>({type:new Set(),tier:new Set(),ns:new Set(),kind:new Set(),level:new Set(),crit:new Set(),place:new Set(),plan:new Set(),pub:new Set(),chg:new Set()});
-const S={ov:null,asOf:true,deg:null,slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
+const S={mi:-1,ov:null,asOf:true,deg:null,slice:null,vi:0,expanded:new Set(),pos:new Map(),pinned:new Set(),sel:null,hover:null,rels:new Set(),f:emptyFilters(),internal:false,q:'',focus:null,legendOpen:false,
   cam:{x:0,y:0,k:1},camMoved:false,theme:'auto'};
 let V,byId,kidsOf,VN=[],VE=[],D,rng;
 const cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),stage=$('stage'),panel=$('panel');
 const coarse=!!(window.matchMedia&&matchMedia('(pointer: coarse)').matches);
 let lastPtr='mouse'; // the last pointer type: touch gets wider hit targets
 let RC=new Map(); // rect cache for open boundaries, reset per frame
+// The legend starts folded; opening it is remembered in this browser.
+let legendOpen=false;try{legendOpen=localStorage.getItem('gloss-legend')==='open';}catch(e){}
 
 /* Deterministic PRNG so the layout is the same on every load. */
 function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -469,6 +516,10 @@ function loadView(i,keep){
   // Drop self-references and dangling parents/boundaries.
   nodes.forEach(n=>{if(n.parent===n.id||!byId.has(n.parent))n.parent='';if(n.boundary===n.id||!byId.has(n.boundary))n.boundary='';});
   V._nodes=nodes;V._edges=edges;
+  // One namespace for every concept: labels drop it and the header shows it once.
+  const cs=nodes.filter(n=>n.type==='concept'&&!n.ghost),nss=new Set(cs.map(n=>n.ns||''));
+  V._ns=nss.size===1&&cs.length>1&&[...nss][0]&&cs.every(n=>(n.label||n.id||'').startsWith(n.ns+':'))?[...nss][0]:'';
+  $('nsNote').textContent=V._ns?'namespace '+V._ns:'';$('nsNote').title=V._ns?'Every concept in this view is in '+V._ns+':, so the map leaves the prefix off':'';
   markChanges();
   const rels=new Set(edges.map(e=>e.p));
   if(keep){
@@ -486,7 +537,7 @@ function loadView(i,keep){
   S.relsAll=rels;
   // The top of the system: everything closed; drill in by clicking.
   S.expanded=groupIds();S.pos=new Map();S.pinned=new Set();S.sel=null;S.hover=null;S.focus=null;S.f=emptyFilters();
-  S.rels=new Set(edges.map(e=>e.p));S.slice=null;S.deg=null;
+  S.rels=new Set(edges.map(e=>e.p));S.slice=null;S.deg=null;S.mi=-1;
   rng=mulberry(hash(V.name||'view')+1);
   buildFilters();syncChangesBtn();
   rebuild(true);
@@ -585,7 +636,7 @@ const ONLY_TIP='Click to toggle, Shift+click to show only this';
 // another repository can import.
 const pubState=n=>n.published?'published':'not published';
 function buildFilters(){
-  const box=$('filters');box.innerHTML='';
+  const box=$('fBody');box.innerHTML='';
   const count=(f,label)=>{const m=new Map();V._nodes.forEach(n=>{if(n.group||n._later)return;const v=f(n);if(v===undefined)return;m.set(v,(m.get(v)||0)+1);});return m;};
   const groups=[
     {key:'type',label:'Type',counts:count(n=>n.type)},
@@ -641,14 +692,29 @@ function buildFilters(){
   const row=document.createElement('div');row.className='fgroup';
   const gl=document.createElement('span');gl.className='gl';gl.textContent='Flags';row.appendChild(gl);
   const l=document.createElement('label');l.innerHTML='<input type="checkbox" id="internal"> show internal mechanisms';row.appendChild(l);
+  const l2=document.createElement('label');l2.title='On a map of more than '+QUIET+' edges, derived and lifted edges are drawn only for the selected or hovered node';
+  l2.innerHTML='<input type="checkbox" id="allEdges"> every derived and lifted edge';row.appendChild(l2);
   const reset=document.createElement('button');reset.textContent='Reset filters';reset.style.marginLeft='auto';
-  reset.onclick=()=>{S.f=emptyFilters();S.deg=null;S.rels=new Set(V._edges.map(e=>e.p));S.internal=false;buildFilters();rebuild(false);syncChangesBtn();renderPanel();draw();};
+  reset.onclick=resetFilters;
   row.appendChild(reset);
   box.appendChild(row);
   $('internal').checked=S.internal;
   $('internal').onchange=ev=>{S.internal=ev.target.checked;rebuild(false);renderPanel();draw();};
+  $('allEdges').checked=!!S.allEdges;$('allEdges').onchange=ev=>{S.allEdges=ev.target.checked;draw();};
 }
-function filtersActive(){return Object.values(S.f).some(s=>s.size)||S.rels.size!==new Set(V._edges.map(e=>e.p)).size;}
+function filtersActive(){return filterCount()>0;}
+function resetFilters(){S.f=emptyFilters();S.deg=null;S.rels=new Set(V._edges.map(e=>e.p));S.internal=false;buildFilters();rebuild(false);syncChangesBtn();renderPanel();draw();}
+// filterCount: the values and relations filtered out, for "N filters active".
+function filterCount(){let n=0;Object.values(S.f).forEach(s=>{n+=s.size;});new Set(V._edges.map(e=>e.p)).forEach(r=>{if(!S.rels.has(r))n++;});return n;}
+// syncFilterUI: chips say whether they are on (aria-pressed), and the toolbar
+// says how many filters are active while the sheet is closed.
+function syncFilterUI(){
+  document.querySelectorAll('#filters .chip').forEach(c=>c.setAttribute('aria-pressed',String(!c.classList.contains('off'))));
+  const n=filterCount();$('fActive').hidden=!n;
+  if(n)$('fActive').querySelector('.t').textContent=n+' filter'+(n===1?'':'s')+' active';
+  $('filtersBtn').classList.toggle('act',!!n);
+}
+function setFiltersOpen(on){$('filters').classList.toggle('on',on);$('filtersBtn').classList.toggle('on',on);$('filtersBtn').setAttribute('aria-expanded',String(on));}
 
 /* ---- slices ---- */
 // A slice is computed by gloss view (Go is the one implementation); the page only
@@ -772,6 +838,7 @@ function hiddenDesc(n){let c=0;(kidsOf.get(n.id)||[]).forEach(k=>{if(!k._vis)c++
 function descendants(n,out){(kidsOf.get(n.id)||[]).forEach(k=>{out.push(k);descendants(k,out);});return out;}
 
 function rebuild(seedAll){
+  hideTip();
   const nodes=V._nodes;
   nodes.forEach(n=>{n._c=null;n._ext=false;n._open=false;});
   nodes.forEach(n=>{n._c=containerOf(n);});
@@ -840,13 +907,20 @@ function rebuild(seedAll){
   else hideMsg();
   if(S.sel&&!(S.sel.id?byId.get(S.sel.id)&&byId.get(S.sel.id)._vis:VE.includes(S.sel)))S.sel=null;
   renderCrumbs();
+  if(S.q)searchInfo();
+  syncFilterUI();
+  const nb=VN.filter(n=>n.type==='boundary').length;
+  cv.setAttribute('aria-label',`Map of the ${V.name||''} view: ${VN.filter(n=>!n.group).length} nodes, ${nb} boundar${nb===1?'y':'ies'}, ${VE.filter(e=>!e.contain).length} edges${S.focus?', focused on '+(byId.get(S.focus).label||S.focus):''}. The Outline in the side panel lists them for the keyboard.`);
 }
 function measure(){
   ctx.font='12px system-ui,sans-serif';
   VN.forEach(n=>{
     const lab=shortLabel(n);
     n._lw=ctx.measureText(lab).width;
-    if(n.type==='boundary'){n._w=Math.max(80,Math.min(260,n._lw+44));n._h=32;n._r=Math.hypot(n._w,n._h)/2;n._hw=n._w/2+4;n._hh=n._h/2+4;}
+    // A placement group's frame is at least as wide as its title and count, at
+    // the zoomed-out font, so the dashed border never runs through the text.
+    if(n.group){const c=(kidsOf.get(n.id)||[]).length+' concepts';ctx.font='10px system-ui,sans-serif';n._tw=(n._lw+ctx.measureText(c).width+36)*1.5;ctx.font='12px system-ui,sans-serif';}
+    if(n.type==='boundary'){n._w=Math.max(80,Math.min(340,n._lw*1.5+40));n._h=32;n._r=Math.hypot(n._w,n._h)/2;n._hw=n._w/2+4;n._hh=n._h/2+4;}
     else if(n.type==='artifact'){n._w=n._h=12;n._r=7;n._hw=Math.max(8,n._lw/2+2);n._hh=16;}
     else{n._r=n._kids?16:13;n._w=n._h=n._r*2;n._hw=Math.max(n._r+4,n._lw/2+2);n._hh=n._r+12;}
   });
@@ -854,7 +928,20 @@ function measure(){
 // extent: how far an item reaches from its centre along a direction, for its
 // layout box (label included; an open boundary is its whole rectangle).
 function extent(it,ux,uy){const t=Math.min(it._hw/(Math.abs(ux)||1e-9),it._hh/(Math.abs(uy)||1e-9));return Math.min(t,Math.hypot(it._hw,it._hh));}
-function shortLabel(n){const l=n.label||n.id||'';return l.length>30?l.slice(0,28)+'…':l;}
+// shortLabel: the label drawn on the map. In a view whose concepts all share one
+// namespace the prefix is dropped (the header names it once); a long label
+// keeps its head and tail, which tell names apart better than the head alone.
+function shortLabel(n){let l=n.label||n.id||'';
+  if(V._ns&&n.type==='concept'&&l.startsWith(V._ns+':'))l=l.slice(V._ns.length+1);
+  return l.length>30?l.slice(0,18)+'…'+l.slice(-11):l;}
+// fitText: text cut in the middle to fit maxW at the current font.
+function fitText(t,maxW){
+  if(ctx.measureText(t).width<=maxW)return t;
+  let lo=1,hi=t.length-1;
+  const cut=k=>{const h=Math.ceil(k*.6);return t.slice(0,h)+'…'+t.slice(t.length-(k-h));};
+  while(lo<hi){const m=(lo+hi+1)>>1;if(ctx.measureText(cut(m)).width<=maxW)lo=m;else hi=m-1;}
+  return cut(lo);
+}
 
 /* ---- layout: hierarchical force-directed, deterministic seeds ----
    Each container lays out its visible members in local coordinates; an open
@@ -918,7 +1005,7 @@ function layout(all){
       x0=Math.min(x0,p.x-hw);x1=Math.max(x1,p.x+hw);y0=Math.min(y0,p.y-top);y1=Math.max(y1,p.y+bot);});
     const cx=(x0+x1)/2,cy=(y0+y1)/2;
     items.forEach((it,j)=>{it._lx=P[j].x-cx;it._ly=P[j].y-cy;});
-    return {w:(x1-x0)+2*PAD,h:(y1-y0)+2*PAD+TITLE};
+    return {w:Math.max((x1-x0)+2*PAD,(Cn&&Cn._tw)||0),h:(y1-y0)+2*PAD+TITLE};
   }
   doGroup('');
   const place=(cid,base)=>{(groups.get(cid)||[]).forEach(it=>{const p={x:base.x+it._lx,y:base.y+it._ly};S.pos.set(it.id,p);if(it._open)place(it.id,p);});};
@@ -970,21 +1057,55 @@ function rectOf(b){
     });
     if(x0>x1)r={x:p.x-60,y:p.y-30-TITLE,w:120,h:60+TITLE};
     else r={x:x0-PAD,y:y0-PAD-TITLE,w:(x1-x0)+2*PAD,h:(y1-y0)+2*PAD+TITLE};
+    if(b._tw&&r.w<b._tw){r.x-=(b._tw-r.w)/2;r.w=b._tw;}
   }
   RC.set(b.id,r);return r;
 }
 // viewH: the canvas height not covered by the bottom sheet (phones only).
 function viewH(){return cv.clientHeight-(getComputedStyle(panel).position==='absolute'?panel.offsetHeight:0);}
 function centre(n){if(n._open){const r=rectOf(n);return {x:r.x+r.w/2,y:r.y+r.h/2};}return S.pos.get(n.id);}
-function fit(){
+// fit: the whole map in the window. On a narrow screen the automatic fit (not
+// the Fit button or f, which pass whole) stops at a readable zoom and centres
+// on the largest top-level box (its top edge when it is taller than the
+// window) instead of shrinking the map until no label can be read.
+const MIN_READ=.7;
+function fit(whole){
   if(!VN.length)return;
   RC=new Map();
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   VN.forEach(n=>{if(n._open){const r=rectOf(n);x0=Math.min(x0,r.x);x1=Math.max(x1,r.x+r.w);y0=Math.min(y0,r.y);y1=Math.max(y1,r.y+r.h);return;}
     const p=S.pos.get(n.id);x0=Math.min(x0,p.x-n._w/2);x1=Math.max(x1,p.x+n._w/2);y0=Math.min(y0,p.y-n._h/2);y1=Math.max(y1,p.y+n._h/2+16);});
   const W=cv.clientWidth,H=viewH(),m=Math.min(120,Math.min(W,H)*.12),k=Math.min(1.5,Math.max(.08,Math.min(W/(x1-x0+m),H/(y1-y0+m))));
+  if(whole!==true&&W<600&&k<MIN_READ){
+    const box=n=>n._open?rectOf(n):(p=>({x:p.x-n._w/2,y:p.y-n._h/2,w:n._w,h:n._h}))(S.pos.get(n.id));
+    const tops=VN.filter(n=>!n._lc&&n.type==='boundary').map(box).sort((a,b)=>b.w*b.h-a.w*a.h);
+    const r=tops[0]||{x:x0,y:y0,w:x1-x0,h:y1-y0},kk=MIN_READ;
+    S.cam={k:kk,x:W/2-(r.x+r.w/2)*kk,y:r.h*kk>H-24?12-r.y*kk:H/2-(r.y+r.h/2)*kk};S.camMoved=false;
+    draw();return;
+  }
   S.cam={k,x:W/2-(x0+x1)/2*k,y:H/2-(y0+y1)/2*k};S.camMoved=false;
   draw();
+}
+
+/* ---- search ---- */
+// A node matches when the query is in its id or label. Matches inside closed
+// boxes are counted, their boxes ringed, and Enter steps to them, opening boxes.
+const matchQ=n=>!!S.q&&((n.id||'').toLowerCase().includes(S.q)||(n.label||'').toLowerCase().includes(S.q));
+function matchList(){return S.q?V._nodes.filter(n=>!n.group&&!n._later&&matchQ(n)).sort((a,b)=>shortLabel(a).localeCompare(shortLabel(b))):[];}
+// holdsMatch: the closed nodes drawn in place of matches they hide.
+function holdsMatch(){const out=new Set();if(!S.q)return out;
+  V._nodes.forEach(n=>{if(!n.group&&!n._vis&&!n._later&&matchQ(n)&&!hiddenByFilter(n)){const r=repr(n.id);if(r&&!r._open&&r!==n)out.add(r.id);}});return out;}
+function searchInfo(){
+  const el=$('searchInfo');if(!S.q){el.textContent='';return;}
+  const L=matchList(),filt=L.filter(hiddenByFilter).length,inside=L.filter(n=>!n._vis&&!hiddenByFilter(n)).length,steps=L.length-filt;
+  el.textContent=!L.length?'no matches':(S.mi>=0&&steps?(S.mi+1)+' of ':'')+L.length+' match'+(L.length===1?'':'es')+(inside?' \u00b7 '+inside+' inside closed boxes':'')+(filt?' \u00b7 '+filt+' filtered out':'');
+  el.title=steps?'Enter: next match, Shift+Enter: previous; boxes open as needed':'';
+}
+// stepMatch: select the next (+1) or previous (-1) match, opening what holds it.
+function stepMatch(dir){
+  const L=matchList().filter(n=>!hiddenByFilter(n));if(!L.length)return;
+  S.mi=S.mi<0?(dir>0?0:L.length-1):(S.mi+dir+L.length)%L.length;
+  reveal(L[S.mi]);searchInfo();
 }
 
 /* ---- drawing ---- */
@@ -1030,6 +1151,33 @@ function edgeGeom(e){
   const cx=mx-dy/d*(e.off||0)*2,cy=my+dx/d*(e.off||0)*2;
   return {a:anchor(e.s,ps,cx,cy),b:anchor(e.o,po,cx,cy),cx,cy,port:null};
 }
+// drawnEdges: what the edge pass draws and hit-tests. On a dense map (more
+// than QUIET edges) derived and lifted edges appear only for the selected or
+// hovered node, and edges between the same two nodes are bundled into one
+// with a count unless one of the two is selected; the panel lists them all.
+const QUIET=30;
+let BUN=new Map(); // bundles by node pair, kept between frames so hover and selection hold
+function edgeQuiet(){return !S.allEdges&&VE.filter(e=>!e.contain).length>QUIET;}
+function drawnEdges(){
+  const sn=S.sel&&S.sel.id?S.sel:null,hv=S.hover&&S.hover.id?S.hover:null,quiet=edgeQuiet();
+  const near=e=>(sn&&(e.s===sn||e.o===sn))||(hv&&(e.s===hv||e.o===hv));
+  const out=[],pairs=new Map();let hidden=0;
+  VE.forEach(e=>{
+    if(e.contain){out.push(e);return;}
+    if(quiet&&(e.source==='derived'||e.lifted)&&!near(e)&&S.sel!==e){hidden++;return;}
+    if(near(e)||S.sel===e||e.s._open||e.o._open){out.push(e);return;}
+    const k=e.s.id<e.o.id?e.s.id+'|'+e.o.id:e.o.id+'|'+e.s.id;
+    (pairs.get(k)||pairs.set(k,[]).get(k)).push(e);
+  });
+  const keep=new Map();
+  pairs.forEach((list,k)=>{
+    if(list.length===1){out.push(list[0]);return;}
+    const b=BUN.get(k)||{s:list[0].s,o:list[0].o,off:0,source:'bundle',via:new Set(),parts:[]};
+    b.bundle=list;b.count=list.length;b.p=list.length+' relations';keep.set(k,b);out.push(b);
+  });
+  BUN=keep;out.hidden=hidden;
+  return out;
+}
 function draw(){
   const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
   if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
@@ -1041,8 +1189,8 @@ function draw(){
   ctx.translate(x,y);ctx.scale(k,k);
   const sel=S.sel,q=S.q,selNode=sel&&sel.id?sel:null,selEdge=sel&&!sel.id?sel:null;
   const nb=new Set();if(selNode)VE.forEach(e=>{if(e.s===selNode)nb.add(e.o.id);if(e.o===selNode)nb.add(e.s.id);});
-  const match=n=>!q||(n.id||'').toLowerCase().includes(q)||(n.label||'').toLowerCase().includes(q);
-  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;if(S.slice&&!n.group){const r=S.slice.roles.get(n.id);if(r&&r.role==='context')a*=.45;}if(S.deg!==null&&n._dist>0&&n._dist<Infinity)a*=[1,.55,.38,.26][n._dist];return a;};
+  const match=n=>!q||matchQ(n),holds=holdsMatch();
+  const nodeAlpha=n=>{let a=1;if(selNode&&n!==selNode&&!nb.has(n.id)&&!(selNode._open&&under(n,selNode)))a*=.35;if(q&&!match(n)&&!holds.has(n.id))a*=.15;if(n.ghost)a*=.55;if(n._ext)a*=.5;if(S.slice&&!n.group){const r=S.slice.roles.get(n.id);if(r&&r.role==='context')a*=.45;}if(S.deg!==null&&n._dist>0&&n._dist<Infinity)a*=[1,.55,.38,.26][n._dist];return a;};
   // open boundaries, outermost first
   const open=VN.filter(n=>n._open).sort((a,b)=>depthOf(a)-depthOf(b));
   ctx.textAlign='left';ctx.textBaseline='middle';
@@ -1051,9 +1199,13 @@ function draw(){
     ctx.globalAlpha=nodeAlpha(b);
     if(b.group){ // placement group: a dashed frame with its value and count
       ctx.strokeStyle=hl?C.select:C.muted;ctx.lineWidth=(hl?2:1.2)*u;ctx.setLineDash([6,4]);roundRect(r.x,r.y,r.w,r.h,10);ctx.stroke();ctx.setLineDash([]);
-      ctx.font=(12*u)+'px system-ui,sans-serif';ctx.fillStyle=hl?C.select:C.muted;ctx.fillText(b.label,r.x+10*u,r.y+TITLE/2);
-      const n=(kidsOf.get(b.id)||[]).filter(k=>k._vis&&k._lc===b).length,tx=r.x+18*u+ctx.measureText(b.label).width;
-      ctx.font=(10*u)+'px system-ui,sans-serif';ctx.fillText(n+' concept'+(n===1?'':'s'),tx,r.y+TITLE/2);
+      const n=(kidsOf.get(b.id)||[]).filter(k=>k._vis&&k._lc===b).length,cnt=n+' concept'+(n===1?'':'s');
+      ctx.font=(12*u)+'px system-ui,sans-serif';const lw=ctx.measureText(b.label).width,tx=r.x+18*u+lw;
+      ctx.font=(10*u)+'px system-ui,sans-serif';const end=tx+ctx.measureText(cnt).width;
+      // Zoomed out, the text can outgrow the frame: a halo keeps the border off it.
+      if(end>r.x+r.w-6){ctx.fillStyle=C.bg;ctx.fillRect(r.x+6*u,r.y+TITLE/2-8*u,end-r.x,16*u);}
+      ctx.fillStyle=hl?C.select:C.muted;ctx.fillText(cnt,tx,r.y+TITLE/2);
+      ctx.font=(12*u)+'px system-ui,sans-serif';ctx.fillText(b.label,r.x+10*u,r.y+TITLE/2);
       return;
     }
     ctx.fillStyle=C.bOpen;roundRect(r.x,r.y,r.w,r.h,10);ctx.fill();
@@ -1064,22 +1216,34 @@ function draw(){
     ctx.font=(12*u)+'px system-ui,sans-serif';
     let tx=r.x+10*u;
     ctx.fillStyle=hl?C.select:C.label;
-    const title=shortLabel(b);ctx.fillText(title,tx,r.y+TITLE/2);tx+=ctx.measureText(title).width+8*u;
+    const title=fitText(shortLabel(b),r.w-(cc?70*u:20*u));ctx.fillText(title,tx,r.y+TITLE/2);tx+=ctx.measureText(title).width+8*u;
     ctx.font=(10*u)+'px system-ui,sans-serif';ctx.fillStyle=C.muted;
-    const sub=(b.kind||'boundary')+(b._hidden?' · '+b._hidden+' more inside':'');
+    // An open box shows its members; only what the view folds into it is unseen.
+    const nf=(b.folded&&b.folded.length)||0,sub=(b.kind||'boundary')+(nf?' · '+nf+' folded':'');
     if(tx+ctx.measureText(sub).width<r.x+r.w-60*u){ctx.fillText(sub,tx,r.y+TITLE/2);}
     if(cc){const t=b.criticality.toUpperCase();ctx.font=(9.5*u)+'px system-ui,sans-serif';const w=ctx.measureText(t).width+10*u;
       ctx.fillStyle=cc;roundRect(r.x+r.w-w-8*u,r.y+(TITLE-14*u)/2,w,14*u,4*u);ctx.fill();ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText(t,r.x+r.w-w/2-8*u,r.y+TITLE/2);ctx.textAlign='left';}
     if(b.published){ctx.strokeStyle=C.gold;ctx.lineWidth=2.5*u;roundRect(r.x-4,r.y-4,r.w+8,r.h+8,13);ctx.stroke();}
     if(b._diff==='changed'){ctx.strokeStyle=C.changed;ctx.lineWidth=2*u;ctx.setLineDash([3,3]);roundRect(r.x-7,r.y-7,r.w+14,r.h+14,15);ctx.stroke();ctx.setLineDash([]);}
   });
-  // edges
+  // edges; their labels are drawn after the nodes so no node covers them
+  const labels=[];
   ctx.lineCap='round';ctx.font=(10*u)+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  VE.forEach(e=>{
+  const DE=drawnEdges();
+  DE.forEach(e=>{
     const gm=edgeGeom(e);if(!gm)return;
     const {a,b,cx,cy,port}=gm;
     let alpha=Math.min(nodeAlpha(e.s),nodeAlpha(e.o));
     const hl=selEdge===e||(selNode&&(e.s===selNode||e.o===selNode))||S.hover===e;
+    if(e.bundle){ // several relations between one pair: one thicker line, arrows where they point
+      ctx.globalAlpha=selNode&&!hl?alpha*.5:alpha;ctx.strokeStyle=hl?C.select:C.edge;ctx.lineWidth=(1.6+Math.min(2.4,(e.count-1)*.6))*(hl?1.4:1);
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      const head=(p,q)=>{const ang=Math.atan2(p.y-q.y,p.x-q.x),s=(6+ctx.lineWidth)*u;ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(p.x,p.y);
+        ctx.lineTo(p.x-s*Math.cos(ang-.45),p.y-s*Math.sin(ang-.45));ctx.lineTo(p.x-s*Math.cos(ang+.45),p.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill();};
+      if(e.bundle.some(m=>m.s===e.s))head(b,a);if(e.bundle.some(m=>m.s===e.o))head(a,b);
+      labels.push({at:t=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t}),t:k>=1.25||hl?e.p:'\u00d7'+e.count,hl,alpha:ctx.globalAlpha});
+      return;
+    }
     if(selNode&&!hl)alpha*=.5;
     if(e.contain)alpha*=.8;
     if(e.planned)alpha*=.45;
@@ -1097,10 +1261,7 @@ function draw(){
       const ang=Math.atan2(b.y-cy,b.x-cx),s=(6+ctx.lineWidth)*u;
       ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(b.x,b.y);
       ctx.lineTo(b.x-s*Math.cos(ang-.45),b.y-s*Math.sin(ang-.45));ctx.lineTo(b.x-s*Math.cos(ang+.45),b.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill();
-      if(k>=1.25||hl){ // relation label
-        const lx=(a.x+2*cx+b.x)/4,ly=(a.y+2*cy+b.y)/4,t=e.p+(e.count>1?' ×'+e.count:'')+(e.lifted?' ↑':''),w=ctx.measureText(t).width+6;
-        ctx.fillStyle=C.halo;ctx.fillRect(lx-w/2,ly-7*u,w,14*u);ctx.fillStyle=hl?C.select:C.muted;ctx.fillText(t,lx,ly);
-      }
+      if(k>=1.25||hl)labels.push({at:t=>({x:(1-t)*(1-t)*a.x+2*(1-t)*t*cx+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*cy+t*t*b.y}),t:e.p+(e.count>1?' ×'+e.count:'')+(e.lifted?' ↑':''),hl,alpha:ctx.globalAlpha});
     }
   });
   // nodes (closed boundaries, concepts, artifacts)
@@ -1132,6 +1293,9 @@ function draw(){
       if(n.type==='boundary')ctx.roundRect(p.x-n._w/2-4,p.y-n._h/2-4,n._w+8,n._h+8,11);else ctx.arc(p.x,p.y,ring+1,0,Math.PI*2);ctx.stroke();}
     if(n._diff==='changed'){ctx.strokeStyle=C.changed;ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.beginPath();
       if(n.type==='boundary')ctx.roundRect(p.x-n._w/2-7,p.y-n._h/2-7,n._w+14,n._h+14,13);else ctx.arc(p.x,p.y,ring+5,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
+    if(holds.has(n.id)){ // a closed box or whole holding search matches
+      ctx.strokeStyle=C.select;ctx.lineWidth=2.5;ctx.setLineDash([5,3]);ctx.beginPath();
+      if(n.type==='boundary')ctx.roundRect(p.x-n._w/2-9,p.y-n._h/2-9,n._w+18,n._h+18,14);else ctx.arc(p.x,p.y,ring+8,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
     if(n.type==='concept'&&n._kids){ // expand marker
       ctx.strokeStyle=col.stroke;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(p.x-5,p.y);ctx.lineTo(p.x+5,p.y);
       if(!S.expanded.has(n.id)){ctx.moveTo(p.x,p.y-5);ctx.lineTo(p.x,p.y+5);}ctx.stroke();}
@@ -1139,9 +1303,10 @@ function draw(){
     if(!manyLabels||hl||(q&&match(n))){
       ctx.fillStyle=C.label;ctx.textAlign='center';
       if(n.type==='boundary'){ctx.textBaseline='middle';
-        const lab=shortLabel(n),room=n._w-(n._kids?30:16);let text=lab;
-        if(n._lw*u>room)text=lab.slice(0,Math.max(4,Math.floor(lab.length*room/(n._lw*u))-1))+'…';
-        ctx.fillText(text,p.x+(n._kids?-7*u:0),p.y);
+        const lab=shortLabel(n),room=n._w-(n._kids?24*u:12*u);let text=lab;
+        // Too wide at the legible size: shrink to at most 80%, then cut in the middle.
+        if(n._lw*u>room){const f=Math.max(.8,room/(n._lw*u));ctx.font=(12*u*f)+'px system-ui,sans-serif';text=fitText(lab,room);}
+        ctx.fillText(text,p.x+(n._kids?-7*u:0),p.y);ctx.font=(12*u)+'px system-ui,sans-serif';
         if(n._kids){ctx.fillStyle=C.muted;ctx.font=(13*u)+'px system-ui,sans-serif';ctx.fillText('+',p.x+n._w/2-10*u,p.y+.5);ctx.font=(12*u)+'px system-ui,sans-serif';}
       }
       else{ctx.textBaseline='top';const ly=p.y+n._h/2+3*u+(cc?3:0),w=n._lw*u+6;ctx.fillStyle=C.halo;ctx.fillRect(p.x-w/2,ly-1,w,15*u);ctx.fillStyle=C.label;ctx.fillText(shortLabel(n),p.x,ly);}
@@ -1152,9 +1317,23 @@ function draw(){
       ctx.fillStyle='#fff';ctx.textBaseline='middle';ctx.fillText(t,bx,by+.5);
     }
   });
+  // relation labels at each edge's midpoint, on a halo, above the nodes
+  ctx.font=(10*u)+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  // A label that would overlap one already drawn is left out (highlighted ones first);
+  // the tooltip and the panel still name the relation.
+  // Nodes and their labels are taken first; each edge label tries its midpoint,
+  // then points further along the edge.
+  const taken=[];
+  VN.forEach(n=>{if(n._open)return;const p=S.pos.get(n.id);if(!p)return;
+    if(n.type==='boundary')taken.push({x0:p.x-n._w/2,x1:p.x+n._w/2,y0:p.y-n._h/2,y1:p.y+n._h/2});
+    else{const hw=Math.max(n._r,n._lw*u/2+3);taken.push({x0:p.x-hw,x1:p.x+hw,y0:p.y-n._r,y1:p.y+n._h/2+3*u+15*u});}});
+  const free=r=>!taken.some(o=>o.x0<r.x1&&r.x0<o.x1&&o.y0<r.y1&&r.y0<o.y1);
+  labels.sort((a,b)=>(b.hl?1:0)-(a.hl?1:0)).forEach(l=>{const w=ctx.measureText(l.t).width+8*u;
+    let r=null;for(const t of [.5,.4,.6,.3,.7]){const q=l.at(t),c={x0:q.x-w/2,x1:q.x+w/2,y0:q.y-7.5*u,y1:q.y+7.5*u,x:q.x,y:q.y};if(free(c)){r=c;break;}}
+    if(!r)return;taken.push(r);ctx.globalAlpha=l.alpha;ctx.fillStyle=C.halo;roundRect(r.x0,r.y0,w,15*u,4*u);ctx.fill();ctx.fillStyle=l.hl?C.select:C.muted;ctx.fillText(l.t,r.x,r.y);});
   ctx.globalAlpha=1;
   const nb2=VN.filter(n=>n.type==='boundary').length;
-  $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(filtersActive()?' · filtered':'')+(S.slice?' · slice':'');
+  $('status').textContent=`${VN.filter(n=>!n.group).length} nodes (${nb2} boundaries) · ${VE.filter(e=>!e.contain).length} edges · zoom ${k.toFixed(2)}`+(DE.hidden?` · ${DE.hidden} derived or lifted hidden until a node is selected or hovered`:'')+(filtersActive()?' · filtered':'')+(S.slice?' · slice':'');
   $('hint').textContent=S.focus?'Esc leaves focus':S.slice?'Esc clears the slice':(VN.some(n=>n.type==='boundary'&&!n._open&&n._kids)?'click a boundary to open it · double-click to focus · alt+click to slice':'alt+click a node to slice on it');
 }
 
@@ -1178,17 +1357,23 @@ function hitNode(w){
 function hitEdge(w){
   const tol=(lastPtr==='mouse'?7:14)/S.cam.k;let best=null,bd=tol;
   RC=new Map();
-  VE.forEach(e=>{if(e.contain)return;const gm=edgeGeom(e);if(!gm)return;const {a,b,cx,cy}=gm;
+  drawnEdges().forEach(e=>{if(e.contain)return;const gm=edgeGeom(e);if(!gm)return;const {a,b,cx,cy}=gm;
     for(let t=0;t<=1;t+=.05){const u=1-t,x=u*u*a.x+2*u*t*cx+t*t*b.x,y=u*u*a.y+2*u*t*cy+t*t*b.y,dd=Math.hypot(w.x-x,w.y-y);if(dd<bd){bd=dd;best=e;}}});
   return best;
 }
 
 /* ---- tooltip / panel ---- */
+// hideTip: the hover card belongs to the pointer over the canvas. Anything else
+// (a press, a key, the toolbar, a rebuild) takes it down, or it outlives its node.
+function hideTip(){tip.style.display='none';S.hover=null;}
+// Outside the canvas, any press or focus change hides it.
+document.addEventListener('pointerdown',ev=>{if(ev.target!==cv)hideTip();},true);
+document.addEventListener('focusin',hideTip);
 const critPill=l=>l?`<span class="crit ${esc(l)}">${esc(l)}</span>`:'';
 function critText(n){if(!n.criticality)return '';return n.criticality+(n.criticalityFrom&&n.criticalityFrom!=='declared'?' (via '+n.criticalityFrom+')':n.criticalityFrom?' (declared)':'');}
 function nodeTip(n){
   if(n.group)return `<b>${esc(n.label)}</b><div class="def">${esc(n.doc)}</div><span class="k">${n._kids} concept${n._kids===1?'':'s'}</span>`;
-  let h=`<b>${esc(n.label||n.id)}</b><br><span class="k">${esc(n.id)}</span><br>${esc(n.type)}${n.kind?' · '+esc(n.kind):''}${n.tier?' · '+esc(n.tier):''}${n.ghost?' · <i>removed</i>':''}`;
+  let h=`<b>${esc(n.label||n.id)}</b><br>${n.label&&n.label!==n.id?`<span class="k">${esc(n.id)}</span><br>`:''}${esc(n.type)}${n.kind?' · '+esc(n.kind):''}${n.tier?' · '+esc(n.tier):''}${n.ghost?' · <i>removed</i>':''}`;
   if(n.criticality)h+=`<br><span class="k">criticality</span> ${esc(critText(n))}`;
   if(n.owner)h+=`<br><span class="k">owner</span> ${esc(n.owner)}`;
   if(n.published)h+=`<br><span class="k">published as</span> ${esc(n.publishedAs||'')}`;
@@ -1205,12 +1390,26 @@ function nodeTip(n){
   return h;
 }
 function edgeTip(e){
+  if(e.bundle)return `<b>${esc(e.s.label||e.s.id)}</b> \u21c4 <b>${esc(e.o.label||e.o.id)}</b><br><span class="k">${e.count} relations, bundled; click for each</span><ul>${e.bundle.map(m=>'<li>'+esc(m.s===e.s?'\u2192 ':'\u2190 ')+esc(m.p)+' <span class="k">'+esc(m.source)+(m.count>1?' \u00d7'+m.count:'')+'</span></li>').join('')}</ul>`;
   const iface=(e.s._open&&under(e.o,e.s))||(e.o._open&&under(e.s,e.o));
   let h=`<b>${esc(e.s.label||e.s.id)}</b> —${esc(e.p)}→ <b>${esc(e.o.label||e.o.id)}</b><div class="def">${esc(relDef(e.p))}</div><span class="k">${iface?'boundary interface: the box '+esc(e.p)+' what it houses · ':''}${esc(e.source)}${e.proposed?' · proposed':''}${e.planned?' · planned':''}${e.lifted?' · lifted':''}${e.rerouted?' · from closed nodes':''}${e.diff?' · '+e.diff:''} · ×${e.count}</span>`;
   if(e.via&&e.via.size)h+=`<br><span class="k">via</span><ul>${[...e.via].slice(0,10).map(v=>'<li>'+esc(v)+'</li>').join('')}${e.via.size>10?'<li>…</li>':''}</ul>`;
   return h;
 }
-function nodeLink(n){return `<a class="n" data-id="${esc(n.id)}">${esc(n.label||n.id)}</a>`;}
+// housingHtml: the one "in boundary" answer for a concept or artifact: the box
+// it is drawn in, and whether a boundary's code realizes it there or it only
+// sits in the box that encloses what produces and uses it.
+const PLACING=new Set(['realizes','represents','holds']);
+function housingHtml(n){
+  const cb=n._c&&!n._c.group&&n._c.type==='boundary'?n._c:null,home=cb||(n.boundary&&byId.get(n.boundary))||null;
+  if(n.type==='artifact')return home?nodeLink(home):'<span class="via">none</span>';
+  const by=[...new Set(V._edges.filter(e=>e.o===n.id&&PLACING.has(e.p)&&byId.has(e.s)&&byId.get(e.s).type==='boundary').map(e=>e.s))].map(id=>byId.get(id));
+  if(!home)return '<span class="via">none: no boundary’s code realizes it</span>';
+  if(!by.length)return 'housed in '+nodeLink(home)+'<span class="note">; no boundary realizes it directly</span>';
+  const others=by.filter(b=>b!==home);
+  return nodeLink(home)+(others.length?'<div class="note">also realized or held by '+others.map(nodeLink).join(', ')+'</div>':'');
+}
+function nodeLink(n){return `<a class="n" data-id="${esc(n.id)}" tabindex="0" role="link">${esc(n.label||n.id)}</a>`;}
 function renderCrumbs(){
   const box=$('crumbs');let h=`<a data-focus="" class="${S.focus?'':'cur'}" title="Whole view">All</a>`;
   if(S.focus&&byId.has(S.focus)){
@@ -1280,20 +1479,23 @@ function historyHtml(){
 }
 function renderPanel(){
   const sel=S.sel;let h='';
-  if(V.doc||V.zoom)h+=`<h2>View</h2><div><b>${esc(V.name)}</b>${V.zoom?' <span class="badge">'+esc(V.zoom)+'</span>':''}</div><div style="color:var(--muted)">${esc(V.doc||'')}</div>`;
+  if(V.doc||V.zoom||V._ns)h+=`<h2>View</h2><div><b>${esc(V.name)}</b>${V.zoom?' <span class="badge">'+esc(V.zoom)+'</span>':''}${V._ns?' <span class="badge" title="Every concept here is in '+esc(V._ns)+':, so the map leaves the prefix off">namespace '+esc(V._ns)+'</span>':''}</div><div style="color:var(--muted)">${esc(V.doc||'')}</div>`;
   if(S.slice){
     const by=new Map();S.slice.roles.forEach(r=>by.set(r.role,(by.get(r.role)||0)+1));
     h+=`<h2>Slice</h2><div><b>${S.slice.seeds.map(esc).join(', ')}</b> <a class="n" data-clearslice="1">clear</a></div><div class="via">${SROLES.filter(r=>by.has(r)).map(r=>`<span title="${esc(SLICEDEFS[r]||'')}">${by.get(r)} ${esc(r)}</span>`).join(' · ')}</div>`;
     if(S.slice.missing.length)h+=`<div class="via">Not precomputed for ${S.slice.missing.map(esc).join(', ')}${SL&&SL.omitted?' (the index reached its size cap)':''}: run <span class="mono">gloss slice ${S.slice.missing.map(esc).join(' ')}</span>.</div>`;
   }
   h+=overlayHtml();
+  // The selection goes to its own live region, so a screen reader hears what
+  // was selected and not the whole panel again.
+  const topH=h;h='';
   if(sel&&sel.id){
     const n=sel;
     if(n.group){
       const kids=(kidsOf.get(n.id)||[]).slice().sort((a,b)=>(a.label||a.id).localeCompare(b.label||b.id));
       h+=`<h2>Placement group</h2><div><b>${esc(n.label)}</b></div><div style="color:var(--muted)">${esc(n.doc)}</div><ul>${kids.map(k=>'<li>'+nodeLink(k)+(k.placementReason?' <div class="via">'+esc(k.placementReason)+'</div>':'')+'</li>').join('')}</ul>`;
     }else{
-    h+=`<h2>Selected ${esc(n.type)}</h2><div><b>${esc(n.label||n.id)}</b> ${critPill(n.criticality)}</div><div class="id">${esc(n.id)}</div>`;
+    h+=`<h2>Selected ${esc(n.type)}</h2><div><b>${esc(n.label||n.id)}</b> ${critPill(n.criticality)}</div>${n.label&&n.label!==n.id?`<div class="id">${esc(n.id)}</div>`:''}`;
     h+=`<div class="acts">`;
     if(n._kids)h+=`<button data-act="${S.expanded.has(n.id)?'close':'open'}">${S.expanded.has(n.id)?'Close':'Open'}</button>`;
     if(n.type==='boundary')h+=S.focus===n.id?`<button data-act="unfocus">Leave focus</button>`:`<button data-act="focus">Focus</button>`;
@@ -1304,10 +1506,10 @@ function renderPanel(){
     row('type',esc(n.type));row(n.type==='boundary'?'level':'kind',esc(n.kind));row('tier',esc(n.tier));row('ns',esc(n.ns));row('branch',n.branch&&n.branch!=='boundary'&&n.branch!=='artifact'?esc(n.branch):'');
     row('criticality',n.criticality?esc(critText(n)):'<span class="via">unclassified</span>');
     row('owner',esc(n.owner));
-    if(n._c&&!n._c.group)row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
+    if(n._c&&!n._c.group&&(n.type==='boundary'||n._c.type!=='boundary'))row(n._c.type==='boundary'?'in boundary':'part of',nodeLink(n._c));
     const whole=displacedFrom(n);
     if(whole)row('part of',nodeLink(whole)+'<div class="via">drawn in the boundary its code is in; it shares the colour of '+esc(whole.id)+'</div>');
-    else if(n.type!=='boundary'&&!n.ghost)row('in boundary','<span class="via">none: no boundary’s code realizes it</span>');
+    if(n.type!=='boundary'&&!n.ghost)row('in boundary',housingHtml(n));
     if(n.placement)row('placement',(n.placement==='housed'?'':'unplaced: ')+'<b>'+esc(n.placement)+'</b>'+(n.placementReason?'<div class="via">'+esc(n.placementReason)+'</div>':''));
     const sr=S.slice&&S.slice.roles.get(n.id);
     if(sr)row('slice role','<b title="'+esc(SLICEDEFS[sr.role]||'')+'">'+esc(sr.role)+'</b>'+(sr.member!==n.id?' <span class="via">as '+esc(sr.member)+'</span>':'')+(sr.via.length?'<div class="via">via '+sr.via.map(esc).join('<br>→ ')+'</div>':''));
@@ -1324,7 +1526,7 @@ function renderPanel(){
     row('doc',esc(n.doc));h+='</dl>';
     const dt=n.type==='concept'?details[n.id]:null;
     if(dt){
-      const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="via">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="via">proposed</span>':''}${l.via?' <span class="via">via '+esc(l.via)+'</span>':''}</li>`;
+      const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="note">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="note">proposed</span>':''}${l.via?' <span class="note">via '+esc(l.via)+'</span>':''}</li>`;
       if(dt.replaces&&dt.replaces.length)h+=`<h2>Replaces</h2><div class="mono">${dt.replaces.map(esc).join(', ')}</div>`;
       if(dt.realizes&&dt.realizes.length)h+=`<h2>Realizes</h2><div class="mono">${dt.realizes.map(esc).join(' → ')}</div>`;
       h+=`<h2>Artifacts (${(dt.artifacts||[]).length})</h2><ul>${(dt.artifacts||[]).map(linkLi).join('')||'<li class="via">no code links to it</li>'}</ul>`;
@@ -1340,39 +1542,47 @@ function renderPanel(){
     h+=`<h2>Outgoing (${out.length})</h2><ul>${out.map(e=>edgeLi(e,e.o,'→')).join('')||'<li class="via">none</li>'}</ul>`;
     h+=`<h2>Incoming (${inn.length})</h2><ul>${inn.map(e=>edgeLi(e,e.s,'←')).join('')||'<li class="via">none</li>'}</ul>`;
     }
+  }else if(sel&&sel.bundle){
+    const e=sel;
+    h+=`<h2>Selected edges (${e.count})</h2><div>${nodeLink(e.s)} <b>\u21c4</b> ${nodeLink(e.o)}</div><ul>${e.bundle.map(m=>`<li>${nodeLink(m.s)} <b title="${esc(relDef(m.p))}">\u2014${esc(m.p)}\u2192</b> ${nodeLink(m.o)} <span class="via">${esc(m.source)}${m.proposed?' · proposed':''}${m.lifted?' · lifted':''}${m.count>1?' · ×'+m.count:''}</span></li>`).join('')}</ul><div class="via">Select either node to draw them one by one.</div>`;
   }else if(sel){
     const e=sel;
     h+=`<h2>Selected edge</h2><div>${nodeLink(e.s)} <b>—${esc(e.p)}→</b> ${nodeLink(e.o)}</div><dl><dt>meaning</dt><dd>${esc(relDef(e.p))}</dd><dt>source</dt><dd>${esc(e.source)}</dd><dt>count</dt><dd>${e.count}</dd>`;
     if(e.proposed)h+='<dt>proposed</dt><dd>yes</dd>';if(e.planned)h+='<dt>planned</dt><dd>yes</dd>';if(e.lifted)h+='<dt>lifted</dt><dd>yes</dd>';if(e.diff)h+=`<dt>diff</dt><dd>${esc(e.diff)}</dd>`;
     if(e.rerouted)h+=`<dt>underlying</dt><dd>${e.parts.map(p=>esc(p.s)+' → '+esc(p.o)).join('<br>')}</dd>`;
     if(e.via.size)h+=`<dt>via</dt><dd class="via">${[...e.via].map(esc).join('<br>')}</dd>`;h+='</dl>';
-  }else{
+  }
+  const selH=h;h=topH;
+  if(!sel){
     const tops=VN.filter(n=>n.type==='boundary'&&!n._lc),loose=VN.filter(n=>n.type==='concept'&&n._lc&&n._lc.group);
     h+=`<h2>Where you are</h2><div style="color:var(--muted)">`;
     if(S.focus&&byId.has(S.focus))h+=`Focused on <b>${esc(byId.get(S.focus).label||S.focus)}</b>: its contents and what they connect to. `;
     else h+=`The top of the system: ${tops.length} top-level boundar${tops.length===1?'y':'ies'}${loose.length?` and ${loose.length} unplaced concept${loose.length===1?'':'s'} outside them (${VN.filter(n=>n.group).map(g=>loose.filter(k=>k._lc===g).length+' '+esc(g.placement)).join(', ')||'no placement'})`:''}. `;
-    h+=coarse?`Tap a boundary to open it, double-tap to focus on it. Drag to pan, pinch to zoom.</div>`:`Click a boundary to open it, double-click to focus on it. Drag to pan, wheel to zoom, Esc to step back.</div>`;
-    if(tops.length){
-      const sorted=tops.slice().sort((a,b)=>critRank(b.criticality)-critRank(a.criticality)||(a.label||a.id).localeCompare(b.label||b.id));
-      h+=`<ul>${sorted.map(b=>'<li>'+nodeLink(b)+' <span class="badge">'+esc(b.kind||'boundary')+'</span>'+(b._hidden?' <span class="via">'+b._hidden+' inside</span>':'')+(b.criticality?' '+critPill(b.criticality):'')+'</li>').join('')}</ul>`;
-    }
+    h+=coarse?`Tap a boundary to open it, double-tap to focus on it. Drag to pan, pinch to zoom.</div>`:`Click a boundary to open it, double-click to focus on it. Drag to pan, wheel to zoom, Esc to step back. The outline below lists the same nodes for the keyboard.</div>`;
+  }
+  const midH=h;h='';
+  if(!sel){
     h+=historyHtml();
     if(data.classified===0)h+=`<div class="via" style="margin-top:6px">Nothing is classified by criticality yet, so ordering by criticality has no effect. Run <span class="mono">gloss criticality suggest</span> for a first pass.</div>`;
     if(findings.length){
       const kinds=[...new Set(findings.map(f=>f.kind))];
-      h+=`<h2>Drift (${findings.length})</h2>`;
+      h+=`<h2>Drift (${findings.length}) <a class="n gl" href="${GLOSSARY}" target="_blank" rel="noopener" title="Every drift kind explained, in docs/GLOSSARY.md">what these mean</a></h2>`;
       kinds.forEach(k=>{
         const list=findings.filter(f=>f.kind===k);
-        h+=`<details${k==='violation'||k==='gap'||k==='dangling'?' open':''}><summary><b>${esc(k)}</b> <span class="badge">${list.length}</span></summary><ul>${list.slice(0,25).map(f=>{
+        const dd=DRIFTDEFS[k];
+        h+=`<details${k==='violation'||k==='gap'||k==='dangling'?' open':''}><summary><b>${esc(k)}</b> <span class="badge">${list.length}</span>${dd?` <span class="note">${esc(dd[0])}</span>`:''}</summary>${dd?`<div class="kdef"><b>Next:</b> ${esc(dd[1])} <a href="${GLOSSARY}#${encodeURIComponent(k)}" target="_blank" rel="noopener">More</a></div>`:''}<ul>${list.slice(0,25).map(f=>{
           const c=f.concept&&byId.has(f.concept)?nodeLink(byId.get(f.concept)):(f.concept?'<span class="mono">'+esc(f.concept)+'</span>':'');
-          return '<li>'+(f.boundary?esc(f.boundary)+' ':'')+c+' <div class="via">'+esc(f.msg||'')+'</div>'+(f.path?'<div>'+srcLink(f.path,f.line)+'</div>':'')+'</li>';
+          return '<li>'+(f.boundary?esc(f.boundary)+' ':'')+c+' <div class="note">'+esc(f.msg||'')+'</div>'+(f.path?'<div>'+srcLink(f.path,f.line)+'</div>':'')+'</li>';
         }).join('')}${list.length>25?'<li class="via">… '+(list.length-25)+' more</li>':''}</ul></details>`;
       });
     }
   }
-  const groups=LEGEND.filter(g=>(!g.diff||D.on)&&(!g.unplaced||V._nodes.some(n=>n.group)));
-  h+=`<h2>Legend</h2><div class="legend">${groups.map(g=>g.items.map(([sw,l,d])=>`<span title="${esc(d)}">${sw}${esc(l)}</span>`).join('')).join('<br>')}`;
-  h+=`<details class="defs"${S.legendOpen?' open':''}><summary>What these mean</summary>${groups.map(g=>`<h3>${esc(g.name)}</h3>${g.note?`<p>${esc(g.note)}</p>`:''}<dl>${g.items.map(([sw,l,d])=>`<dt>${sw}${esc(l)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>`).join('')}<h3>Relations</h3><p>Read each edge as A, relation, B in the direction of its arrow.</p><dl>${[...new Set(V._edges.map(e=>e.p))].sort().map(r=>`<dt>${esc(r)}</dt><dd>${esc(relDef(r))}</dd>`).join('')}</dl></details></div>`;
+  // Only what the map shows now: an entry for an encoding nothing on screen uses is noise.
+  const LN=VN.filter(n=>!n.group&&!n._later),LE=VE.filter(e=>!e.contain);
+  const groups=LEGEND.filter(g=>!g.diff||D.on).map(g=>({...g,items:g.items.filter(it=>!it[3]||it[3](LN,LE))})).filter(g=>g.items.length);
+  const relsShown=[...new Set(LE.map(e=>e.p))].sort(),nItems=groups.reduce((a,g)=>a+g.items.length,0);
+  h+=`<details id="legendBox"${legendOpen?' open':''}><summary>Legend <span class="n">· ${nItems} on the map</span></summary><div class="legend">${groups.map(g=>g.items.map(([sw,l,d])=>`<span title="${esc(d)}">${sw}${esc(l)}</span>`).join('')).join('<br>')}`;
+  h+=`<details class="defs"${S.legendOpen?' open':''}><summary>What these mean</summary>${groups.map(g=>`<h3>${esc(g.name)}</h3>${g.note?`<p>${esc(g.note)}</p>`:''}<dl>${g.items.map(([sw,l,d])=>`<dt>${sw}${esc(l)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>`).join('')}${relsShown.length?`<h3>Relations</h3><p>Read each edge as A, relation, B in the direction of its arrow.</p><dl>${relsShown.map(r=>`<dt>${esc(r)}</dt><dd>${esc(relDef(r))}</dd>`).join('')}</dl>`:''}</details></div></details>`;
   if(diff&&Array.isArray(diff.changes)&&diff.changes.length){
     h+=`<h2>Changes (${diff.changes.length})${diff.criticality?' '+critPill(diff.criticality):''}</h2>`;
     if(Array.isArray(diff.critical)&&diff.critical.length)h+=`<div class="via" style="margin-bottom:6px">criticality touched: ${diff.critical.slice(0,8).map(c=>esc(c.curie)+' '+esc(c.level)).join(', ')}${diff.critical.length>8?', …':''}</div>`;
@@ -1384,12 +1594,80 @@ function renderPanel(){
     });
   }
   const hs=$('panelBody').querySelector('.hist'),top=hs?hs.scrollTop:0;
-  $('panelBody').innerHTML=h;
+  $('panelTop').innerHTML=midH;
+  if(S.selH!==selH){$('selPane').innerHTML=selH;S.selH=selH;}
+  $('panelRest').innerHTML=h;
+  renderNav();
   const hs2=$('panelBody').querySelector('.hist');
   if(hs2){hs2.scrollTop=top;if(S.histScroll){const r=hs2.querySelector('.hrow.on');if(r){const a=r.offsetTop-hs2.offsetTop,b=a+r.offsetHeight;if(a<hs2.scrollTop||b>hs2.scrollTop+hs2.clientHeight)hs2.scrollTop=a-hs2.clientHeight/3;}}}
   S.histScroll=false;
   sheetLabel();
 }
+/* ---- outline: the map as a keyboard tree (role=tree, roving tabindex) ---- */
+// It lists what the canvas draws, nested as drawn; arrow keys move, Right and
+// Left open and close, Enter or Space selects (the canvas follows), Home/End.
+let navFocus=null,navSel=null; // the tree item that holds the tab stop; the selection it last followed
+function navKids(n){return VN.filter(k=>(n?k._lc===n:!k._lc)).sort((a,b)=>(a.group?1:0)-(b.group?1:0)||(a.type===b.type?0:a.type==='boundary'?-1:1)||critRank(b.criticality)-critRank(a.criticality)||shortLabel(a).localeCompare(shortLabel(b)));}
+function renderNav(){
+  const tree=$('navTree'),had=tree.contains(document.activeElement);
+  const sid=S.sel&&S.sel.id?S.sel.id:null;
+  // A selection made on the canvas moves the tab stop to it.
+  if(sid!==navSel){navSel=sid;if(sid)navFocus=sid;}
+  if(!navFocus||!byId.has(navFocus)||!byId.get(navFocus)._vis)navFocus=sid&&byId.get(sid)._vis?sid:null;
+  let first=null;
+  const item=(n,lvl)=>{
+    if(!first)first=n.id;
+    const kids=n._open||n.group?navKids(n):[],can=!n.group&&n._kids>0;
+    const kind=n.group?'group':n.type==='boundary'?(n.kind||'boundary'):n.type==='artifact'?'artifact':(n.kind||'concept');
+    const lab=n.group?n.label:shortLabel(n);
+    return `<li role="treeitem" data-id="${esc(n.id)}" aria-level="${lvl}" aria-selected="${n.id===sid}"${can||n.group?` aria-expanded="${n.group||n._open}"`:''} aria-label="${esc((n.group?n.label:(n.label||n.id))+', '+kind+(n.criticality?', '+n.criticality+' criticality':'')+(can&&!n._open?', '+n._hidden+' inside':''))}" tabindex="-1"><span class="ti" title="${esc(n.label||n.id)}"><span class="tw" aria-hidden="true">${can?(n._open?'▾':'▸'):''}</span>${esc(lab)} <span class="k">${esc(kind)}${n.criticality?' · '+esc(n.criticality):''}${can&&!n._open&&n._hidden?' · '+n._hidden+' inside':''}</span></span>${kids.length?`<ul role="group">${kids.map(k=>item(k,lvl+1)).join('')}</ul>`:''}</li>`;
+  };
+  tree.innerHTML=navKids(null).map(n=>item(n,1)).join('');
+  $('navBox').querySelector('.n').textContent='· '+VN.filter(n=>!n.group).length+' nodes';
+  const stop=tree.querySelector(`li[data-id="${CSS.escape(navFocus||first||'')}"]`)||tree.querySelector('li');
+  if(stop){stop.tabIndex=0;if(had)stop.focus({preventScroll:true});
+    const t=stop.offsetTop-tree.offsetTop,r=stop.querySelector(".ti").offsetHeight;if(t<tree.scrollTop||t+r>tree.scrollTop+tree.clientHeight)tree.scrollTop=t-tree.clientHeight/3;}
+}
+const navItems=()=>[...$('navTree').querySelectorAll('li[role=treeitem]')];
+function navMove(li){if(!li)return;navItems().forEach(x=>x.tabIndex=-1);li.tabIndex=0;navFocus=li.dataset.id;li.focus();}
+// navSelect: select a node from the outline and centre the canvas on it.
+function navSelect(n){
+  S.sel=n;navFocus=n.id;
+  const p=centre(n);if(p){S.cam.x=cv.clientWidth/2-p.x*S.cam.k;S.cam.y=viewH()/2-p.y*S.cam.k;S.camMoved=true;}
+  renderPanel();draw();
+}
+$('navTree').addEventListener('keydown',ev=>{
+  const li=ev.target.closest('li[role=treeitem]');if(!li)return;
+  const n=byId.get(li.dataset.id);if(!n)return;
+  const all=navItems(),i=all.indexOf(li);
+  let done=true;
+  switch(ev.key){
+    case 'ArrowDown':navMove(all[i+1]);break;
+    case 'ArrowUp':navMove(all[i-1]);break;
+    case 'Home':navMove(all[0]);break;
+    case 'End':navMove(all[all.length-1]);break;
+    case 'ArrowRight':
+      if(!n.group&&n._kids&&!n._open){navFocus=n.id;S.expanded.add(n.id);rebuild(false);renderPanel();draw();}
+      else{const c=li.querySelector('li[role=treeitem]');if(c)navMove(c);}
+      break;
+    case 'ArrowLeft':
+      if(!n.group&&n._open){navFocus=n.id;collapse(n);rebuild(false);renderPanel();draw();}
+      else{const up=li.parentElement.closest('li[role=treeitem]');if(up)navMove(up);}
+      break;
+    case 'Enter':case ' ':navSelect(n);break;
+    default:done=false;
+  }
+  if(done){ev.preventDefault();ev.stopPropagation();}
+});
+$('navTree').addEventListener('click',ev=>{
+  const li=ev.target.closest('li[role=treeitem]');if(!li)return;
+  const n=byId.get(li.dataset.id);if(!n)return;
+  navItems().forEach(x=>x.tabIndex=-1);li.tabIndex=0;
+  if(ev.target.closest('.tw')&&!n.group&&n._kids){navFocus=n.id;toggle(n);return;}
+  navSelect(n);
+});
+// Links in the panel are keyboard targets too: Enter follows them.
+panel.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.matches('a.n')){ev.preventDefault();ev.target.click();}});
 // The bottom sheet's handle (phones): what is selected, and whether it is open.
 function sheetLabel(){
   const s=S.sel,open=!panel.classList.contains('min');
@@ -1400,38 +1678,66 @@ function sheetLabel(){
 $('sheetBtn').addEventListener('click',()=>{panel.classList.toggle('min');panel.scrollTop=0;sheetLabel();});
 // Legend items: swatch, label and a definition worded as in docs/GRAPH.md,
 // docs/GOVERNANCE.md, docs/MARKING.md and docs/ADVANCED.md.
+// Each item may end with a test (visible nodes, visible edges) => shown: the
+// legend lists only what the current map draws.
+const any=(f)=>(N)=>N.some(f),anyE=(f)=>(N,E)=>E.some(f);
+const isC=n=>n.type==='concept'&&!n.ghost;
 const LEGEND=[
   {name:'Shapes',items:[
-    ['<i class="sw r"></i>','closed boundary','A boundary (a directory with a .gloss.yaml manifest) drawn as one box with its contents hidden; its outline colour is its criticality. Click to open it.'],
-    ['<i class="sw o"></i>','open boundary','An opened boundary: a box around the concepts its code realizes or represents and the boundaries nested in it.'],
-    ['<i class="sw c"></i>','concept','A term the ontology (*.gloss.yaml) defines: an entity, process, capability, event, measure, constraint, resource or system-type.'],
-    ['<i class="sw a"></i>','artifact','A function, class, file, test or page that a @gloss marker links to a concept or boundary.']]},
+    ['<i class="sw r"></i>','closed boundary','A boundary (a directory with a .gloss.yaml manifest) drawn as one box with its contents hidden; its outline colour is its criticality. Click to open it.',any(n=>n.type==='boundary'&&!n._open)],
+    ['<i class="sw o"></i>','open boundary','An opened boundary: a box around the concepts its code realizes or represents and the boundaries nested in it.',any(n=>n.type==='boundary'&&n._open)],
+    ['<i class="sw c"></i>','concept','A term the ontology (*.gloss.yaml) defines: an entity, process, capability, event, measure, constraint, resource or system-type.',any(isC)],
+    ['<i class="sw a"></i>','artifact','A function, class, file, test or page that a @gloss marker links to a concept or boundary.',any(n=>n.type==='artifact')]]},
+  {name:'Fill and badges',items:[
+    ['<i class="sw c f" style="background:hsl(30 var(--node-sat) var(--node-light))"></i><i class="sw c f" style="background:hsl(140 var(--node-sat) var(--node-light))"></i><i class="sw c f" style="background:hsl(250 var(--node-sat) var(--node-light))"></i>','fill colour','The colour of a concept\u2019s is-a family: concepts with the same taxonomy root share a hue. It identifies, it does not rank. A part drawn outside its whole takes the whole\u2019s colour; an implementation-tier concept is paler.',any(isC)],
+    ['<i class="bdg">3</i>','number badge','How much is tucked inside a closed boundary or concept: its hidden members plus what the view folds into it (implementation concepts folded into the core concept they realize, nested boundaries folded at this zoom). Open it, or read the list in the panel.',any(n=>n._hidden>0&&!n._open)]]},
   {name:'Concept styles',items:[
-    ['<i class="sw c i"></i>','implementation tier','Dashed outline: a concept in an implementation-tier namespace (such as impl:), a mechanism such as a handler, pipeline or queue that realizes a core concept.'],
-    ['<i class="sw c p"></i>','published','Gold ring: a concept written as published: { as: core:X }, the only seam between tiers and across repositories.'],
-    ['<i class="sw c pl"></i>','planned',PLANDEFS.planned],
-    ['<i class="sw c pl od"></i>','overdue',PLANDEFS.overdue]]},
-  {name:'Placement',unplaced:true,items:PLACEMENTS.map(v=>[v==='housed'?'<i class="sw o"></i>':'<i class="sw u"></i>',v,PLACEDEFS[v]]),
+    ['<i class="sw c i"></i>','implementation tier','Dashed outline: a concept in an implementation-tier namespace (such as impl:), a mechanism such as a handler, pipeline or queue that realizes a core concept.',any(n=>isC(n)&&n.tier==='implementation')],
+    ['<i class="sw c p"></i>','published','Gold ring: a concept written as published: { as: core:X }, the only seam between tiers and across repositories.',any(n=>n.published)],
+    ['<i class="sw c pl"></i>','planned',PLANDEFS.planned,any(n=>planState(n)==='planned')],
+    ['<i class="sw c pl od"></i>','overdue',PLANDEFS.overdue,any(n=>planState(n)==='overdue')],
+    ['<i class="sw c" style="border-style:dotted"></i>','deprecated','Dotted outline: being retired (deprecated, often with replaced-by); the panel names what takes over.',any(n=>n.deprecated)]]},
+  {name:'Placement',items:PLACEMENTS.map(v=>[v==='housed'?'<i class="sw o"></i>':'<i class="sw u"></i>',v,PLACEDEFS[v],any(n=>isC(n)&&n.placement===v&&v!=='housed')]),
    note:'A concept no boundary houses is drawn in a dashed group outside the boxes, one group per value. The first value that applies wins, in this order.'},
-  {name:'Criticality',items:[
-    ['<i class="sw c k low"></i>','low','A mistake here is an annoyance: telemetry, dashboards, internal tooling.'],
-    ['<i class="sw c k medium"></i>','medium','A mistake here degrades the product.'],
-    ['<i class="sw c k high"></i>','high','A mistake here costs money, trust or compliance: PII, access control, audit.'],
-    ['<i class="sw c k critical"></i>','critical','A mistake here moves money, breaks the law or stops the business.']],
+  {name:'Criticality',items:CRIT.map(l=>['<i class="sw c k '+l+'"></i>',l,{low:'A mistake here is an annoyance: telemetry, dashboards, internal tooling.',medium:'A mistake here degrades the product.',
+    high:'A mistake here costs money, trust or compliance: PII, access control, audit.',critical:'A mistake here moves money, breaks the law or stops the business.'}[l],any(n=>n.criticality===l)]),
    note:'Rings on concepts and artifacts, outline colour on boundaries. No ring means unclassified.'},
   {name:'Edges',items:[
-    ['<i class="ln"></i>','declared','Solid line: declared in an ontology file or a boundary manifest.'],
-    ['<i class="ln thin"></i>','inline','Thin line: from a @gloss marker in the code.'],
-    ['<i class="ln d"></i>','derived','Dashed line: derived by the rollup rules (such as the realization lift); written by the tool, never by hand.'],
-    ['<i class="ln dot"></i>','proposed','Dotted line: a proposal (@gloss? or a proposed: true entry) that a human has not yet accepted.'],
-    ['<i class="ln pl"></i>','planned','Faint line: declared only in a manifest\u2019s planned: block, capability the boundary will have.'],
-    ['<i class="ln thick"></i>','lifted','Thick line marked ↑: a boundary’s links to several concepts lifted to their least common subsumer (is-a); the panel lists the originals under via.']]},
+    ['<i class="ln"></i>','declared','Solid line: declared in an ontology file or a boundary manifest.',anyE(e=>e.source==='declared'&&!e.proposed)],
+    ['<i class="ln thin"></i>','inline','Thin line: from a @gloss marker in the code.',anyE(e=>e.source==='inline'&&!e.proposed)],
+    ['<i class="ln d"></i>','derived','Dashed line: derived by the rollup rules (such as the realization lift); written by the tool, never by hand.',anyE(e=>e.source==='derived'&&!e.proposed)],
+    ['<i class="ln dd"></i>','mixed','Dash-dot line: several underlying edges from different sources (declared, inline, derived) drawn as one; the panel lists them.',anyE(e=>e.source==='mixed'&&!e.proposed)],
+    ['<i class="ln dot"></i>','proposed','Dotted line: a proposal (@gloss? or a proposed: true entry) that a human has not yet accepted.',anyE(e=>e.proposed&&e.diff!=='removed')],
+    ['<i class="ln pl"></i>','planned','Faint line: declared only in a manifest\u2019s planned: block, capability the boundary will have.',anyE(e=>e.planned)],
+    ['<i class="ln thick"></i>','lifted','Thick line marked \u2191: a boundary\u2019s links to several concepts lifted to their least common subsumer (is-a); the panel lists the originals under via.',anyE(e=>e.lifted)]]},
   {name:'Diff',diff:true,items:[
-    ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.'],
-    ['<i class="ln rem"></i>','removed','Red: removed since the base; a removed node is drawn hollow and dashed.'],
-    ['<span style="color:var(--changed)">◌</span>','changed','Orange dashed ring: a node whose definition changed since the base.'],
-    ['<i class="sw c" style="background:transparent;border-color:var(--added);border-style:dashed"></i>','added, gone since','Green and dashed: a commit of the history added it and a newer one removed it, so today\u2019s map has no place for it; it floats at the top.']]},
+    ['<i class="ln add"></i>','added','Green: added since the base the diff compares against.',(N,E)=>N.some(n=>n._diff==='added')||E.some(e=>e.diff==='added')],
+    ['<i class="ln rem"></i>','removed','Red: removed since the base; a removed node is drawn hollow and dashed.',(N,E)=>N.some(n=>n._diff==='removed')||E.some(e=>e.diff==='removed')],
+    ['<span style="color:var(--changed)">\u25cc</span>','changed','Orange dashed ring: a node whose definition changed since the base.',any(n=>n._diff==='changed')],
+    ['<i class="sw c" style="background:transparent;border-color:var(--added);border-style:dashed"></i>','added, gone since','Green and dashed: a commit of the history added it and a newer one removed it, so today\u2019s map has no place for it; it floats at the top.',any(n=>n.gone)]]},
 ];
+// Drift kinds: what each means and what to do next, worded from the finding
+// kinds table in docs/ADVANCED.md; docs/GLOSSARY.md has an anchor per kind.
+const GLOSSARY='https://github.com/mckalvan/glossmark/blob/main/docs/GLOSSARY.md';
+const DRIFTDEFS={
+  'violation':['A boundary\u2019s code realizes, produces, consumes, publishes or subscribes something its manifest does not declare.','Declare it in the manifest if it belongs there, or move or unlink the code.'],
+  'gap':['A manifest declares something no code under the boundary implements.','Implement it, mark it planned: with a date, or drop the declaration.'],
+  'value-drift':['The code a published value is bound to changed and the ontology value did not.','Update value: in the ontology, or revert the code.'],
+  'dangling':['A marker, manifest entry or ontology relation names a concept that does not exist.','Fix the name, or propose the concept with @gloss? ns:NEW:Name.'],
+  'overdue':['A deprecated boundary is past its retire-by date and still has code.','Finish the migration, or move retire-by with the owner\u2019s agreement.'],
+  'planned-closed':['Code now implements something marked planned.','Drop planned (gloss accept --planned ns:X), or move the manifest entry to its plain list.'],
+  'plan-overdue':['A plan item\u2019s by date has passed and nothing implements it.','Build it, or move the date on the plan.'],
+  'overlap':['Two boundaries, neither inside the other, both realize or hold the same concept through their own code.','If one replaces the other, mark the old manifest deprecated: with replaced-by: and retire-by:; otherwise decide which boundary owns the concept.'],
+  'rogue':['A ns:NEW:Name proposal: a concept someone asked the namespace owner to add.','The owner adds the concept to the ontology or rejects the link.'],
+  'orphan':['A concept nothing is built for: no code links to it or to anything realizing it.','Link the code that implements it, mark it planned:, or remove the concept.'],
+  'untested':['Code reaches the concept but no test verifies it.','Add a test with a verifies marker.'],
+  'presented-only':['A page presents the concept (or a shell hosts it) but nothing implements it.','Link the code behind it with implements, or check that the page is meant to exist.'],
+  'unguarded':['A handler under a guarded-by boundary lacks the guard\u2019s decorator its neighbours carry.','Add the decorator, or confirm the guard is applied another way.'],
+  'stale':['An accepted link whose anchored code changed since it was accepted.','Check the link still holds, then gloss accept --stale <paths>.'],
+  'proposed':['An ontology entry marked proposed: true, awaiting acceptance.','Review it, then gloss accept --concept, or remove it.'],
+  'planned':['A planned concept or manifest declaration nothing implements yet.','Nothing, until its by date; build it before then.'],
+  'out-of-range':['An importer resolves a namespace version outside its declared range.','Bump the import range or pin a version inside it.'],
+  'deprecated-use':['Something still references a deprecated concept.','Move the reference to its replacement.']};
 // Relation definitions, read as "A <relation> B" in the direction the edge is drawn.
 // Worded from docs/ADVANCED.md and internal/model/vocab.go.
 const RELDEFS={
@@ -1477,7 +1783,9 @@ function reveal(n){ // expand every container, then select and centre
   renderPanel();draw();
 }
 panel.addEventListener('change',ev=>{if(ev.target.id==='asOf'){S.asOf=ev.target.checked;loadView(S.vi,true);}});
-panel.addEventListener('toggle',ev=>{if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;},true);
+panel.addEventListener('toggle',ev=>{
+  if(ev.target.classList.contains('defs'))S.legendOpen=ev.target.open;
+  if(ev.target.id==='legendBox'){legendOpen=ev.target.open;try{localStorage.setItem('gloss-legend',legendOpen?'open':'closed');}catch(e){}}},true);
 panel.addEventListener('click',ev=>{
   const hr=ev.target.closest('[data-step]');
   if(hr){ev.preventDefault();const i=+hr.dataset.step;
@@ -1517,9 +1825,10 @@ cv.addEventListener('pointerdown',ev=>{
   pts.set(ev.pointerId,{x:ev.offsetX,y:ev.offsetY});
   if(pts.size>=2){ // a second finger: stop dragging, start pinching
     cv.setPointerCapture(ev.pointerId);
-    if(pts.size===2){drag=null;moved=true;tip.style.display='none';const g=pinchGeom();pinch={...g,cam:{...S.cam}};}
+    if(pts.size===2){drag=null;moved=true;hideTip();const g=pinchGeom();pinch={...g,cam:{...S.cam}};}
     return;
   }
+  hideTip(); // a press selects, pans or drags: the hover card would cover what changes
   const w=toWorld(ev.offsetX,ev.offsetY),n=hitNode(w);
   drag={sx:ev.offsetX,sy:ev.offsetY,cam:{...S.cam},node:n,lx:w.x,ly:w.y};
   moved=false;cv.classList.add('drag');cv.setPointerCapture(ev.pointerId);
@@ -1539,7 +1848,7 @@ cv.addEventListener('pointermove',ev=>{
     if(!moved)return;
     if(drag.node){const w=toWorld(ev.offsetX,ev.offsetY);moveSubtree(drag.node,w.x-drag.lx,w.y-drag.ly);drag.lx=w.x;drag.ly=w.y;S.pinned.add(drag.node.id);}
     else{S.cam.x=drag.cam.x+dx;S.cam.y=drag.cam.y+dy;S.camMoved=true;}
-    tip.style.display='none';draw();return;
+    hideTip();draw();return;
   }
   if(ev.pointerType!=='mouse'&&ev.pointerType)return; // no hover on touch
   const w=toWorld(ev.offsetX,ev.offsetY),h=hitNode(w)||hitEdge(w);
@@ -1548,7 +1857,7 @@ cv.addEventListener('pointermove',ev=>{
   if(h){tip.innerHTML=h.id?nodeTip(h):edgeTip(h);tip.style.display='block';
     const r=stage.getBoundingClientRect(),tx=Math.min(ev.offsetX+14,r.width-tip.offsetWidth-6),ty=Math.min(ev.offsetY+14,r.height-tip.offsetHeight-6);
     tip.style.left=Math.max(0,tx)+'px';tip.style.top=Math.max(0,ty)+'px';}
-  else tip.style.display='none';
+  else hideTip();
 });
 // A single click selects and (after a short wait, so a double-click can cancel
 // it) opens or closes the node; a double-click focuses a boundary.
@@ -1575,15 +1884,17 @@ function collapse(n){if(n.group)return;S.expanded.delete(n.id);descendants(n,[])
 // After a pinch, the fingers lift one by one; none of them is a tap.
 cv.addEventListener('pointerup',ev=>{pts.delete(ev.pointerId);if(pinch||moved&&!drag){if(pts.size<2)pinch=null;return;}endDrag(ev);});
 cv.addEventListener('pointercancel',ev=>{pts.delete(ev.pointerId);if(pts.size<2)pinch=null;drag=null;cv.classList.remove('drag');});
-cv.addEventListener('pointerleave',()=>{if(!drag){S.hover=null;tip.style.display='none';draw();}});
+cv.addEventListener('pointerleave',()=>{hideTip();draw();});
 cv.addEventListener('wheel',ev=>{
-  ev.preventDefault();
+  ev.preventDefault();hideTip();
   const f=Math.exp(-ev.deltaY*0.0015),k=Math.min(8,Math.max(.05,S.cam.k*f)),r=k/S.cam.k;
   S.cam.x=ev.offsetX-(ev.offsetX-S.cam.x)*r;S.cam.y=ev.offsetY-(ev.offsetY-S.cam.y)*r;S.cam.k=k;S.camMoved=true;draw();
 },{passive:false});
-window.addEventListener('keydown',ev=>{if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
+window.addEventListener('keydown',ev=>{hideTip();if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
+  if(ev.key==='Escape'&&$('filters').classList.contains('on')){setFiltersOpen(false);return;}
   if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
-  if(ev.key==='f')fit();
+  if(ev.key==='f')fit(true);
+  if(ev.key==='/'&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey){ev.preventDefault();$('search').focus();$('search').select();}
   if((ev.key==='['||ev.key===']')&&HIST.length){S.histScroll=true;stepOverlay(ev.key==='['?1:-1);}});
 // A resize (a phone turned sideways) refits the map unless the reader has panned or zoomed.
 new ResizeObserver(()=>{if(!S.camMoved&&VN.length)fit();else draw();}).observe(stage);
@@ -1592,8 +1903,14 @@ new ResizeObserver(()=>{if(!S.camMoved&&VN.length)fit();else draw();}).observe(s
 const sel=$('viewSel');
 views.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=(v&&v.name)||('view '+(i+1));sel.appendChild(o);});
 sel.onchange=()=>loadView(+sel.value);
-$('search').oninput=ev=>{S.q=ev.target.value.trim().toLowerCase();draw();};
-$('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');};
+$('search').oninput=ev=>{hideTip();S.q=ev.target.value.trim().toLowerCase();S.mi=-1;searchInfo();draw();};
+$('search').addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'){ev.preventDefault();stepMatch(ev.shiftKey?-1:1);}
+  else if(ev.key==='Escape'&&ev.target.value){ev.preventDefault();ev.target.value='';S.q='';S.mi=-1;searchInfo();draw();}
+});
+$('filtersBtn').onclick=()=>setFiltersOpen(!$('filters').classList.contains('on'));
+$('fClose').onclick=()=>{setFiltersOpen(false);$('filtersBtn').focus();};
+$('fReset').onclick=resetFilters;
 $('ovSel').onchange=ev=>{const v=ev.target.value;S.histScroll=true;
   if(v==='')setOverlay(null);else if(v==='diff')setOverlay({k:'diff'});else if(v[0]==='s'){S.ovAnchor=+v.slice(1);setOverlay({k:'step',i:+v.slice(1)});}};
 $('ovOlder').onclick=()=>{S.histScroll=true;stepOverlay(1);};
@@ -1601,11 +1918,12 @@ $('ovNewer').onclick=()=>{S.histScroll=true;stepOverlay(-1);};
 $('changesSel').onchange=ev=>setDegree(ev.target.value===''?null:+ev.target.value);
 $('expandAll').onclick=()=>{V._nodes.forEach(n=>{if(kidsOf.has(n.id))S.expanded.add(n.id);});rebuild(false);fit();renderPanel();};
 $('collapseAll').onclick=()=>{S.expanded=groupIds();S.focus=null;rebuild(false);fit();renderPanel();};
-$('fit').onclick=fit;
+$('fit').onclick=()=>fit(true);
+$('moreBtn').onclick=()=>{const on=document.querySelector('.bar').classList.toggle('more');$('moreBtn').setAttribute('aria-expanded',String(on));$('moreBtn').classList.toggle('on',on);};
 $('relayout').onclick=()=>{S.pinned.clear();rebuild(true);fit();};
 const themes=['auto','light','dark'];
 function applyTheme(t){S.theme=t;if(t==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t);
-  $('themeBtn').textContent='Theme: '+t;readTheme();draw();try{localStorage.setItem('gloss-theme',t);}catch(e){}}
+  $('themeBtn').querySelector('.tv').textContent=t;$('themeBtn').setAttribute('aria-label','Theme: '+t+' (cycle auto, light, dark)');readTheme();draw();try{localStorage.setItem('gloss-theme',t);}catch(e){}}
 $('themeBtn').onclick=()=>applyTheme(themes[(themes.indexOf(S.theme)+1)%3]);
 let saved='auto';try{saved=localStorage.getItem('gloss-theme')||'auto';}catch(e){}
 if(!themes.includes(saved))saved='auto';

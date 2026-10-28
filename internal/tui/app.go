@@ -10,6 +10,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -74,7 +75,11 @@ type App struct {
 	items   []review.Item
 	visible []int // indexes into items after the filters
 	cur     int   // index into visible
-	top     int   // first visible row of the list
+	top     int   // first row of the list, group headers included
+
+	// opening holds the ids of the decisions in the queue as the session
+	// opened; the header counts those that have left it as decided.
+	opening map[string]bool
 
 	detail    *review.Detail
 	detailErr string
@@ -108,17 +113,50 @@ func New(eng Engine, opt Options) *App {
 var kindFilters = []string{"", review.KindProposedLink, review.KindStaleLink, review.KindProposedConcept, review.KindValueDrift, review.KindFinding, review.KindRecommendation}
 
 // Reload re-reads the queue and keeps the cursor on the same item when it
-// is still there.
+// is still there. Decisions come before findings, each group in the
+// engine's order; the engine's own order (gloss review --format json) is
+// untouched.
 func (a *App) Reload() {
 	keep := a.selectedID()
 	a.eng.Invalidate()
-	items, err := a.eng.Queue()
+	queue, err := a.eng.Queue()
 	if err != nil {
 		a.setStatus(false, err.Error())
-		items = nil
+		queue = nil
+	}
+	items := append([]review.Item(nil), queue...)
+	sort.SliceStable(items, func(i, j int) bool { return items[i].NeedsDecision() && !items[j].NeedsDecision() })
+	if a.opening == nil && err == nil {
+		a.opening = map[string]bool{}
+		for i := range items {
+			if items[i].NeedsDecision() {
+				a.opening[items[i].ID] = true
+			}
+		}
 	}
 	a.items = items
 	a.refilter(keep)
+}
+
+// progress counts the opening queue's decisions that have left the queue,
+// and the decisions in it that arrived since (a proposed concept a
+// propose made, say). Undo puts an item back, and it counts as open again.
+func (a *App) progress() (decided, total, arrived int) {
+	present := map[string]bool{}
+	for i := range a.items {
+		if a.items[i].NeedsDecision() {
+			present[a.items[i].ID] = true
+			if !a.opening[a.items[i].ID] {
+				arrived++
+			}
+		}
+	}
+	for id := range a.opening {
+		if !present[id] {
+			decided++
+		}
+	}
+	return decided, len(a.opening), arrived
 }
 
 func (a *App) refilter(keep string) {

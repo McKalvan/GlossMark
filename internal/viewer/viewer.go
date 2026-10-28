@@ -11,7 +11,10 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
@@ -36,9 +39,12 @@ type Data struct {
 	Concepts map[string]*ConceptDetail `json:"concepts,omitempty"`
 	// Findings are the drift findings, for the findings panel.
 	Findings []rollup.Finding `json:"findings,omitempty"`
-	// SourceURL is the source-url template from glossmark.yaml
-	// ("https://github.com/o/r/blob/main/{path}#L{line}"); paths link to it.
-	// The viewer ignores a template that is not http or https.
+	// SourceURL is the template paths link to: gloss view --source-url, else
+	// source-url from glossmark.yaml
+	// ("https://github.com/o/r/blob/main/{path}#L{line}"); "vscode" in either
+	// becomes EditorURL of the repository root; unset, paths are not links.
+	// The viewer ignores a template that is not http,
+	// https or vscode://file/.
 	SourceURL string `json:"sourceUrl,omitempty"`
 	// Classified counts concepts with a criticality, for the empty state.
 	Classified int `json:"classified"`
@@ -72,6 +78,20 @@ type Link struct {
 }
 
 const maxLinks = 40
+
+// EditorURL is the source-url template that opens a path in VS Code
+// (vscode://file/<root>/{path}:{line}), for a repository at the absolute
+// path root; "" when root is not absolute.
+func EditorURL(root string) string {
+	if !filepath.IsAbs(root) {
+		return ""
+	}
+	segs := strings.Split(strings.TrimPrefix(filepath.ToSlash(root), "/"), "/")
+	for i, s := range segs {
+		segs[i] = url.PathEscape(s)
+	}
+	return "vscode://file/" + strings.Join(segs, "/") + "/{path}:{line}"
+}
 
 // Details builds the concept pane data for every concept in the graph. A
 // concept's artifacts include those linked to the concepts that realize it,
