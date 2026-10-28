@@ -171,6 +171,9 @@ func cmdCoverage(args []string) int {
 		}
 		fmt.Printf("markers %d (%d targets): accepted %d, proposed %d, stale %d, rejected %d; proposed concepts %d%s\n", m.Markers, m.Targets, m.Accepted, m.Proposed, m.Stale, m.Rejected, m.ProposedConcepts, backlog)
 		fmt.Printf("orphans %d, rogues %d, violations %d, gaps %d, untested %d, dangling %d; open plan items %d (planned concepts are out of the denominator)\n", m.Orphans, m.Rogues, m.Violations, m.Gaps, m.Untested, m.Dangling, m.PlanItems)
+		if hint := emptyOntologyHint(p.Graph); hint != "" {
+			fmt.Fprintln(os.Stderr, "gloss coverage: "+hint)
+		}
 	}
 	// With nothing in scope coverage is n/a, which no threshold fails.
 	if threshold > 0 && m.ConceptsInScope > 0 && m.ConceptCoveragePct < threshold {
