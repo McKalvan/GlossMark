@@ -60,6 +60,8 @@ func cmdDiff(args []string) int {
 	}
 	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption, BaseViews: baseViews(head.WS, *base),
 		Actor: *actor, BaseLedger: baseLedger(head.WS, *base), BaseHardPaths: baseHardPaths(head.WS, *base)})
+	// The adoption level caps what fails: the report keeps every gate.
+	gate.Enforce(im, head.WS.Config.AdoptionLevel())
 	var buf bytes.Buffer
 	switch *format {
 	case "json":
@@ -84,14 +86,17 @@ func cmdDiff(args []string) int {
 			os.WriteFile(*out, buf.Bytes(), 0o644)
 		}
 	}
+	if im.Advisory != "" {
+		fmt.Fprintln(os.Stderr, "gloss diff: "+im.Advisory)
+	}
 	switch strings.ToUpper(*failOn) {
 	case "HARD":
-		if im.Gate == gate.HARD {
+		if im.Enforced == gate.HARD {
 			fmt.Fprintln(os.Stderr, "gloss diff: HARD changes need a human decision")
 			return 1
 		}
 	case "SOFT":
-		if im.Gate == gate.HARD || im.Gate == gate.SOFT {
+		if im.Enforced == gate.HARD || im.Enforced == gate.SOFT {
 			return 1
 		}
 	}

@@ -3,7 +3,7 @@ boundary: arch:model
 level: component
 label: model
 part-of: arch:lib-reading
-realizes: [gmi:ImportLock, gmi:SuggestCalibration, gmi:DefaultSoftThreshold]
+realizes: [gmi:ImportLock, gmi:SuggestCalibration, gmi:DefaultSoftThreshold, gmi:AdoptionLadder]
 holds: [gm:Boundary, gm:Namespace, gm:Relation, gmi:FileFormats]
 default-namespace: gmi
 owner: glossmark

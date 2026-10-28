@@ -38,6 +38,8 @@ Rough meanings, which a repository is free to redefine for itself:
 Leave it off where it does not matter; unclassified is a valid state, and the
 viewer and reports show it as such.
 
+Classifying is also the second rung of the [adoption ladder](QUICKSTART.md#the-adoption-ladder): with `adoption: 2` in `glossmark.yaml`, `gloss drift` and the PR gate fail only for concepts classified `high` or `critical`, and everything unclassified stays advisory until the repository moves to level 3.
+
 ## Inheritance
 
 Declare the level where the business sees it (the core concept) and let it

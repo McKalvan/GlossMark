@@ -63,10 +63,14 @@ type Config struct {
 	// RepoIRI is the repository's own IRI. A boundary prefix not declared
 	// under prefixes: expands to <repo-iri>boundaries/<prefix>/ instead of a
 	// urn with a warning, so most repositories need no prefixes: at all.
-	RepoIRI string   `yaml:"repo-iri,omitempty" json:"repo-iri,omitempty"`
-	Views   string   `yaml:"views,omitempty" json:"views,omitempty"`
-	Policy  *Policy  `yaml:"policy,omitempty" json:"policy,omitempty"`
-	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
+	RepoIRI string  `yaml:"repo-iri,omitempty" json:"repo-iri,omitempty"`
+	Views   string  `yaml:"views,omitempty" json:"views,omitempty"`
+	Policy  *Policy `yaml:"policy,omitempty" json:"policy,omitempty"`
+	// Adoption is the rung of the adoption ladder the repository has reached
+	// (0 vocabulary, 1 manifests, 2 criticality, 3 full; docs/QUICKSTART.md).
+	// It caps how hard check, drift and diff bite. Unset means 3.
+	Adoption *int     `yaml:"adoption,omitempty" json:"adoption,omitempty"`
+	Exclude  []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
 	// CommentStyles maps a file extension (".foo"), a file name
 	// ("crontab") or a path glob ("**/cron.d/*") to its comment tokens,
 	// extending the builtin table.
@@ -300,6 +304,9 @@ func LoadConfig(path string) (*Config, error) {
 				return nil, fmt.Errorf("%s: imports.%s: version range %q: %v", path, prefix, im.Version, err)
 			}
 		}
+	}
+	if c.Adoption != nil && !ValidAdoption(*c.Adoption) {
+		return nil, fmt.Errorf("%s: adoption must be a level from %d to %d (docs/QUICKSTART.md), got %d", path, AdoptionVocabulary, AdoptionFull, *c.Adoption)
 	}
 	if c.Policy != nil {
 		for lvl, gate := range c.Policy.CriticalityGates {
