@@ -80,6 +80,8 @@ Binaries for Linux, macOS and Windows are attached to each [release](https://git
 
 ## Try it
 
+**Sixty seconds first:** `examples/value-binding/demo.sh` binds one constant to a business rule with `gloss bind`, changes it, and shows `gloss drift` catching the drift and `gloss diff` going HARD with the owner named; [docs/DEMO.md](docs/DEMO.md) walks it.
+
 ```sh
 go build -o gloss ./cmd/gloss
 cd examples/library/circulation

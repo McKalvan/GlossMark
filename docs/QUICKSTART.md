@@ -12,6 +12,20 @@ gloss version                                                                   
 
 Pin a release everywhere the tool runs (`@v0.3.0`, never `@latest` or `@main`): binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/mckalvan/glossmark/releases), and `go install ...@v0.3.0` reports the same version. See [VERSIONING.md](VERSIONING.md).
 
+## Sixty seconds: a constant becomes a governed business rule
+
+Before scaffolding anything, see the one feature that explains the rest. [DEMO.md](DEMO.md) binds one constant in a sample service to the business rule it is, then changes it:
+
+```sh
+examples/value-binding/demo.sh                                   # builds gloss, runs the three steps below in a temporary copy
+gloss bind services/assessment/assessment/settings.py:AUTO_APPROVE_LIMIT_EUR --as tide:AutoApprovalRule --publish-as claim:AutoApprovalLimit --value "5000 EUR"
+sed -i 's/= 5_000/= 7_500/' services/assessment/assessment/settings.py
+gloss drift                 # ≠ Published values drifted: tide:AutoApprovalRule publishes "5000 EUR", bound to settings.py:7, which changed ...
+gloss diff --base HEAD      # gate HARD ... [HIGH, HARD: published value drifted ..., owner claims-decisioning]
+```
+
+`gloss bind` reads the value from the code, writes `value:`, `value-from:` and `published:` into the ontology file, puts a `@gloss publishes-value` marker above the line and records the baseline. From then on the constant, the ontology and the baseline change together in one reviewable diff, or the build fails. The rest of this page is how to get a repository to the point where every such rule has a name.
+
 ## 0. Scaffold
 
 ```sh
