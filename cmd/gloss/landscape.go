@@ -122,8 +122,8 @@ func cmdLandscape(args []string) int {
 		}
 		fmt.Fprintf(os.Stderr, "gloss landscape: viewer → %s\n", fs.viewOut)
 	}
-	if n := len(rep.Failing(failKinds)); n > 0 {
-		fmt.Fprintf(os.Stderr, "gloss landscape: %s (%s)\n", plural(n, "failing finding"), fs.failOn)
+	if failing := rep.Failing(failKinds); len(failing) > 0 {
+		fmt.Fprintf(os.Stderr, "gloss landscape: %s\n", rollup.FailSummary(failing, failKinds))
 		return 1
 	}
 	return 0

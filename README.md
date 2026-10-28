@@ -29,19 +29,24 @@ One grammar, `@gloss`. Two ontology tiers: a **core** the business owns and an *
 
 ![The review terminal: a queue of proposed links, a stale link, a proposed concept, a rogue concept and untested findings, each tagged HARD, SOFT or AUTO, with the selected item's marker, concept doc and source beside it.](docs/img/review-terminal.png)
 
-**The drift report.** `gloss drift` compares what each boundary's manifest declares with what the code under it derives, and names the difference:
+**The drift report.** `gloss drift` compares what each boundary's manifest declares with what the code under it derives, names the difference and what to do about it (`--explain` adds the declared and derived sets):
 
 ```
 $ gloss drift
 ✗ Violations (boundary exceeds its declared capability)
-  acme:circulation-svc produces lib:Laptop but declares produces {lib:Media}; rollup: produces {lib:Item} (from lib:Book, lib:DVD, lib:Laptop, lib:Media) ⊄ declared [proposed link]
+  → Widen the manifest or move the code; gloss review to waive.
+  acme:circulation-svc now produces lib:Laptop (proposed link), which its manifest does not allow. Add it to produces: in services/circulation/.gloss.yaml, or move the code.
 ○ Gaps (declared, not implemented)
-  acme:library-platform declares publishes lib:HoldReady but nothing under it publishes it: intended capability not implemented, or the declaration is wrong
+  → Implement it, or remove the declaration.
+  acme:library-platform declares publishes lib:HoldReady, but no code under it publishes it. Implement it, or remove it from publishes: in .gloss.yaml.
 ? Rogue concepts (decision requests)
-  services/circulation/loans/returns.py:10 implements circ:NEW:DamageCheck: rogue concept; becomes a decision request
+  → Add the concept with gloss propose --from-new, or rename the marker to an existing concept.
+  implements circ:NEW:DamageCheck: not in the ontology; its namespace owner decides (see Decision requests)
 ◇ Presented but not implemented (a surface with no mechanism)
-  lib:Hold is presented (apps/opac/src/PlaceHold.tsx#PlaceHold) but nothing implements it: a surface with no mechanism behind it
-Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue: 1   Violations: 2   Gaps: 1   Stale: 0   Untested: 5   Proposed links: 4   Proposed concepts: 0
+  → Mark the code that implements it, or remove the presents link.
+  lib:Hold is presented (apps/opac/src/PlaceHold.tsx#PlaceHold) but nothing implements it
+Concepts covered 22% (2/9 with an artifact and a verifier)   Orphans: 6   Rogue: 1   Violations: 2   Gaps: 1   Stale: 0   Untested: 5   Proposed links: 4   Proposed concepts: 0   Plan items: 0
+gloss drift: failed: 2 violations, 1 gap (fail-on: violation, value-drift, gap, dangling, overdue, planned-closed, plan-overdue)
 ```
 
 The report is from [`examples/library`](examples/library/README.md) in this repository; the screenshots are from the [glossmark-examples](https://github.com/McKalvan/glossmark-examples) showcase, rendered by [`scripts/screenshots.sh`](scripts/screenshots.sh) with a `gloss` built from this tree.
@@ -103,5 +108,5 @@ Not every subsystem carries the same risk. `criticality: low | medium | high | c
 ## More
 
 - [docs/REPOSITORY.md](docs/REPOSITORY.md): what is in this repository, GlossMark applied to itself (this tree is its own first user and CI holds it to the strictest gate), versions and roadmap status.
-- Docs: [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
+- Docs: [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Glossary](docs/GLOSSARY.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
 - [glossmark-examples](https://github.com/McKalvan/glossmark-examples): the showcase behind the screenshots, and a lab that turns rough edges into issues.
