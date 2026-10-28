@@ -52,12 +52,19 @@ input[type=text]{min-width:160px}
 #crumbs .arr{color:var(--muted)}
 #crumbs .slicechip{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 4px 1px 8px;border-radius:12px;border:1px solid var(--accent);color:var(--accent);font-size:11.5px}
 #crumbs .slicechip a{padding:0 5px;border-radius:10px}
-#filters{display:none;flex-direction:column;gap:4px;padding:6px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12px}
+/* Filters open as a sheet over the left of the map, so the canvas keeps its size. */
+#filters{display:none;position:absolute;z-index:5;top:0;left:0;bottom:0;width:min(420px,100%);overflow-y:auto;flex-direction:column;gap:6px;padding:8px 14px 12px;border-right:1px solid var(--line);background:var(--panel);font-size:12px;box-shadow:6px 0 18px rgba(0,0,0,.14)}
 #filters.on{display:flex}
+#filters .fhead{display:flex;align-items:center;justify-content:space-between;font-weight:650}
+#fBody{display:flex;flex-direction:column;gap:6px}
+#fActive{color:var(--muted);white-space:nowrap}
+#fActive button{border:0;background:none;color:var(--accent);padding:0;text-decoration:underline}
+#filtersBtn.act{border-color:var(--accent);color:var(--accent)}
 .fgroup{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .fgroup .gl{color:var(--muted);min-width:80px;text-transform:uppercase;font-size:10.5px;letter-spacing:.04em}
 .chip{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:12px;border:1px solid var(--line);background:var(--bg);cursor:pointer;user-select:none;font-size:11.5px;line-height:1.5}
 .chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));background:color-mix(in srgb,var(--accent) 9%,var(--bg))}
 .chip.off{opacity:.45;text-decoration:line-through}
 .chip .n{color:var(--muted);font-size:10.5px}
 .chip .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -172,7 +179,7 @@ table.vt tr.cur td{font-weight:650}
   /* 16px keeps iOS from zooming the page when a field gets focus. */
   select,input[type=text]{font-size:16px;padding:3px 6px}
   input[type=text]{min-width:0;width:130px}
-  #filters{padding-left:12px;padding-right:12px;max-height:40vh;overflow-y:auto}
+  #filters{padding-left:12px;padding-right:12px;width:100%;bottom:auto;max-height:65%;border-right:0;border-bottom:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.14)}
   .chip{padding:3px 10px}
   #status{bottom:50px}
   aside{position:absolute;left:0;right:0;bottom:0;width:auto;height:48%;border-left:0;border-top:1px solid var(--line);padding:0 14px 12px;z-index:4;box-shadow:0 -6px 18px rgba(0,0,0,.12)}
@@ -201,6 +208,7 @@ table.vt tr.cur td{font-weight:650}
   <input type="text" id="search" placeholder="Search id / label…  ( / )" autocomplete="off" aria-label="Search nodes by id or label; Enter and Shift+Enter step through matches" aria-keyshortcuts="/" aria-describedby="searchInfo">
   <span id="searchInfo" class="meta" aria-live="polite"></span>
   <button id="filtersBtn" title="Filter by type, tier, namespace, kind, level, criticality and relation" aria-expanded="false" aria-controls="filters">Filters</button>
+  <span id="fActive" hidden><span class="t"></span> · <button type="button" id="fReset">Reset</button></span>
   <span class="sep"></span>
   <span id="ovBar" hidden><button id="ovOlder" type="button" title="Older commit ([)" aria-label="Older commit" aria-keyshortcuts="[">◀</button><select id="ovSel" title="Overlay one commit's changes on the map (gloss view --history), or the --diff" aria-label="Overlay"></select><button id="ovNewer" type="button" title="Newer commit (])" aria-label="Newer commit" aria-keyshortcuts="]">▶</button></span>
   <select id="changesSel" aria-label="Show changes within" title="Show what the diff changed and what lies within so many hops of it (edges and part-of); boxes holding any of it open" hidden>
@@ -214,10 +222,10 @@ table.vt tr.cur td{font-weight:650}
   <button id="relayout" title="Lay the map out again, unpinning dragged nodes">Re-layout</button>
   </span>
 </div>
-<div id="filters" role="region" aria-label="Filters"></div>
 <main>
   <div id="stage">
     <canvas id="cv" role="img" aria-label="Map"></canvas>
+    <div id="filters" role="region" aria-label="Filters"><div class="fhead">Filters <button type="button" id="fClose" aria-label="Close filters" title="Close (Esc)">×</button></div><div id="fBody"></div></div>
     <div id="tip"></div>
     <div id="msg"></div>
     <div id="status"></div>
@@ -625,7 +633,7 @@ const ONLY_TIP='Click to toggle, Shift+click to show only this';
 // another repository can import.
 const pubState=n=>n.published?'published':'not published';
 function buildFilters(){
-  const box=$('filters');box.innerHTML='';
+  const box=$('fBody');box.innerHTML='';
   const count=(f,label)=>{const m=new Map();V._nodes.forEach(n=>{if(n.group||n._later)return;const v=f(n);if(v===undefined)return;m.set(v,(m.get(v)||0)+1);});return m;};
   const groups=[
     {key:'type',label:'Type',counts:count(n=>n.type)},
@@ -684,14 +692,26 @@ function buildFilters(){
   const l2=document.createElement('label');l2.title='On a map of more than '+QUIET+' edges, derived and lifted edges are drawn only for the selected or hovered node';
   l2.innerHTML='<input type="checkbox" id="allEdges"> every derived and lifted edge';row.appendChild(l2);
   const reset=document.createElement('button');reset.textContent='Reset filters';reset.style.marginLeft='auto';
-  reset.onclick=()=>{S.f=emptyFilters();S.deg=null;S.rels=new Set(V._edges.map(e=>e.p));S.internal=false;buildFilters();rebuild(false);syncChangesBtn();renderPanel();draw();};
+  reset.onclick=resetFilters;
   row.appendChild(reset);
   box.appendChild(row);
   $('internal').checked=S.internal;
   $('internal').onchange=ev=>{S.internal=ev.target.checked;rebuild(false);renderPanel();draw();};
   $('allEdges').checked=!!S.allEdges;$('allEdges').onchange=ev=>{S.allEdges=ev.target.checked;draw();};
 }
-function filtersActive(){return Object.values(S.f).some(s=>s.size)||S.rels.size!==new Set(V._edges.map(e=>e.p)).size;}
+function filtersActive(){return filterCount()>0;}
+function resetFilters(){S.f=emptyFilters();S.deg=null;S.rels=new Set(V._edges.map(e=>e.p));S.internal=false;buildFilters();rebuild(false);syncChangesBtn();renderPanel();draw();}
+// filterCount: the values and relations filtered out, for "N filters active".
+function filterCount(){let n=0;Object.values(S.f).forEach(s=>{n+=s.size;});new Set(V._edges.map(e=>e.p)).forEach(r=>{if(!S.rels.has(r))n++;});return n;}
+// syncFilterUI: chips say whether they are on (aria-pressed), and the toolbar
+// says how many filters are active while the sheet is closed.
+function syncFilterUI(){
+  document.querySelectorAll('#filters .chip').forEach(c=>c.setAttribute('aria-pressed',String(!c.classList.contains('off'))));
+  const n=filterCount();$('fActive').hidden=!n;
+  if(n)$('fActive').querySelector('.t').textContent=n+' filter'+(n===1?'':'s')+' active';
+  $('filtersBtn').classList.toggle('act',!!n);
+}
+function setFiltersOpen(on){$('filters').classList.toggle('on',on);$('filtersBtn').classList.toggle('on',on);$('filtersBtn').setAttribute('aria-expanded',String(on));}
 
 /* ---- slices ---- */
 // A slice is computed by gloss view (Go is the one implementation); the page only
@@ -885,6 +905,7 @@ function rebuild(seedAll){
   if(S.sel&&!(S.sel.id?byId.get(S.sel.id)&&byId.get(S.sel.id)._vis:VE.includes(S.sel)))S.sel=null;
   renderCrumbs();
   if(S.q)searchInfo();
+  syncFilterUI();
   const nb=VN.filter(n=>n.type==='boundary').length;
   cv.setAttribute('aria-label',`Map of the ${V.name||''} view: ${VN.filter(n=>!n.group).length} nodes, ${nb} boundar${nb===1?'y':'ies'}, ${VE.filter(e=>!e.contain).length} edges${S.focus?', focused on '+(byId.get(S.focus).label||S.focus):''}. The Outline in the side panel lists them for the keyboard.`);
 }
@@ -1829,6 +1850,7 @@ cv.addEventListener('wheel',ev=>{
   S.cam.x=ev.offsetX-(ev.offsetX-S.cam.x)*r;S.cam.y=ev.offsetY-(ev.offsetY-S.cam.y)*r;S.cam.k=k;S.camMoved=true;draw();
 },{passive:false});
 window.addEventListener('keydown',ev=>{hideTip();if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT')return;
+  if(ev.key==='Escape'&&$('filters').classList.contains('on')){setFiltersOpen(false);return;}
   if(ev.key==='Escape'){if(S.sel){S.sel=null;renderPanel();draw();}else if(S.focus){const F=byId.get(S.focus);setFocus(F&&F._c&&F._c.type==='boundary'?F._c.id:null);}else if(S.slice)setSlice(null);}
   if(ev.key==='f')fit(true);
   if(ev.key==='/'&&!ev.ctrlKey&&!ev.metaKey&&!ev.altKey){ev.preventDefault();$('search').focus();$('search').select();}
@@ -1845,7 +1867,9 @@ $('search').addEventListener('keydown',ev=>{
   if(ev.key==='Enter'){ev.preventDefault();stepMatch(ev.shiftKey?-1:1);}
   else if(ev.key==='Escape'&&ev.target.value){ev.preventDefault();ev.target.value='';S.q='';S.mi=-1;searchInfo();draw();}
 });
-$('filtersBtn').onclick=()=>{$('filters').classList.toggle('on');$('filtersBtn').classList.toggle('on');$('filtersBtn').setAttribute('aria-expanded',String($('filters').classList.contains('on')));};
+$('filtersBtn').onclick=()=>setFiltersOpen(!$('filters').classList.contains('on'));
+$('fClose').onclick=()=>{setFiltersOpen(false);$('filtersBtn').focus();};
+$('fReset').onclick=resetFilters;
 $('ovSel').onchange=ev=>{const v=ev.target.value;S.histScroll=true;
   if(v==='')setOverlay(null);else if(v==='diff')setOverlay({k:'diff'});else if(v[0]==='s'){S.ovAnchor=+v.slice(1);setOverlay({k:'step',i:+v.slice(1)});}};
 $('ovOlder').onclick=()=>{S.histScroll=true;stepOverlay(1);};
