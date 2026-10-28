@@ -14,6 +14,14 @@ Pin a release everywhere the tool runs (`@v0.3.0`, never `@latest` or `@main`): 
 
 ## 0. Scaffold
 
+**In a hurry?** `gloss onboard` runs the whole first pass on an unmodified repository and ends with the viewer: the scaffold below, a `glossary.md` or `enums.yaml` imported, a draft core and implementation vocabulary from the harvested code, schemas, tests, UI and docs, a draft boundary map from the deploy manifests (Kubernetes, Compose) and Terraform, and `@gloss?` markers. Everything it writes is a proposal (`proposed: true`, `@gloss?`, a commented `realizes:`), `gloss check` passes on it, and `gloss review` decides. Pass `--namespace <ns>` to name the core yourself, `--top n` for more or fewer concepts, `--no-suggest` to skip the markers, `--open` to open the viewer. The tail of the draft is noise (a config key, a report name): review it, do not accept it whole ([ADR 0041](adr/0041-zero-config-bootstrap.md)).
+
+```sh
+gloss onboard --namespace clinic   # scaffold, import, harvest, draft, mark, view; then open .glossmark/viewer.html and run gloss review
+```
+
+Step by step, the same ground:
+
 ```sh
 gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per deployable directory, then hook and build
 gloss init               # write it, install the agent hook, build the first graph (.glossmark/graph.jsonl, a header-only ledger.jsonl)
