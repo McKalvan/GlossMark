@@ -107,6 +107,11 @@ type Impact struct {
 	// the diff is the whole adoption, so it is reported as counts per
 	// boundary and per view, and Changes keeps only the decision requests.
 	Adoption *Adoption `json:"adoption,omitempty"`
+	// Enforced is the gate after the repository's adoption level (Enforce):
+	// what gloss diff --fail-on compares against. Advisory explains a gate
+	// the level lowered; both are empty until Enforce ran.
+	Enforced Class  `json:"enforced,omitempty"`
+	Advisory string `json:"advisory,omitempty"`
 }
 
 // Adoption summarizes a first-PR diff as counts instead of links.

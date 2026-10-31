@@ -1,0 +1,22 @@
+# bench/tasks: one ticket, the pitfalls it sets and how the result is scored (docs/BENCHMARK.md).
+repo: showcase/claims-events
+title: Tell the policyholder when a payout bounces
+prompt: |
+  PAY-412: when Treasury's payment gateway reports that a bank rejected a payout, the
+  payout notifier must email the policyholder that the payment failed and that we will
+  retry or contact them. The gateway already publishes the failure on the payouts topic
+  (payouts.v1) in the same Avro family as the authorization event; the notifier currently
+  only handles authorizations. Handle the failure event end to end in
+  services/payout-notifier (consumer, notifier, template) with a test, the way the
+  authorization is handled.
+pitfalls:
+  - { kind: reuse, concept: claim:PayoutFailed, note: "the event exists in the ontology, the schema (schemas/PayoutFailed.avsc) and the manifest; the trap is to name it again (PaymentFailed, PayoutBounced, PayoutRejected)" }
+  - { kind: boundary, concept: claimb:payout-notifier, note: "the manifest already declares subscribes claim:PayoutFailed as a gap for this ticket; the change should close it, not widen anything" }
+  - { kind: rule, concept: claim:PayoutNotification, note: "the notifier consumes payouts; it must not start producing or deciding anything" }
+assertions:
+  - { kind: link, relation: subscribes, concept: claim:PayoutFailed, under: services/payout-notifier, why: "the new handler is linked to the existing event, not to a new name" }
+  - { kind: finding-closed, id: "gap:claimb:payout-notifier:subscribes:claim:PayoutFailed", why: "the declared-but-unimplemented subscription is now implemented" }
+  - { kind: no-new-concept, why: "every concept this ticket needs already exists" }
+  - { kind: forbidden-terms, terms: [PaymentFailed, PayoutBounced, PayoutRejected, PayoutDeclined], paths: ["services/payout-notifier/**", "schemas/**", "ontology/**"], why: "the business calls it a failed payout, and the schema already does" }
+  - { kind: file-unchanged, path: schemas/PayoutFailed.avsc, why: "the event's schema is the gateway's contract, not the notifier's to change" }
+  - { kind: gate, max: SOFT, why: "a link inside what the manifest declares needs no human decision" }

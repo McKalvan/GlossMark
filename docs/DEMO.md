@@ -149,7 +149,7 @@ value and only its wording moved; see [ADVANCED.md](ADVANCED.md).)
   [FILE-FORMATS.md](FILE-FORMATS.md) and the `publishes-value` relation in
   [ADVANCED.md](ADVANCED.md); [ADR 0017](adr/0017-published-values-implement.md)
   says why a published value counts as an implementation and
-  [ADR 0041](adr/0041-bind-writes-the-whole-binding.md) why `bind` writes
+  [ADR 0047](adr/0047-bind-writes-the-whole-binding.md) why `bind` writes
   both forms and names the owner.
 - Next: [QUICKSTART.md](QUICKSTART.md) for adopting GlossMark on your own
   repository, where `gloss init` scaffolds the files this example has by hand.

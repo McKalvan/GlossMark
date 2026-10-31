@@ -1,0 +1,16 @@
+repo: showcase/freight-federation/shipment-core
+title: Promise a three-hour delivery window
+prompt: |
+  KF-1203: after the carrier review, Kestrel promises shippers a three-hour delivery
+  window instead of two. Change the booking service's window policy and its tests, and
+  update everything that states the window length. The on-time rate target and the
+  label format do not change.
+pitfalls:
+  - { kind: published-value, concept: shc:DeliveryWindowPolicy, note: "published as frt:DeliveryWindow (2h) by value-from on WINDOW_LENGTH and imported by tracking's lateness test; the constant alone is value drift and the published seam is HARD" }
+  - { kind: rule, concept: frt:OnTimeDeliveryRate, note: "the 95% target is a different published value" }
+assertions:
+  - { kind: file-matches, path: service/src/main/java/com/kestrelfreight/shipment/booking/DeliveryWindowPolicy.java, pattern: "WINDOW_LENGTH\\s*=.*(3|THREE)", why: "the policy constant is the window" }
+  - { kind: concept-value, concept: shc:DeliveryWindowPolicy, pattern: "3 ?h", why: "the published value follows the code" }
+  - { kind: concept-value, concept: shc:OnTimeRateCalculator, pattern: "95", why: "the target did not move" }
+  - { kind: no-new-concept, why: "a new value is not a new concept" }
+  - { kind: gate, is: HARD, why: "a published value every importer relies on changed" }

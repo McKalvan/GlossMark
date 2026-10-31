@@ -1,5 +1,5 @@
 <!-- @gloss documents gm:ValueBinding scope=file -->
-# ADR 0041: `gloss bind` writes the whole binding, and HARD changes name their owner
+# ADR 0047: `gloss bind` writes the whole binding, and HARD changes name their owner
 
 Status: accepted, 2026-10-28; built 2026-10-28 (#272).
 

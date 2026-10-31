@@ -38,6 +38,8 @@ Rough meanings, which a repository is free to redefine for itself:
 Leave it off where it does not matter; unclassified is a valid state, and the
 viewer and reports show it as such.
 
+Classifying is also the second rung of the [adoption ladder](QUICKSTART.md#the-adoption-ladder): with `adoption: 2` in `glossmark.yaml`, `gloss drift` and the PR gate fail only for concepts classified `high` or `critical`, and everything unclassified stays advisory until the repository moves to level 3.
+
 ## Inheritance
 
 Declare the level where the business sees it (the core concept) and let it
@@ -175,6 +177,58 @@ artifact; under a `criticality-floor` it is exported as a `node='file'` row
 carrying the floor's level (`criticality_from` names the floor boundary), so
 an unmarked migration that grants database roles is listed as `gloss impact`
 already reports it.
+
+## Audit reports (`gloss report compliance`)
+
+A regulated team is asked, for each rule, to show the code that enforces
+it, the tests that verify it, and who approved each change. The graph, the
+ledger, the criticality levels and the published values hold all of that;
+`gloss report compliance` assembles it into one report a reviewer outside
+engineering can follow, and parses nothing itself: it reads the built graph,
+`.glossmark/ledger.jsonl` and the drift report.
+
+```
+gloss report compliance                                   # every constraint and every critical concept, as Markdown
+gloss report compliance --concept claim:FilingWindow --concept claim:AutoApprovalLimit --format html -o filing.html
+gloss report compliance --criticality high --format csv -o evidence.csv   # high and critical, one row per piece of evidence
+gloss report compliance --since 2026-01-01 --format json    # decisions on or after a date
+```
+
+For each selected concept the report gives:
+
+- its definition, kind, tier, criticality (and where an inherited level comes
+  from), status (`gloss export --status`), the owner of its namespace and the
+  owner of each boundary that realizes it, and the implementation concepts
+  that stand for it in code;
+- **Where it is enforced**: every artifact linked to it or to a concept that
+  realizes it (`implements`, `represents`, `publishes-value`, `configures`,
+  ...), with its review state and who linked it; paths link to the code host
+  through `source-url` in `glossmark.yaml` (or `--source-url`);
+- **How it is verified**: the `verifies` links, the same way;
+- **Published value**: the value the ontology publishes, the line it is bound
+  to, what that line reads now and whether the binding is `accepted` or
+  `drifted`;
+- **Decision history**: the ledger entries whose targets resolve to the
+  concept, as events in order: who linked or proposed each link and at what
+  confidence, who accepted or rejected it, when, and the reason; links that
+  went stale or left the tree; value bindings and their drift. A marker that
+  no longer exists is still resolved through the manifest's default namespace,
+  so a rejected or removed link keeps its place in the history;
+- **Open findings and waivers**: the drift findings on the concept and its
+  realizers, waived ones marked, and every `policy.waivers` entry naming the
+  concept or one of those findings with its owner and expiry.
+
+Formats: `markdown` (default, the text form), `html` (one self-contained
+page without scripts, with a print stylesheet: print it from the browser to
+file a PDF), `csv` (one row per concept and piece of evidence, columns
+`concept, label, kind, criticality, status, owner, row, relation, path, line,
+url, state, actor, when, record, reason, detail`, where `row` is `concept`,
+`boundary`, `artifact`, `test`, `value`, `decision`, `finding` or `waiver`
+and `record` the ledger marker id or finding id) and `json` (the report
+itself). Without `--concept` or `--criticality` the report covers every
+constraint (an implementation constraint that stands for a core one is
+reported under it) and every `critical` concept. See
+[ADR 0043](adr/0043-compliance-report.md).
 
 ## Changing a level
 
