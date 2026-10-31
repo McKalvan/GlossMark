@@ -142,6 +142,10 @@ The PR comment (`gloss diff --format markdown`) ends with **Recent history**: fo
 
 `gloss view --history` embeds the same steps, AUTO ones included, in the viewer (`--history-range` bounds the walk). Its History panel lists every commit newest first with its gate and how many nodes and edges it added, removed and changed across the whole graph. Clicking one overlays that commit on the map as `--diff` does, with the commit's summary above the list: the counts per view, the change kinds, the graph's metrics before and after, version bumps and realization moves. *Map as of this commit* (on by default) hides what newer commits added, so the map is the graph at that commit; what a newer commit removed is no longer in the projection and is only counted. Shift+clicking a second commit overlays the net of the steps between them (decision 8: what is added and removed again inside the range is left out). The toolbar's commit selector and `[` `]` step older and newer; `#commit=<sha>` or `#commit=<older>..<newer>` links to one.
 
+## Audit reports (`gloss report compliance`)
+
+`gloss report compliance` is the per-rule audit report: definition, criticality and owner; the code that enforces it and the tests that verify it, linked through `source-url`; its published value and the line it is bound to; every ledger decision about those links (who proposed, who accepted or rejected, when, why); open findings and waivers with their expiry. Markdown by default, `--format html` for a page that prints to PDF, `csv` for one row per piece of evidence, `json` for the record. [GOVERNANCE.md](GOVERNANCE.md#audit-reports-gloss-report-compliance) has the columns and the selection rules.
+
 ## Files and version numbers
 
 Three kinds of file: `glossmark.yaml` (namespaces, policy), `*.gloss.yaml` (one per namespace, the concepts) and `.gloss.yaml` (one per boundary directory). Four numbers: the tool release, the grammar (`grammar: 1`), the file formats (`"format"` headers) and each namespace's semver. [FILE-FORMATS.md](FILE-FORMATS.md) and [VERSIONING.md](VERSIONING.md) have the details.
