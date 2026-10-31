@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.2.0
+version: 1.3.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -87,3 +87,4 @@ concepts:
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed], doc: "The MCP server agents call to search concepts, ask what a path or change touches, and propose links and concepts." }
   AgentsSnippet:      { kind: process, realizes: gm:Vocabulary, doc: "The AGENTS.md vocabulary snippet and the session-start briefing." }
+  AgentIntegrations:  { kind: process, realizes: gm:Vocabulary, doc: "gloss hook install --agent: the ready-made Claude Code plugin, Cursor rule and Copilot instructions, each with its MCP config, that give an agent the briefing, the skills and the concept tools in one step; every file committed and running gloss by name." }

@@ -155,13 +155,15 @@ var help = map[string]helpEntry{
 		docs:     "docs/QUICKSTART.md#review-workflow"},
 
 	// Agents
-	"hook": {line: "install the agent SessionStart hook and MCP server",
-		usage: []string{"hook install [--skill] [--cursor] [--actor agent:name]"},
+	"hook": {line: "install the agent hook, MCP server and per-agent integrations",
+		usage: []string{"hook install [--skill] [--agent claude-code|cursor|copilot]"},
 		examples: []string{
-			"gloss hook install  # Claude Code: .claude/settings.json, .mcp.json",
-			"gloss hook install --skill --cursor",
+			"gloss hook install  # .claude/settings.json, .mcp.json",
+			"gloss hook install --agent claude-code  # plugin: skills, hook, MCP",
+			"gloss hook install --agent cursor,copilot  # rule and instructions",
 		},
-		docs: "docs/QUICKSTART.md#agent-experience"},
+		more: "Every file written is committed and runs gloss by name; gloss doctor checks each installed integration. docs/AGENTS.md has the per-agent setup.",
+		docs: "docs/AGENTS.md"},
 	"context": {line: "session-start briefing for an agent in a directory or feature",
 		usage: []string{"context [--dir dir | --concept curie...] [--changed] [--budget n]"},
 		examples: []string{
