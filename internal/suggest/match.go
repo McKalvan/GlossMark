@@ -28,15 +28,13 @@ const (
 	evData         = "data"           // the body touches a table that represents an entity the concept works on
 	evNamePartial  = "name-partial"   // the declaration's words are part of the concept name (appointment: AppointmentReminding)
 	evNameOverlap  = "name-overlap"   // some words shared, neither name holds the other
-	// Evidence read from a spec (#260, ADR 0041).
-	evAsyncAPI = "asyncapi" // the code names a channel or a message of the AsyncAPI contract
-	evOpenAPI  = "openapi"  // the code declares a route the OpenAPI spec maps to a process
-	evRoute    = "route"    // the code declares a route whose path names the concept
-	evSchema   = "schema"   // the type maps to a table that represents the entity
+	// Evidence read from code the way a spec describes it (#260, ADR 0041).
+	evRoute  = "route"  // the code declares a route whose path names the concept
+	evSchema = "schema" // the type maps to a table that represents the entity
 )
 
 var strength = map[string]int{
-	evNamedInDoc: 110, evNameExact: 100, evAliasExact: 95, evSchema: 92, evAsyncAPI: 90, evOpenAPI: 88, evCalls: 85,
+	evNamedInDoc: 110, evNameExact: 100, evAliasExact: 95, evSchema: 92, evCalls: 85,
 	evNameContains: 80, evAliasContain: 75, evTopic: 65, evDoc: 60, evRoute: 50, evData: 45, evNamePartial: 40, evNameOverlap: 30,
 }
 
@@ -119,9 +117,39 @@ type hit struct {
 	c     *concept
 	kind  string
 	terms string
+	// source is the infer.Source the hit came from; "" for the matcher's
+	// own evidence. rel is a relation the source fixed.
+	source string
+	rel    string
 }
 
-func (h hit) strength() int { return strength[h.kind] }
+// sourceStrength orders a source's own evidence (a channel's messages, a
+// route the spec covers): below a concept doc that names the declaration,
+// above a bare name match.
+const sourceStrength = 90
+
+func (h hit) strength() int {
+	if s, ok := strength[h.kind]; ok {
+		return s
+	}
+	if h.source != "" {
+		return sourceStrength
+	}
+	return 0
+}
+
+// basis is the calibration bucket: evidence/role, plus /tie, under the
+// source's name when a source gave the evidence (asyncapi/flow/member).
+func (h hit) basis(role string, tie bool) string {
+	b := h.kind + "/" + role
+	if h.source != "" {
+		b = h.source + "/" + b
+	}
+	if tie {
+		b += "/tie"
+	}
+	return b
+}
 
 func (h hit) matched() string {
 	if h.terms == "" {
@@ -153,7 +181,7 @@ func (m *matcher) nameHits(sym string) []hit {
 		best := hit{}
 		set := func(k, terms string) {
 			if strength[k] > strength[best.kind] {
-				best = hit{c, k, terms}
+				best = hit{c: c, kind: k, terms: terms}
 			}
 		}
 		// Aliases bypass the stoplist; a short alias must be the whole symbol.
@@ -196,11 +224,11 @@ func (m *matcher) docHits(doc string) []hit {
 	for _, c := range m.concepts {
 		switch {
 		case len(c.raw) >= 5 && containsSeq(toks, c.toks) && m.nonStop(c.toks):
-			out = append(out, hit{c, evDoc, strings.Join(c.toks, ",")})
+			out = append(out, hit{c: c, kind: evDoc, terms: strings.Join(c.toks, ",")})
 		default:
 			for i, at := range c.aliases {
 				if len(c.aliasRaw[i]) >= 4 && len(at) > 0 && containsSeq(toks, at) {
-					out = append(out, hit{c, evDoc, c.alias[i]})
+					out = append(out, hit{c: c, kind: evDoc, terms: c.alias[i]})
 					break
 				}
 			}
@@ -231,7 +259,7 @@ func (m *matcher) namedInDoc(sym, parent string) []hit {
 		}
 		for _, n := range names {
 			if wordIn(c.doc, n) {
-				out = append(out, hit{c, evNamedInDoc, n})
+				out = append(out, hit{c: c, kind: evNamedInDoc, terms: n})
 				break
 			}
 		}

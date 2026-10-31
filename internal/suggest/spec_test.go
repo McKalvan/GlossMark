@@ -6,11 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/mckalvan/glossmark/internal/marker"
 )
 
-func decl(line string) marker.Decl { return marker.Decl{Decorators: []string{line}} }
+// The built-in sources' names, as Proposal.Source carries them.
+const (
+	sourceAsyncAPI = "asyncapi"
+	sourceOpenAPI  = "openapi"
+)
 
 var claimsEvents = filepath.Join("testdata", "calibration", "glossmark-examples", "claims-events")
 
@@ -31,7 +33,7 @@ func TestAsyncAPIContractYieldsFlows(t *testing.T) {
 	want(t, got, "platform/kafka/topics/fraud-alerts.yaml#KafkaTopic/fraud.alerts.v1", "provisions", ".FraudAlertsTopic")
 	flows := map[string]bool{}
 	for _, p := range ps {
-		if p.Source == SourceAsyncAPI && p.Scope == "" {
+		if p.Source == sourceAsyncAPI && p.Scope == "" {
 			flows[p.Path+"#"+p.Symbol+" "+p.Relation+" "+p.Target] = true
 			if !strings.HasPrefix(p.Basis, "asyncapi/") {
 				t.Errorf("%s: basis %s, want asyncapi/<role>", p.Symbol, p.Basis)
@@ -78,7 +80,7 @@ func TestSourceFilter(t *testing.T) {
 	root := t.TempDir()
 	copyStripped(t, claimsEvents, root)
 	ws, g := build(t, root)
-	ps, _, err := Run(ws, g, nil, Options{MinConf: 0.01, Sources: []string{SourceAsyncAPI, SourceTopic}})
+	ps, _, err := Run(ws, g, nil, Options{MinConf: 0.01, Sources: []string{sourceAsyncAPI, SourceTopic}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +88,7 @@ func TestSourceFilter(t *testing.T) {
 		t.Fatal("no proposals")
 	}
 	for _, p := range ps {
-		if p.Source != SourceAsyncAPI && p.Source != SourceTopic {
+		if p.Source != sourceAsyncAPI && p.Source != SourceTopic {
 			t.Errorf("%s: source %q kept by the filter", p.Symbol, p.Source)
 		}
 	}
@@ -156,7 +158,7 @@ func PostAppointment(w http.ResponseWriter, r *http.Request) {
 		t.Error("Problem: a schema named for no entity was proposed")
 	}
 	p, ok := got["services/booking-api/internal/httpapi/book.go#Register"]
-	if !ok || p.Relation != "implements" || p.Target != "clinic:Booking" || p.Source != SourceOpenAPI {
+	if !ok || p.Relation != "implements" || p.Target != "clinic:Booking" || p.Source != sourceOpenAPI {
 		t.Errorf("Register: got %+v, want implements clinic:Booking from openapi", p)
 	}
 	for k, p := range got {
@@ -185,76 +187,5 @@ func TestORMTableMapping(t *testing.T) {
 	p, ok := got["services/reminder-worker/worker/models.py#ApptRow"]
 	if !ok || p.Relation != "represents" || p.Target != "clinic:Appointment" || p.Source != SourceSchema {
 		t.Errorf("ApptRow: got %+v, want represents clinic:Appointment from schema", p)
-	}
-}
-
-func TestRoutesParse(t *testing.T) {
-	for _, tc := range []struct {
-		line         string
-		method, path string
-	}{
-		{`@app.route("/upload", methods=["POST"])`, "post", "/upload"},
-		{`@router.get("/{location_id}/{station}", response_model=list[KitchenTicket])`, "get", "/{location_id}/{station}"},
-		{`@GetMapping(value = "/shipments/{id}/label", produces = "x-application/zpl")`, "get", "/shipments/{id}/label"},
-		{`@PostMapping`, "", ""},
-		{`app.post('/pickups/:id/confirm', async (req, reply) => {`, "post", "/pickups/:id/confirm"},
-		{`mux.HandleFunc("/healthz", health)`, "", "/healthz"},
-		{`        post("/{id}/withdrawal") {`, "post", "/{id}/withdrawal"},
-	} {
-		rs := routes(decl(tc.line), "")
-		if tc.path == "" {
-			if len(rs) != 0 {
-				t.Errorf("%s: parsed %+v", tc.line, rs)
-			}
-			continue
-		}
-		if len(rs) != 1 || rs[0].method != tc.method || rs[0].path != tc.path {
-			t.Errorf("%s: got %+v, want %s %s", tc.line, rs, tc.method, tc.path)
-		}
-	}
-	if got := normPath("/pickups/:id/confirm/"); got != "/pickups/{}/confirm" {
-		t.Errorf("normPath: %s", got)
-	}
-	if got := pathWords("/api/v1/shipments/{id}/label"); got != "shipments label" {
-		t.Errorf("pathWords: %q", got)
-	}
-}
-
-func TestAssignmentBindings(t *testing.T) {
-	for _, tc := range []struct {
-		line  string
-		ident string
-		vals  []string
-	}{
-		{`    filed_topic: str = "claims.filed.v1"`, "filed_topic", []string{"claims.filed.v1"}},
-		{`const val FILED_TOPIC = "claims.filed.v1"`, "FILED_TOPIC", []string{"claims.filed.v1"}},
-		{`  filedTopic = "claims.filed.v1"`, "filedTopic", []string{"claims.filed.v1"}},
-		{`topic: payouts.v1`, "topic", []string{"payouts.v1"}},
-		{`FILED_EVENT_TYPES = ("MotorClaimFiled", "FloodClaimFiled")`, "FILED_EVENT_TYPES", []string{"MotorClaimFiled", "FloodClaimFiled"}},
-		{`if (input.eventType == "MotorClaimFiled" && x) {`, "", nil},
-		{`            event_type="MotorClaimFiled",`, "", nil},
-		{`    val publisher = ClaimEventPublisher.fromConfig(config.config("kafka"))`, "", nil},
-	} {
-		m := assignment.FindStringSubmatch(tc.line)
-		if tc.ident == "" {
-			if m != nil {
-				t.Errorf("%s: bound %q", tc.line, m[1])
-			}
-			continue
-		}
-		if m == nil {
-			t.Errorf("%s: no binding", tc.line)
-			continue
-		}
-		var vals []string
-		for _, q := range quoted.FindAllStringSubmatch(m[2], -1) {
-			vals = append(vals, q[1])
-		}
-		if vals == nil {
-			vals = []string{m[2]}
-		}
-		if lastPart(m[1]) != tc.ident || strings.Join(vals, ",") != strings.Join(tc.vals, ",") {
-			t.Errorf("%s: got %s = %v, want %s = %v", tc.line, m[1], vals, tc.ident, tc.vals)
-		}
 	}
 }
