@@ -1,5 +1,5 @@
 <!-- @gloss documents gmi:Bootstrapper scope=file -->
-# ADR 0041: a zero-config bootstrap drafts everything as proposals
+# ADR 0048: a zero-config bootstrap drafts everything as proposals
 
 Status: accepted, 2026-10-28. Closes issue #257. Amends [ADR 0030](0030-suggest-targets-deprecated-not-proposed.md) (decision 5) for one command.
 

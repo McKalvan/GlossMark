@@ -110,19 +110,22 @@ func cmdOnboard(args []string) int {
 	// (an incomplete proposed concept, a link outside an allowed set).
 	diags := append([]marker.Diagnostic{}, p.Diags...)
 	diags = append(diags, check.Run(p.WS, p.Graph)...)
-	errs, warns := 0, 0
+	errs, warns, hints := 0, 0, 0
 	for _, d := range diags {
-		if d.Severity == "error" {
+		switch d.Severity {
+		case "error":
 			errs++
-		} else {
+		case "warning":
 			warns++
+		default:
+			hints++ // GM250: a relation outside the starter profile (ADR 0042)
 		}
 	}
 	if errs > 0 {
 		printDiags(diags)
 		return fail(fmt.Errorf("the draft fails gloss check with %s; this is a bug in gloss onboard, please report it with the output above", plural(errs, "error")))
 	}
-	fmt.Printf("  gloss check: 0 errors, %s; graph built (.glossmark/graph.jsonl)\n", plural(warns, "warning"))
+	fmt.Printf("  gloss check: 0 errors, %s, %s; graph built (.glossmark/graph.jsonl)\n", plural(warns, "warning"), plural(hints, "hint"))
 	if rc := cmdView([]string{"--root", res.Root}); rc != 0 {
 		return rc
 	}

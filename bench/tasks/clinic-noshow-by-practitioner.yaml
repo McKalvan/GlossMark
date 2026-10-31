@@ -1,0 +1,18 @@
+repo: showcase/clinic-booking
+title: Break the no-show report down by practitioner
+prompt: |
+  LARK-598: operations want Monday's no-show report per practitioner as well as per
+  clinic, so they can see who is losing the most visits. Extend the reminder worker's
+  report with a per-practitioner breakdown using the same definition of the rate
+  (no-shows plus late cancellations over every appointment that should have happened,
+  over four weeks), with tests.
+pitfalls:
+  - { kind: rule, concept: clinic:NoShowRate, note: "the measure's definition is the business's; a per-practitioner AttendanceRate or NoShowRatio with another formula is a new, wrong measure" }
+  - { kind: reuse, concept: clinic:Practitioner, note: "the entity exists; the reminder worker's manifest allows only its derived set plus clinic:Appointment, so linking Practitioner there needs the allowed: list widened" }
+  - { kind: boundary, concept: clinicb:reminders, note: "a marker outside the allowed set is a GM503 warning and HARD; the fix is the manifest, not dropping the marker" }
+assertions:
+  - { kind: check-clean, warnings: true, why: "a link to Practitioner in the worker is outside its allowed set until the manifest says otherwise" }
+  - { kind: link, concept: clinic:NoShowRate, under: services/reminders, why: "the report is still the no-show rate" }
+  - { kind: no-new-concept, why: "the rate and the practitioner exist" }
+  - { kind: forbidden-terms, terms: [AttendanceRate, NoShowRatio, DNARate, MissedVisitRate], why: "the measure keeps its name and its definition" }
+  - { kind: file-matches, path: services/reminders/reminders/noshow.py, pattern: "(?s)no_shows\\s*\\+\\s*self\\.late_cancellations\\)\\s*/\\s*total", why: "the formula did not change" }

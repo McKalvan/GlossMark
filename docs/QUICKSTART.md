@@ -12,9 +12,27 @@ gloss version                                                                   
 
 Pin a release everywhere the tool runs (`@v0.3.0`, never `@latest` or `@main`): binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/mckalvan/glossmark/releases), and `go install ...@v0.3.0` reports the same version. See [VERSIONING.md](VERSIONING.md).
 
+## The adoption ladder
+
+GlossMark is not all-or-nothing. Each rung below pays off on its own, and a repository can stop at any of them for as long as it likes; the sections after this one are the rungs in order, each marked with its level. `adoption:` in `glossmark.yaml` names the rung you are on and sets how hard `gloss check`, `gloss drift` and `gloss diff` bite, so a repository that has only written a glossary is not failed for the manifests it has not written yet ([ADR 0044](adr/0044-staged-adoption-levels.md)). Unset means level 3: an existing repository changes nothing by upgrading.
+
+| Level | What you write | What you get | What fails |
+|---|---|---|---|
+| 0 | `glossmark.yaml` and the core glossary (sections 0 to 3) | Agents get the vocabulary over MCP, `gloss context` and `AGENTS.md`; `gloss check` and `gloss drift` report | Nothing: every command exits 0 |
+| 1 | One manifest per service and `scope=file` links in its entry points (section 4, and the `scope=file` form in section 5) | Drift per boundary (violations, gaps) as a warning; the viewer draws the map; the briefing knows which boundary an agent is in | `gloss check` errors (a reference to a concept that does not exist); drift and the PR gate report only |
+| 2 | `criticality:` on the concepts and boundaries that matter ([GOVERNANCE.md](GOVERNANCE.md)) | The PR gate and drift turned on where a mistake is an incident; everything else stays advisory | Drift findings and HARD changes on critical or high concepts |
+| 3 | Markers on individual declarations, `value-from` bindings, imports of sibling repositories (section 5 in full, [ADVANCED.md](ADVANCED.md)) | Full coverage numbers, published values watched for drift, the cross-repository seam | Everything `--fail-on` names: today's behaviour |
+
+```yaml
+# glossmark.yaml
+adoption: 1   # manifests and file-level links are written; drift warns, nothing gates yet
+```
+
+`gloss doctor` reports the level in force, the rung the tree has actually reached (read from what is written: concepts, manifests and links, declared criticality, markers on declarations) and what the next rung asks for and gives; when the two differ it says which line to change. A command that the level kept from failing says so on stderr (`gloss drift: adoption level 1 (manifests): 3 finding(s) would fail (fail-on: ...), reported only; set adoption: 2 in glossmark.yaml for ...`), and the report itself is the same at every level: the level changes the exit code, never what is shown. `--fail-on` still chooses which kinds or gate class count; the level caps how hard they bite, so the GitHub Action needs no change. `gloss check --strict` fails on errors at every level.
+
 ## 0. Scaffold
 
-**In a hurry?** `gloss onboard` runs the whole first pass on an unmodified repository and ends with the viewer: the scaffold below, a `glossary.md` or `enums.yaml` imported, a draft core and implementation vocabulary from the harvested code, schemas, tests, UI and docs, a draft boundary map from the deploy manifests (Kubernetes, Compose) and Terraform, and `@gloss?` markers. Everything it writes is a proposal (`proposed: true`, `@gloss?`, a commented `realizes:`), `gloss check` passes on it, and `gloss review` decides. Pass `--namespace <ns>` to name the core yourself, `--top n` for more or fewer concepts, `--no-suggest` to skip the markers, `--open` to open the viewer. The tail of the draft is noise (a config key, a report name): review it, do not accept it whole ([ADR 0041](adr/0041-zero-config-bootstrap.md)).
+*Level 0.* In a hurry? `gloss onboard` runs this section and the next four in one go and ends with the viewer: the scaffold below, a `glossary.md` or `enums.yaml` imported, a draft core and implementation vocabulary from the harvested code, schemas, tests, UI and docs, a draft boundary map from the deploy manifests (Kubernetes, Compose) and Terraform, and `@gloss?` markers. Everything it writes is a proposal (`proposed: true`, `@gloss?`, a commented `realizes:`), so the repository lands on level 0 with level 1 drafted: `gloss check` passes on it and `gloss review` decides what is accepted. Pass `--namespace <ns>` to name the core yourself, `--top n` for more or fewer concepts, `--no-suggest` to skip the markers, `--open` to open the viewer. The tail of the draft is noise (a config key, a report name): review it, do not accept it whole ([ADR 0048](adr/0048-zero-config-bootstrap.md)).
 
 ```sh
 gloss onboard --namespace clinic   # scaffold, import, harvest, draft, mark, view; then open .glossmark/viewer.html and run gloss review
@@ -30,7 +48,7 @@ gloss check              # passes on the empty scaffold, and names the next step
 
 `init` ends with the path the tooling supports: draft concepts from the code with `gloss suggest --concepts` (or let an agent interview you with the adopt-glossmark skill, `gloss hook install --skill`), review the drafts and write the ones you keep into the tier files (sections 2 and 3), then `gloss suggest` to propose `@gloss?` markers for the code (section 5), and `gloss check && gloss build && gloss drift`.
 
-`gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one container manifest per deployable directory, `.gitignore` lines for the viewer and `.claude/settings.local.json` (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server, then builds the first graph. It never overwrites a file; run it again and it skips what exists. The sections below explain what it wrote.
+Try it on a branch: everything `init` writes is in the plan and in your commit, and `gloss strip` takes it all out again after a final export, markers included ([LEAVING.md](LEAVING.md)). `gloss init` writes `glossmark.yaml` (with `repo-iri:`, so boundary prefixes need no `prefixes:` entry), the two tier files with the litmus test in a comment, `ontology/views.yaml`, a root manifest and one container manifest per deployable directory, `.gitignore` lines for the viewer and `.claude/settings.local.json` (the graph and the ledger are committed), a `gloss` target in the `Makefile` or a script in `package.json`, a CI job pinned to the release, and the SessionStart hook and MCP server, then builds the first graph. It never overwrites a file; run it again and it skips what exists. The sections below explain what it wrote.
 
 - **Deployable directories.** Each top-level directory holding source, schema (`.avsc`, `.proto`, `.graphql`), infrastructure (Terraform, Kubernetes or Helm YAML) or configuration files gets a manifest. A top-level directory with no project file of its own (`package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`, `Dockerfile`, ...) whose children have one is a grouping (`apps/`, `services/`): each child gets the manifest instead (`apps/web`, `services/booking-api`). A directory named like shared code (`utils`, `util`, `helpers`, `common`, `core`, `lib`, `shared`, `misc`, ...) gets none unless it holds an entry point (a project or build file, a `Dockerfile`, or a `main`, `server`, `wsgi` or `routes` source file); the plan lists it as "not a boundary" and its code stays under the parent's manifest.
 - **Prefixes.** `--namespace` (or `--core`), `--impl` and `--boundary-prefix` override the guesses from the directory name (initials, which rarely read as a domain: pick a word). `--namespace inv` gives `inv:`, `invi:` and `invb:`; the plan says when the prefixes are guessed, and every marker carries them, so settle them with `--dry-run` first.
@@ -40,6 +58,8 @@ gloss check              # passes on the empty scaffold, and names the next step
 - **An existing vocabulary.** A `glossary.md` or an `enums.yaml` in the tree is listed with the `gloss import` command that reads it (section 2).
 
 ## 1. Declare the namespaces
+
+*Level 0.*
 
 `glossmark.yaml` at the repo root:
 
@@ -52,6 +72,8 @@ prefixes:
 ```
 
 ## 2. Write the core in words the business recognises
+
+*Level 0. With this written, `gloss agents`, `gloss context` and the MCP server already serve the vocabulary; nothing fails yet.*
 
 `ontology/lib.gloss.yaml`:
 
@@ -79,6 +101,8 @@ Imports are re-runnable: new terms are appended, and everything else in the file
 
 ## 3. Write the implementation that realizes it
 
+*Level 0.*
+
 `ontology/circ.gloss.yaml`:
 
 ```yaml
@@ -89,6 +113,8 @@ concepts:
 ```
 
 ## 4. Put a manifest on each service directory
+
+*Level 1. One manifest per service plus a `scope=file` link in each entry point (next section) is enough for `gloss drift` to compare what each boundary declares with what its code does, and for `gloss view` to draw the map. At `adoption: 1` the findings are advisory.*
 
 `services/circulation/.gloss.yaml`:
 
@@ -103,7 +129,11 @@ default-namespace: circ
 
 ## 5. Mark the code
 
-Five relations cover almost every marker; learn these and ignore the rest until you need them ([MARKING.md](MARKING.md) says when to mark, [ADVANCED.md](ADVANCED.md) has everything else):
+*Level 1 needs only the `scope=file` form: one marker at the top of each entry point (a handler module, a schema, a migration), which says what the file is about and lets drift and the viewer place it. Level 3 is the rest of this section: markers on individual declarations, `value-from` bindings for published values and imports of sibling repositories.*
+
+*Level 2 sits between them and is one attribute, not more markers: `criticality: high` or `critical` on the few concepts and boundaries where a mistake is an incident ([GOVERNANCE.md](GOVERNANCE.md); `gloss criticality suggest` drafts them). At `adoption: 2` the PR gate and drift fail for those only.*
+
+Five relations cover almost every marker; learn these and ignore the rest until you need them ([MARKING.md](MARKING.md) says when to mark, [ADVANCED.md](ADVANCED.md) has everything else). `gloss init` wrote `relations: starter` into `glossmark.yaml`, so `gloss check` hints when a marker uses one of the rest; `relations: full` unlocks them ([ADVANCED.md](ADVANCED.md#relation-profiles)):
 
 ```python
 # @gloss implements .CheckoutHandler         # the code that does the work (handler, pipeline, module)
@@ -134,7 +164,7 @@ On an existing codebase, let the tool draft the first pass and review it rather 
 gloss suggest > suggestions.patch   # @gloss? proposals for unmarked public surfaces, from names, docstrings, tables touched and test calls
 git apply suggestions.patch          # or gloss suggest --write; then delete the wrong ones and retarget the near misses
 gloss hook install --skill           # installs the adopt-glossmark, derive-ontology, review-glossmark and curate-increment skills: the whole adoption, deriving the ontology from what exists, working the review queue after, and planning each feature in the ontology before it is built, as agent workflows (works before gloss init)
-gloss hook install --skill --cursor  # the same for Cursor: an always-applied rule in .cursor/rules/glossmark.mdc that points at the skills
+gloss hook install --agent cursor    # the same for Cursor: an always-applied rule in .cursor/rules/glossmark.mdc that points at the skills (docs/AGENTS.md: --agent claude-code|cursor|copilot)
 ```
 
 Generate the vocabulary agents should see first:
@@ -163,9 +193,11 @@ gloss history gm:Increment       # when a concept or boundary was added, changed
 gloss coverage --fail-under 80   # headline: concepts with an artifact and a verifier (implementation concepts, internal ones only at high or critical, and core concepts code implements directly; n/a when none); files are secondary
 gloss coverage --fail-under current --changed-only   # ratchet: never below the base's coverage; score only the files this change touches
 gloss export --sqlite graph.db
+gloss report compliance --format html -o compliance.html   # per rule: code, tests, published value, who decided each link and why, open findings and waivers (docs/GOVERNANCE.md)
 gloss publish                    # dist/glossmark/<ns>/ontology.jsonld and <ns>.gloss.yaml (published concepts only for impl namespaces, + graph.jsonl)
 gloss landscape ../repo-a ../repo-b   # union several repos, context-map edges, cross-repo drift, import versions, deprecated concepts still in use
 gloss mcp                        # MCP server on stdio for agents
+gloss strip --dry-run            # leaving: what gloss strip would remove (every marker, manifest and tool file, after an export to glossmark-export/); see LEAVING.md
 gloss doctor                     # one line per setup check with its fix: gloss on PATH (and that it is GlossMark), GLOSS_ACTOR, hook, graph current, ledger in git, lockfile, CI pinned, docs intact
 ```
 
@@ -175,7 +207,9 @@ gloss doctor                     # one line per setup check with its fix: gloss 
 
 The actor belongs to a marker's first appearance, not to whoever runs the last build. For a marker the ledger does not know yet, `gloss build` takes, in order: the actor the last built `graph.jsonl` recorded for it; `GLOSS_ACTOR` (`agent:claude-code@claude-fable-5-1`, `human:alice`); the `git blame` author of the marker line when it is committed; else `human:<git user.name>`. `gloss hook install` writes `GLOSS_ACTOR=agent:claude-code` into the MCP server's env and into the SessionStart hook (`--actor` to change it), so links an agent writes are attributed to the agent and the agent-remit gate (`may-modify`) applies to them. The committed files (`.claude/settings.json`, `.mcp.json`) always call `gloss` by name, so a clone works on any machine with `gloss` on `PATH`. When `PATH` does not find the binary running the install, it also writes the hook with that binary's absolute path to `.claude/settings.local.json` (git-ignored, per machine) and says the MCP server needs `gloss` on `PATH`; `gloss doctor` warns when committed agent config names gloss by an absolute path. The hook also appends `export GLOSS_ACTOR=...` to `$CLAUDE_ENV_FILE`, which Claude Code sources before every shell command of the session, so a `gloss build` the agent runs later carries the actor too, not only the briefing. Set `GLOSS_ACTOR` yourself in any other agent harness.
 
-**Cursor.** `gloss hook install --cursor` also writes `.cursor/mcp.json` (the same MCP server, as `agent:cursor` unless `--actor` is given) and `.cursor/rules/glossmark.mdc`, an always-applied rule. Cursor has no SessionStart hook, so the rule asks the agent to run `gloss context` itself, with `GLOSS_ACTOR` on every gloss command. Cursor reads the skills from `.claude/skills/`. The skills stop for the domain owner twice, before drafting and before writing a tier file, and ask in chat when the harness has no ask-the-user tool; `gloss doctor` accepts the Cursor setup in place of the Claude Code hook.
+**Ready-made integrations.** `gloss hook install --agent claude-code|cursor|copilot` writes, per agent, everything above as committed files that run `gloss` by name: a Claude Code plugin (skills, hook, MCP server, installable with one `claude plugin install`), the Cursor rule and MCP config, or a Copilot instructions section and VS Code MCP config; `gloss doctor` checks each one. [AGENTS.md](AGENTS.md) has the details.
+
+**Cursor.** `gloss hook install --agent cursor` (or `--cursor`) also writes `.cursor/mcp.json` (the same MCP server, as `agent:cursor` unless `--actor` is given) and `.cursor/rules/glossmark.mdc`, an always-applied rule. Cursor has no SessionStart hook, so the rule asks the agent to run `gloss context` itself, with `GLOSS_ACTOR` on every gloss command. Cursor reads the skills from `.claude/skills/`. The skills stop for the domain owner twice, before drafting and before writing a tier file, and ask in chat when the harness has no ask-the-user tool; `gloss doctor` accepts the Cursor setup in place of the Claude Code hook.
 
 **Subagents need their own actor.** Subagents share the session's shell environment and its MCP server, so without more they all write as the session's actor, and the remit gate checks every link against one agent. Give each subagent its actor in its agent file (`.claude/agents/prep-cook.md`): "run gloss commands as `GLOSS_ACTOR=agent:prep-cook gloss build`". The name after `agent:` is the agent file's name, which is what ties the link to that agent's `may-modify` remit and lets `gloss context` show only its remit. A link a subagent writes through the shared MCP server is attributed to the server's actor; prefer writing `@gloss?` lines and running `gloss build` with the subagent's actor. `gloss build` warns when a rebuild would change the actor on an existing marker.
 

@@ -57,6 +57,9 @@ func header(im *Impact) string {
 		fmt.Fprintf(&sb, "   criticality %s", im.Criticality)
 	}
 	sb.WriteString("\n")
+	if im.Advisory != "" {
+		sb.WriteString("  " + im.Advisory + "\n")
+	}
 	return sb.String()
 }
 
@@ -316,6 +319,9 @@ func RenderMarkdown(im *Impact) string {
 		sb.WriteString("\nOnly **AUTO** changes: nothing to review. ")
 	}
 	sb.WriteString("Accept a proposal with `gloss accept <marker-id>`.\n")
+	if im.Advisory != "" {
+		sb.WriteString("\n_" + im.Advisory + "._\n")
+	}
 	return sb.String()
 }
 

@@ -44,6 +44,11 @@ var reviewTools = []tool{
 // toolList is every tool this backend serves.
 func (s *Server) toolList() []tool {
 	list := append([]tool{}, tools...)
+	for i := range list {
+		if list[i].Name == "propose_link" {
+			list[i] = withRelationDesc(list[i], s.relationDesc())
+		}
+	}
 	if _, ok := s.backend.(Reviewer); ok {
 		list = append(append(list, reviewTools...), browseTools...)
 	}
@@ -114,4 +119,22 @@ func (s *Server) callReview(name string, args json.RawMessage) (res any, handled
 		return res2, true, fmt.Errorf("%s", res2.Error)
 	}
 	return res2, true, nil
+}
+
+// withRelationDesc returns a copy of t whose relation property carries desc,
+// leaving the shared table untouched.
+func withRelationDesc(t tool, desc string) tool {
+	props, _ := t.InputSchema["properties"].(map[string]any)
+	schema := map[string]any{}
+	for k, v := range t.InputSchema {
+		schema[k] = v
+	}
+	np := map[string]any{}
+	for k, v := range props {
+		np[k] = v
+	}
+	np["relation"] = str(desc)
+	schema["properties"] = np
+	t.InputSchema = schema
+	return t
 }
