@@ -261,7 +261,7 @@ func TestInitThenCheck(t *testing.T) {
 		if ws.Config.RelationProfile() != model.ProfileStarter {
 			t.Errorf("%s: relations: %q, want starter", tc.name, ws.Config.Relations)
 		}
-		if s := agents.Snippet(ws, res.Graph, nil); !strings.Contains(s, "inline: `consumes`, `implements`, `produces`, `represents`, `verifies`. ") {
+		if s := agents.Snippet(ws, res.Graph, nil); !strings.Contains(s, "inline: `consumes`, `documents`, `implements`, `produces`, `represents`, `verifies`. ") {
 			t.Errorf("%s: snippet does not list the starter relations:\n%s", tc.name, s)
 		}
 		// Boundary prefixes come from repo-iri: no urn fallback.

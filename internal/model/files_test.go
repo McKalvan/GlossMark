@@ -79,10 +79,10 @@ func TestRelationProfile(t *testing.T) {
 		}
 	}
 	v := NewVocabulary()
-	if got := strings.Join(v.InlineNames(ProfileStarter), " "); got != "consumes implements produces represents verifies" {
+	if got := strings.Join(v.InlineNames(ProfileStarter), " "); got != "consumes documents implements produces represents verifies" {
 		t.Errorf("starter inline names: %s", got)
 	}
-	if full := v.InlineNames(ProfileFull); len(full) <= 5 || strings.Contains(strings.Join(full, " "), "tests") {
+	if full := v.InlineNames(ProfileFull); len(full) <= 6 || strings.Contains(strings.Join(full, " "), "tests") {
 		t.Errorf("full inline names: %v", full)
 	}
 	if !InStarter("tests") || InStarter("presents") || !InStarter("realizes") {

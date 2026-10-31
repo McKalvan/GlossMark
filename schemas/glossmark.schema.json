@@ -135,7 +135,7 @@
       }
     },
     "relations": {
-      "description": "The relation profile (issue #261). starter: gloss check hints (GM250) at any relation outside implements, represents, verifies, produces, consumes, part-of and is-a, and the AGENTS.md snippet and the MCP server list only those; full: every relation. Unset means full. gloss init writes starter. The graph is the same under either.",
+      "description": "The relation profile (issue #261). starter: gloss check hints (GM250) at any relation outside implements, represents, verifies, documents, produces, consumes, part-of and is-a, and the AGENTS.md snippet and the MCP server list only those; full: every relation. Unset means full. gloss init writes starter. The graph is the same under either.",
       "enum": ["starter", "full"]
     },
     "grammar": {

@@ -72,10 +72,10 @@ func TestStarterProfileMCP(t *testing.T) {
 			hint = pl.Proposals[0].Hint
 		}
 		if relations == "starter" {
-			if !strings.Contains(init.Result.Instructions, "inline: `consumes`, `implements`, `produces`, `represents`, `verifies`. ") || !strings.Contains(init.Result.Instructions, "relations: full") {
+			if !strings.Contains(init.Result.Instructions, "inline: `consumes`, `documents`, `implements`, `produces`, `represents`, `verifies`. ") || !strings.Contains(init.Result.Instructions, "relations: full") {
 				t.Errorf("starter instructions:\n%s", init.Result.Instructions)
 			}
-			if desc != "consumes | implements | produces | represents | verifies (the starter profile; relations: full in glossmark.yaml unlocks the rest)" {
+			if desc != "consumes | documents | implements | produces | represents | verifies (the starter profile; relations: full in glossmark.yaml unlocks the rest)" {
 				t.Errorf("starter propose_link relation: %q", desc)
 			}
 			if !strings.Contains(hint, "presents is outside the starter relation profile") || !strings.Contains(hint, "GM250") {

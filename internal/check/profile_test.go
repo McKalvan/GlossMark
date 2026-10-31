@@ -29,6 +29,7 @@ func profileRepo(t *testing.T, relations string) string {
 		"glossmark.yaml":          cfg,
 		"ontology/lib.gloss.yaml": "concepts:\n  Return: { kind: process }\n  Loan: { kind: entity }\n  Limit: { kind: constraint, constrains: Return }\n  Late: { kind: process, is-a: Return }\n",
 		".gloss.yaml":             "boundary: o:b\nlevel: container\ndefault-namespace: lib\nholds: [lib:Loan]\n",
+		"README.md":               "<!-- @gloss documents lib:Return scope=file -->\n# Library\n",
 		"app.py":                  "# @gloss implements lib:Return\ndef a(): pass\n\n# @gloss presents lib:Loan\ndef b(): pass\n\n# @gloss represents lib:Loan\nclass Loan: pass\n\n# @gloss tests lib:Return\ndef test_a(): pass\n",
 	} {
 		p := filepath.Join(root, rel)
@@ -68,7 +69,7 @@ func buildRepo(t *testing.T, root string) (*load.Workspace, *graph.Graph, []stri
 // TestStarterProfile (issue #261): under relations: starter, check hints
 // (GM250, never an error) at presents in a marker, holds in a manifest and
 // constrains in an ontology file, naming the switch; implements,
-// represents, tests (the verifies alias) and is-a pass. Unset and full
+// represents, tests (the verifies alias), documents and is-a pass. Unset and full
 // hint at nothing, and the graph is the same under every value.
 func TestStarterProfile(t *testing.T) {
 	var graphs []string
@@ -90,7 +91,7 @@ func TestStarterProfile(t *testing.T) {
 			continue
 		}
 		for _, want := range []string{
-			"app.py:presents is outside the starter relation profile (implements, represents, verifies, produces, consumes, part-of, is-a); set relations: full in glossmark.yaml",
+			"app.py:presents is outside the starter relation profile (implements, represents, verifies, documents, produces, consumes, part-of, is-a); set relations: full in glossmark.yaml",
 			".gloss.yaml:holds is outside",
 			"ontology/lib.gloss.yaml:constrains is outside",
 		} {
@@ -98,7 +99,7 @@ func TestStarterProfile(t *testing.T) {
 				t.Errorf("missing %q in:\n%s", want, all)
 			}
 		}
-		for _, no := range []string{"implements is", "represents is", "verifies is", "tests is", "is-a is", "part-of is"} {
+		for _, no := range []string{"implements is", "represents is", "verifies is", "tests is", "documents is", "is-a is", "part-of is"} {
 			if strings.Contains(all, no) {
 				t.Errorf("a starter relation is hinted at: %q in:\n%s", no, all)
 			}
@@ -113,7 +114,7 @@ func TestStarterProfile(t *testing.T) {
 				line = l
 			}
 		}
-		if !strings.HasPrefix(line, "- Relations you may use inline: `consumes`, `implements`, `produces`, `represents`, `verifies`. ") || !strings.Contains(line, "relations: full") {
+		if !strings.HasPrefix(line, "- Relations you may use inline: `consumes`, `documents`, `implements`, `produces`, `represents`, `verifies`. ") || !strings.Contains(line, "relations: full") {
 			t.Errorf("starter snippet lists the wrong relations:\n%s", line)
 		}
 	}

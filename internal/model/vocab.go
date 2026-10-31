@@ -166,9 +166,9 @@ const (
 var RelationProfiles = []string{ProfileStarter, ProfileFull}
 
 // StarterRelations are the relations the starter profile shows and writes
-// without a hint: the five inline ones a repository writes first, part-of
+// without a hint: the six inline ones a repository writes first, part-of
 // in manifests and ontology files, and is-a in ontology files.
-var StarterRelations = []string{"implements", "represents", "verifies", "produces", "consumes", "part-of", "is-a"}
+var StarterRelations = []string{"implements", "represents", "verifies", "documents", "produces", "consumes", "part-of", "is-a"}
 
 // StructuralRelations belong to no profile: the tier seam itself asks for
 // the first three (GM320 wants realizes on an implementation concept, GM340
