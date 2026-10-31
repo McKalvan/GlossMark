@@ -67,6 +67,7 @@ func Run(ws *load.Workspace, g *graph.Graph, diags []marker.Diagnostic, env Env)
 	d.binary()
 	d.actor()
 	d.hook()
+	d.integrations()
 	d.graph()
 	d.ledger()
 	d.lock()
@@ -268,22 +269,19 @@ func (d *doctor) hook() {
 	srv, hasMCP := glossMCP(read(".mcp.json"))
 	hasHook := len(hooks) > 0
 	if !hasHook && !hasMCP {
-		// Cursor has no SessionStart hook: gloss hook install --cursor writes
-		// a rule that asks the agent for the briefing instead.
-		rule, _ := os.ReadFile(filepath.Join(d.ws.Root, ".cursor", "rules", "glossmark.mdc"))
-		cmcp, _ := os.ReadFile(filepath.Join(d.ws.Root, ".cursor", "mcp.json"))
-		if bytes.Contains(rule, []byte("gloss context")) || bytes.Contains(rule, []byte(" context --dir")) {
-			if bytes.Contains(cmcp, []byte("GLOSS_ACTOR")) {
-				d.add("agent hook", OK, "Cursor rule and MCP server registered with GLOSS_ACTOR", "")
-			} else {
-				d.add("agent hook", Warn, "Cursor rule registered but no MCP server with GLOSS_ACTOR in .cursor/mcp.json", "gloss hook install --cursor")
-			}
+		// A ready-made integration (gloss hook install --agent, #267) stands
+		// in: the Claude Code plugin carries the hook and the server, the
+		// Cursor rule and the Copilot instructions ask for the briefing
+		// since neither agent has a SessionStart hook. Each gets its own
+		// line from integrations().
+		if names := d.installedIntegrations(); len(names) > 0 {
+			d.add("agent hook", OK, "none in .claude/settings.json and .mcp.json; "+strings.Join(names, ", ")+" installed instead (checked below)", "")
 			return
 		}
 	}
 	switch {
 	case !hasHook && !hasMCP:
-		d.add("agent hook", Warn, "no SessionStart hook in .claude/settings.json and no MCP server in .mcp.json", "gloss hook install")
+		d.add("agent hook", Warn, "no SessionStart hook in .claude/settings.json and no MCP server in .mcp.json", "gloss hook install (--agent claude-code|cursor|copilot for a ready-made integration)")
 	case !hasHook:
 		d.add("agent hook", Warn, "MCP server registered but no SessionStart hook", "gloss hook install")
 	case !hasMCP:
@@ -631,4 +629,203 @@ func uniq(xs []string) []string {
 		}
 	}
 	return out
+}
+
+// Ready-made agent integrations (issue #267). Each is a set of committed
+// files gloss hook install --agent writes; doctor reads them the way the
+// agent does and reports one line per integration it finds, none for one
+// that is not installed. Committed files must run gloss by name (#226).
+const (
+	pluginDir       = ".claude/plugins/glossmark"
+	marketplacePath = ".claude-plugin/marketplace.json"
+	cursorRulePath  = ".cursor/rules/glossmark.mdc"
+	cursorMCPPath   = ".cursor/mcp.json"
+	copilotPath     = ".github/copilot-instructions.md"
+	vscodeMCPPath   = ".vscode/mcp.json"
+)
+
+// skillNames are the skills the plugin must carry.
+var skillNames = []string{"adopt-glossmark", "derive-ontology", "review-glossmark", "curate-increment"}
+
+func (d *doctor) read(rel string) []byte {
+	b, _ := os.ReadFile(filepath.Join(d.ws.Root, filepath.FromSlash(rel)))
+	return b
+}
+
+func (d *doctor) exists(rel string) bool {
+	_, err := os.Stat(filepath.Join(d.ws.Root, filepath.FromSlash(rel)))
+	return err == nil
+}
+
+// installedIntegrations names the integrations whose main file exists.
+func (d *doctor) installedIntegrations() []string {
+	var out []string
+	if d.exists(pluginDir + "/.claude-plugin/plugin.json") {
+		out = append(out, "the Claude Code plugin")
+	}
+	if d.exists(cursorRulePath) {
+		out = append(out, "the Cursor rule")
+	}
+	if bytes.Contains(d.read(copilotPath), []byte("## GlossMark")) {
+		out = append(out, "the Copilot instructions")
+	}
+	return out
+}
+
+func (d *doctor) integrations() {
+	d.claudePlugin()
+	d.cursor()
+	d.copilot()
+}
+
+// claudePlugin checks the plugin as Claude Code loads it: a manifest, the
+// four skills, a SessionStart hook in hooks/hooks.json and the MCP server
+// in .mcp.json, both with GLOSS_ACTOR and running gloss by name, and the
+// marketplace entry that installs it.
+func (d *doctor) claudePlugin() {
+	manifest := pluginDir + "/.claude-plugin/plugin.json"
+	if !d.exists(manifest) {
+		return
+	}
+	fix := "gloss hook install --agent claude-code"
+	var m struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(d.read(manifest), &m); err != nil || m.Name == "" {
+		d.add("claude-code plugin", Warn, manifest+" is not a plugin manifest with a name", fix)
+		return
+	}
+	var problems []string
+	var missing []string
+	for _, s := range skillNames {
+		if !d.exists(pluginDir + "/skills/" + s + "/SKILL.md") {
+			missing = append(missing, s)
+		}
+	}
+	if len(missing) > 0 {
+		problems = append(problems, "skills missing: "+strings.Join(missing, ", "))
+	}
+	cmds, bins := glossHooks(d.read(pluginDir + "/hooks/hooks.json"))
+	switch {
+	case len(cmds) == 0:
+		problems = append(problems, "no SessionStart hook running gloss context in hooks/hooks.json")
+	case !strings.Contains(strings.Join(cmds, "\n"), "GLOSS_ACTOR="):
+		problems = append(problems, "the hook sets no GLOSS_ACTOR")
+	default:
+		for _, b := range bins {
+			if absPath(b) {
+				problems = append(problems, "hooks/hooks.json runs "+b+" (an absolute path; the plugin is installed on every teammate's machine)")
+			}
+		}
+	}
+	srv, ok := glossMCP(d.read(pluginDir + "/.mcp.json"))
+	switch {
+	case !ok:
+		problems = append(problems, "no MCP server running gloss mcp in .mcp.json")
+	case absPath(srv.Command):
+		problems = append(problems, ".mcp.json runs "+srv.Command+" (an absolute path)")
+	default:
+		if _, ok := srv.Env["GLOSS_ACTOR"]; !ok {
+			problems = append(problems, "the MCP server sets no GLOSS_ACTOR")
+		}
+	}
+	market, listed := marketplaceLists(d.read(marketplacePath), m.Name)
+	if !listed {
+		problems = append(problems, marketplacePath+" does not list the plugin, so claude plugin install cannot find it")
+	}
+	if len(problems) > 0 {
+		d.add("claude-code plugin", Warn, pluginDir+": "+strings.Join(problems, "; "), fix)
+		return
+	}
+	d.add("claude-code plugin", OK, fmt.Sprintf("%s has the skills, the SessionStart hook and the MCP server, all running gloss by name with GLOSS_ACTOR; install with claude plugin install %s@%s --scope project", pluginDir, m.Name, market), "")
+}
+
+// marketplaceLists reports whether a marketplace file lists a plugin by
+// name, and the marketplace's name.
+func marketplaceLists(b []byte, plugin string) (string, bool) {
+	var m struct {
+		Name    string `json:"name"`
+		Plugins []struct {
+			Name string `json:"name"`
+		} `json:"plugins"`
+	}
+	json.Unmarshal(b, &m)
+	for _, p := range m.Plugins {
+		if p.Name == plugin {
+			return m.Name, true
+		}
+	}
+	return m.Name, false
+}
+
+// briefingRule reports whether a rules or instructions file asks the agent
+// for gloss context or the MCP server, as the generated ones do.
+func briefingRule(b []byte) bool {
+	return bytes.Contains(b, []byte("gloss context")) || bytes.Contains(b, []byte(" context --dir")) || bytes.Contains(b, []byte("concepts_for_path"))
+}
+
+// mcpProblems checks an MCP config file written for an agent: the server
+// is there, runs gloss by name and carries GLOSS_ACTOR. key is the map the
+// file keeps its servers under (mcpServers, or servers for VS Code).
+func mcpProblems(b []byte, rel, key string) []string {
+	var raw map[string]json.RawMessage
+	json.Unmarshal(b, &raw)
+	wrapped, _ := json.Marshal(map[string]json.RawMessage{"mcpServers": raw[key]})
+	srv, ok := glossMCP(wrapped)
+	switch {
+	case !ok:
+		return []string{"no MCP server running gloss mcp in " + rel}
+	case absPath(srv.Command):
+		return []string{rel + " runs " + srv.Command + ": committed agent config names gloss by an absolute path, which a teammate's clone does not have"}
+	}
+	if _, ok := srv.Env["GLOSS_ACTOR"]; !ok {
+		return []string{"the MCP server in " + rel + " sets no GLOSS_ACTOR: links the agent writes are attributed to the git user"}
+	}
+	return nil
+}
+
+// cursor checks the always-applied rule and .cursor/mcp.json. Cursor has
+// no SessionStart hook, so the rule must ask for the briefing itself.
+func (d *doctor) cursor() {
+	rule := d.read(cursorRulePath)
+	if len(rule) == 0 {
+		return
+	}
+	fix := "gloss hook install --agent cursor"
+	var problems []string
+	if !bytes.Contains(rule, []byte("alwaysApply: true")) {
+		problems = append(problems, cursorRulePath+" is not always applied (alwaysApply: true)")
+	}
+	if !briefingRule(rule) {
+		problems = append(problems, cursorRulePath+" does not ask for gloss context")
+	}
+	if m := hookBinRe.FindSubmatch(rule); m != nil && absPath(strings.Trim(string(m[1]), "'`")) {
+		problems = append(problems, cursorRulePath+" runs "+strings.Trim(string(m[1]), "'`")+" (an absolute path)")
+	}
+	problems = append(problems, mcpProblems(d.read(cursorMCPPath), cursorMCPPath, "mcpServers")...)
+	if len(problems) > 0 {
+		d.add("cursor", Warn, strings.Join(problems, "; "), fix)
+		return
+	}
+	d.add("cursor", OK, "rule always applied and MCP server registered in "+cursorMCPPath+" with GLOSS_ACTOR, running gloss by name", "")
+}
+
+// copilot checks the GlossMark section of the Copilot instructions and the
+// VS Code MCP config (servers, not mcpServers).
+func (d *doctor) copilot() {
+	instr := d.read(copilotPath)
+	if !bytes.Contains(instr, []byte("## GlossMark")) {
+		return
+	}
+	fix := "gloss hook install --agent copilot"
+	var problems []string
+	if !briefingRule(instr) {
+		problems = append(problems, copilotPath+" does not ask for gloss context or concepts_for_path")
+	}
+	problems = append(problems, mcpProblems(d.read(vscodeMCPPath), vscodeMCPPath, "servers")...)
+	if len(problems) > 0 {
+		d.add("copilot", Warn, strings.Join(problems, "; "), fix)
+		return
+	}
+	d.add("copilot", OK, "GlossMark section in "+copilotPath+" and MCP server registered in "+vscodeMCPPath+" with GLOSS_ACTOR, running gloss by name", "")
 }

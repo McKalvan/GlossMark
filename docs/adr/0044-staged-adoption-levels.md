@@ -1,5 +1,5 @@
 <!-- @gloss documents gmi:AdoptionLadder scope=file -->
-# ADR 0041: staged adoption levels, each paying off on its own
+# ADR 0044: staged adoption levels, each paying off on its own
 
 Status: accepted, 2026-10-28. Refs issue #258 (tracking #256).
 

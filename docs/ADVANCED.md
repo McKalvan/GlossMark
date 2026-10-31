@@ -3,6 +3,16 @@
 
 [MARKING.md](MARKING.md) covers `implements`, `represents`, `verifies`, `documents`, `instructs` and `scope=file`, which is most of what a repository writes. This page is the rest, for when a marker needs it.
 
+## Relation profiles
+
+A repository picks how much of the vocabulary it shows with `relations:` in `glossmark.yaml` ([ADR 0042](adr/0042-relation-profiles.md)). `gloss init` writes `relations: starter`: `implements`, `represents`, `verifies`, `documents`, `produces`, `consumes`, `part-of` and, in ontology files, `is-a` (plus `realizes`, `replaced-by` and `published-as`, which the tier seam itself asks for, and `owns`, `same-as` and `derived-from`, which the tool writes from CODEOWNERS or an import). Under `starter`, the AGENTS.md snippet and the MCP server list only those, and `gloss check` hints at any other relation it finds in a marker, a manifest or an ontology file:
+
+```
+web/page.py:3: hint: presents is outside the starter relation profile (implements, represents, verifies, documents, produces, consumes, part-of, is-a); set relations: full in glossmark.yaml to use it, or write one of the starter relations [GM250]
+```
+
+A hint is not a warning: `gloss check --strict` ignores it, the edge is built as written, and `gloss build`, `gloss drift` and the gate behave the same under either profile. Set `relations: full` when the repository needs a page (`presents`), a shell (`hosts`), configuration or IaC (`configures`, `provisions`, `deploys`), events (`publishes`, `subscribes`), a rule (`constrains`, `guards`) or the rest of the table below. A repository without the key is `full`.
+
 ## Every relation
 
 Inline relations go in `@gloss` markers (artifact → concept or boundary). Ontology relations go in `*.gloss.yaml` files (concept → concept). Manifest relations go in `.gloss.yaml` boundary files (boundary → concept or boundary). Derived relations are written by the tool, never by hand.
@@ -131,6 +141,10 @@ MCP `history_of` (`curies`, `since`, `step`, `all`, `limit`) is the same history
 The PR comment (`gloss diff --format markdown`) ends with **Recent history**: for each concept and boundary the change touches (those of HARD changes first, at most 15), its last 3 SOFT and HARD steps on `--base`, lineage followed, AUTO rows left out. `--history N` sets the count; `--history 0` leaves the section out. The Action fetches the base without `--depth` when the checkout has full history, so check out with `fetch-depth: 0` for all of it; a shallow checkout gets a line saying the history is cut short.
 
 `gloss view --history` embeds the same steps, AUTO ones included, in the viewer (`--history-range` bounds the walk). Its History panel lists every commit newest first with its gate and how many nodes and edges it added, removed and changed across the whole graph. Clicking one overlays that commit on the map as `--diff` does, with the commit's summary above the list: the counts per view, the change kinds, the graph's metrics before and after, version bumps and realization moves. *Map as of this commit* (on by default) hides what newer commits added, so the map is the graph at that commit; what a newer commit removed is no longer in the projection and is only counted. Shift+clicking a second commit overlays the net of the steps between them (decision 8: what is added and removed again inside the range is left out). The toolbar's commit selector and `[` `]` step older and newer; `#commit=<sha>` or `#commit=<older>..<newer>` links to one.
+
+## Audit reports (`gloss report compliance`)
+
+`gloss report compliance` is the per-rule audit report: definition, criticality and owner; the code that enforces it and the tests that verify it, linked through `source-url`; its published value and the line it is bound to; every ledger decision about those links (who proposed, who accepted or rejected, when, why); open findings and waivers with their expiry. Markdown by default, `--format html` for a page that prints to PDF, `csv` for one row per piece of evidence, `json` for the record. [GOVERNANCE.md](GOVERNANCE.md#audit-reports-gloss-report-compliance) has the columns and the selection rules.
 
 ## Files and version numbers
 
