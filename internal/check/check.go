@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -85,18 +86,26 @@ func (c *checker) surfaceOf(path string) *surfaceFile {
 // inline marker and reports whether one fired, so the general GM223 and
 // GM224 do not repeat it.
 func (c *checker) surfaceHint(e *graph.Edge, sn, on *graph.Node, path string, line int) bool {
-	if sn.NodeType != model.NodeArtifact || path == "" {
+	if sn.NodeType != model.NodeArtifact || e.Prov == nil || e.Prov.Path == "" {
 		return false
 	}
-	f := c.surfaceOf(path)
+	// The surface is the code the link maps (Prov.Path), also for a
+	// manifest links: entry, whose diagnostic sits at the entry.
+	code := e.Prov.Path
+	f := c.surfaceOf(code)
 	if f.kind == surface.None {
 		return false
 	}
-	h := surface.Advise(c.g, c.ws, f.kind, surface.Link{Path: path, Lines: f.lines, Relation: e.P, Target: on, Artifact: sn})
+	h := surface.Advise(c.g, c.ws, f.kind, surface.Link{Path: code, Lines: f.lines, Relation: e.P, Target: on, Artifact: sn})
 	if h == nil {
 		return false
 	}
-	c.add(path, line, "hint", h.Code, h.Msg)
+	msg := h.Msg
+	if e.Source == graph.SourceManifest {
+		// A mapped link has no marker to rewrite: the links: entry is it.
+		msg += fmt.Sprintf("; this link is a links: entry mapping %s, so the rewrite is the entry's relation, not a marker in the code", code)
+	}
+	c.add(path, line, "hint", h.Code, msg)
 	return true
 }
 
@@ -432,7 +441,7 @@ func (c *checker) markers() {
 	fileLevel := map[fact]int{}
 	byPath := map[string][]*graph.Edge{}
 	for _, e := range c.g.Edges() {
-		if e.Source != graph.SourceInline || e.Prov == nil || e.P == "may-modify" {
+		if !graph.LinkSource(e.Source) || e.Prov == nil || e.P == "may-modify" {
 			continue
 		}
 		if e.Prov.Scope == "file" {
@@ -555,6 +564,9 @@ func unknownRelation(v *model.Vocabulary, p, source string, sn *graph.Node) stri
 	case source == graph.SourceInline:
 		where = func(r *model.Relation) bool { return r.Inline }
 		advice = "an inline marker takes one of"
+	case source == graph.SourceManifest:
+		where = func(r *model.Relation) bool { return r.Inline }
+		advice = "a links: entry takes one of"
 	case sn != nil && sn.NodeType == model.NodeConcept:
 		where = func(r *model.Relation) bool { return r.Ontology }
 		declare = fmt.Sprintf("declare it in an ontology file (relations: { %s: { doc: \"...\" } }, see docs/FILE-FORMATS.md)", p)
@@ -625,6 +637,19 @@ func (c *checker) starterHint(rel string) string {
 	return fmt.Sprintf("%s is outside the starter relation profile (%s); set relations: full in %s to use it, or write one of the starter relations", rel, strings.Join(model.StarterRelations, ", "), load.ConfigName)
 }
 
+// linkOrigin is where a link is written: the links: entry of a mapped link
+// (prov.from, path:line), else the marker's own path and line.
+func linkOrigin(p *graph.Prov) (string, int) {
+	if p.From != "" {
+		if file, ln, ok := strings.Cut(p.From, ":"); ok {
+			if n, err := strconv.Atoi(ln); err == nil {
+				return file, n
+			}
+		}
+	}
+	return p.Path, p.Line
+}
+
 // minRun is the shortest run of identical markers GM131 reports.
 const minRun = 3
 
@@ -648,6 +673,18 @@ func (c *checker) edges() {
 		case graph.SourceInline:
 			if !rel.Inline {
 				c.add(path, line, "error", "GM201", fmt.Sprintf("relation %q cannot be used in an inline marker (ontology or manifest only)", e.P))
+			}
+			if e.Prov != nil && e.Prov.Alias == "tests" {
+				c.add(path, line, "warning", "GM240", "prefer verifies: it is the one test relation; tests is an accepted alias that means the same")
+			}
+		case graph.SourceManifest:
+			// A mapped link is a marker written elsewhere: the same
+			// relations, reported at the links: entry.
+			if e.Prov != nil {
+				path, line = linkOrigin(e.Prov)
+			}
+			if !rel.Inline {
+				c.add(path, line, "error", "GM201", fmt.Sprintf("relation %q cannot be used in a links: entry (ontology or manifest declarations only)", e.P))
 			}
 			if e.Prov != nil && e.Prov.Alias == "tests" {
 				c.add(path, line, "warning", "GM240", "prefer verifies: it is the one test relation; tests is an accepted alias that means the same")
@@ -707,7 +744,7 @@ func (c *checker) edges() {
 			c.add(path, line, "error", "GM220", fmt.Sprintf("%s %s %s: relation %q expects %s → %s, got %s → %s", c.g.Curie(e.S), e.P, on.CURIE, e.P, types(rel.Domain), types(rel.Range), sn.NodeType, on.NodeType))
 		}
 		// Soft range kinds for inline links.
-		if e.Source == graph.SourceInline && len(rel.RangeKinds) > 0 && on.NodeType == model.NodeConcept && on.Kind != "" && !contains(rel.RangeKinds, on.Kind) {
+		if graph.LinkSource(e.Source) && len(rel.RangeKinds) > 0 && on.NodeType == model.NodeConcept && on.Kind != "" && !contains(rel.RangeKinds, on.Kind) {
 			c.add(path, line, "warning", "GM221", RangeKindMsg(e.P, rel.RangeKinds, on.CURIE, on.Kind))
 		}
 		// A manifest relation that cannot lift for the concept's kind is
@@ -721,8 +758,8 @@ func (c *checker) edges() {
 		// system-type (or a page concept), and a page that edits a
 		// constraint's value configures it rather than presenting it. On a
 		// recognised surface the surface rule's hint says it instead
-		// (ADR 0046).
-		if e.Source == graph.SourceInline && on.NodeType == model.NodeConcept && on.Kind != "" && !c.surfaceHint(e, sn, on, path, line) {
+		// (ADR 0046), for an inline marker and a manifest links: entry alike.
+		if graph.LinkSource(e.Source) && on.NodeType == model.NodeConcept && on.Kind != "" && !c.surfaceHint(e, sn, on, path, line) {
 			switch {
 			case e.P == "hosts" && on.Kind != "system-type" && len(c.g.Objects(on.ID, "presents"))+len(c.g.Objects(on.ID, "hosts")) == 0:
 				c.add(path, line, "warning", "GM223", fmt.Sprintf("hosts %s: %s is a %s, and hosts is for a shell around a whole system-type; if this code does the work, write implements, if it shows it, presents (hosts hides a missing mechanism from drift)", on.CURIE, on.CURIE, on.Kind))
@@ -855,7 +892,7 @@ func (c *checker) manifests() {
 				continue
 			}
 			for _, e := range c.g.Out(a.ID, "") {
-				if e.Source != graph.SourceInline || e.P == "may-modify" || e.P == "instructs" || e.P == "documents" {
+				if !graph.LinkSource(e.Source) || e.P == "may-modify" || e.P == "instructs" || e.P == "documents" {
 					continue
 				}
 				if strings.HasPrefix(e.O, "urn:gloss:") {

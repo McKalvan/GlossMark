@@ -216,3 +216,26 @@ func TestSurfaceRuleHints(t *testing.T) {
 		}
 	}
 }
+
+// TestSurfaceRuleHintOnManifestLink: a link written as a manifest links:
+// entry (ADR 0045) gets the same surface hint as a marker, and the hint
+// says the rewrite is the entry, since there is no marker in the code.
+func TestSurfaceRuleHintOnManifestLink(t *testing.T) {
+	root, write := workspace(t)
+	sc := surfaceCases[4] // admin-limit
+	for p, c := range sc.base {
+		write(p, c)
+	}
+	write("apps/admin/.gloss.yaml", "boundary: hpb:admin\nlevel: container\ndefault-namespace: hpx\nlinks:\n  - { path: \"src/pages/*.tsx\", presents: hp:CreditLimit }\n")
+	write(sc.file, strings.Replace(sc.body, "MARK\n", "", 1))
+	ws, g, _, _ := build(t, root)
+	var hints []string
+	for _, d := range check.Run(ws, g) {
+		if strings.HasPrefix(d.Code, "GM25") || d.Code == "GM224" {
+			hints = append(hints, d.String())
+		}
+	}
+	if len(hints) != 1 || !strings.Contains(hints[0], "[GM258]") || !strings.Contains(hints[0], "links: entry mapping "+sc.file) || !strings.HasPrefix(hints[0], "apps/admin/.gloss.yaml:5:") {
+		t.Errorf("hints = %v, want one GM258 at the links: entry naming %s", hints, sc.file)
+	}
+}

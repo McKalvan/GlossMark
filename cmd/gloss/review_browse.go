@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mckalvan/glossmark/internal/browse"
+	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/review"
 )
 
@@ -81,6 +82,11 @@ func printNode(w io.Writer, n *browse.Node) {
 				r := nb.Ref
 				if nb.Proposed {
 					r += "?"
+				}
+				if nb.Source == graph.SourceManifest {
+					r += " [manifest " + nb.From + "]"
+				} else if nb.Source == graph.SourceInferred {
+					r += " [inferred]"
 				}
 				refs = append(refs, r)
 			}

@@ -485,10 +485,14 @@ func conceptsForPath(ws *load.Workspace, g *graph.Graph, path string) map[string
 			continue
 		}
 		for _, e := range g.Out(a.ID, "") {
-			if e.Source != graph.SourceInline || e.Prov == nil {
+			if !graph.LinkSource(e.Source) || e.Prov == nil {
 				continue
 			}
-			links = append(links, map[string]any{"relation": e.P, "target": g.Curie(e.O), "line": e.Prov.Line, "symbol": e.Prov.Symbol, "proposed": e.Prov.Proposed, "marker_id": e.Prov.ID})
+			l := map[string]any{"relation": e.P, "target": g.Curie(e.O), "line": e.Prov.Line, "symbol": e.Prov.Symbol, "proposed": e.Prov.Proposed, "marker_id": e.Prov.ID, "source": e.Source}
+			if e.Prov.From != "" {
+				l["from"] = e.Prov.From
+			}
+			links = append(links, l)
 		}
 	}
 	out["links"] = links

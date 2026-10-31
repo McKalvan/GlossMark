@@ -1,9 +1,9 @@
-// @gloss implements gmi:Extractor scope=file
+// @gloss implements gmi:Extractor, gmi:LinkMapper scope=file
 // @gloss produces gm:Graph scope=file
 
-// Package extract is pass 1 of the extractor: ontology files, manifests and
-// inline markers become nodes and edges of the canonical graph. Derived edges
-// are added afterwards by the rollup package.
+// Package extract is pass 1 of the extractor: ontology files, manifests,
+// inline markers and manifest links become nodes and edges of the canonical
+// graph. Derived edges are added afterwards by the rollup package.
 package extract
 
 import (
@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/mckalvan/glossmark/internal/graph"
@@ -29,7 +30,8 @@ import (
 type Result struct {
 	Graph *graph.Graph
 	Diags []marker.Diagnostic
-	// Markers lists every marker found, in file order, with its edge.
+	// Markers lists every marker found, in file order, with its edge, then
+	// every link a manifest's links: entries map (ADR 0045).
 	Markers []FoundMarker
 	// ScannedFiles is the number of files read.
 	ScannedFiles int
@@ -45,6 +47,27 @@ type FoundMarker struct {
 	// entry moves instead of being orphaned: a JSON-sidecar range before #116.
 	LegacyID string
 	Edges    []*graph.Edge
+	// Source is "" for an inline marker, which is written at
+	// Path:Marker.Line, or graph.SourceManifest for a link a links: entry
+	// maps, which is written at From:FromLine and spans to FromEnd; Path
+	// and Marker.Line then name the code it anchors to.
+	Source   string
+	From     string
+	FromLine int
+	FromEnd  int
+}
+
+// Mapped reports a link a manifest's links: entry maps, as opposed to an
+// inline marker.
+func (fm FoundMarker) Mapped() bool { return fm.Source == graph.SourceManifest }
+
+// Stated returns the file and line where the link is written: the marker
+// line, or the links: entry in the manifest.
+func (fm FoundMarker) Stated() (string, int) {
+	if fm.Mapped() {
+		return fm.From, fm.FromLine
+	}
+	return fm.Path, fm.Marker.Line
 }
 
 // Build runs pass 1 over a loaded workspace.
@@ -61,6 +84,9 @@ func Build(ws *load.Workspace) (*Result, error) {
 	if err := ex.files(); err != nil {
 		return nil, err
 	}
+	if err := ex.mappings(); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 
@@ -71,6 +97,9 @@ type extractor struct {
 	ids map[string]string // marker id → path:line of its first marker
 	// bindings are the lines each published value is bound to.
 	bindings map[*graph.Node][]valueBinding
+	// inline records the relations inline markers state on each artifact
+	// (artifact IRI → relation set), which a mapped link does not restate.
+	inline map[string]map[string]bool
 }
 
 func (ex *extractor) diag(path string, line int, sev, code, msg string) {
@@ -418,22 +447,7 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.A
 		ex.diag(rel, mk.Line, "warning", "GM122", "scope=symbol requested but no declaration was detected after the marker; anchored to the next block")
 	}
 	// Artifact node.
-	aid := graph.ArtifactPrefix + target
-	label := target
-	kind := "file"
-	if anchor.Scope == "symbol" && anchor.Symbol != "" {
-		aid += "#" + anchor.Symbol
-		label = target + ":" + anchor.Symbol
-		kind = anchor.Kind
-	} else if anchor.Scope == "range" && anchor.Kind == "json-pointer" {
-		aid += "#" + anchor.Symbol
-		label = target + ":" + anchor.Symbol
-		kind = anchor.Scope
-	} else if anchor.Scope == "block" || anchor.Scope == "line" || anchor.Scope == "range" {
-		aid += fmt.Sprintf("#L%d", anchor.StartLine)
-		label = fmt.Sprintf("%s:%d", target, anchor.StartLine)
-		kind = anchor.Scope
-	}
+	aid, label, kind := artifactID(target, anchor)
 	a := anchor
 	art := ex.g.AddNode(&graph.Node{NodeType: model.NodeArtifact, ID: aid, Kind: kind, Label: label, Path: target, Anchor: &a, Boundary: boundary, File: rel, Line: mk.Line})
 	if art.Boundary == "" {
@@ -459,10 +473,14 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.A
 	}
 	// An alias is stored as its canonical relation, so a query for verifies
 	// finds every test link; the written form stays in prov.alias.
-	pred, alias := mk.Relation, ""
-	if pred == "tests" {
-		pred, alias = "verifies", "tests"
+	pred, alias := canonical(mk.Relation)
+	if ex.inline == nil {
+		ex.inline = map[string]map[string]bool{}
 	}
+	if ex.inline[aid] == nil {
+		ex.inline[aid] = map[string]bool{}
+	}
+	ex.inline[aid][pred] = true
 	for _, t := range mk.Targets {
 		oiri, raw := ex.resolveTarget(t, m, rel, mk.Line)
 		prov := &graph.Prov{Path: rel, Line: mk.Line, Col: mk.Col, Scope: anchor.Scope, Symbol: anchor.Symbol, Fingerprint: anchor.Fingerprint,
@@ -485,6 +503,200 @@ func (ex *extractor) marker(rel, target string, fd marker.Found, anchor marker.A
 		}
 	}
 	ex.res.Markers = append(ex.res.Markers, fm)
+}
+
+// artifactID names the artifact an anchor binds: the file, or the file
+// plus the symbol, pointer or first line it anchors inside it.
+func artifactID(target string, anchor marker.Anchor) (aid, label, kind string) {
+	aid, label, kind = graph.ArtifactPrefix+target, target, "file"
+	switch {
+	case anchor.Scope == "symbol" && anchor.Symbol != "":
+		aid += "#" + anchor.Symbol
+		label = target + ":" + anchor.Symbol
+		kind = anchor.Kind
+	case anchor.Scope == "range" && anchor.Kind == "json-pointer":
+		aid += "#" + anchor.Symbol
+		label = target + ":" + anchor.Symbol
+		kind = anchor.Scope
+	case anchor.Scope == "block" || anchor.Scope == "line" || anchor.Scope == "range":
+		aid += fmt.Sprintf("#L%d", anchor.StartLine)
+		label = fmt.Sprintf("%s:%d", target, anchor.StartLine)
+		kind = anchor.Scope
+	}
+	return aid, label, kind
+}
+
+// canonical returns the relation an alias is stored as, and the alias: a
+// query for verifies finds every test link, and the written form stays in
+// prov.alias.
+func canonical(relation string) (pred, alias string) {
+	if relation == "tests" {
+		return "verifies", "tests"
+	}
+	return relation, ""
+}
+
+// mappings runs every links: entry of the manifests, then of glossmark.yaml,
+// after the inline markers, so a marker on an artifact overrides a mapping
+// of the same relation onto it (ADR 0045).
+func (ex *extractor) mappings() error {
+	for _, m := range ex.ws.Manifests {
+		for _, l := range m.Links {
+			if err := ex.mapping(m.Path, m.Dir, l, m); err != nil {
+				return err
+			}
+		}
+	}
+	for _, l := range ex.ws.Config.Links {
+		if err := ex.mapping(load.ConfigName, "", l, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// mapping links the files beneath dir that a links: entry names: every
+// scanned file the path glob matches at file scope, or, with symbol:, the
+// declaration of that name in each of them, anchored as a marker above it
+// would be. m is the manifest holding the entry (nil for glossmark.yaml).
+func (ex *extractor) mapping(file, dir string, l *model.Link, m *model.Manifest) error {
+	if l == nil {
+		ex.diag(file, 1, "error", "GM125", "links: entry is empty; write { path: \"<glob>\", <relation>: <concept> } or { symbol: \"<name>\", <relation>: <concept> }")
+		return nil
+	}
+	rels := l.RelationNames()
+	switch {
+	case l.Path == "" && l.Symbol == "":
+		ex.diag(file, l.Line, "error", "GM125", "links: entry names neither path: (a glob over the files beneath this directory) nor symbol: (a declaration name)")
+		return nil
+	case len(rels) == 0:
+		ex.diag(file, l.Line, "error", "GM125", fmt.Sprintf("links: entry for %s names no relation; add the relation a marker would carry (implements: ns:Concept, verifies: ..., represents: ...)", l.Where()))
+		return nil
+	case l.Conf != nil && (*l.Conf < 0 || *l.Conf > 1):
+		ex.diag(file, l.Line, "error", "GM125", fmt.Sprintf("links: entry for %s: conf must be between 0 and 1, got %v", l.Where(), *l.Conf))
+		return nil
+	}
+	for _, rel := range rels {
+		if len(l.Relations[rel]) == 0 {
+			ex.diag(file, l.Line, "error", "GM125", fmt.Sprintf("links: entry for %s: %s names no concept", l.Where(), rel))
+			return nil
+		}
+	}
+	matched, files := 0, 0
+	for _, f := range ex.ws.Files {
+		if marker.IsSidecar(f) || (dir != "" && !strings.HasPrefix(f, dir+"/")) {
+			continue
+		}
+		sub := f
+		if dir != "" {
+			sub = strings.TrimPrefix(f, dir+"/")
+		}
+		if l.Path != "" && !model.MatchGlob(l.Path, sub) {
+			continue
+		}
+		files++
+		b, err := os.ReadFile(ex.ws.Abs(f))
+		if err != nil {
+			return err
+		}
+		lines := strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
+		if l.Symbol == "" {
+			ex.mapped(file, l, f, marker.FileAnchor(lines), lines, m)
+			matched++
+			continue
+		}
+		style, _ := marker.StyleFor(f, ex.ws.Config.CommentStyles)
+		var anchors []marker.Anchor
+		for _, d := range marker.Declarations(f, lines, style) {
+			if d.Symbol == l.Symbol || (d.Parent != "" && d.Parent+"."+d.Symbol == l.Symbol) {
+				anchors = append(anchors, d.Anchor(lines))
+			}
+		}
+		// Same-named declarations in one file must not share an artifact.
+		marker.Disambiguate(f, lines, anchors)
+		for _, a := range anchors {
+			ex.mapped(file, l, f, a, lines, m)
+			matched++
+		}
+	}
+	where := "the repository"
+	if dir != "" {
+		where = dir + "/"
+	}
+	switch {
+	case matched > 0:
+	case files == 0 && l.Path != "":
+		ex.diag(file, l.Line, "warning", "GM126", fmt.Sprintf("links: %s matches no scanned file beneath %s (globs are relative to this directory; a file in a language without a comment style is not scanned)", l.Where(), where))
+	case files == 0:
+		ex.diag(file, l.Line, "warning", "GM126", fmt.Sprintf("links: %s: no scanned file beneath %s to look in", l.Where(), where))
+	default:
+		ex.diag(file, l.Line, "warning", "GM126", fmt.Sprintf("links: %s is declared in none of the %d files it covers beneath %s (the name a marker's anchor would record: a Go method is Type.Method, a resource resource.type.name)", l.Where(), files, where))
+	}
+	return nil
+}
+
+// mapped adds one mapped link: the artifact the anchor names in target, and
+// an edge per relation and concept of the links: entry, with the entry's
+// location in prov.from. A relation an inline marker already states on the
+// artifact is left to the marker, and a mapping that repeats another one's
+// link (two overlapping globs) adds nothing.
+func (ex *extractor) mapped(file string, l *model.Link, target string, anchor marker.Anchor, lines []string, m *model.Manifest) {
+	bm := ex.ws.ManifestFor(target)
+	boundary := ""
+	if bm != nil {
+		boundary = ex.boundaryIRI(bm.Boundary, bm.Path, 1)
+	}
+	if m == nil {
+		m = bm // .Local in glossmark.yaml resolves in the file's own boundary
+	}
+	aid, label, kind := artifactID(target, anchor)
+	a := anchor
+	art := ex.g.AddNode(&graph.Node{NodeType: model.NodeArtifact, ID: aid, Kind: kind, Label: label, Path: target, Anchor: &a, Boundary: boundary, File: target, Line: anchor.StartLine})
+	if art.Boundary == "" {
+		art.Boundary = boundary
+	}
+	from := fmt.Sprintf("%s:%d", file, l.Line)
+	for _, rel := range l.RelationNames() {
+		targets := []string(l.Relations[rel])
+		pred, alias := canonical(rel)
+		if ex.inline[aid][pred] {
+			continue
+		}
+		id := MarkerID(target, rel, targets, anchor.Symbol, anchor.Scope)
+		if _, dup := ex.ids[id]; dup {
+			continue
+		}
+		if ex.ids == nil {
+			ex.ids = map[string]string{}
+		}
+		ex.ids[id] = from
+		mk := &marker.Marker{Relation: rel, Targets: targets, Proposed: l.Proposed, Keys: map[string]string{}, Line: anchor.StartLine,
+			Raw: fmt.Sprintf("%s: %s", rel, strings.Join(targets, ", "))}
+		if l.Conf != nil {
+			mk.Keys["conf"] = strconv.FormatFloat(*l.Conf, 'g', -1, 64)
+		}
+		if l.Note != "" {
+			mk.Keys["note"] = l.Note
+		}
+		fm := FoundMarker{Path: target, Marker: mk, Anchor: anchor, ID: id, Source: graph.SourceManifest, From: file, FromLine: l.Line, FromEnd: l.EndLine}
+		for _, t := range targets {
+			oiri, raw := ex.resolveTarget(t, m, file, l.Line)
+			prov := &graph.Prov{Path: target, Line: anchor.StartLine, Scope: anchor.Scope, Symbol: anchor.Symbol, Fingerprint: anchor.Fingerprint,
+				Proposed: l.Proposed, ID: id, Note: l.Note, Raw: raw, Alias: alias, From: from, Conf: l.Conf}
+			e := &graph.Edge{S: aid, P: pred, O: oiri, Source: graph.SourceManifest, Prov: prov}
+			ex.g.AddEdge(e)
+			if rel == "publishes-value" {
+				if cn := ex.g.Node(oiri); cn != nil && cn.NodeType == model.NodeConcept && anchor.StartLine > 0 && anchor.StartLine <= len(lines) {
+					ex.addBinding(cn, fmt.Sprintf("%s:%d", target, anchor.StartLine), strings.TrimSpace(lines[anchor.StartLine-1]))
+				}
+			}
+			fm.Edges = append(fm.Edges, e)
+			if (rel == "implements" || rel == "represents") && ex.ws.IsTestPath(target) {
+				ex.g.AddEdge(&graph.Edge{S: aid, P: "verifies", O: oiri, Source: graph.SourceInferred, Prov: &graph.Prov{Path: target, Line: anchor.StartLine, Rule: "test-path", ID: id, Proposed: l.Proposed, From: from}})
+			}
+		}
+		ex.res.Markers = append(ex.res.Markers, fm)
+	}
 }
 
 // resolveTarget maps a marker target to an IRI: .Local via the manifest's

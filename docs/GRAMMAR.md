@@ -113,6 +113,8 @@ Severities are `error`, `warning` and `hint`. Errors fail `gloss check`, warning
 | GM006 | conf outside [0,1] |
 | GM007 | glob target on a relation other than may-modify |
 | GM12x | target resolution (no default-namespace for `.Local`, sidecar target missing, symbol not detected, JSON Pointer not resolved) |
+| GM125 | a `links:` entry in a manifest or `glossmark.yaml` names neither `path` nor `symbol`, no relation, a relation with no concept, or a `conf` outside [0,1] ([ADR 0045](adr/0045-manifest-links.md)) |
+| GM126 | a `links:` entry matches no scanned file beneath its directory (globs are relative to the directory of the file that holds the entry), or names a symbol no declaration in those files has (the name the anchor would record: `Type.Method` for a Go method, `resource.type.name` for a Terraform resource) |
 | GM117 | a file contains a marker but its type has no comment style, so it is not scanned: add it under `comment-styles:` (JSON takes a sidecar) |
 | GM118 | unknown key in `views.yaml` (at the top or in a view); the rest of the file still applies |
 | GM119 | a file in a scanned language is not scanned: a symlink out of the repository, not a regular file (a FIFO, a device), unreadable, or larger than 4 MiB |
