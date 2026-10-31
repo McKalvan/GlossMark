@@ -23,6 +23,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/ledger"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
+	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/internal/version"
 )
@@ -74,7 +75,39 @@ func Run(ws *load.Workspace, g *graph.Graph, diags []marker.Diagnostic, env Env)
 	d.docs()
 	d.waivers()
 	d.autoAccept()
+	d.adoption()
 	return d.out
+}
+
+// adoption reports the rung of the adoption ladder in force (adoption: in
+// glossmark.yaml, level 3 when unset), the rung the tree has reached, and
+// what the next rung asks for and gives (docs/QUICKSTART.md, issue #258).
+// It never fails: a mismatch between the two is an Info with the line that
+// fixes it.
+func (d *doctor) adoption() {
+	cfg := d.ws.Config
+	level := cfg.AdoptionLevel()
+	obs := rollup.ObservedAdoption(d.ws, d.g)
+	in := model.AdoptionName(level)
+	if !cfg.AdoptionSet() {
+		in += ", adoption: unset"
+	}
+	msg := fmt.Sprintf("%s fails on %s. Written: %s (%s)", in, model.AdoptionLevels[level].Enforces, model.AdoptionName(obs.Level), obs.Has[obs.Level])
+	if obs.Level < model.AdoptionFull {
+		next := model.AdoptionLevels[obs.Level+1]
+		msg += fmt.Sprintf(". Next, level %d (%s): write %s; you get %s", next.Level, next.Name, next.Write, next.Get)
+		if m := obs.Missing[obs.Level+1]; m != "" {
+			msg += " (" + m + ")"
+		}
+	}
+	switch {
+	case obs.Level < level:
+		d.add("adoption", Info, msg, fmt.Sprintf("set adoption: %d in %s so that only what is written is enforced, or write what level %d asks for", obs.Level, load.ConfigName, obs.Level+1))
+	case obs.Level > level:
+		d.add("adoption", Info, msg, fmt.Sprintf("the tree already has what level %d asks for: raise adoption: in %s to %d to enforce it", obs.Level, load.ConfigName, obs.Level))
+	default:
+		d.add("adoption", OK, msg, "")
+	}
 }
 
 // autoAccept reports the auto-accept rule in force: the conf threshold,

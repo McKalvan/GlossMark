@@ -12,7 +12,27 @@ gloss version                                                                   
 
 Pin a release everywhere the tool runs (`@v0.3.0`, never `@latest` or `@main`): binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/mckalvan/glossmark/releases), and `go install ...@v0.3.0` reports the same version. See [VERSIONING.md](VERSIONING.md).
 
+## The adoption ladder
+
+GlossMark is not all-or-nothing. Each rung below pays off on its own, and a repository can stop at any of them for as long as it likes; the sections after this one are the rungs in order, each marked with its level. `adoption:` in `glossmark.yaml` names the rung you are on and sets how hard `gloss check`, `gloss drift` and `gloss diff` bite, so a repository that has only written a glossary is not failed for the manifests it has not written yet ([ADR 0044](adr/0044-staged-adoption-levels.md)). Unset means level 3: an existing repository changes nothing by upgrading.
+
+| Level | What you write | What you get | What fails |
+|---|---|---|---|
+| 0 | `glossmark.yaml` and the core glossary (sections 0 to 3) | Agents get the vocabulary over MCP, `gloss context` and `AGENTS.md`; `gloss check` and `gloss drift` report | Nothing: every command exits 0 |
+| 1 | One manifest per service and `scope=file` links in its entry points (section 4, and the `scope=file` form in section 5) | Drift per boundary (violations, gaps) as a warning; the viewer draws the map; the briefing knows which boundary an agent is in | `gloss check` errors (a reference to a concept that does not exist); drift and the PR gate report only |
+| 2 | `criticality:` on the concepts and boundaries that matter ([GOVERNANCE.md](GOVERNANCE.md)) | The PR gate and drift turned on where a mistake is an incident; everything else stays advisory | Drift findings and HARD changes on critical or high concepts |
+| 3 | Markers on individual declarations, `value-from` bindings, imports of sibling repositories (section 5 in full, [ADVANCED.md](ADVANCED.md)) | Full coverage numbers, published values watched for drift, the cross-repository seam | Everything `--fail-on` names: today's behaviour |
+
+```yaml
+# glossmark.yaml
+adoption: 1   # manifests and file-level links are written; drift warns, nothing gates yet
+```
+
+`gloss doctor` reports the level in force, the rung the tree has actually reached (read from what is written: concepts, manifests and links, declared criticality, markers on declarations) and what the next rung asks for and gives; when the two differ it says which line to change. A command that the level kept from failing says so on stderr (`gloss drift: adoption level 1 (manifests): 3 finding(s) would fail (fail-on: ...), reported only; set adoption: 2 in glossmark.yaml for ...`), and the report itself is the same at every level: the level changes the exit code, never what is shown. `--fail-on` still chooses which kinds or gate class count; the level caps how hard they bite, so the GitHub Action needs no change. `gloss check --strict` fails on errors at every level.
+
 ## 0. Scaffold
+
+*Level 0.*
 
 ```sh
 gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per deployable directory, then hook and build
@@ -33,6 +53,8 @@ Try it on a branch: everything `init` writes is in the plan and in your commit, 
 
 ## 1. Declare the namespaces
 
+*Level 0.*
+
 `glossmark.yaml` at the repo root:
 
 ```yaml
@@ -44,6 +66,8 @@ prefixes:
 ```
 
 ## 2. Write the core in words the business recognises
+
+*Level 0. With this written, `gloss agents`, `gloss context` and the MCP server already serve the vocabulary; nothing fails yet.*
 
 `ontology/lib.gloss.yaml`:
 
@@ -71,6 +95,8 @@ Imports are re-runnable: new terms are appended, and everything else in the file
 
 ## 3. Write the implementation that realizes it
 
+*Level 0.*
+
 `ontology/circ.gloss.yaml`:
 
 ```yaml
@@ -81,6 +107,8 @@ concepts:
 ```
 
 ## 4. Put a manifest on each service directory
+
+*Level 1. One manifest per service plus a `scope=file` link in each entry point (next section) is enough for `gloss drift` to compare what each boundary declares with what its code does, and for `gloss view` to draw the map. At `adoption: 1` the findings are advisory.*
 
 `services/circulation/.gloss.yaml`:
 
@@ -94,6 +122,10 @@ default-namespace: circ
 ```
 
 ## 5. Mark the code
+
+*Level 1 needs only the `scope=file` form: one marker at the top of each entry point (a handler module, a schema, a migration), which says what the file is about and lets drift and the viewer place it. Level 3 is the rest of this section: markers on individual declarations, `value-from` bindings for published values and imports of sibling repositories.*
+
+*Level 2 sits between them and is one attribute, not more markers: `criticality: high` or `critical` on the few concepts and boundaries where a mistake is an incident ([GOVERNANCE.md](GOVERNANCE.md); `gloss criticality suggest` drafts them). At `adoption: 2` the PR gate and drift fail for those only.*
 
 Five relations cover almost every marker; learn these and ignore the rest until you need them ([MARKING.md](MARKING.md) says when to mark, [ADVANCED.md](ADVANCED.md) has everything else). `gloss init` wrote `relations: starter` into `glossmark.yaml`, so `gloss check` hints when a marker uses one of the rest; `relations: full` unlocks them ([ADVANCED.md](ADVANCED.md#relation-profiles)):
 

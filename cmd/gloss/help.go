@@ -49,6 +49,7 @@ var help = map[string]helpEntry{
 		docs: "docs/QUICKSTART.md#0-scaffold"},
 	"doctor": {line: "check the setup end to end; one line per check with its fix",
 		usage:    []string{"doctor [--format text|json]"},
+		more:     "The last line is the adoption level in force (adoption: in glossmark.yaml), the rung the tree has reached and what the next one adds (docs/QUICKSTART.md).",
 		examples: []string{"gloss doctor", "gloss doctor --format json"},
 		docs:     "docs/QUICKSTART.md#6-run-the-tooling"},
 	"strip": {line: "leave: export the graph, then remove every marker and file",
@@ -64,7 +65,7 @@ var help = map[string]helpEntry{
 	// Daily
 	"check": {line: "lint markers, manifests and ontologies",
 		usage: []string{"check [--strict]", "check --explain [--format text|json]"},
-		more:  "Errors fail the command; warnings fail it only with --strict. Run it before gloss build; the pre-commit hook runs both.",
+		more:  "Errors fail the command; warnings fail it only with --strict. At adoption level 0 (adoption: 0 in glossmark.yaml) errors are reported and nothing fails. Run it before gloss build; the pre-commit hook runs both.",
 		examples: []string{
 			"gloss check  # before a commit",
 			"gloss check --strict  # in CI: warnings fail too",
@@ -80,7 +81,7 @@ var help = map[string]helpEntry{
 		docs: "docs/GRAPH.md"},
 	"drift": {line: "compare declared boundaries with what the code does",
 		usage: []string{"drift [--format text|json|markdown] [--fail-on kinds] [--ids]"},
-		more:  "Violations (code outside what a manifest declares) and gaps (declared, never reached) fail by default; orphans, rogues and stale links are reported. Waive a finding under policy.waivers by its id (--ids).",
+		more:  "Violations (code outside what a manifest declares) and gaps (declared, never reached) fail by default; orphans, rogues and stale links are reported. Waive a finding under policy.waivers by its id (--ids). The adoption level caps what fails: below adoption: 2 the report is advisory, at 2 only findings on critical or high concepts fail.",
 		examples: []string{
 			"gloss drift  # the report; non-zero exit on a failing kind",
 			"gloss drift --fail-on violation  # fail only on violations",
@@ -113,7 +114,7 @@ var help = map[string]helpEntry{
 	// Pull requests
 	"diff": {line: "gate a change against a base: AUTO/SOFT/HARD per change",
 		usage: []string{"diff [--base ref] [--format text|markdown|json] [--fail-on class]"},
-		more:  "AUTO changes need no review, SOFT ones a reviewer's glance and HARD ones a decision; HARD fails the command by default. --format markdown is the PR comment.",
+		more:  "AUTO changes need no review, SOFT ones a reviewer's glance and HARD ones a decision; HARD fails the command by default. The adoption level caps what fails: below adoption: 2 the gate is advisory, at 2 only changes on critical or high concepts count. --format markdown is the PR comment.",
 		examples: []string{
 			"gloss diff  # against origin/main",
 			"gloss diff --base main --format markdown -o comment.md",

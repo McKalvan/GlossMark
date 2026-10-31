@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.6.0
+version: 1.7.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -80,6 +80,10 @@ concepts:
   VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
   AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark, derive-ontology and review-glossmark Claude Code skills, shipped in the binary." }
   Stripper:           { kind: process, internal: true, doc: "gloss strip, the reverse of gloss init: a final export of the graph, ledger and ontology, then every marker, manifest and tool file removed from the tree, so a trial leaves no trace." }
+  AdoptionLadder:
+    kind: constraint
+    internal: true
+    doc: "The staged adoption levels (ADR 0044, #258): adoption: in glossmark.yaml names the rung a repository has reached (0 vocabulary, 1 manifests, 2 criticality, 3 full) and caps what gloss check, drift and diff fail; gloss doctor reads the rung the tree has reached and names what the next one adds."
   # Ontology-first increments, phase P2 (ADR 0034, #200): curated before it is built.
   IncrementCurator:
     kind: process
