@@ -3,6 +3,16 @@
 
 [MARKING.md](MARKING.md) covers `implements`, `represents`, `verifies`, `documents`, `instructs` and `scope=file`, which is most of what a repository writes. This page is the rest, for when a marker needs it.
 
+## Relation profiles
+
+A repository picks how much of the vocabulary it shows with `relations:` in `glossmark.yaml` ([ADR 0042](adr/0042-relation-profiles.md)). `gloss init` writes `relations: starter`: `implements`, `represents`, `verifies`, `documents`, `produces`, `consumes`, `part-of` and, in ontology files, `is-a` (plus `realizes`, `replaced-by` and `published-as`, which the tier seam itself asks for, and `owns`, `same-as` and `derived-from`, which the tool writes from CODEOWNERS or an import). Under `starter`, the AGENTS.md snippet and the MCP server list only those, and `gloss check` hints at any other relation it finds in a marker, a manifest or an ontology file:
+
+```
+web/page.py:3: hint: presents is outside the starter relation profile (implements, represents, verifies, documents, produces, consumes, part-of, is-a); set relations: full in glossmark.yaml to use it, or write one of the starter relations [GM250]
+```
+
+A hint is not a warning: `gloss check --strict` ignores it, the edge is built as written, and `gloss build`, `gloss drift` and the gate behave the same under either profile. Set `relations: full` when the repository needs a page (`presents`), a shell (`hosts`), configuration or IaC (`configures`, `provisions`, `deploys`), events (`publishes`, `subscribes`), a rule (`constrains`, `guards`) or the rest of the table below. A repository without the key is `full`.
+
 ## Every relation
 
 Inline relations go in `@gloss` markers (artifact → concept or boundary). Ontology relations go in `*.gloss.yaml` files (concept → concept). Manifest relations go in `.gloss.yaml` boundary files (boundary → concept or boundary). Derived relations are written by the tool, never by hand.

@@ -81,6 +81,11 @@ type Config struct {
 	Suggest *SuggestConfig `yaml:"suggest,omitempty" json:"suggest,omitempty"`
 	// History tunes gloss history (ADR 0040).
 	History *HistoryConfig `yaml:"history,omitempty" json:"history,omitempty"`
+	// Relations is the relation profile: starter (what gloss init writes;
+	// gloss check hints at any other relation, GM250, and the agent
+	// surfaces list only StarterRelations) or full. Unset means full, so
+	// the graph of an existing repository is unchanged (issue #261).
+	Relations string `yaml:"relations,omitempty" json:"relations,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
@@ -208,6 +213,15 @@ func gateRank(g string) int {
 	return -1
 }
 
+// RelationProfile returns the profile in force: relations: as written, or
+// full when unset or when there is no config at all.
+func (c *Config) RelationProfile() string {
+	if c == nil || c.Relations == "" {
+		return ProfileFull
+	}
+	return c.Relations
+}
+
 // EffectivePolicy merges the configured policy over the defaults. Its
 // SoftConfThreshold is the auto-accept rule's threshold (Config.AutoAccept).
 func (c *Config) EffectivePolicy() *Policy {
@@ -262,6 +276,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.Grammar < 0 {
 		return nil, fmt.Errorf("%s: grammar must be a positive integer", path)
+	}
+	if c.Relations != "" && c.Relations != ProfileStarter && c.Relations != ProfileFull {
+		return nil, fmt.Errorf("%s: relations must be starter or full, got %q", path, c.Relations)
 	}
 	for prefix, ns := range c.Owns {
 		if ns == nil {

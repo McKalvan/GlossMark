@@ -49,3 +49,43 @@ func TestCoverageFailUnder(t *testing.T) {
 		}
 	}
 }
+
+// TestRelationProfile (issue #261): relations: takes starter or full, unset
+// reads as full, and InlineNames under starter is the starter list without
+// the tests alias.
+//
+// @gloss verifies gmi:RelationProfile scope=symbol
+func TestRelationProfile(t *testing.T) {
+	dir := t.TempDir()
+	for rel, want := range map[string]string{"": ProfileFull, "starter": ProfileStarter, "full": ProfileFull, "advanced": "error"} {
+		cfg := "owns:\n  lib: { iri: https://x/lib/, tier: core }\n"
+		if rel != "" {
+			cfg += "relations: " + rel + "\n"
+		}
+		p := filepath.Join(dir, "glossmark.yaml")
+		os.WriteFile(p, []byte(cfg), 0o644)
+		c, err := LoadConfig(p)
+		if want == "error" {
+			if err == nil || !strings.Contains(err.Error(), "relations must be starter or full") {
+				t.Errorf("relations: %s: err = %v", rel, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("relations: %q: %v", rel, err)
+		}
+		if got := c.RelationProfile(); got != want {
+			t.Errorf("relations: %q: profile %q, want %q", rel, got, want)
+		}
+	}
+	v := NewVocabulary()
+	if got := strings.Join(v.InlineNames(ProfileStarter), " "); got != "consumes documents implements produces represents verifies" {
+		t.Errorf("starter inline names: %s", got)
+	}
+	if full := v.InlineNames(ProfileFull); len(full) <= 6 || strings.Contains(strings.Join(full, " "), "tests") {
+		t.Errorf("full inline names: %v", full)
+	}
+	if !InStarter("tests") || InStarter("presents") || !InStarter("realizes") {
+		t.Error("InStarter: tests (alias) and realizes (seam) are in, presents is out")
+	}
+}

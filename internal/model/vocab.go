@@ -152,6 +152,50 @@ var BuiltinRelations = []Relation{
 	{Name: "same-as", Domain: any_, Range: any_, Doc: "SSSOM equivalence."},
 }
 
+// Relation profiles: which part of the vocabulary a repository shows and
+// lints by (glossmark.yaml relations:, issue #261). The starter profile is
+// the handful a repository needs on day one; the full profile is every
+// relation. An unset relations: means full, so a repository written before
+// the switch existed reads as before; gloss init writes starter.
+const (
+	ProfileStarter = "starter"
+	ProfileFull    = "full"
+)
+
+// RelationProfiles are the values relations: takes.
+var RelationProfiles = []string{ProfileStarter, ProfileFull}
+
+// StarterRelations are the relations the starter profile shows and writes
+// without a hint: the six inline ones a repository writes first, part-of
+// in manifests and ontology files, and is-a in ontology files.
+var StarterRelations = []string{"implements", "represents", "verifies", "documents", "produces", "consumes", "part-of", "is-a"}
+
+// StructuralRelations belong to no profile: the tier seam itself asks for
+// the first three (GM320 wants realizes on an implementation concept, GM340
+// wants replaced-by on a deprecated one), and the rest are written by the
+// tool from CODEOWNERS, Backstage or an import, never chosen by hand, so no
+// profile hints against them.
+var StructuralRelations = []string{"realizes", "replaced-by", "published-as", "owns", "same-as", "derived-from"}
+
+// InStarter reports whether a relation is written without a hint under the
+// starter profile. tests is the accepted alias of verifies, so it is.
+func InStarter(name string) bool {
+	if name == "tests" {
+		return true
+	}
+	for _, r := range StarterRelations {
+		if r == name {
+			return true
+		}
+	}
+	for _, r := range StructuralRelations {
+		if r == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Vocabulary is the effective relation table: builtins plus ontology overrides.
 type Vocabulary struct {
 	rel map[string]*Relation
@@ -209,6 +253,24 @@ func (v *Vocabulary) Names() []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// InlineNames returns the relations an inline marker may carry under a
+// profile, sorted, without the tests alias (GM240 asks for verifies): the
+// list the AGENTS.md snippet and the MCP server show.
+func (v *Vocabulary) InlineNames(profile string) []string {
+	var out []string
+	for _, r := range v.Names() {
+		rel := v.rel[r]
+		if !rel.Inline || r == "tests" {
+			continue
+		}
+		if profile == ProfileStarter && !InStarter(r) {
+			continue
+		}
+		out = append(out, r)
+	}
 	return out
 }
 

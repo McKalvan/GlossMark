@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.2.0
+version: 1.5.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -32,6 +32,7 @@ concepts:
   # The graph and what is derived from it
   CanonicalGraph:     { kind: resource, realizes: gm:Graph, doc: "The deterministic graph.jsonl record stream (nodes, then edges, with provenance) and its JSON-LD context." }
   Linter:             { kind: process, realizes: [gm:Lint, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:AllowedList], doc: "Where the tier, seam, own-subject and allowed-list constraints are enforced." }
+  RelationProfile:    { kind: constraint, part-of: Linter, internal: true, doc: "glossmark.yaml relations: starter | full. Under starter, check hints (GM250) at a relation outside the starter set and the agent surfaces list only it; the graph is the same under either (issue #261)." }
   RollupEngine:       { kind: process, realizes: gm:Rollup, doc: "Derives boundary-level facts from code-level links: containment, realization lifted to cores, flows lifted to boundaries, implied relationships." }
   CriticalityStamper:
     kind: process
@@ -77,6 +78,7 @@ concepts:
     doc: "The default soft-conf-threshold: proposals at or above it are SOFT. Bound to DefaultPolicy by a publishes-value marker."
   VocabularyImporter: { kind: process, realizes: gm:Onboarding, doc: "gloss import: a markdown glossary or an enums file into an owned namespace, re-runnable." }
   AdoptionSkill:      { kind: process, realizes: gm:Onboarding, doc: "The adopt-glossmark, derive-ontology and review-glossmark Claude Code skills, shipped in the binary." }
+  Stripper:           { kind: process, internal: true, doc: "gloss strip, the reverse of gloss init: a final export of the graph, ledger and ontology, then every marker, manifest and tool file removed from the tree, so a trial leaves no trace." }
   # Ontology-first increments, phase P2 (ADR 0034, #200): curated before it is built.
   IncrementCurator:
     kind: process
@@ -90,3 +92,4 @@ concepts:
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed], doc: "The MCP server agents call to search concepts, ask what a path or change touches, and propose links and concepts." }
   AgentsSnippet:      { kind: process, realizes: gm:Vocabulary, doc: "The AGENTS.md vocabulary snippet and the session-start briefing." }
+  AgentIntegrations:  { kind: process, realizes: gm:Vocabulary, doc: "gloss hook install --agent: the ready-made Claude Code plugin, Cursor rule and Copilot instructions, each with its MCP config, that give an agent the briefing, the skills and the concept tools in one step; every file committed and running gloss by name." }
