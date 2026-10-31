@@ -31,7 +31,7 @@ type Result struct {
 	Graph *graph.Graph
 	Diags []marker.Diagnostic
 	// Markers lists every marker found, in file order, with its edge, then
-	// every link a manifest's links: entries map (ADR 0041).
+	// every link a manifest's links: entries map (ADR 0045).
 	Markers []FoundMarker
 	// ScannedFiles is the number of files read.
 	ScannedFiles int
@@ -538,7 +538,7 @@ func canonical(relation string) (pred, alias string) {
 
 // mappings runs every links: entry of the manifests, then of glossmark.yaml,
 // after the inline markers, so a marker on an artifact overrides a mapping
-// of the same relation onto it (ADR 0041).
+// of the same relation onto it (ADR 0045).
 func (ex *extractor) mappings() error {
 	for _, m := range ex.ws.Manifests {
 		for _, l := range m.Links {

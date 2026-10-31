@@ -81,7 +81,7 @@ type Item struct {
 	Concept  string   `json:"concept,omitempty"`
 	Boundary string   `json:"boundary,omitempty"`
 	// Source and From say where a link is written when not in the file at
-	// Path: "manifest" and the path:line of its links: entry (ADR 0041).
+	// Path: "manifest" and the path:line of its links: entry (ADR 0045).
 	Source  string  `json:"source,omitempty"`
 	From    string  `json:"from,omitempty"`
 	Summary string  `json:"summary"`

@@ -111,6 +111,13 @@ func TestDoctor(t *testing.T) {
 	git("commit", "-q", "-m", "fixed")
 	by = run("agent:claude-code", true)
 	for name, c := range by {
+		// adoption: is unset and the tree is at level 1: worth knowing, nothing to fix.
+		if name == "adoption" {
+			if c.Status != Info || !strings.Contains(c.Msg, "Written: level 1 (manifests)") {
+				t.Errorf("adoption = %+v, want info at level 1", c)
+			}
+			continue
+		}
 		if c.Status != OK {
 			t.Errorf("%s = %+v, want ok", name, c)
 		}
@@ -364,5 +371,138 @@ func TestMentionsRoot(t *testing.T) {
 		if got := mentionsRoot(text, "showcase/clinic-booking"); got != want {
 			t.Errorf("%q: %v, want %v", text, got, want)
 		}
+	}
+}
+
+// TestDoctorIntegrations (issue #267): one line per ready-made integration
+// gloss hook install --agent wrote, none for one that is not there; each
+// warns on a missing piece or an absolute path, and when no hook is in
+// .claude/settings.json the integrations stand in for it.
+func TestDoctorIntegrations(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	run := func() map[string]Check {
+		t.Helper()
+		d := &doctor{ws: &load.Workspace{Root: root}}
+		d.hook()
+		d.integrations()
+		out := map[string]Check{}
+		for _, c := range d.out {
+			out[c.Name] = c
+		}
+		return out
+	}
+	hook := func(bin string) string {
+		return `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo export GLOSS_ACTOR=agent:claude-code >> \"${CLAUDE_ENV_FILE:-/dev/null}\"; GLOSS_ACTOR=agent:claude-code ` + bin + ` context --dir \"$PWD\""}]}]}}`
+	}
+	mcp := func(key, bin, actor string) string {
+		return `{"` + key + `":{"glossmark":{"command":"` + bin + `","args":["mcp"],"env":{"GLOSS_ACTOR":"` + actor + `"}}}}`
+	}
+	// Nothing installed: the agent hook line warns, no integration lines.
+	cs := run()
+	if c := cs["agent hook"]; c.Status != Warn {
+		t.Errorf("nothing = %+v", c)
+	}
+	for _, n := range []string{"claude-code plugin", "cursor", "copilot"} {
+		if _, ok := cs[n]; ok {
+			t.Errorf("%s reported though not installed", n)
+		}
+	}
+	// The three integrations, complete and by name.
+	write(".claude/plugins/glossmark/.claude-plugin/plugin.json", `{"name":"glossmark","version":"1"}`)
+	for _, s := range skillNames {
+		write(".claude/plugins/glossmark/skills/"+s+"/SKILL.md", "---\nname: "+s+"\n---\n")
+	}
+	write(".claude/plugins/glossmark/hooks/hooks.json", hook("gloss"))
+	write(".claude/plugins/glossmark/.mcp.json", mcp("mcpServers", "gloss", "agent:claude-code"))
+	write(".claude-plugin/marketplace.json", `{"name":"repo-plugins","owner":{"name":"x"},"plugins":[{"name":"glossmark","source":"./.claude/plugins/glossmark"}]}`)
+	write(".cursor/rules/glossmark.mdc", "---\nalwaysApply: true\n---\n- run `GLOSS_ACTOR=agent:cursor gloss context --dir <dir>`\n")
+	write(".cursor/mcp.json", mcp("mcpServers", "gloss", "agent:cursor"))
+	write(".github/copilot-instructions.md", "# Rules\n\n## GlossMark\n\n- ask concepts_for_path first\n")
+	write(".vscode/mcp.json", mcp("servers", "gloss", "agent:copilot"))
+	cs = run()
+	if c := cs["agent hook"]; c.Status != OK || !strings.Contains(c.Msg, "the Claude Code plugin, the Cursor rule, the Copilot instructions installed instead") {
+		t.Errorf("stand-in = %+v", c)
+	}
+	if c := cs["claude-code plugin"]; c.Status != OK || !strings.Contains(c.Msg, "claude plugin install glossmark@repo-plugins") {
+		t.Errorf("plugin = %+v", c)
+	}
+	if c := cs["cursor"]; c.Status != OK {
+		t.Errorf("cursor = %+v", c)
+	}
+	if c := cs["copilot"]; c.Status != OK {
+		t.Errorf("copilot = %+v", c)
+	}
+	// Absolute paths, a missing skill, a missing actor and an unlisted
+	// plugin each warn with the install command as the fix.
+	write(".claude/plugins/glossmark/hooks/hooks.json", hook("/opt/gm/gloss"))
+	os.Remove(filepath.Join(root, ".claude/plugins/glossmark/skills/curate-increment/SKILL.md"))
+	write(".claude-plugin/marketplace.json", `{"name":"repo-plugins","plugins":[]}`)
+	write(".vscode/mcp.json", mcp("servers", "C:\\\\tools\\\\gloss.exe", "agent:copilot"))
+	write(".cursor/mcp.json", `{"mcpServers":{"glossmark":{"command":"gloss","args":["mcp"]}}}`)
+	cs = run()
+	c := cs["claude-code plugin"]
+	for _, want := range []string{"skills missing: curate-increment", "hooks/hooks.json runs /opt/gm/gloss", "does not list the plugin"} {
+		if c.Status != Warn || !strings.Contains(c.Msg, want) || c.Fix != "gloss hook install --agent claude-code" {
+			t.Errorf("plugin lacks %q: %+v", want, c)
+		}
+	}
+	if c := cs["copilot"]; c.Status != Warn || !strings.Contains(c.Msg, `.vscode/mcp.json runs C:\tools\gloss.exe`) || c.Fix != "gloss hook install --agent copilot" {
+		t.Errorf("copilot = %+v", c)
+	}
+	if c := cs["cursor"]; c.Status != Warn || !strings.Contains(c.Msg, "sets no GLOSS_ACTOR") || c.Fix != "gloss hook install --agent cursor" {
+		t.Errorf("cursor = %+v", c)
+	}
+}
+
+// TestDoctorAdoption (issue #258): doctor names the level in force, the
+// rung the tree has reached and what the next one adds; a mismatch is an
+// Info with the line that fixes it, never a failure.
+func TestDoctorAdoption(t *testing.T) {
+	at := func(cfg string, manifest bool) Check {
+		t.Helper()
+		root := t.TempDir()
+		write := func(rel, content string) {
+			p := filepath.Join(root, rel)
+			os.MkdirAll(filepath.Dir(p), 0o755)
+			os.WriteFile(p, []byte(content), 0o644)
+		}
+		write("glossmark.yaml", "owns:\n  z: { iri: https://x/z/, tier: core }\n"+cfg)
+		write("ontology/z.gloss.yaml", "concepts:\n  Thing: { kind: entity }\n")
+		if manifest {
+			write("svc/.gloss.yaml", "boundary: o:svc\nlevel: container\n")
+			write("svc/a.py", "# @gloss represents z:Thing scope=file\nclass T: pass\n")
+		}
+		ws, err := load.Load(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := extract.Build(ws)
+		rollup.Derive(res.Graph, ws.Vocab)
+		for _, c := range Run(ws, res.Graph, nil, Env{Actor: "agent:x", LookPath: func(string) (string, error) { return "", errors.New("none") }}) {
+			if c.Name == "adoption" {
+				return c
+			}
+		}
+		return Check{}
+	}
+	// Unset means level 3; a glossary-only tree is at 0: say so and name level 1.
+	if c := at("", false); c.Status != Info || !strings.Contains(c.Msg, "level 3 (full), adoption: unset") || !strings.Contains(c.Msg, "Written: level 0 (vocabulary)") || !strings.Contains(c.Msg, "Next, level 1 (manifests): write one .gloss.yaml manifest") || !strings.Contains(c.Fix, "set adoption: 0") {
+		t.Errorf("unset on a glossary = %+v", c)
+	}
+	// The level matches what is written.
+	if c := at("adoption: 0\n", false); c.Status != OK || !strings.Contains(c.Msg, "level 0 (vocabulary) fails on nothing") || !strings.Contains(c.Msg, "Next, level 1") {
+		t.Errorf("level 0 = %+v", c)
+	}
+	if c := at("adoption: 1\n", true); c.Status != OK || !strings.Contains(c.Msg, "Written: level 1 (manifests) (1 manifest(s), 1 link(s) from code)") || !strings.Contains(c.Msg, "Next, level 2 (criticality)") || !strings.Contains(c.Msg, "(no criticality: declared)") {
+		t.Errorf("level 1 = %+v", c)
+	}
+	// The tree has more than the level enforces: suggest raising it.
+	if c := at("adoption: 0\n", true); c.Status != Info || !strings.Contains(c.Fix, "raise adoption: in glossmark.yaml to 1") {
+		t.Errorf("level 0 with manifests = %+v", c)
 	}
 }

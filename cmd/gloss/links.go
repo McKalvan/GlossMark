@@ -11,7 +11,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/extract"
 )
 
-// A mapped link (a links: entry in a manifest or glossmark.yaml, ADR 0041)
+// A mapped link (a links: entry in a manifest or glossmark.yaml, ADR 0045)
 // is reviewed like a marker: accepting it drops proposed: true from its
 // entry, the way accepting a marker drops the ?, and reject --remove
 // deletes the entry.

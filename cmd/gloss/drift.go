@@ -62,7 +62,22 @@ func cmdDrift(args []string) int {
 		}
 	}
 	if failing := rep.Failing(kinds); len(failing) > 0 {
-		msg := "gloss drift: " + rollup.FailSummary(failing, kinds)
+		// The adoption level caps what fails: below level 2 drift reports
+		// only, at level 2 only findings on critical or high concepts fail.
+		level := p.WS.Config.AdoptionLevel()
+		enforced := rollup.FailingAtLevel(failing, p.Graph, level)
+		if len(enforced) == 0 {
+			what := fmt.Sprintf("%d finding(s) would fail (fail-on: %s), reported only", len(failing), strings.Join(kinds, ", "))
+			if model.AdoptionDriftFails(level) {
+				what = fmt.Sprintf("%d finding(s) would fail (fail-on: %s), none on a %s or critical concept, so none fails", len(failing), strings.Join(kinds, ", "), model.AdoptionMinCriticality(level))
+			}
+			fmt.Fprintln(os.Stderr, "gloss drift: "+model.AdoptionNote(level, what))
+			return 0
+		}
+		msg := "gloss drift: " + rollup.FailSummary(enforced, kinds)
+		if n := len(failing) - len(enforced); n > 0 {
+			msg += fmt.Sprintf("; %d more below %s criticality are advisory at adoption %s", n, model.AdoptionMinCriticality(level), model.AdoptionName(level))
+		}
 		if colorOn(os.Stderr) {
 			msg = "\x1b[1;31m" + msg + "\x1b[0m"
 		}

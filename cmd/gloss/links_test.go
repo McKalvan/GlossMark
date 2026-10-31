@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// A mapped link (a links: entry, ADR 0041) is reviewed like a marker:
+// A mapped link (a links: entry, ADR 0045) is reviewed like a marker:
 // status names its source, accept drops proposed: true from the entry,
 // reject --remove deletes the entry, and gloss review node says where the
 // link is written.

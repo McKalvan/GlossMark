@@ -1,0 +1,19 @@
+repo: showcase/library-legacy
+title: Export patrons with overdue items for the Friends mailing
+prompt: |
+  CIRC-2310: the Friends of the Library mail a courtesy letter each quarter to every
+  patron with an item more than 28 days overdue. Add a nightly batch job that writes
+  a CSV of those patrons (card number, name, postal address, number of overdue items)
+  to the notice archive, the way the overdue notices job works. Patron records are
+  confidential under state library-records law: no reading history, nothing beyond
+  the four columns.
+pitfalls:
+  - { kind: deprecated, concept: lib:Borrower, note: "the pre-2016 term; deprecated with replaced-by lib:Patron, and the legacy_borrowers view still exists to tempt a reader" }
+  - { kind: reuse, concept: lib:OverdueNotification, note: "the courtesy letter is an overdue notice (aliases: overdue notice, courtesy notice), not a new process" }
+  - { kind: rule, concept: lib:Patron, note: "high criticality (PII); a link to it is flagged, which is right" }
+assertions:
+  - { kind: no-link, concept: lib:Borrower, why: "new code says patron" }
+  - { kind: forbidden-terms, terms: [Borrower, Member, Cardholder], paths: ["batch/**"], why: "the glossary term is patron; the others are aliases staff use, not names for code" }
+  - { kind: link, concept: lib:OverdueNotification, under: batch, why: "the job is one more overdue notice" }
+  - { kind: no-new-concept, allow: [lib:CourtesyLetter], why: "overdue notification exists; a courtesy letter proposed under it is acceptable, anything else is a duplicate" }
+  - { kind: no-new-finding, boundary: libb:batch, why: "the batch manifest declares what the job does" }

@@ -14,7 +14,7 @@ import (
 )
 
 // linksTree writes a workspace whose booking manifest maps paths and
-// symbols to concepts (ADR 0041) and returns the extractor's result.
+// symbols to concepts (ADR 0045) and returns the extractor's result.
 func linksTree(t *testing.T, files map[string]string) *Result {
 	t.Helper()
 	root := t.TempDir()

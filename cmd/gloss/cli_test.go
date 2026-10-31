@@ -1,3 +1,5 @@
+// @gloss verifies gmi:AgentIntegrations scope=file
+
 package main
 
 import (
@@ -485,7 +487,7 @@ func TestHookInstallCursor(t *testing.T) {
 }
 
 // Before gloss init, --skill --cursor installs the skills and the rule that
-// points Cursor at them; --cursor alone has nothing to register.
+// points Cursor at them, and so does --agent cursor on its own.
 func TestHookInstallCursorBeforeInit(t *testing.T) {
 	root := t.TempDir()
 	if code, out := gloss(t, "hook", "install", "--skill", "--cursor", "--root", root); code != 0 {
@@ -497,8 +499,95 @@ func TestHookInstallCursorBeforeInit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".cursor", "mcp.json")); err == nil {
 		t.Errorf("an MCP server was registered without a workspace")
 	}
-	if code, _ := gloss(t, "hook", "install", "--cursor", "--root", t.TempDir()); code == 0 {
-		t.Errorf("hook install --cursor without a workspace succeeded")
+	// --agent cursor alone before init installs the skills the rule points
+	// at (issue #267); plain hook install still has nothing to register.
+	root2 := t.TempDir()
+	if code, out := gloss(t, "hook", "install", "--agent", "cursor", "--root", root2); code != 0 || !strings.Contains(out, "only the skills, the Cursor rule were installed") {
+		t.Errorf("--agent cursor before init: %d\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root2, ".claude", "skills", "derive-ontology", "SKILL.md")); err != nil {
+		t.Errorf("--agent cursor before init did not install the skills: %v", err)
+	}
+	if code, _ := gloss(t, "hook", "install", "--root", t.TempDir()); code == 0 {
+		t.Errorf("hook install without a workspace succeeded")
+	}
+}
+
+// Issue #267: --agent writes a ready-made integration per agent, every
+// file running gloss by name. claude-code is a plugin (manifest, the four
+// skills, SessionStart hook, MCP server) listed in a marketplace file;
+// copilot is a section in the Copilot instructions plus VS Code's MCP
+// file; the Cursor rule and the Copilot section carry the vocabulary. A
+// rerun rewrites what gloss owns and keeps the rest.
+func TestHookInstallAgents(t *testing.T) {
+	root := tiny(t, nil)
+	os.MkdirAll(filepath.Join(root, ".github"), 0o755)
+	os.WriteFile(filepath.Join(root, ".github", "copilot-instructions.md"), []byte("# Team rules\n\nBe brief.\n"), 0o644)
+	code, out := gloss(t, "hook", "install", "--agent", "claude-code,copilot", "--agent", "cursor", "--root", root)
+	if code != 0 {
+		t.Fatalf("hook install --agent: exit %d\n%s", code, out)
+	}
+	read := func(rel string) string {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Errorf("%s: %v", rel, err)
+		}
+		return string(b)
+	}
+	if s := read(".claude/plugins/glossmark/.claude-plugin/plugin.json"); !strings.Contains(s, `"name": "glossmark"`) {
+		t.Errorf("plugin.json:\n%s", s)
+	}
+	for _, name := range []string{"adopt-glossmark", "derive-ontology", "review-glossmark", "curate-increment"} {
+		if s := read(".claude/plugins/glossmark/skills/" + name + "/SKILL.md"); strings.Contains(s, "<!-- @gloss") {
+			t.Errorf("plugin skill %s keeps GlossMark's own marker", name)
+		}
+	}
+	if s := read(".claude/plugins/glossmark/hooks/hooks.json"); !strings.Contains(s, "GLOSS_ACTOR=agent:claude-code gloss context") || !strings.Contains(s, `"SessionStart"`) {
+		t.Errorf("hooks.json:\n%s", s)
+	}
+	if s := read(".claude/plugins/glossmark/.mcp.json"); !strings.Contains(s, `"command": "gloss"`) || !strings.Contains(s, `"GLOSS_ACTOR": "agent:claude-code"`) {
+		t.Errorf("plugin .mcp.json:\n%s", s)
+	}
+	if s := read(".claude-plugin/marketplace.json"); !strings.Contains(s, `"source": "./.claude/plugins/glossmark"`) || !strings.Contains(s, `"name": "`+filepath.Base(root)+`-plugins"`) {
+		t.Errorf("marketplace.json:\n%s", s)
+	}
+	if !strings.Contains(out, "claude plugin install glossmark@"+filepath.Base(root)+"-plugins --scope project") {
+		t.Errorf("no install command:\n%s", out)
+	}
+	if s := read(".github/copilot-instructions.md"); !strings.HasPrefix(s, "# Team rules\n\nBe brief.\n\n<!-- glossmark: begin") || !strings.Contains(s, "concepts_for_path") || !strings.Contains(s, "GLOSS_ACTOR=agent:copilot") || !strings.Contains(s, "| `z:Doing` |") {
+		t.Errorf("copilot-instructions.md:\n%s", s)
+	}
+	if s := read(".vscode/mcp.json"); !strings.Contains(s, `"servers"`) || !strings.Contains(s, `"type": "stdio"`) || !strings.Contains(s, `"command": "gloss"`) || !strings.Contains(s, `"GLOSS_ACTOR": "agent:copilot"`) {
+		t.Errorf(".vscode/mcp.json:\n%s", s)
+	}
+	if s := read(".cursor/rules/glossmark.mdc"); !strings.Contains(s, "<!-- gloss agents: begin") || !strings.Contains(s, "| `i:Doer` |") {
+		t.Errorf("cursor rule lacks the vocabulary:\n%s", s)
+	}
+	// Every committed file names gloss by its bare name (issue #226).
+	for _, rel := range []string{".claude/plugins/glossmark/hooks/hooks.json", ".claude/plugins/glossmark/.mcp.json", ".cursor/rules/glossmark.mdc", ".cursor/mcp.json", ".github/copilot-instructions.md", ".vscode/mcp.json"} {
+		if s := read(rel); strings.Contains(s, "/gloss ") || strings.Contains(s, `/gloss"`) {
+			t.Errorf("%s names gloss by path:\n%s", rel, s)
+		}
+	}
+	// A rerun replaces the generated sections instead of adding to them.
+	if code, _ := gloss(t, "hook", "install", "--agent", "claude-code", "--agent", "copilot", "--root", root); code != 0 {
+		t.Fatalf("rerun: exit %d", code)
+	}
+	if s := read(".github/copilot-instructions.md"); strings.Count(s, "<!-- glossmark: begin") != 1 || strings.Count(s, "## GlossMark vocabulary") != 1 {
+		t.Errorf("rerun duplicated the Copilot section:\n%s", s)
+	}
+	if s := read(".claude-plugin/marketplace.json"); strings.Count(s, `"name": "glossmark"`) != 1 {
+		t.Errorf("rerun duplicated the marketplace entry:\n%s", s)
+	}
+	// doctor reports each installed integration.
+	code, out = gloss(t, "doctor", "--root", root)
+	for _, want := range []string{"✓ claude-code plugin:", "✓ cursor:", "✓ copilot:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor lacks %q:\n%s", want, out)
+		}
+	}
+	if code, out := gloss(t, "hook", "install", "--agent", "windsurf", "--root", root); code == 0 || strings.Contains(out, "written") {
+		t.Errorf("unknown agent accepted: %d\n%s", code, out)
 	}
 }
 

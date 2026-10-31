@@ -48,7 +48,7 @@ type Neighbor struct {
 	Kind   string `json:"kind,omitempty"`
 	Source string `json:"source,omitempty"` // inline | manifest | declared | derived | inferred
 	// From is where a manifest link is written (path:line of its links:
-	// entry), since Path and Line name the code it maps (ADR 0041).
+	// entry), since Path and Line name the code it maps (ADR 0045).
 	From string `json:"from,omitempty"`
 	// Proposed: the edge comes from a marker still awaiting review.
 	Proposed bool   `json:"proposed,omitempty"`

@@ -121,7 +121,7 @@
           "format": "date-time"
         },
         "source": {
-          "description": "manifest when the link is mapped by a links: entry in a manifest or glossmark.yaml (docs/adr/0041-manifest-links.md); absent for an inline marker.",
+          "description": "manifest when the link is mapped by a links: entry in a manifest or glossmark.yaml (docs/adr/0045-manifest-links.md); absent for an inline marker.",
           "type": "string",
           "enum": ["manifest"]
         },

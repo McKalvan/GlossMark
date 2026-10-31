@@ -164,6 +164,27 @@ func (s *Server) send(r response) {
 	s.out.Write([]byte("\n"))
 }
 
+// instructions is the initialize text: how to use the tools, then the
+// relations the repository's profile lets a marker carry (issue #261), so
+// an agent in a starter repository is not shown the advanced ones.
+func (s *Server) instructions() string {
+	text := "GlossMark serves the repository's code ontology. Call concepts_for_path before writing code in a directory, search_concepts to find the right concept, propose_link to get the exact @gloss? line and its gate. "
+	if ws, _, _, err := s.backend.Current(); err == nil && ws != nil {
+		text += "Relations you may use inline: " + agents.RelationGuidance(ws) + " "
+	}
+	return text + agents.ProposalSentence
+}
+
+// relationDesc is propose_link's relation description under the
+// repository's profile: the starter list in a starter repository, the three
+// first relations and an ellipsis otherwise.
+func (s *Server) relationDesc() string {
+	if ws, _, _, err := s.backend.Current(); err == nil && ws != nil && ws.Config.RelationProfile() == model.ProfileStarter {
+		return strings.Join(ws.Vocab.InlineNames(model.ProfileStarter), " | ") + " (the starter profile; relations: full in glossmark.yaml unlocks the rest)"
+	}
+	return "implements | represents | verifies | ..."
+}
+
 type tool struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
@@ -180,6 +201,10 @@ func obj(props map[string]any, required ...string) map[string]any {
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 
+// relationPlaceholder is propose_link's relation description in the static
+// table; toolList swaps in the profile's list (Server.relationDesc).
+const relationPlaceholder = "implements | represents | verifies | ..."
+
 var tools = []tool{
 	{"lookup_concept", "Return a concept (by CURIE such as lib:Book) with its kind, tier, doc, relations, realizations and the artifacts linking to it.",
 		obj(map[string]any{"curie": str("Concept CURIE, e.g. lib:Renewal")}, "curie")},
@@ -188,7 +213,7 @@ var tools = []tool{
 	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
 		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
 	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files. " + agents.ProposalSentence,
-		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str("implements | represents | verifies | ..."), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "relation", "target")},
+		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str(relationPlaceholder), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "relation", "target")},
 	{"impact_of", "Impact of a change. Pass proposals (links you intend to add) to get each link's gate; and/or pass paths (files you changed) or base (a git ref) to learn what those files touch: the concepts, whether they sit on the published seam, what constrains them, which boundaries declare them, their tests, and the other files sharing them, and the plan items (ADR 0034) the change closes or still works towards. With base, the AUTO/SOFT/HARD classification of the whole working tree is included.",
 		obj(map[string]any{"proposals": map[string]any{"type": "array", "items": obj(map[string]any{"path": str(""), "relation": str(""), "target": str(""), "conf": map[string]any{"type": "number"}, "note": str("")}, "path", "relation", "target")},
 			"paths": map[string]any{"type": "array", "items": str("Repo-relative file you changed or will change")},
@@ -211,7 +236,7 @@ func (s *Server) handle(req request) (any, *rpcError) {
 			"protocolVersion": ProtocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "glossmark", "version": s.version},
-			"instructions":    "GlossMark serves the repository's code ontology. Call concepts_for_path before writing code in a directory, search_concepts to find the right concept, propose_link to get the exact @gloss? line and its gate. " + agents.ProposalSentence,
+			"instructions":    s.instructions(),
 		}, nil
 	case "ping":
 		return map[string]any{}, nil

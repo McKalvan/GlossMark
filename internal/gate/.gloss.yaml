@@ -3,7 +3,7 @@ boundary: arch:gate
 level: component
 label: gate
 part-of: arch:lib-checking
-realizes: [gmi:Gate]
+realizes: [gmi:Gate, gmi:AdoptionLadder]
 produces: [gm:Impact]
 default-namespace: gmi
 owner: glossmark

@@ -89,7 +89,7 @@
       "$ref": "#/$defs/stringOrList"
     },
     "links": {
-      "description": "Links from code beneath this directory to concepts, written here instead of as inline markers (docs/adr/0041-manifest-links.md). Each entry maps a path glob (every scanned file it matches, at file scope) or a declaration symbol (anchored to that declaration in every file beneath the directory, or beneath path when both are given) to concepts under one or more relations. A mapped link is anchored, fingerprinted, reviewed and gated as a marker is; the graph records it with source manifest and the entry's location in prov.from. An inline marker on the same artifact overrides a mapped link of the same relation. An entry that names neither path nor symbol, or no relation, is an error (GM125); one that matches no file or declaration is a warning (GM126).",
+      "description": "Links from code beneath this directory to concepts, written here instead of as inline markers (docs/adr/0045-manifest-links.md). Each entry maps a path glob (every scanned file it matches, at file scope) or a declaration symbol (anchored to that declaration in every file beneath the directory, or beneath path when both are given) to concepts under one or more relations. A mapped link is anchored, fingerprinted, reviewed and gated as a marker is; the graph records it with source manifest and the entry's location in prov.from. An inline marker on the same artifact overrides a mapped link of the same relation. An entry that names neither path nor symbol, or no relation, is an error (GM125); one that matches no file or declaration is a warning (GM126).",
       "type": "array",
       "items": { "$ref": "#/$defs/link" }
     },

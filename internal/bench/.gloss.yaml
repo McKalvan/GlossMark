@@ -1,0 +1,8 @@
+# internal/bench/.gloss.yaml: the agent benchmark's task format and scorer.
+boundary: arch:bench
+level: component
+label: bench
+part-of: arch:lib-checking
+realizes: [gmi:AgentBenchmark]
+default-namespace: gmi
+owner: glossmark

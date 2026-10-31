@@ -1,5 +1,5 @@
 <!-- @gloss documents gmi:LinkMapper scope=file -->
-# ADR 0041: links from manifests, by path glob or symbol
+# ADR 0045: links from manifests, by path glob or symbol
 
 Status: accepted, 2026-10-28; `links:` in `.gloss.yaml` and `glossmark.yaml`, extraction, review and display built 2026-10-28. `gloss suggest` emitting mappings is not built yet.
 

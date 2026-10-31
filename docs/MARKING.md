@@ -1,7 +1,7 @@
 <!-- @gloss documents gm:Link scope=file -->
 # When to mark, and with what
 
-Five relations cover almost every marker in a real repository. Learn these first; the rest are on the [advanced page](ADVANCED.md).
+Five relations cover almost every marker in a real repository. Learn these first; the rest are on the [advanced page](ADVANCED.md). A repository `gloss init` set up starts on the starter relation profile (`relations: starter` in `glossmark.yaml`): `gloss check` hints at a relation outside `implements`, `represents`, `verifies`, `documents`, `produces`, `consumes` and `part-of` until the file says `relations: full` ([ADVANCED.md](ADVANCED.md#relation-profiles)).
 
 | Write | On | Meaning |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ Either the file is about one concept (`scope=file`, one line in the header comme
 
 ## A mapping instead of a marker
 
-When a whole directory or file is about one concept, or a team does not want `@gloss` comments in its code, the boundary manifest can say it instead ([ADR 0041](adr/0041-manifest-links.md)): `links: [{ path: "cataloging/**", implements: .CatalogIntake }]` links every scanned file under the glob at file scope, and `{ symbol: Service.cancel, implements: .CancellationHandler }` anchors to that declaration exactly as a marker above it would. The link is reviewed, fingerprinted and gated the same way, and `gloss status`, `gloss review` and the viewer show it came from the manifest. A marker in a file overrides a mapping of the same relation onto that file, so the mapping is the default and the marker the exception. Prefer markers where the code is about several concepts or the link is worth seeing next to the declaration; prefer a mapping for a coarse directory-level fact or a test glob.
+When a whole directory or file is about one concept, or a team does not want `@gloss` comments in its code, the boundary manifest can say it instead ([ADR 0045](adr/0045-manifest-links.md)): `links: [{ path: "cataloging/**", implements: .CatalogIntake }]` links every scanned file under the glob at file scope, and `{ symbol: Service.cancel, implements: .CancellationHandler }` anchors to that declaration exactly as a marker above it would. The link is reviewed, fingerprinted and gated the same way, and `gloss status`, `gloss review` and the viewer show it came from the manifest. A marker in a file overrides a mapping of the same relation onto that file, so the mapping is the default and the marker the exception. Prefer markers where the code is about several concepts or the link is worth seeing next to the declaration; prefer a mapping for a coarse directory-level fact or a test glob.
 
 ## Where the marker goes
 
