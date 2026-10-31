@@ -226,7 +226,7 @@ and `record` the ledger marker id or finding id) and `json` (the report
 itself). Without `--concept` or `--criticality` the report covers every
 constraint (an implementation constraint that stands for a core one is
 reported under it) and every `critical` concept. See
-[ADR 0041](adr/0041-compliance-report.md).
+[ADR 0043](adr/0043-compliance-report.md).
 
 ## Changing a level
 

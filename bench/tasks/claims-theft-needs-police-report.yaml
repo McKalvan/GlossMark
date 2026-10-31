@@ -1,0 +1,19 @@
+repo: showcase/claims-events
+title: Motor theft claims need a police report before the rules decide them
+prompt: |
+  CLM-902: underwriting wants every motor theft claim to carry a police report before
+  the rules may decide it. A theft claim filed without one is referred to an adjuster
+  with the reason MISSING_POLICE_REPORT; the report is one more piece of the evidence a
+  policyholder attaches. Make the change in the assessment service with tests. The
+  motor claim event already carries the incident kind and the police report number.
+pitfalls:
+  - { kind: reuse, concept: claim:LossEvidence, note: "photos, reports and receipts a policyholder attaches are LossEvidence (aliases: evidence, photos, police report); the trap is a new PoliceReport concept" }
+  - { kind: rule, concept: claim:AutoApprovalLimit, note: "the new refusal is a referral reason, not a change to the limit or its order" }
+  - { kind: boundary, concept: claimb:assessment, note: "assessment consumes claims and produces assessments; it must not start representing or producing evidence of its own" }
+assertions:
+  - { kind: no-new-concept, why: "the evidence concept exists; the police report is one kind of it" }
+  - { kind: forbidden-terms, terms: [PoliceReport, PoliceRecord, CrimeReference], why: "the business term is loss evidence; a marker or concept named after the report duplicates it" }
+  - { kind: file-matches, path: services/assessment/assessment/rules.py, pattern: "MISSING_POLICE_REPORT", why: "the ticket's referral reason" }
+  - { kind: file-matches, path: services/assessment/assessment/rules.py, pattern: "ABOVE_AUTO_APPROVE_LIMIT", why: "the limit still applies after the new check" }
+  - { kind: file-unchanged, path: services/assessment/assessment/settings.py, why: "the limit does not move" }
+  - { kind: gate, max: SOFT, why: "a rule change inside the service's remit, no published value touched" }

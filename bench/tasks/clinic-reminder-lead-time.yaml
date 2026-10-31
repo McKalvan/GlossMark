@@ -1,0 +1,17 @@
+repo: showcase/clinic-booking
+title: Send the first reminder 72 hours ahead
+prompt: |
+  LARK-612: operations want the first appointment reminder sent 72 hours before the
+  visit instead of 48, so patients outside the cancellation window still have a day to
+  cancel without it counting as late. Change the reminder worker and its tests, and
+  anything else that states the lead time. The same-day nudge does not change.
+pitfalls:
+  - { kind: published-value, concept: lark:LeadTimeSetting, note: "published as clinic:ReminderLeadTime (48h) by a publishes-value marker on REMINDER_LEAD_HOURS; changing the constant alone is value drift" }
+  - { kind: rule, concept: clinic:CancellationWindow, note: "24h is a separate published value and not part of the ticket" }
+assertions:
+  - { kind: file-matches, path: services/reminders/reminders/settings.py, pattern: "REMINDER_LEAD_HOURS\\s*=\\s*72", why: "the worker reads the lead time from its settings" }
+  - { kind: concept-value, concept: lark:LeadTimeSetting, pattern: "72", why: "the published value follows the code" }
+  - { kind: file-matches, path: services/reminders/reminders/settings.py, pattern: "SAME_DAY_NUDGE_HOURS\\s*=\\s*3", why: "the nudge did not move" }
+  - { kind: file-unchanged, path: services/booking-api/internal/booking/cancellation.go, why: "the cancellation window is a different rule" }
+  - { kind: no-new-concept, why: "a new value is not a new concept" }
+  - { kind: gate, is: HARD, why: "a published value changed: the gate must surface it" }

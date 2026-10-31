@@ -1,0 +1,20 @@
+repo: showcase/library-legacy
+title: Let patrons place holds at the self-checkout kiosks
+prompt: |
+  CIRC-2301: the Friends of the Library asked that patrons be able to place a hold on a
+  title from a self-checkout kiosk, not only at the desk. Add a PlaceHold call to the
+  kiosk API and the gateway, reusing what the desk already does: a blocked patron
+  cannot place a hold, and the hold joins the same first-come-first-served queue the
+  desk uses. Update the kiosk README.
+pitfalls:
+  - { kind: reuse, concept: lib:Hold, note: "a hold (aliases: reserve, request) is the existing entity; the trap is a kiosk-side Reservation or Request" }
+  - { kind: reuse, concept: circ:HoldQueue, note: "HoldQueue.place is the mechanism; the kiosk must not grow a second queue" }
+  - { kind: rule, concept: lib:PatronBlock, note: "a blocked patron cannot borrow or hold; the gateway must not bypass assertNotBlocked" }
+  - { kind: boundary, concept: libb:kiosk, note: "the kiosk manifest holds only lib:Loan; representing a hold in the proto widens what the boundary holds, which its manifest must say" }
+assertions:
+  - { kind: link, concept: lib:Hold, under: kiosk, why: "the kiosk's hold message is linked to the existing entity" }
+  - { kind: no-new-concept, why: "hold, hold queue and patron block all exist" }
+  - { kind: forbidden-terms, terms: [Reservation, Reserve, KioskHold, HoldRequest], why: "the glossary term is hold" }
+  - { kind: no-new-finding, boundary: libb:kiosk, why: "if the proto represents a hold, the kiosk manifest says it holds one" }
+  - { kind: file-matches, path: kiosk/gateway/src/main/java/gov/riverbend/kiosk/SelfCheckGateway.java, pattern: "(?i)placeHold", why: "the gateway serves the new call" }
+  - { kind: file-unchanged, path: src/main/java/gov/riverbend/circ/service/HoldQueue.java, why: "the queue is reused, not changed" }

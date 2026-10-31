@@ -1,0 +1,18 @@
+repo: showcase/library-legacy
+title: Extend the fine grace period to five days
+prompt: |
+  CIRC-2288: the Head of Circulation has approved extending the grace period, the days
+  after the due date during which no fine accrues, from three to five days (policy 4.2).
+  Make the change everywhere the grace period is applied so a patron sees the same
+  balance at the desk and after the nightly run, and update the fines policy document
+  and tests.
+pitfalls:
+  - { kind: rule, concept: lib:GracePeriod, note: "the rule exists twice, in FineCalculator (desk, from config) and in sp_assess_fines (nightly, hard-coded 3); both copies are linked to circ:GracePeriodRule" }
+  - { kind: rule, concept: lib:FineCap, note: "the cap and the daily rates are not part of the ticket" }
+assertions:
+  - { kind: file-matches, path: config/circulation.yaml, pattern: "grace_days:\\s*5", why: "the desk reads the grace period from config" }
+  - { kind: file-matches, path: db/procs/sp_assess_fines.sql, pattern: "grace\\s+constant\\s+integer\\s*:=\\s*5", why: "the nightly procedure has its own copy of the rule" }
+  - { kind: file-matches, path: docs/fines-policy.md, pattern: "(?i)five|5", why: "the policy document states the grace period" }
+  - { kind: file-matches, path: config/circulation.yaml, pattern: "cap_flat:\\s*20\\.00", why: "the cap did not move" }
+  - { kind: no-new-concept, why: "a new value is not a new concept" }
+  - { kind: gate, max: SOFT, why: "no published value, no ontology change" }

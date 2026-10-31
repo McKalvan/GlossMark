@@ -17,7 +17,7 @@ var helpGroups = []struct {
 	name     string
 	commands []string
 }{
-	{"Start", []string{"init", "doctor"}},
+	{"Start", []string{"init", "doctor", "strip"}},
 	{"Daily", []string{"check", "build", "drift", "coverage", "review", "view"}},
 	{"Pull requests", []string{"diff", "impact", "accept", "reject", "status"}},
 	{"Agents", []string{"hook", "context", "mcp", "agents"}},
@@ -51,6 +51,15 @@ var help = map[string]helpEntry{
 		usage:    []string{"doctor [--format text|json]"},
 		examples: []string{"gloss doctor", "gloss doctor --format json"},
 		docs:     "docs/QUICKSTART.md#6-run-the-tooling"},
+	"strip": {line: "leave: export the graph, then remove every marker and file",
+		usage: []string{"strip [--keep-ontology] [--dry-run] [--export dir|-]"},
+		more:  "The reverse of gloss init. It writes glossmark-export/ (the graph as JSON Lines, JSON-LD and SQLite, the ledger as it is and as PROV-O, the ontology, the manifests), then removes every @gloss and @gloss? marker in every comment style the scanner reads, the JSON sidecars, every .gloss.yaml manifest, .glossmark/, glossmark.lock and, unless --keep-ontology, ontology/ and glossmark.yaml. exclude: and generated: are honoured. Afterwards git diff shows only marker lines and GlossMark files gone; the hook, MCP, CI and Makefile entries it cannot edit are listed to remove by hand.",
+		examples: []string{
+			"gloss strip --dry-run  # what would go, and what stays for you",
+			"gloss strip  # export, then remove; review with git diff",
+			"gloss strip --keep-ontology  # keep the vocabulary, drop the markers",
+		},
+		docs: "docs/LEAVING.md"},
 
 	// Daily
 	"check": {line: "lint markers, manifests and ontologies",
@@ -146,13 +155,15 @@ var help = map[string]helpEntry{
 		docs:     "docs/QUICKSTART.md#review-workflow"},
 
 	// Agents
-	"hook": {line: "install the agent SessionStart hook and MCP server",
-		usage: []string{"hook install [--skill] [--cursor] [--actor agent:name]"},
+	"hook": {line: "install the agent hook, MCP server and per-agent integrations",
+		usage: []string{"hook install [--skill] [--agent claude-code|cursor|copilot]"},
 		examples: []string{
-			"gloss hook install  # Claude Code: .claude/settings.json, .mcp.json",
-			"gloss hook install --skill --cursor",
+			"gloss hook install  # .claude/settings.json, .mcp.json",
+			"gloss hook install --agent claude-code  # plugin: skills, hook, MCP",
+			"gloss hook install --agent cursor,copilot  # rule and instructions",
 		},
-		docs: "docs/QUICKSTART.md#agent-experience"},
+		more: "Every file written is committed and runs gloss by name; gloss doctor checks each installed integration. docs/AGENTS.md has the per-agent setup.",
+		docs: "docs/AGENTS.md"},
 	"context": {line: "session-start briefing for an agent in a directory or feature",
 		usage: []string{"context [--dir dir | --concept curie...] [--changed] [--budget n]"},
 		examples: []string{

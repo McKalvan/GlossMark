@@ -121,5 +121,6 @@ Feature: Checkout
 | GM224 | `presents` on a constraint: a page that edits the value `configures` it, code that enforces it `implements` it |
 | GM225 | a manifest `publishes` or `subscribes` a concept that is not an event (often after an upstream retype) |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
+| GM250 | a relation outside the starter profile under `relations: starter` in `glossmark.yaml` (a hint, not a warning: `--strict` ignores it and the edge is built as written); set `relations: full` to use it ([ADVANCED.md](ADVANCED.md#relation-profiles)) |
 | GM360 | a `value-from` names a file, line or symbol that does not exist, or, in YAML, TOML or JSON, a key that ends several key paths (the message lists them) |
 | GM502 / GM503 | link outside the manifest's written `allowed` list (error) / outside the set derived from what it declares (warning); both are HARD in the gate |

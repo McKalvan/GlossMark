@@ -1,5 +1,5 @@
 <!-- @gloss documents gm:Criticality, gm:Ledger scope=file -->
-# ADR 0041: the compliance report reads the graph, the ledger and drift
+# ADR 0043: the compliance report reads the graph, the ledger and drift
 
 Status: proposed, 2026-10-28; `gloss report compliance` built 2026-10-28 (issue #269).
 
