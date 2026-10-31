@@ -2,13 +2,14 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.7.0
+version: 1.8.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
   Extractor:          { kind: process, realizes: gm:Extraction, doc: "Pass 1; markers, manifests and ontologies into the graph." }
   MarkerGrammar:      { kind: process, part-of: Extractor, realizes: gm:Extraction, doc: "Parsing one marker line and the per-extension comment table." }
   DeclarationAnchor:  { kind: process, part-of: Extractor, realizes: gm:Extraction, doc: "Binding a marker to the declaration that follows it." }
+  LinkMapper:         { kind: process, part-of: Extractor, realizes: gm:Extraction, doc: "Mapping the links: entries of manifests and glossmark.yaml onto code: a path glob at file scope, or a declaration symbol anchored as a marker above it would be (ADR 0045)." }
   WorkspaceLoader:    { kind: process, part-of: Extractor, realizes: gm:Extraction, doc: "Reading glossmark.yaml, ontology files, manifests and imports." }
   ImportLock:
     kind: process

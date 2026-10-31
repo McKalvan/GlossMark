@@ -72,7 +72,7 @@ func PreviousActors(g *graph.Graph) map[string]string {
 		return out
 	}
 	for _, e := range g.Edges() {
-		if e.Source == graph.SourceInline && e.Prov != nil && e.Prov.ID != "" && e.Prov.Actor != "" {
+		if graph.LinkSource(e.Source) && e.Prov != nil && e.Prov.ID != "" && e.Prov.Actor != "" {
 			out[e.Prov.ID] = e.Prov.Actor
 		}
 	}
@@ -90,7 +90,7 @@ func (a *Actors) For(fm extract.FoundMarker) string {
 	if a.Session != "" {
 		return a.Session
 	}
-	if b := a.blameActor(fm.Path, fm.Marker.Line); b != "" {
+	if b := a.blameActor(fm.Stated()); b != "" {
 		return b
 	}
 	return a.Fallback
@@ -253,7 +253,7 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			if a := l.Actors.For(fm); a != "" {
 				by = a
 			}
-			e = &model.LedgerEntry{MarkerID: fm.ID, Path: fm.Path, Relation: fm.Marker.Relation, Targets: fm.Marker.Targets,
+			e = &model.LedgerEntry{MarkerID: fm.ID, Path: fm.Path, Relation: fm.Marker.Relation, Targets: fm.Marker.Targets, Source: fm.Source,
 				Actor: by, Model: modelOf(by), Created: ts, AnchorFingerprint: fm.Anchor.Fingerprint, Rationale: fm.Marker.Keys["note"]}
 			if c := fm.Marker.Conf(); c >= 0 {
 				e.Conf = c
@@ -270,7 +270,7 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 			l.dirty = true
 		} else {
 			prev := *e
-			e.Path, e.Relation, e.Targets = fm.Path, fm.Marker.Relation, fm.Marker.Targets
+			e.Path, e.Relation, e.Targets, e.Source = fm.Path, fm.Marker.Relation, fm.Marker.Targets, fm.Source
 			if c := fm.Marker.Conf(); c >= 0 {
 				e.Conf = c
 			}
@@ -408,7 +408,7 @@ func (l *Ledger) Sync(g *graph.Graph, markers []extract.FoundMarker, actor strin
 // number of edges removed; the caller re-derives when it is not zero.
 func (l *Ledger) DropRejected(g *graph.Graph) int {
 	return g.RemoveEdges(func(e *graph.Edge) bool {
-		if e.Prov == nil || e.Prov.ID == "" || (e.Source != graph.SourceInline && e.Source != graph.SourceInferred) {
+		if e.Prov == nil || e.Prov.ID == "" || (!graph.LinkSource(e.Source) && e.Source != graph.SourceInferred) {
 			return false
 		}
 		le, ok := l.Entries[e.Prov.ID]

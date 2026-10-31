@@ -165,7 +165,7 @@ func Touched(g *graph.Graph, ws *load.Workspace, files []string) []FileTouch {
 					ft.Criticality, ft.CriticalityFrom = a.Criticality, a.CriticalityFrom
 				}
 				for _, e := range g.Out(a.ID, "") {
-					if e.Source != graph.SourceInline || e.Prov == nil {
+					if !graph.LinkSource(e.Source) || e.Prov == nil {
 						continue
 					}
 					ft.Links = append(ft.Links, LinkTouch{Line: e.Prov.Line, Symbol: e.Prov.Symbol, Relation: e.P, Target: g.Curie(e.O), Proposed: e.Prov.Proposed, MarkerID: e.Prov.ID})

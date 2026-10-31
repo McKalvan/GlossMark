@@ -27,9 +27,18 @@ const ArtifactPrefix = "urn:gloss:artifact:"
 const (
 	SourceDeclared = "declared" // ontology files and manifests
 	SourceInline   = "inline"   // `@gloss` markers
+	SourceManifest = "manifest" // links: entries in a manifest or glossmark.yaml
 	SourceDerived  = "derived"  // rollup rules
 	SourceInferred = "inferred" // inferrers (test paths)
 )
+
+// LinkSource reports whether an edge source is a link someone wrote from
+// code to a concept: an inline marker, or a links: entry in a manifest that
+// maps a path or symbol to the concept. Both are anchored, fingerprinted and
+// reviewed alike; only where the words sit differs.
+func LinkSource(source string) bool {
+	return source == SourceInline || source == SourceManifest
+}
 
 // Node is one graph node.
 type Node struct {
@@ -129,6 +138,9 @@ type Prov struct {
 	// Alias is the relation as written when the marker used an alias that
 	// was stored as its canonical relation ("tests", stored as verifies).
 	Alias string `json:"alias,omitempty"`
+	// From is where a manifest link is written (path:line of its links:
+	// entry), since Path and Line name the code it maps.
+	From string `json:"from,omitempty"`
 }
 
 // Edge is one triple with provenance.
