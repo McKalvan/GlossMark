@@ -106,6 +106,10 @@ func linkItem(st *State, pol *model.Policy, le *model.LedgerEntry, fm extract.Fo
 		it.Boundary = m.Boundary
 	}
 	what := fmt.Sprintf("%s:%d %s %s", fm.Path, fm.Marker.Line, fm.Marker.Relation, strings.Join(fm.Marker.Targets, ", "))
+	if fm.Mapped() {
+		it.Source, it.From = fm.Source, fmt.Sprintf("%s:%d", fm.From, fm.FromLine)
+		what += " (mapped in " + it.From + ")"
+	}
 	if le.Status == model.StatusStale {
 		it.Kind = KindStaleLink
 		it.Summary = what + " (stale: the anchor changed since it was accepted)"

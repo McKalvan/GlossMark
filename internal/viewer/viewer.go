@@ -75,6 +75,10 @@ type Link struct {
 	Symbol   string `json:"symbol,omitempty"`
 	Proposed bool   `json:"proposed,omitempty"`
 	Via      string `json:"via,omitempty"` // the concept linked when not this one
+	// Source says where the link is written: inline (a marker in the
+	// file), manifest (a links: entry, at From) or inferred.
+	Source string `json:"source,omitempty"`
+	From   string `json:"from,omitempty"`
 }
 
 const maxLinks = 40
@@ -119,13 +123,13 @@ func Details(g *graph.Graph, rep *rollup.Report) map[string]*ConceptDetail {
 				via = g.Curie(id)
 			}
 			for _, e := range g.In(id, "") {
-				if e.Source != graph.SourceInline && e.Source != graph.SourceInferred || e.Prov == nil {
+				if !graph.LinkSource(e.Source) && e.Source != graph.SourceInferred || e.Prov == nil {
 					continue
 				}
 				if a := g.Node(e.S); a == nil || a.NodeType != model.NodeArtifact {
 					continue
 				}
-				l := Link{Relation: e.P, Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, Proposed: e.Prov.Proposed, Via: via}
+				l := Link{Relation: e.P, Path: e.Prov.Path, Line: e.Prov.Line, Symbol: e.Prov.Symbol, Proposed: e.Prov.Proposed, Via: via, Source: e.Source, From: e.Prov.From}
 				if e.P == "verifies" || e.P == "tests" {
 					if len(d.Verifiers) < maxLinks {
 						d.Verifiers = append(d.Verifiers, l)

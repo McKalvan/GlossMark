@@ -42,7 +42,7 @@ func selectMarkers(p *pipeline, sel []string) ([]extract.FoundMarker, error) {
 				break
 			}
 			if i := strings.LastIndex(s, ":"); i > 0 {
-				if ln, err := strconv.Atoi(s[i+1:]); err == nil && fm.Path == s[:i] && fm.Marker.Line == ln {
+				if ln, err := strconv.Atoi(s[i+1:]); err == nil && where(fm) == s[:i]+":"+strconv.Itoa(ln) {
 					out = append(out, fm)
 					found = true
 					break
@@ -50,14 +50,18 @@ func selectMarkers(p *pipeline, sel []string) ([]extract.FoundMarker, error) {
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("no marker matches %q (use a marker id from gloss status, or path:line)", s)
+			return nil, fmt.Errorf("no marker matches %q (use a marker id from gloss status, or path:line of the marker or of the links: entry)", s)
 		}
 	}
 	return out, nil
 }
 
-// flipMarker rewrites `@gloss?` to `@gloss` on the marker's line.
+// flipMarker rewrites `@gloss?` to `@gloss` on the marker's line, or drops
+// proposed: true from the links: entry of a mapped link.
 func flipMarker(p *pipeline, fm extract.FoundMarker) error {
+	if fm.Mapped() {
+		return unproposeLink(p, fm)
+	}
 	path := p.WS.Abs(fm.Path)
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -222,14 +226,14 @@ func cmdAccept(args []string) int {
 		if !fm.Marker.Proposed {
 			// A stale link is re-confirmed: the current anchor becomes the baseline.
 			if e := p.Ledger.Entry(fm.ID); e != nil && e.Status == model.StatusStale {
-				fmt.Printf("%s %s:%d %s %s (stale)\n", map[bool]string{true: "would re-confirm", false: "re-confirm"}[*dry], fm.Path, fm.Marker.Line, fm.Marker.Relation, join(fm.Marker.Targets))
+				fmt.Printf("%s %s %s %s (stale)\n", map[bool]string{true: "would re-confirm", false: "re-confirm"}[*dry], where(fm), fm.Marker.Relation, join(fm.Marker.Targets))
 				if !*dry {
 					p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
 					n++
 				}
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "%s:%d: %s is not proposed; nothing to accept\n", fm.Path, fm.Marker.Line, fm.ID)
+			fmt.Fprintf(os.Stderr, "%s: %s is not proposed; nothing to accept\n", where(fm), fm.ID)
 			continue
 		}
 		g := gate.SOFT
@@ -239,7 +243,7 @@ func cmdAccept(args []string) int {
 			g = gate.Max(g, cg)
 			why = append(why, r...)
 		}
-		fmt.Printf("%s %s:%d %s %s [%s]\n", map[bool]string{true: "would accept", false: "accept"}[*dry], fm.Path, fm.Marker.Line, fm.Marker.Relation, join(fm.Marker.Targets), g)
+		fmt.Printf("%s %s %s %s [%s]\n", map[bool]string{true: "would accept", false: "accept"}[*dry], where(fm), fm.Marker.Relation, join(fm.Marker.Targets), g)
 		if *dry {
 			continue
 		}
@@ -270,7 +274,7 @@ func cmdAccept(args []string) int {
 func cmdReject(args []string) int {
 	fs, root := newFlags("reject")
 	reason := fs.String("reason", "", "why the link is wrong (recorded in the ledger)")
-	remove := fs.Bool("remove", false, "also delete the marker line from the source file (or the concept entry with --concept)")
+	remove := fs.Bool("remove", false, "also delete the marker line from the source file (the links: entry of a mapped link, or the concept entry with --concept)")
 	concept := fs.Bool("concept", false, "the arguments are proposed concept CURIEs")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
@@ -314,7 +318,7 @@ func cmdReject(args []string) int {
 	now := time.Now().UTC()
 	for _, fm := range targets {
 		p.Ledger.Reject(fm.ID, rev, *reason, now)
-		fmt.Printf("reject %s:%d %s %s — %s\n", fm.Path, fm.Marker.Line, fm.Marker.Relation, join(fm.Marker.Targets), *reason)
+		fmt.Printf("reject %s %s %s — %s\n", where(fm), fm.Marker.Relation, join(fm.Marker.Targets), *reason)
 		if *remove {
 			if err := removeMarkerLine(p, fm); err != nil {
 				return fail(err)
@@ -328,6 +332,9 @@ func cmdReject(args []string) int {
 }
 
 func removeMarkerLine(p *pipeline, fm extract.FoundMarker) error {
+	if fm.Mapped() {
+		return removeLinkEntry(p, fm)
+	}
 	path := p.WS.Abs(fm.Path)
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -410,7 +417,11 @@ func cmdStatus(args []string) int {
 			if e.Conf > 0 {
 				conf = fmt.Sprintf(" conf=%.2f", e.Conf)
 			}
-			fmt.Printf("  %s  %s  %s %s%s  by %s%s\n", e.MarkerID, e.Path, e.Relation, join(e.Targets), conf, e.Actor, g)
+			src := ""
+			if e.Source != "" {
+				src = " (" + e.Source + ")"
+			}
+			fmt.Printf("  %s  %s%s  %s %s%s  by %s%s\n", e.MarkerID, e.Path, src, e.Relation, join(e.Targets), conf, e.Actor, g)
 		}
 	}
 	return 0

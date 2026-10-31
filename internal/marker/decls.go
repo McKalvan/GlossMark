@@ -220,3 +220,21 @@ func stripHash(s string) string {
 	}
 	return s
 }
+
+// Anchor is the anchor a symbol marker above the declaration would record:
+// the declaration's line range, its signature and its decorator stack, with
+// the fingerprint the detector computed (ADR 0014). A manifest link that
+// names the symbol anchors here (ADR 0045).
+func (d Decl) Anchor(lines []string) Anchor {
+	a := Anchor{Scope: "symbol", Symbol: d.Symbol, Kind: d.Kind, StartLine: d.Line, EndLine: d.End, Fingerprint: d.Fingerprint}
+	if d.Line > 0 && d.Line <= len(lines) {
+		a.Signature = norm(lines[d.Line-1])
+	}
+	for _, t := range d.Decorators {
+		a.Decorators = append(a.Decorators, norm(t))
+	}
+	if len(a.Decorators) > 0 {
+		a.Legacy = fp(a.Signature)
+	}
+	return a
+}
