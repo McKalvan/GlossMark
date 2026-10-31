@@ -23,7 +23,7 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/library` | The worked example: a public library in two repos sharing one core (`circulation` owns both tiers, `holds-worker` imports and extends the core), covering taxonomic lift, the published seam, `value-from`, surfaces, criticality, extension, remits and a landscape; see its [README](../examples/library/README.md) |
 | `scripts/screenshots.sh` | Regenerates the README images in `docs/img/` from the [glossmark-examples](https://github.com/McKalvan/glossmark-examples) showcase |
-| `docs/` | [Quickstart](QUICKSTART.md) · [When to mark](MARKING.md) · [Advanced](ADVANCED.md) · [Grammar](GRAMMAR.md) · [File formats](FILE-FORMATS.md) · [Graph](GRAPH.md) · [Governance](GOVERNANCE.md) · [Versioning](VERSIONING.md) · [Plan](PLAN.md) · [ADRs](adr/) |
+| `docs/` | [Quickstart](QUICKSTART.md) · [Trying it safely, leaving](LEAVING.md) · [When to mark](MARKING.md) · [Advanced](ADVANCED.md) · [Grammar](GRAMMAR.md) · [File formats](FILE-FORMATS.md) · [Graph](GRAPH.md) · [Governance](GOVERNANCE.md) · [Versioning](VERSIONING.md) · [Plan](PLAN.md) · [ADRs](adr/) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.

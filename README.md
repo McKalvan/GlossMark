@@ -99,7 +99,7 @@ gloss suggest                  # propose @gloss? comment lines for the code; acc
 gloss check && gloss build && gloss drift
 ```
 
-The [Quickstart](docs/QUICKSTART.md) walks every step. The [showcase](https://github.com/McKalvan/glossmark-examples) has five realistic adoptions to copy from: a monorepo, three repositories sharing one vocabulary, an event-driven system, an agent-heavy repository and a brownfield legacy stack.
+The [Quickstart](docs/QUICKSTART.md) walks every step. It is as easy to leave as to try: markers are comments, `gloss strip` removes every one of them with the tool's own files after a final export, and [docs/LEAVING.md](docs/LEAVING.md) says what stays and what goes. The [showcase](https://github.com/McKalvan/glossmark-examples) has five realistic adoptions to copy from: a monorepo, three repositories sharing one vocabulary, an event-driven system, an agent-heavy repository and a brownfield legacy stack.
 
 ## What it looks like
 
@@ -149,6 +149,6 @@ Why the vocabulary is written before the code rather than summarised from it aft
 ## More
 
 - [docs/REPOSITORY.md](docs/REPOSITORY.md): what is in this repository, GlossMark applied to itself (this tree is its own first user and CI holds it to the strictest gate), versions and roadmap status.
-- Docs: [Quickstart](docs/QUICKSTART.md) · [When to mark](docs/MARKING.md) · [Glossary](docs/GLOSSARY.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
+- Docs: [Quickstart](docs/QUICKSTART.md) · [Trying it safely, leaving](docs/LEAVING.md) · [When to mark](docs/MARKING.md) · [Glossary](docs/GLOSSARY.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
 - [`examples/library`](examples/library/README.md): the worked example in this repository, two repositories sharing one vocabulary (`gloss landscape circulation holds-worker` shows the cross-repository drift).
 - [glossmark-examples](https://github.com/McKalvan/glossmark-examples): the showcase behind the screenshots, and a lab that turns rough edges into issues.
