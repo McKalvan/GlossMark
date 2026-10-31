@@ -27,6 +27,10 @@ Coverage counts concepts, not markers: an implementation concept, or a core conc
 
 Either the file is about one concept (`scope=file`, one line in the header comment) or its declarations are about several (one marker per declaration). A file-level marker plus a symbol-level marker with the same relation and target state the same fact twice; `gloss check` reports the second one (GM130).
 
+## A mapping instead of a marker
+
+When a whole directory or file is about one concept, or a team does not want `@gloss` comments in its code, the boundary manifest can say it instead ([ADR 0045](adr/0045-manifest-links.md)): `links: [{ path: "cataloging/**", implements: .CatalogIntake }]` links every scanned file under the glob at file scope, and `{ symbol: Service.cancel, implements: .CancellationHandler }` anchors to that declaration exactly as a marker above it would. The link is reviewed, fingerprinted and gated the same way, and `gloss status`, `gloss review` and the viewer show it came from the manifest. A marker in a file overrides a mapping of the same relation onto that file, so the mapping is the default and the marker the exception. Prefer markers where the code is about several concepts or the link is worth seeing next to the declaration; prefer a mapping for a coarse directory-level fact or a test glob.
+
 ## Where the marker goes
 
 Directly above the declaration, above any decorators:

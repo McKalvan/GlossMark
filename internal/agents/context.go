@@ -236,7 +236,7 @@ func retiring(g *graph.Graph, m *model.Manifest, dir string) string {
 		}
 		for _, e := range g.Out(a.ID, "") {
 			o := g.Node(e.O)
-			if e.Source != graph.SourceInline || o == nil || o.NodeType != model.NodeConcept || !o.Deprecated || seen[o.ID] {
+			if !graph.LinkSource(e.Source) || o == nil || o.NodeType != model.NodeConcept || !o.Deprecated || seen[o.ID] {
 				continue
 			}
 			seen[o.ID] = true
@@ -278,7 +278,7 @@ func rankConcepts(ws *load.Workspace, g *graph.Graph, m *model.Manifest, allowed
 			continue
 		}
 		for _, e := range g.Out(a.ID, "") {
-			if e.Source == graph.SourceInline || e.Source == graph.SourceInferred {
+			if graph.LinkSource(e.Source) || e.Source == graph.SourceInferred {
 				if o := g.Node(e.O); o != nil && o.NodeType == model.NodeConcept {
 					linked[o.ID]++
 					for _, c := range rollup.RealizesStar(g, o.ID) {

@@ -44,6 +44,9 @@ func takeSnapshot(st *State, d Decision) (*snapshot, error) {
 	}
 	for _, fm := range st.Markers {
 		paths[ws.Abs(fm.Path)] = true
+		if fm.From != "" {
+			paths[ws.Abs(fm.From)] = true
+		}
 	}
 	if d.Path != "" {
 		paths[ws.Abs(d.Path)] = true
