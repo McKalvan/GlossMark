@@ -18,6 +18,7 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](adr/0025-deriving-the-ontology.md), experimental) |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` and `derive-ontology` (deriving the core and implementation tiers from an existing application, [ADR 0025](adr/0025-deriving-the-ontology.md)), installed by `gloss hook install --skill` (`--agent claude-code` bundles them in a plugin, `--agent cursor` and `--agent copilot` write a rule or instructions that point at them, [AGENTS.md](AGENTS.md)), before `gloss init` too |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
+| `internal/bench`, `cmd/glossbench`, `bench/` | The agent benchmark ([BENCHMARK.md](BENCHMARK.md)): task files, the scorer and the runner; results not yet collected |
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |

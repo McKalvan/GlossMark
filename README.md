@@ -149,6 +149,6 @@ Why the vocabulary is written before the code rather than summarised from it aft
 ## More
 
 - [docs/REPOSITORY.md](docs/REPOSITORY.md): what is in this repository, GlossMark applied to itself (this tree is its own first user and CI holds it to the strictest gate), versions and roadmap status.
-- Docs: [Quickstart](docs/QUICKSTART.md) · [Trying it safely, leaving](docs/LEAVING.md) · [When to mark](docs/MARKING.md) · [Glossary](docs/GLOSSARY.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [ADRs](docs/adr/)
+- Docs: [Quickstart](docs/QUICKSTART.md) · [Trying it safely, leaving](docs/LEAVING.md) · [When to mark](docs/MARKING.md) · [Glossary](docs/GLOSSARY.md) · [Advanced](docs/ADVANCED.md) · [Grammar](docs/GRAMMAR.md) · [File formats](docs/FILE-FORMATS.md) · [Graph](docs/GRAPH.md) · [Governance](docs/GOVERNANCE.md) · [Versioning](docs/VERSIONING.md) · [Plan](docs/PLAN.md) · [Benchmark](docs/BENCHMARK.md) (method and harness; results not yet collected) · [ADRs](docs/adr/)
 - [`examples/library`](examples/library/README.md): the worked example in this repository, two repositories sharing one vocabulary (`gloss landscape circulation holds-worker` shows the cross-repository drift).
 - [glossmark-examples](https://github.com/McKalvan/glossmark-examples): the showcase behind the screenshots, and a lab that turns rough edges into issues.
