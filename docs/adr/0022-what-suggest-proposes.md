@@ -57,7 +57,7 @@ When the core concept wins, an implementation concept that realizes it and that 
 - `presents` on a page component, `hosts` on a layout or app shell;
 - `subscribes` or `consumes` on a listener or consumer, `publishes` on a producer.
 
-Provisions and deploys target only resource and system-type concepts. It reads `.md`, `.yaml`, `.yml` and `.sh` besides source files. It does not propose `configures`, `publishes-value`, `instructs`, `may-modify` or `produces`, or anything in sidecars, JSON, Dockerfiles or CI workflows ([ADR 0041](0041-surface-rules.md) later lets a surface rule propose `configures` on an admin page and `produces` on a document renderer). `gloss suggest -h` prints this coverage.
+Provisions and deploys target only resource and system-type concepts. It reads `.md`, `.yaml`, `.yml` and `.sh` besides source files. It does not propose `configures`, `publishes-value`, `instructs`, `may-modify` or `produces`, or anything in sidecars, JSON, Dockerfiles or CI workflows ([ADR 0046](0046-surface-rules.md) later lets a surface rule propose `configures` on an admin page and `produces` on a document renderer). `gloss suggest -h` prints this coverage.
 
 **Allowed set and runs (#66).** Every candidate is tested against the allowed set `gloss check` uses. This is `rollup.AllowedFor`, which expands the `derived` keyword, so check and suggest cannot disagree. After choosing, identical proposals are collapsed:
 

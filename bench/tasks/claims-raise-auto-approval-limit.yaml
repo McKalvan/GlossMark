@@ -1,0 +1,18 @@
+repo: showcase/claims-events
+title: Raise the auto-approval limit for motor claims
+prompt: |
+  CLM-881: the claims director has signed off raising the auto-approval limit from
+  EUR 5,000 to EUR 7,500. Claims at or below the limit, with complete evidence and no fraud
+  hold, are approved by the rules without an adjuster. Make the change in the assessment
+  service and update everything that states the limit, including tests. Do not change
+  how the limit is applied.
+pitfalls:
+  - { kind: published-value, concept: tide:AutoApprovalRule, note: "the value is published into the business view (5000 EUR, bound to AUTO_APPROVE_LIMIT_EUR); changing the constant alone is value drift, and a published value is HARD" }
+  - { kind: rule, concept: claim:AutoApprovalLimit, note: "the rule itself (denials first, then holds, then the limit) must not be weakened or reordered" }
+assertions:
+  - { kind: file-matches, path: services/assessment/assessment/settings.py, pattern: "AUTO_APPROVE_LIMIT_EUR\\s*=\\s*7[ _,]?500", why: "the constant is where the business limit lives" }
+  - { kind: concept-value, concept: tide:AutoApprovalRule, pattern: "7[ _,]?500", why: "the published value follows the code it is bound to" }
+  - { kind: file-matches, path: services/assessment/assessment/rules.py, pattern: "ABOVE_AUTO_APPROVE_LIMIT", why: "claims above the limit are still referred, not approved" }
+  - { kind: file-matches, path: services/assessment/assessment/rules.py, pattern: "(?s)FRAUD_HOLD.*MISSING_EVIDENCE.*ABOVE_AUTO_APPROVE_LIMIT", why: "holds and evidence still come before the limit" }
+  - { kind: no-new-concept, why: "a new value is not a new concept" }
+  - { kind: gate, is: HARD, why: "a published value changed: the gate must surface it for a person" }

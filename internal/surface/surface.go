@@ -4,8 +4,8 @@
 // modelled (glossmark-examples, lab/ambiguous-surfaces): a page, an admin
 // value editor, a CLI, a BFF, a GraphQL gateway and a generated document.
 // Each has one marking rule, drawn from the lab's decision rule (ADR
-// 0041). gloss check hints when a marker contradicts the rule (GM250 to
-// GM254), and gloss suggest and the MCP propose_link default to it.
+// 0041). gloss check hints when a marker contradicts the rule (GM255 to
+// GM259), and gloss suggest and the MCP propose_link default to it.
 package surface
 
 import (
@@ -195,7 +195,7 @@ func Advise(g *graph.Graph, ws *load.Workspace, k Kind, l Link) *Hint {
 	tail := fmt.Sprintf(" [surface rule: %s]", rule.Lab)
 	switch k {
 	case Document:
-		// GM254: the output is the product.
+		// GM259: the output is the product.
 		switch l.Relation {
 		case "presents", "represents", "implements":
 			ent := producedEntity(g, t)
@@ -203,52 +203,52 @@ func Advise(g *graph.Graph, ws *load.Workspace, k Kind, l Link) *Hint {
 			if l.Relation == "implements" && t.Tier == model.TierImpl {
 				msg = fmt.Sprintf("implements %s in %s: a concept realized from a renderer takes the engine's tests and moves the process it realizes out of the engine's box; the renderer produces the entity instead: write `produces %s` and declare produces: [%s] in the manifest", t.CURIE, rule.Surface, ent, ent)
 			}
-			return &Hint{"GM254", "produces", msg + tail}
+			return &Hint{"GM259", "produces", msg + tail}
 		}
 		return nil
 	case Schema:
 		return nil
 	}
 	shell := Shell(k, l.Path, l.Lines)
-	// GM253: a page that edits a constraint configures it.
+	// GM258: a page that edits a constraint configures it.
 	if k == Page || k == AdminPage {
 		switch {
 		case l.Relation == "presents" && t.Kind == "constraint":
-			return &Hint{"GM253", "configures", fmt.Sprintf("presents %s in %s: a page that edits a constraint's value configures it: write `configures %s` (and configures: [%s] in the manifest); only a page that shows the limit without changing it stays presents", t.CURIE, rule.Surface, t.CURIE, t.CURIE) + tail}
+			return &Hint{"GM258", "configures", fmt.Sprintf("presents %s in %s: a page that edits a constraint's value configures it: write `configures %s` (and configures: [%s] in the manifest); only a page that shows the limit without changing it stays presents", t.CURIE, rule.Surface, t.CURIE, t.CURIE) + tail}
 		case l.Relation == "implements" && t.Kind == "constraint":
 			if by := implementers(g, ws, t, l.Path, true); len(by) > 0 {
-				return &Hint{"GM253", "configures", fmt.Sprintf("implements %s in %s: %s already enforces it, and implements here draws the constraint inside this boundary; a page that edits the value configures it: write `configures %s` (and configures: [%s] in the manifest)", t.CURIE, rule.Surface, by[0], t.CURIE, t.CURIE) + tail}
+				return &Hint{"GM258", "configures", fmt.Sprintf("implements %s in %s: %s already enforces it, and implements here draws the constraint inside this boundary; a page that edits the value configures it: write `configures %s` (and configures: [%s] in the manifest)", t.CURIE, rule.Surface, by[0], t.CURIE, t.CURIE) + tail}
 			}
 		case l.Relation == "implements" && t.Tier == model.TierImpl:
 			for _, o := range g.Objects(t.ID, "presents") {
 				if on := g.Node(o); on != nil && on.Kind == "constraint" && t.CriticalityFrom != "declared" {
-					return &Hint{"GM253", "", fmt.Sprintf("implements %s in %s: a page concept that presents constraint %s with no criticality of its own rates the page none; a page that edits the value declares criticality: on its concept (the constraint's level), or configures %s directly", t.CURIE, rule.Surface, on.CURIE, on.CURIE) + tail}
+					return &Hint{"GM258", "", fmt.Sprintf("implements %s in %s: a page concept that presents constraint %s with no criticality of its own rates the page none; a page that edits the value declares criticality: on its concept (the constraint's level), or configures %s directly", t.CURIE, rule.Surface, on.CURIE, on.CURIE) + tail}
 				}
 			}
 		}
 	}
-	// GM251: hosts is for the shell, and targets a system-type.
+	// GM256: hosts is for the shell, and targets a system-type.
 	if l.Relation == "hosts" && t.Kind != "system-type" && len(g.Objects(t.ID, "presents"))+len(g.Objects(t.ID, "hosts")) == 0 {
 		part, frame := part(k)
 		if shell {
-			return &Hint{"GM251", "", fmt.Sprintf("hosts %s on %s: %s is a %s, and %s hosts a system-type; target the system-type it is the shell of (or leave it unmarked), and write `implements %s` on the %s that does the work", t.CURIE, frame, t.CURIE, t.Kind, frame, t.CURIE, part) + tail}
+			return &Hint{"GM256", "", fmt.Sprintf("hosts %s on %s: %s is a %s, and %s hosts a system-type; target the system-type it is the shell of (or leave it unmarked), and write `implements %s` on the %s that does the work", t.CURIE, frame, t.CURIE, t.Kind, frame, t.CURIE, part) + tail}
 		}
-		return &Hint{"GM251", "implements", fmt.Sprintf("hosts %s on %s: write `implements %s` if this code does the work, `presents %s` if it shows what an engine elsewhere does; hosts belongs on %s and targets a system-type (hosts alone hides a missing mechanism)", t.CURIE, rule.Surface, t.CURIE, t.CURIE, frame) + tail}
+		return &Hint{"GM256", "implements", fmt.Sprintf("hosts %s on %s: write `implements %s` if this code does the work, `presents %s` if it shows what an engine elsewhere does; hosts belongs on %s and targets a system-type (hosts alone hides a missing mechanism)", t.CURIE, rule.Surface, t.CURIE, t.CURIE, frame) + tail}
 	}
-	// GM250: a surface with no engine behind it is the engine. An entity
+	// GM255: a surface with no engine behind it is the engine. An entity
 	// has no mechanism, and a concept something represents is satisfied
 	// by its data shape, as drift's presented-only reads it.
 	if l.Relation == "presents" && !shell && mechanismLess(g, t) && len(implementers(g, ws, t, l.Path, false)) == 0 && !declImplements(g, l.Artifact) {
-		return &Hint{"GM250", "implements", fmt.Sprintf("presents %s in %s, and nothing implements it; the surface that computes the concept is its mechanism: write `implements %s` on this declaration (keep presents when it also shows it), or mark the engine that does", t.CURIE, rule.Surface, t.CURIE) + tail}
+		return &Hint{"GM255", "implements", fmt.Sprintf("presents %s in %s, and nothing implements it; the surface that computes the concept is its mechanism: write `implements %s` on this declaration (keep presents when it also shows it), or mark the engine that does", t.CURIE, rule.Surface, t.CURIE) + tail}
 	}
 	if l.Relation == "implements" && t.Tier == model.TierImpl && !shell {
 		for _, o := range g.Objects(t.ID, "presents") {
 			if on := g.Node(o); on != nil && on.NodeType == model.NodeConcept && !on.Imported && mechanismLess(g, on) && len(implementers(g, ws, on, l.Path, false)) == 0 && !declImplementsOther(g, l.Artifact, t.ID) {
-				return &Hint{"GM250", "implements", fmt.Sprintf("implements %s, a page concept that presents %s, in %s, and nothing implements %s; the surface that computes the concept is its mechanism: add `implements %s` on this declaration, or mark the engine that does", t.CURIE, on.CURIE, rule.Surface, on.CURIE, on.CURIE) + tail}
+				return &Hint{"GM255", "implements", fmt.Sprintf("implements %s, a page concept that presents %s, in %s, and nothing implements %s; the surface that computes the concept is its mechanism: add `implements %s` on this declaration, or mark the engine that does", t.CURIE, on.CURIE, rule.Surface, on.CURIE, on.CURIE) + tail}
 			}
 		}
 	}
-	// GM252: an API surface that only re-implements the backend's process.
+	// GM257: an API surface that only re-implements the backend's process.
 	if l.Relation == "implements" && (k == BFF || k == GraphQL) && !filePresents(g, l.Path) {
 		part, _ := part(k)
 		core := t
@@ -264,9 +264,9 @@ func Advise(g *graph.Graph, ws *load.Workspace, k Kind, l Link) *Hint {
 		if core != nil && core.Kind != "constraint" {
 			if by := implementers(g, ws, core, l.Path, true); len(by) > 0 {
 				if core == t {
-					return &Hint{"GM252", "presents", fmt.Sprintf("implements %s in %s: %s already implements it, so this %s re-implements the backend's process and draws it into this boundary; a %s presents the process it reshapes: write `presents %s` here, and `implements` only on the declaration that re-applies a rule of its own", t.CURIE, rule.Surface, by[0], part, part, t.CURIE) + tail}
+					return &Hint{"GM257", "presents", fmt.Sprintf("implements %s in %s: %s already implements it, so this %s re-implements the backend's process and draws it into this boundary; a %s presents the process it reshapes: write `presents %s` here, and `implements` only on the declaration that re-applies a rule of its own", t.CURIE, rule.Surface, by[0], part, part, t.CURIE) + tail}
 				}
-				return &Hint{"GM252", "presents", fmt.Sprintf("implements %s in %s: it realizes %s, which %s already implements, so the process gets two mechanisms and moves to the root box; a surface's own concept presents the backend's process (presents: %s on %s) and realizes only the rule it re-applies, or the %s writes `presents %s` directly", t.CURIE, rule.Surface, core.CURIE, by[0], core.CURIE, t.CURIE, part, core.CURIE) + tail}
+				return &Hint{"GM257", "presents", fmt.Sprintf("implements %s in %s: it realizes %s, which %s already implements, so the process gets two mechanisms and moves to the root box; a surface's own concept presents the backend's process (presents: %s on %s) and realizes only the rule it re-applies, or the %s writes `presents %s` directly", t.CURIE, rule.Surface, core.CURIE, by[0], core.CURIE, t.CURIE, part, core.CURIE) + tail}
 			}
 		}
 	}

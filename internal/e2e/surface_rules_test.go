@@ -12,7 +12,7 @@ import (
 // surfaceCase is one case of the ambiguous-surfaces lab (glossmark-examples,
 // lab/ambiguous-surfaces), reduced to the lines the surface rules read:
 // the ontology, the manifests, and the surface file with its marker line
-// swapped per variant. want maps each variant to the GM25x hint it gets,
+// swapped per variant. want maps each variant to the GM255-GM259 hint it gets,
 // "" for the recommended marking.
 type surfaceCase struct {
 	name  string
@@ -42,7 +42,7 @@ var surfaceCases = []surfaceCase{
 			"d-page-concept": "# @gloss implements .QuotePage",
 			"e-split-block":  "# @gloss presents hp:Pricing",
 		},
-		want: map[string]string{"a-implements": "", "b-presents": "GM250|`implements hp:Pricing`", "c-both": "", "d-page-concept": "GM250|`implements hp:Pricing`", "e-split-block": "GM250|`implements hp:Pricing`"},
+		want: map[string]string{"a-implements": "", "b-presents": "GM255|`implements hp:Pricing`", "c-both": "", "d-page-concept": "GM255|`implements hp:Pricing`", "e-split-block": "GM255|`implements hp:Pricing`"},
 	},
 	{
 		name: "cli",
@@ -65,7 +65,7 @@ var surfaceCases = []surfaceCase{
 		extra: map[string]map[string]string{
 			"d-hosts-group": {"tools/hpctl/hpctl/cli.py": "import click\n\nfrom hpctl.close_period import close_period\n\n\n# @gloss hosts hp:PeriodClose\n@click.group()\ndef main():\n    pass\n\n\nmain.add_command(close_period)\n"},
 		},
-		want: map[string]string{"a-implements": "", "b-presents": "GM250|`implements hp:PeriodClose`", "c-both": "", "d-hosts-group": "GM251|system-type", "e-hosts-only": "GM251|`implements hp:PeriodClose`"},
+		want: map[string]string{"a-implements": "", "b-presents": "GM255|`implements hp:PeriodClose`", "c-both": "", "d-hosts-group": "GM256|system-type", "e-hosts-only": "GM256|`implements hp:PeriodClose`"},
 	},
 	{
 		name: "bff",
@@ -86,7 +86,7 @@ var surfaceCases = []surfaceCase{
 			"d-split":      "// @gloss presents hp:OrderPlacement",
 			"e-impl-bff":   "// @gloss implements .MobileBff",
 		},
-		want: map[string]string{"a-implements": "GM252|`presents hp:OrderPlacement`", "b-presents": "", "c-hosts": "GM251|`implements hp:OrderPlacement`", "d-split": "", "e-impl-bff": "GM252|presents: hp:OrderPlacement"},
+		want: map[string]string{"a-implements": "GM257|`presents hp:OrderPlacement`", "b-presents": "", "c-hosts": "GM256|`implements hp:OrderPlacement`", "d-split": "", "e-impl-bff": "GM257|presents: hp:OrderPlacement"},
 	},
 	{
 		name: "graphql",
@@ -113,7 +113,7 @@ var surfaceCases = []surfaceCase{
 			"c-hosts-server":      {"gateway/src/server.ts": "import { ApolloServer } from \"@apollo/server\";\nimport { resolvers } from \"./resolvers\";\n\n// @gloss hosts hp:OrderPlacement\nexport async function start() {\n  const server = new ApolloServer({ resolvers });\n  return server;\n}\n"},
 			"d-schema-represents": {"gateway/schema.graphql": "# @gloss represents hp:Order scope=block\ntype Order {\n  id: ID!\n}\n"},
 		},
-		want: map[string]string{"a-implements": "GM252|`presents hp:OrderPlacement`", "b-presents": "", "c-hosts-server": "GM251|system-type", "d-schema-represents": ""},
+		want: map[string]string{"a-implements": "GM257|`presents hp:OrderPlacement`", "b-presents": "", "c-hosts-server": "GM256|system-type", "d-schema-represents": ""},
 	},
 	{
 		name: "admin-limit",
@@ -137,7 +137,7 @@ var surfaceCases = []surfaceCase{
 		extra: map[string]map[string]string{
 			"e-page-concept-critical": {"ontology/hpx.gloss.yaml": "concepts:\n  CreditCheck: { kind: constraint, realizes: hp:CreditLimit }\n  CreditLimitEditor: { kind: process, presents: hp:CreditLimit, criticality: critical }\n"},
 		},
-		want: map[string]string{"a-presents": "GM253|`configures hp:CreditLimit`", "b-implements": "GM253|`configures hp:CreditLimit`", "c-configures": "", "d-page-concept": "GM253|criticality:", "e-page-concept-critical": ""},
+		want: map[string]string{"a-presents": "GM258|`configures hp:CreditLimit`", "b-implements": "GM258|`configures hp:CreditLimit`", "c-configures": "", "d-page-concept": "GM258|criticality:", "e-page-concept-critical": ""},
 	},
 	{
 		name: "pdf-invoice",
@@ -159,14 +159,14 @@ var surfaceCases = []surfaceCase{
 			"d-produces":         "# @gloss produces hp:Invoice",
 			"e-represents":       "# @gloss represents hp:Invoice",
 		},
-		want: map[string]string{"a-presents-entity": "GM254|`produces hp:Invoice`", "b-presents-process": "GM254|`produces hp:Invoice`", "c-implements": "GM254|`produces hp:Invoice`", "d-produces": "", "e-represents": "GM254|`produces hp:Invoice`"},
+		want: map[string]string{"a-presents-entity": "GM259|`produces hp:Invoice`", "b-presents-process": "GM259|`produces hp:Invoice`", "c-implements": "GM259|`produces hp:Invoice`", "d-produces": "", "e-represents": "GM259|`produces hp:Invoice`"},
 	},
 }
 
 // TestSurfaceRuleHints: every variant of the ambiguous-surfaces lab that
-// departs from its surface's rule gets exactly one hint (GM250 to GM254)
+// departs from its surface's rule gets exactly one hint (GM255 to GM259)
 // naming the rule and the rewrite, and the recommended variant gets none;
-// hints never raise a warning or an error (#262, ADR 0041).
+// hints never raise a warning or an error (#262, ADR 0046).
 func TestSurfaceRuleHints(t *testing.T) {
 	for _, sc := range surfaceCases {
 		for variant, mark := range sc.marks {

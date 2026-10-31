@@ -101,7 +101,7 @@ Feature: Checkout
 
 ## Diagnostics
 
-Severities are `error`, `warning` and `hint`. Errors fail `gloss check`, warnings fail it under `--strict`, and a hint (the surface rules, GM25x) never fails it.
+Severities are `error`, `warning` and `hint`. Errors fail `gloss check`, warnings fail it under `--strict`, and a hint (the starter relation profile, GM250; the surface rules, GM255 to GM259) never fails it.
 
 | Code | Meaning |
 | --- | --- |
@@ -122,11 +122,12 @@ Severities are `error`, `warning` and `hint`. Errors fail `gloss check`, warning
 | GM223 | `hosts` on a concept that is not a system-type (nor a page concept that presents or hosts one): write `implements` if the code does the work, `presents` if it shows it |
 | GM224 | `presents` on a constraint: a page that edits the value `configures` it, code that enforces it `implements` it |
 | GM225 | a manifest `publishes` or `subscribes` a concept that is not an event (often after an upstream retype) |
-| GM250 | hint: a page, command, route or resolver `presents` a concept nothing implements (inline, or through a page concept): the surface that computes it `implements` it ([surface rules](MARKING.md#surfaces)) |
-| GM251 | hint: `hosts` on a recognised surface targets something other than a system-type: the command, route or resolver `implements` or `presents` it; the group, server or app frame `hosts` a system-type |
-| GM252 | hint: a BFF route or GraphQL resolver `implements` (directly or through its own concept) a process another boundary implements, and the file presents nothing: `presents` it |
-| GM253 | hint: a page `presents` a constraint, `implements` one an engine elsewhere enforces, or implements a page concept that presents a constraint without a criticality: a value editor `configures` it (or its page concept declares `criticality:`) |
-| GM254 | hint: a document renderer `presents`, `represents` or `implements`: its output is the product, so it `produces` the entity |
+| GM255 | hint: a page, command, route or resolver `presents` a concept nothing implements (inline, or through a page concept): the surface that computes it `implements` it ([surface rules](MARKING.md#surfaces)) |
+| GM256 | hint: `hosts` on a recognised surface targets something other than a system-type: the command, route or resolver `implements` or `presents` it; the group, server or app frame `hosts` a system-type |
+| GM257 | hint: a BFF route or GraphQL resolver `implements` (directly or through its own concept) a process another boundary implements, and the file presents nothing: `presents` it |
+| GM258 | hint: a page `presents` a constraint, `implements` one an engine elsewhere enforces, or implements a page concept that presents a constraint without a criticality: a value editor `configures` it (or its page concept declares `criticality:`) |
+| GM259 | hint: a document renderer `presents`, `represents` or `implements`: its output is the product, so it `produces` the entity |
 | GM240 | `tests` written where `verifies` is meant: one test relation, `verifies`; `tests` is an alias |
+| GM250 | a relation outside the starter profile under `relations: starter` in `glossmark.yaml` (a hint, not a warning: `--strict` ignores it and the edge is built as written); set `relations: full` to use it ([ADVANCED.md](ADVANCED.md#relation-profiles)) |
 | GM360 | a `value-from` names a file, line or symbol that does not exist, or, in YAML, TOML or JSON, a key that ends several key paths (the message lists them) |
 | GM502 / GM503 | link outside the manifest's written `allowed` list (error) / outside the set derived from what it declares (warning); both are HARD in the gate |

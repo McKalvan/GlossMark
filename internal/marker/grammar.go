@@ -66,12 +66,13 @@ func (m *Marker) Conf() float64 {
 // Scope returns the explicit scope= key, or "".
 func (m *Marker) Scope() string { return m.Keys["scope"] }
 
-// Diagnostic is a build warning or error at file:line:col.
+// Diagnostic is a build warning or error at file:line:col. A hint is a
+// pointer at a switch (GM255), never a defect: gloss check --strict ignores it.
 type Diagnostic struct {
 	Path     string `json:"path"`
 	Line     int    `json:"line"`
 	Col      int    `json:"col,omitempty"`
-	Severity string `json:"severity"` // error | warning | hint (never fails a run)
+	Severity string `json:"severity"` // hint | warning | error
 	Code     string `json:"code"`
 	Msg      string `json:"msg"`
 }

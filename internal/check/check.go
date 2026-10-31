@@ -22,7 +22,7 @@ import (
 
 // Run returns lint diagnostics for a built graph. Codes:
 //
-//	GM2xx references   GM25x surface rules (hints)   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
+//	GM2xx references   GM255-GM259 surface rules (hints)   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
 //
 // Severity is error, warning or hint; a hint never fails gloss check, not
 // even under --strict.
@@ -81,7 +81,7 @@ func (c *checker) surfaceOf(path string) *surfaceFile {
 	return f
 }
 
-// surfaceHint applies the surface rules (GM250 to GM254, hints) to one
+// surfaceHint applies the surface rules (GM255 to GM259, hints) to one
 // inline marker and reports whether one fired, so the general GM223 and
 // GM224 do not repeat it.
 func (c *checker) surfaceHint(e *graph.Edge, sn, on *graph.Node, path string, line int) bool {
@@ -610,6 +610,21 @@ func danglingReference(g *graph.Graph, curie string) string {
 	return msg
 }
 
+// starterHint is GM250's message: under the starter relation profile
+// (glossmark.yaml relations: starter, issue #261) a relation outside
+// model.StarterRelations still builds its edge, so the graph is the same
+// under either profile, but gloss check says where the switch is. It is a
+// hint, not a warning: --strict does not fail on it. "" when the profile
+// is full or the relation is in it.
+//
+// @gloss implements gmi:RelationProfile scope=symbol
+func (c *checker) starterHint(rel string) string {
+	if c.ws == nil || c.ws.Config.RelationProfile() != model.ProfileStarter || model.InStarter(rel) {
+		return ""
+	}
+	return fmt.Sprintf("%s is outside the starter relation profile (%s); set relations: full in %s to use it, or write one of the starter relations", rel, strings.Join(model.StarterRelations, ", "), load.ConfigName)
+}
+
 // minRun is the shortest run of identical markers GM131 reports.
 const minRun = 3
 
@@ -644,6 +659,9 @@ func (c *checker) edges() {
 			if sn != nil && sn.NodeType == model.NodeBoundary && !rel.Manifest && e.P != "part-of" {
 				c.add(path, line, "error", "GM203", fmt.Sprintf("relation %q cannot be declared in a manifest", e.P))
 			}
+		}
+		if msg := c.starterHint(e.P); msg != "" {
+			c.add(path, line, "hint", "GM250", msg)
 		}
 		// Object resolution. A replaced-by successor need not be loaded:
 		// GM341 judges a concept's, and a boundary's may be in another repo.
@@ -703,7 +721,7 @@ func (c *checker) edges() {
 		// system-type (or a page concept), and a page that edits a
 		// constraint's value configures it rather than presenting it. On a
 		// recognised surface the surface rule's hint says it instead
-		// (ADR 0041).
+		// (ADR 0046).
 		if e.Source == graph.SourceInline && on.NodeType == model.NodeConcept && on.Kind != "" && !c.surfaceHint(e, sn, on, path, line) {
 			switch {
 			case e.P == "hosts" && on.Kind != "system-type" && len(c.g.Objects(on.ID, "presents"))+len(c.g.Objects(on.ID, "hosts")) == 0:

@@ -3,7 +3,7 @@ boundary: arch:marker
 level: component
 label: marker
 part-of: arch:lib-reading
-realizes: [gmi:MarkerGrammar, gmi:DeclarationAnchor, gmi:MarkerSuggester]
+realizes: [gmi:MarkerGrammar, gmi:DeclarationAnchor, gmi:MarkerSuggester, gmi:Stripper]
 holds: [gm:Link, gm:Confidence]
 default-namespace: gmi
 owner: glossmark

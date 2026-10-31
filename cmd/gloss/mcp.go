@@ -84,7 +84,7 @@ func (b *mcpBackend) Impact(props []mcp.Proposal) (any, error) {
 	for _, p := range props {
 		item := map[string]any{"path": p.Path, "relation": p.Relation, "target": p.Target}
 		// The surface the file is (a page, a CLI, a BFF, a document
-		// renderer) and its marking rule (ADR 0041): the default relation
+		// renderer) and its marking rule (ADR 0046): the default relation
 		// when none is given, and a hint when the given one departs from it.
 		var lines []string
 		if b, err := os.ReadFile(ws.Abs(p.Path)); err == nil {
@@ -190,6 +190,14 @@ func (b *mcpBackend) Impact(props []mcp.Proposal) (any, error) {
 		cls, why := gate.ClassifyLink(g, ws, e, pol)
 		item["gate"] = string(cls)
 		item["reasons"] = why
+		if ws.Config.RelationProfile() == model.ProfileStarter && !model.InStarter(p.Relation) {
+			msg := fmt.Sprintf("%s is outside the starter relation profile; gloss check hints at it (GM250) until %s says relations: full", p.Relation, load.ConfigName)
+			if prev, ok := item["hint"].(string); ok {
+				// A surface rule hint stands first; the profile's follows.
+				msg = prev + "; " + msg
+			}
+			item["hint"] = msg
+		}
 		if on := g.Node(oiri); on != nil {
 			item["target_kind"] = on.Kind
 			if len(rel.RangeKinds) > 0 && on.Kind != "" && !containsStr(rel.RangeKinds, on.Kind) {

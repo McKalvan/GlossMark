@@ -114,7 +114,7 @@ type file struct {
 	test  bool
 	phase int
 	// kind is the surface the file is (a page, a CLI, a BFF, a document
-	// renderer), whose rule sets the relation (ADR 0041).
+	// renderer), whose rule sets the relation (ADR 0046).
 	kind surf.Kind
 }
 
@@ -391,7 +391,7 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 		}
 		// Code implements the implementation tier; a tie goes to it. A
 		// surface (a page, a route, a renderer) names the core concept it
-		// shows, not the engine's concept (ADR 0041).
+		// shows, not the engine's concept (ADR 0046).
 		if a.c.impl != b.c.impl {
 			return a.c.impl != surf.PrefersCore(f.kind)
 		}
@@ -413,7 +413,7 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 			// The surface rule overrides the role's relation: produces on
 			// a document renderer, configures on an admin page editing a
 			// constraint, presents on a surface for a process an engine
-			// elsewhere implements (ADR 0041).
+			// elsewhere implements (ADR 0046).
 			if sr := surf.Default(r.g, r.ws, f.kind, f.rel, h.c.n); sr != "" && (rel == "implements" || rel == "presents" || rel == "represents") {
 				rel = sr
 			}

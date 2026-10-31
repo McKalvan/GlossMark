@@ -1,0 +1,19 @@
+repo: showcase/kitchen-agents
+title: Show the allergen alert at the pass as well
+prompt: |
+  PR-77: the head chef at Harbour wants the pass station's screen to show the allergen
+  alert for every flagged ticket in the order, not only the tickets the pass cooks, so
+  the expediter sees it before plating. Change the ticket routing and the kitchen
+  display so the pass receives the alert for the whole order, with tests. The allergen
+  rule itself does not change.
+pitfalls:
+  - { kind: rule, concept: dine:AllergenRule, note: "critical: every change that touches it is HARD by policy, and the rule (no unacknowledged conflict is fired, every flagged ticket carries the alert) must not be weakened" }
+  - { kind: reuse, concept: pepper:AllergenBanner, note: "the banner is the display's mechanism; the trap is a second PassAlert component" }
+  - { kind: boundary, concept: dineb:kds, note: "the display's allowed list is written, narrower than derived; a new mechanism name needs proposing and the list widening" }
+assertions:
+  - { kind: gate, is: HARD, why: "the allergen rule is critical; a change near it needs a person" }
+  - { kind: file-matches, path: api/ordering/services/allergen_guard.py, pattern: "raise AllergenNotAcknowledged", why: "an unacknowledged conflict still cannot be fired" }
+  - { kind: file-unchanged, path: docs/allergen-policy.md, why: "the rule does not change" }
+  - { kind: no-new-concept, allow: [pepper:PassAlert], why: "the banner and the router exist; a proposed pass mechanism is tolerated, a second allergen concept is not" }
+  - { kind: forbidden-terms, terms: [AllergyWarning, AllergenFlag, AllergenRule2], why: "the rule, the banner and the alert keep their names" }
+  - { kind: check-clean, warnings: true, why: "the display's written allowed list must admit what its code links" }
