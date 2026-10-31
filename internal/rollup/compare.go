@@ -690,7 +690,7 @@ func (c *comparer) unlifted(b, s string) []string {
 	var out []string
 	for _, e := range c.g.Edges() {
 		// A test of the concept is not an attempt to provide it.
-		if e.O != s || e.Source != graph.SourceInline || e.Prov == nil || e.P == "verifies" || e.P == "tests" {
+		if e.O != s || !graph.LinkSource(e.Source) || e.Prov == nil || e.P == "verifies" || e.P == "tests" {
 			continue
 		}
 		a := c.g.Node(e.S)
@@ -1287,7 +1287,7 @@ func boundaryCurie(n *graph.Node) string {
 func (c *comparer) rogues() {
 	seen := map[string]bool{}
 	for _, e := range c.g.Edges() {
-		if e.Source != graph.SourceInline || e.Prov == nil {
+		if !graph.LinkSource(e.Source) || e.Prov == nil {
 			continue
 		}
 		switch {
@@ -1667,7 +1667,7 @@ func (c *comparer) metrics() {
 	accepted := map[string]bool{}
 	counted := map[string]bool{}
 	for _, e := range c.g.Edges() {
-		if e.Source != graph.SourceInline || e.Prov == nil {
+		if !graph.LinkSource(e.Source) || e.Prov == nil {
 			continue
 		}
 		m.Targets++
@@ -1758,7 +1758,7 @@ func (c *comparer) inCoverage(n *graph.Node) bool {
 // concept itself (not a test-path inference).
 func (c *comparer) implementedDirectly(id string) bool {
 	for _, e := range c.g.In(id, "implements") {
-		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && e.Source == graph.SourceInline {
+		if a := c.g.Node(e.S); a != nil && a.NodeType == model.NodeArtifact && graph.LinkSource(e.Source) {
 			return true
 		}
 	}

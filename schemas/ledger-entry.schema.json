@@ -120,6 +120,11 @@
           "type": "string",
           "format": "date-time"
         },
+        "source": {
+          "description": "manifest when the link is mapped by a links: entry in a manifest or glossmark.yaml (docs/adr/0045-manifest-links.md); absent for an inline marker.",
+          "type": "string",
+          "enum": ["manifest"]
+        },
         "value": {
           "description": "For a value:<curie> entry: the ontology value when the binding was last accepted.",
           "type": "string"

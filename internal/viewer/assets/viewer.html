@@ -1526,7 +1526,7 @@ function renderPanel(){
     row('doc',esc(n.doc));h+='</dl>';
     const dt=n.type==='concept'?details[n.id]:null;
     if(dt){
-      const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="note">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="note">proposed</span>':''}${l.via?' <span class="note">via '+esc(l.via)+'</span>':''}</li>`;
+      const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="note">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="note">proposed</span>':''}${l.source==='manifest'?' <span class="note" title="mapped by a links: entry in '+esc(l.from||'a manifest')+'">manifest'+(l.from?' '+esc(l.from):'')+'</span>':l.source==='inferred'?' <span class="note">inferred</span>':''}${l.via?' <span class="note">via '+esc(l.via)+'</span>':''}</li>`;
       if(dt.replaces&&dt.replaces.length)h+=`<h2>Replaces</h2><div class="mono">${dt.replaces.map(esc).join(', ')}</div>`;
       if(dt.realizes&&dt.realizes.length)h+=`<h2>Realizes</h2><div class="mono">${dt.realizes.map(esc).join(' → ')}</div>`;
       h+=`<h2>Artifacts (${(dt.artifacts||[]).length})</h2><ul>${(dt.artifacts||[]).map(linkLi).join('')||'<li class="via">no code links to it</li>'}</ul>`;

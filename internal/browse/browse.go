@@ -46,7 +46,10 @@ type Neighbor struct {
 	Label  string `json:"label"`
 	Type   string `json:"type"`
 	Kind   string `json:"kind,omitempty"`
-	Source string `json:"source,omitempty"` // inline | declared | derived
+	Source string `json:"source,omitempty"` // inline | manifest | declared | derived | inferred
+	// From is where a manifest link is written (path:line of its links:
+	// entry), since Path and Line name the code it maps (ADR 0045).
+	From string `json:"from,omitempty"`
 	// Proposed: the edge comes from a marker still awaiting review.
 	Proposed bool   `json:"proposed,omitempty"`
 	Path     string `json:"path,omitempty"`
@@ -149,7 +152,7 @@ func groups(g *graph.Graph, edges []*graph.Edge, other func(*graph.Edge) string)
 			nb.Type, nb.Kind = string(on.NodeType), on.Kind
 		}
 		if e.Prov != nil {
-			nb.Proposed, nb.Path, nb.Line = e.Prov.Proposed, e.Prov.Path, e.Prov.Line
+			nb.Proposed, nb.Path, nb.Line, nb.From = e.Prov.Proposed, e.Prov.Path, e.Prov.Line, e.Prov.From
 		}
 		if byRel[e.P] == nil {
 			byRel[e.P] = map[string]Neighbor{}

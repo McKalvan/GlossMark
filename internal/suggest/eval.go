@@ -35,7 +35,7 @@ func LabelsFromGraph(g *graph.Graph) []Label {
 	var out []Label
 	seen := map[Label]bool{}
 	for _, e := range g.Edges() {
-		if e.Source != graph.SourceInline || e.Prov == nil || e.Prov.Proposed {
+		if !graph.LinkSource(e.Source) || e.Prov == nil || e.Prov.Proposed {
 			continue
 		}
 		on := g.Node(e.O)

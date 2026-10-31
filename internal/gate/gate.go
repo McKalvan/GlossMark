@@ -312,7 +312,7 @@ func (c *classifier) adoption() {
 	}
 	allFiles, allMarkers := map[string]bool{}, map[string]bool{}
 	for _, e := range c.head.Edges() {
-		if e.Source != graph.SourceInline || e.Prov == nil {
+		if !graph.LinkSource(e.Source) || e.Prov == nil {
 			continue
 		}
 		b := ""
@@ -400,7 +400,7 @@ func (c *classifier) add(ch Change) {
 func inlineEdges(g *graph.Graph) map[string]*graph.Edge {
 	out := map[string]*graph.Edge{}
 	for _, e := range g.Edges() {
-		if e.Source != graph.SourceInline || e.Prov == nil {
+		if !graph.LinkSource(e.Source) || e.Prov == nil {
 			continue
 		}
 		k := e.Prov.ID + "|" + e.P + "|" + e.O
