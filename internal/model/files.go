@@ -63,10 +63,14 @@ type Config struct {
 	// RepoIRI is the repository's own IRI. A boundary prefix not declared
 	// under prefixes: expands to <repo-iri>boundaries/<prefix>/ instead of a
 	// urn with a warning, so most repositories need no prefixes: at all.
-	RepoIRI string   `yaml:"repo-iri,omitempty" json:"repo-iri,omitempty"`
-	Views   string   `yaml:"views,omitempty" json:"views,omitempty"`
-	Policy  *Policy  `yaml:"policy,omitempty" json:"policy,omitempty"`
-	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
+	RepoIRI string  `yaml:"repo-iri,omitempty" json:"repo-iri,omitempty"`
+	Views   string  `yaml:"views,omitempty" json:"views,omitempty"`
+	Policy  *Policy `yaml:"policy,omitempty" json:"policy,omitempty"`
+	// Adoption is the rung of the adoption ladder the repository has reached
+	// (0 vocabulary, 1 manifests, 2 criticality, 3 full; docs/QUICKSTART.md).
+	// It caps how hard check, drift and diff bite. Unset means 3.
+	Adoption *int     `yaml:"adoption,omitempty" json:"adoption,omitempty"`
+	Exclude  []string `yaml:"exclude,omitempty" json:"exclude,omitempty"`
 	// CommentStyles maps a file extension (".foo"), a file name
 	// ("crontab") or a path glob ("**/cron.d/*") to its comment tokens,
 	// extending the builtin table.
@@ -81,6 +85,11 @@ type Config struct {
 	Suggest *SuggestConfig `yaml:"suggest,omitempty" json:"suggest,omitempty"`
 	// History tunes gloss history (ADR 0040).
 	History *HistoryConfig `yaml:"history,omitempty" json:"history,omitempty"`
+	// Relations is the relation profile: starter (what gloss init writes;
+	// gloss check hints at any other relation, GM250, and the agent
+	// surfaces list only StarterRelations) or full. Unset means full, so
+	// the graph of an existing repository is unchanged (issue #261).
+	Relations string `yaml:"relations,omitempty" json:"relations,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
@@ -208,6 +217,15 @@ func gateRank(g string) int {
 	return -1
 }
 
+// RelationProfile returns the profile in force: relations: as written, or
+// full when unset or when there is no config at all.
+func (c *Config) RelationProfile() string {
+	if c == nil || c.Relations == "" {
+		return ProfileFull
+	}
+	return c.Relations
+}
+
 // EffectivePolicy merges the configured policy over the defaults. Its
 // SoftConfThreshold is the auto-accept rule's threshold (Config.AutoAccept).
 func (c *Config) EffectivePolicy() *Policy {
@@ -263,6 +281,9 @@ func LoadConfig(path string) (*Config, error) {
 	if c.Grammar < 0 {
 		return nil, fmt.Errorf("%s: grammar must be a positive integer", path)
 	}
+	if c.Relations != "" && c.Relations != ProfileStarter && c.Relations != ProfileFull {
+		return nil, fmt.Errorf("%s: relations must be starter or full, got %q", path, c.Relations)
+	}
 	for prefix, ns := range c.Owns {
 		if ns == nil {
 			return nil, fmt.Errorf("%s: owns.%s is empty", path, prefix)
@@ -300,6 +321,9 @@ func LoadConfig(path string) (*Config, error) {
 				return nil, fmt.Errorf("%s: imports.%s: version range %q: %v", path, prefix, im.Version, err)
 			}
 		}
+	}
+	if c.Adoption != nil && !ValidAdoption(*c.Adoption) {
+		return nil, fmt.Errorf("%s: adoption must be a level from %d to %d (docs/QUICKSTART.md), got %d", path, AdoptionVocabulary, AdoptionFull, *c.Adoption)
 	}
 	if c.Policy != nil {
 		for lvl, gate := range c.Policy.CriticalityGates {

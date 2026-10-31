@@ -28,7 +28,7 @@ const (
 	evData         = "data"           // the body touches a table that represents an entity the concept works on
 	evNamePartial  = "name-partial"   // the declaration's words are part of the concept name (appointment: AppointmentReminding)
 	evNameOverlap  = "name-overlap"   // some words shared, neither name holds the other
-	// Evidence read from code the way a spec describes it (#260, ADR 0041).
+	// Evidence read from code the way a spec describes it (#260, ADR 0049).
 	evRoute  = "route"  // the code declares a route whose path names the concept
 	evSchema = "schema" // the type maps to a table that represents the entity
 )

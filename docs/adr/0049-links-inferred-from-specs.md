@@ -1,5 +1,5 @@
 <!-- @gloss documents gmi:SpecInference scope=file -->
-# ADR 0041: Links inferred from the specs a repository already has
+# ADR 0049: Links inferred from the specs a repository already has
 
 Status: accepted, 2026-10-28; revised 2026-10-31 to put the sources behind an interface (step A of #209). Refs issue #260; related to #65 (the suggest precision gate), #206 (tree-sitter anchoring), #208 (the SCIP join) and #209 (external sources). Follows [ADR 0021](0021-suggest-conf-is-measured-precision.md) and [ADR 0022](0022-what-suggest-proposes.md).
 

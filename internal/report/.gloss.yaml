@@ -1,0 +1,9 @@
+# internal/report/.gloss.yaml: audit reports assembled from the graph, the ledger and drift.
+boundary: arch:report
+level: component
+label: report
+part-of: arch:lib-projection
+realizes: [gmi:ComplianceReporter]
+consumes: [gm:Graph, gm:Ledger, gm:Drift]
+default-namespace: gmi
+owner: glossmark

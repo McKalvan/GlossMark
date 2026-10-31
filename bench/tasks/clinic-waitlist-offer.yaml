@@ -1,0 +1,19 @@
+repo: showcase/clinic-booking
+title: Offer a freed slot to the waitlist
+prompt: |
+  LARK-540: build the waitlist. When a patient cancels, the booking API offers the freed
+  slot to patients who asked for an earlier time, oldest request first, and holds the
+  slot for them for 30 minutes. The patient site already has a page that collects
+  interest. Add the waitlist to the booking API (storage, the offer on cancellation,
+  an endpoint to accept the offer) with tests. One slot still holds one appointment.
+pitfalls:
+  - { kind: reuse, concept: clinic:Waitlist, note: "designed, not built: the concept exists and the page presents it; the trap is a Standby, Queue or SlotOffer concept beside it" }
+  - { kind: rule, concept: clinic:Booking, note: "one slot holds one appointment and a patient never holds two that overlap; the offer must not bypass Service.Book" }
+  - { kind: boundary, concept: clinicb:booking-api, note: "the manifest realizes Booking, Cancellation and Availability; realizing the waitlist widens it, which the manifest must say" }
+assertions:
+  - { kind: link, relation: implements, concept: clinic:Waitlist, under: services/booking-api, why: "the mechanism is linked to the designed concept" }
+  - { kind: finding-closed, id: "presented-only:clinic:Waitlist", why: "the page now has a mechanism behind it" }
+  - { kind: no-new-concept, allow: [lark:WaitlistOffer, lark:WaitlistHandler, lark:WaitlistStore], why: "the core concept exists; implementation mechanisms under it are fine, a second core concept is not" }
+  - { kind: forbidden-terms, terms: [Standby, SlotQueue, Backfill], why: "the business calls it the waitlist" }
+  - { kind: no-new-finding, boundary: clinicb:booking-api, why: "the booking API's manifest declares the waitlist once it realizes it" }
+  - { kind: file-matches, path: services/booking-api/internal/booking/cancellation.go, pattern: "MarkSlotBooked", why: "cancellation still releases the slot through the store" }

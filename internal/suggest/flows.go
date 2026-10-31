@@ -15,7 +15,7 @@ import (
 // messages; whether the code publishes to it or subscribes to it is code
 // analysis, the same for every source, and done here: the line that
 // names the channel, else the declaration's name, else what its calls do
-// (#260, ADR 0041).
+// (#260, ADR 0049).
 
 var (
 	// Direction a line gives the topic it names: the call that sends to it
