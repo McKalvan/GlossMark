@@ -1,5 +1,5 @@
 <!-- @gloss documents gm:Relation scope=file -->
-# ADR 0041: a starter relation profile, the rest behind a switch
+# ADR 0042: a starter relation profile, the rest behind a switch
 
 Status: accepted, 2026-10-28 (issue #261).
 

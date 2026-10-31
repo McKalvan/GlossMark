@@ -5,7 +5,7 @@
 
 ## Relation profiles
 
-A repository picks how much of the vocabulary it shows with `relations:` in `glossmark.yaml` ([ADR 0041](adr/0041-relation-profiles.md)). `gloss init` writes `relations: starter`: `implements`, `represents`, `verifies`, `documents`, `produces`, `consumes`, `part-of` and, in ontology files, `is-a` (plus `realizes`, `replaced-by` and `published-as`, which the tier seam itself asks for, and `owns`, `same-as` and `derived-from`, which the tool writes from CODEOWNERS or an import). Under `starter`, the AGENTS.md snippet and the MCP server list only those, and `gloss check` hints at any other relation it finds in a marker, a manifest or an ontology file:
+A repository picks how much of the vocabulary it shows with `relations:` in `glossmark.yaml` ([ADR 0042](adr/0042-relation-profiles.md)). `gloss init` writes `relations: starter`: `implements`, `represents`, `verifies`, `documents`, `produces`, `consumes`, `part-of` and, in ontology files, `is-a` (plus `realizes`, `replaced-by` and `published-as`, which the tier seam itself asks for, and `owns`, `same-as` and `derived-from`, which the tool writes from CODEOWNERS or an import). Under `starter`, the AGENTS.md snippet and the MCP server list only those, and `gloss check` hints at any other relation it finds in a marker, a manifest or an ontology file:
 
 ```
 web/page.py:3: hint: presents is outside the starter relation profile (implements, represents, verifies, documents, produces, consumes, part-of, is-a); set relations: full in glossmark.yaml to use it, or write one of the starter relations [GM250]
