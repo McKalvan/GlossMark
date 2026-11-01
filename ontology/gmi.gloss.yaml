@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.12.0
+version: 1.13.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -73,6 +73,7 @@ concepts:
   MarkerSuggester:    { kind: process, realizes: gm:Onboarding, doc: "gloss suggest: proposed links for unmarked public surfaces, from names, docstrings, the tables they touch and the code their tests call." }
   SuggestCalibration: { kind: process, part-of: MarkerSuggester, realizes: gm:Onboarding, doc: "gloss suggest --eval, --calibrate and the calibration harness: precision and auto-accept rate per confidence band on labelled links, the counts conf is read from, and the auto-accept threshold derived from a precision target." }
   SpecInference:      { kind: process, part-of: MarkerSuggester, realizes: gm:Onboarding, doc: "The links gloss suggest infers from the specs a repository already has, through the infer.Source interface: a source reads its files once, says what a spec file declares (an AsyncAPI channel, an OpenAPI operation or schema) and what code names through it (a topic, a route), and the runner settles the relation, the direction of a flow and the conf from the source's own calibration bases (ADR 0049). Strimzi topics and ORM table mappings are matched in the runner." }
+  SourcePlugin:       { kind: process, part-of: SpecInference, realizes: gm:Onboarding, doc: "A link source outside the binary: an executable named gloss-source-<name> on PATH, or a sources: entry in glossmark.yaml, that speaks the infer.Source interface as versioned JSON over stdin and stdout (contract v1: index, read, named, ancestor, indexed, hints). gloss suggest runs each once per run, treats what it returns as proposals under the plugin's own name, reads its conf from the repository's calibration or a prior capped below the auto-accept threshold, fails on a contract mismatch naming both versions, and reports any other failure as GM700 without stopping the other sources. gloss source serve runs a built-in source as a plugin (ADR 0050)." }
   DefaultSoftThreshold:
     kind: measure
     part-of: SuggestCalibration
