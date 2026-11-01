@@ -97,6 +97,8 @@ Inline relations go in `@gloss` markers (artifact → concept or boundary). Onto
 
 A label or `doc:` change on a core concept is HARD and changes every view that shows the concept: the definition is what the business view says. On an implementation concept it is SOFT, unless its file is under `policy.hard-paths` (default `ontology/**`, `**/.gloss.yaml`, `glossmark.yaml`): a change in a file under hard-paths is HARD whatever its semantic class, so the path rule is never lowered ([ADR 0018](adr/0018-gate-classification.md)).
 
+Every HARD change names who decides it: the `owner:` of the manifest its path is under, else the `owner:` of its concept's namespace, as `owner claims-decisioning` at the end of the tag (`owner` in JSON; [ADR 0047](adr/0047-bind-writes-the-whole-binding.md)).
+
 `gloss diff` also prints a **Realization changes** block (`realizations` in JSON): one line per concept whose deepest realizing boundaries changed (a `holds` change is a manifest change, HARD), such as `hire:Invoicing realized by {bw:hirehq-invoicing} → {bw:hirehq-invoicing, bw:invoicing-service}`. A boundary that loses its last implementation of a concept is a `realization-removed` change, gated at the concept's criticality, and HARD when no boundary realizes the concept any more. A view the change deletes is listed under "Views changed" as `name (removed)`.
 
 ## Review states (the ledger)
@@ -105,7 +107,7 @@ A label or `doc:` change on a core concept is HARD and changes every view that s
 
 ## Concept kinds
 
-`entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type`. `implements` expects a process, capability, system-type, event, constraint or measure; `represents` an entity, event, measure, resource or constraint; `publishes` and `subscribes` an event (GM221 warns otherwise, on a proposed `@gloss?` link too, and names `represents` when `implements` targets an entity). `hosts` expects a system-type, or a page concept that itself presents or hosts something (GM223 warns otherwise: a CLI command or a router that does the work implements it), and `presents` on a constraint warns (GM224) because a page that edits a limit `configures` it ([ADR 0012](adr/0012-surfaces.md)).
+`entity`, `process`, `capability`, `event`, `measure`, `constraint`, `resource`, `system-type`. `implements` expects a process, capability, system-type, event, constraint or measure; `represents` an entity, event, measure, resource or constraint; `publishes` and `subscribes` an event (GM221 warns otherwise, on a proposed `@gloss?` link too, and names `represents` when `implements` targets an entity). `hosts` expects a system-type, or a page concept that itself presents or hosts something (GM223 warns otherwise: a CLI command or a router that does the work implements it), and `presents` on a constraint warns (GM224) because a page that edits a limit `configures` it ([ADR 0012](adr/0012-surfaces.md)). On a file `gloss check` recognises as a surface (a page, an admin page, a CLI, a BFF route, a GraphQL gateway, a document renderer) the surface rule's hint (GM255 to GM259) replaces those warnings and names the rewrite ([MARKING.md](MARKING.md#surfaces), [ADR 0046](adr/0046-surface-rules.md)).
 
 ## Feature slices (`gloss slice`)
 

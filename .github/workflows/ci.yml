@@ -54,6 +54,8 @@ jobs:
           (cd examples/library/circulation && ../../../gloss check && ../../../gloss build -q)
           (cd examples/library/holds-worker && ../../../gloss check && ../../../gloss build -q)
           ./gloss landscape examples/library/circulation examples/library/holds-worker --fail-on dangling
+          (cd examples/value-binding && ../../gloss check --strict)
+          GLOSS=$PWD/gloss examples/value-binding/demo.sh
 
   # GlossMark on GlossMark, through the Action built from this checkout: the
   # committed graph matches the tree, gloss check is clean, drift fails on

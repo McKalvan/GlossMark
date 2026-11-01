@@ -76,7 +76,11 @@ type matcher struct {
 	stop     map[string]bool
 }
 
-func newMatcher(ws *load.Workspace, g *graph.Graph, extraStop []string) *matcher {
+// newMatcher indexes the concepts suggest may target. A proposed concept is
+// no target until accepted (ADR 0030) unless proposed is set: gloss onboard
+// drafts the whole vocabulary as proposals and the gate classes every link
+// to one HARD, so the markers it writes are reviewed with the concepts.
+func newMatcher(ws *load.Workspace, g *graph.Graph, extraStop []string, proposed bool) *matcher {
 	m := &matcher{g: g, ws: ws, byCurie: map[string]*concept{}, stop: map[string]bool{}}
 	for _, w := range append(append([]string{}, DefaultStopwords...), extraStop...) {
 		for _, t := range mcp.Tokens(w) {
@@ -89,7 +93,7 @@ func newMatcher(ws *load.Workspace, g *graph.Graph, extraStop []string) *matcher
 		// and is no target until accepted. A deprecated one stays a target:
 		// brownfield code still says its name, and the proposal names the
 		// replacement for the reviewer (ADR 0030).
-		if n.Proposed || n.Imported && n.Tier == model.TierImpl && n.Published == "" {
+		if n.Proposed && !proposed || n.Imported && n.Tier == model.TierImpl && n.Published == "" {
 			continue
 		}
 		name := n.CURIE[strings.Index(n.CURIE, ":")+1:]

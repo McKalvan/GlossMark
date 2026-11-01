@@ -1,0 +1,9 @@
+# ontology/tide.gloss.yaml: the implementation tier. Every concept here realizes
+# a claim: concept or is internal: true.
+namespace: tide
+version: 0.1.0
+concepts:
+  AssessmentRules:
+    kind: process
+    realizes: claim:ClaimAssessment
+    doc: "assess(): the pure decision function, denials first, then holds, then the auto-approval limit."

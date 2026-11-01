@@ -30,6 +30,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/mcp"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	surf "github.com/mckalvan/glossmark/internal/surface"
 )
 
 // Proposal is one marker to insert.
@@ -123,6 +124,10 @@ type Options struct {
 	// rejected (same marker id, or same anchor fingerprint, relation and
 	// target) is not proposed again.
 	Ledger map[string]*model.LedgerEntry
+	// Proposed makes proposed: true concepts targets too. gloss onboard sets
+	// it: its vocabulary is all proposals, and every link to one is HARD at
+	// the gate, so nothing is accepted without a review (ADR 0030).
+	Proposed bool
 	// Sources keeps only the proposals of these sources (gloss suggest
 	// --source); empty keeps every source.
 	Sources []string
@@ -161,9 +166,10 @@ deploys (Kubernetes workloads), presents and hosts (page and layout components),
 specs: an AsyncAPI contract (documents per channel; publishes and subscribes on the code that names a channel or a
 message), an OpenAPI spec (documents per operation, represents per schema, implements on the handler of a covered
 route), Strimzi KafkaTopic resources (provisions), ORM table mappings (represents); --source picks sources.
-targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts.
+targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts (gloss onboard includes them: its vocabulary is all proposals).
 files: .py .ts .tsx .js .jsx .mjs .go .rs .java .kt .rb .cs .php .swift .scala .tf .sql .proto .prisma .feature .sh .md .yaml
-never proposed: configures, publishes-value, instructs, may-modify, produces; sidecars, JSON, Dockerfiles, CI workflows`
+configures and produces only where a surface rule asks for them (an admin page editing a constraint, a document renderer)
+never proposed: publishes-value, instructs, may-modify; sidecars, JSON, Dockerfiles, CI workflows`
 
 type runner struct {
 	ws      *load.Workspace
@@ -190,6 +196,9 @@ type file struct {
 	m     *model.Manifest
 	test  bool
 	phase int
+	// kind is the surface the file is (a page, a CLI, a BFF, a document
+	// renderer), whose rule sets the relation (ADR 0046).
+	kind surf.Kind
 }
 
 // Run proposes markers for the files under paths (all workspace files when
@@ -203,7 +212,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	if ws.Config.Suggest != nil {
 		stop = ws.Config.Suggest.Stopwords
 	}
-	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop), external: map[string]*wire.Client{}, measured: ws.Config.Measured(), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
+	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop, opt.Proposed), external: map[string]*wire.Client{}, measured: ws.Config.Measured(), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
 	if err := r.index(opt); err != nil {
 		return nil, 0, err
 	}
@@ -258,7 +267,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		if err != nil {
 			return nil, 0, err
 		}
-		f := &file{rel: rel, lines: lines, style: style, m: ws.ManifestFor(rel), test: ws.IsTestPath(rel), phase: 1}
+		f := &file{rel: rel, lines: lines, style: style, m: ws.ManifestFor(rel), test: ws.IsTestPath(rel), phase: 1, kind: surf.Detect(rel, lines)}
 		switch {
 		case ext == ".sql" || ext == ".proto" || ext == ".prisma":
 			f.phase = 0
@@ -921,9 +930,11 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 		if pa, pb := kindPreferred(role, a.c.n.Kind), kindPreferred(role, b.c.n.Kind); pa != pb {
 			return pa
 		}
-		// Code implements the implementation tier; a tie goes to it.
+		// Code implements the implementation tier; a tie goes to it. A
+		// surface (a page, a route, a renderer) names the core concept it
+		// shows, not the engine's concept (ADR 0046).
 		if a.c.impl != b.c.impl {
-			return a.c.impl
+			return a.c.impl != surf.PrefersCore(f.kind)
 		}
 		if len(a.c.toks) != len(b.c.toks) {
 			return len(a.c.toks) < len(b.c.toks)
@@ -944,6 +955,15 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 			rel = fixed
 		case h.rel != "":
 			rel = h.rel
+		case role != roleTest && !f.test:
+			// The surface rule overrides the role's relation: produces on
+			// a document renderer, configures on an admin page editing a
+			// constraint, presents on a surface for a process an engine
+			// elsewhere implements (ADR 0046). A relation a spec fixes
+			// (fixed, h.rel) is more specific and wins over it.
+			if sr := surf.Default(r.g, r.ws, f.kind, f.rel, h.c.n); sr != "" && (rel == "implements" || rel == "presents" || rel == "represents") {
+				rel = sr
+			}
 		}
 		if !r.usable(f, h.c, rel) {
 			continue

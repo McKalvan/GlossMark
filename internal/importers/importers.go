@@ -76,7 +76,7 @@ func ParseGlossary(text string) []Entry {
 			if k := kindFromDoc(cur.Doc); k != "" {
 				cur.Kind, cur.KindFrom = k, "definition"
 			} else {
-				cur.Kind, cur.KindFrom = guessKind(cur.Name), "name"
+				cur.Kind, cur.KindFrom = GuessKind(cur.Name), "name"
 			}
 		}
 		out = append(out, *cur)
@@ -576,7 +576,10 @@ func firstSentence(s string) string {
 	return s
 }
 
-func guessKind(name string) string {
+// GuessKind guesses a concept's kind from its name's ending: -ing and
+// -tion are processes, -ed and -Event events, -Rule, -Policy and -Limit
+// constraints, -Rate, -Count and -Score measures; anything else an entity.
+func GuessKind(name string) string {
 	switch {
 	case strings.HasSuffix(name, "ing"), strings.HasSuffix(name, "tion"), strings.HasSuffix(name, "Process"), strings.HasSuffix(name, "Pipeline"):
 		return "process"
