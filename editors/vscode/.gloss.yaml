@@ -1,0 +1,8 @@
+# editors/vscode/.gloss.yaml: the VS Code extension, a thin client of gloss lsp.
+boundary: arch:vscode-extension
+level: container
+label: VS Code extension
+part-of: arch:glossmark
+realizes: [gmi:EditorExtension]
+default-namespace: gmi
+owner: glossmark
