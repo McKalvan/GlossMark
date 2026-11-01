@@ -1,0 +1,8 @@
+# internal/infer/.gloss.yaml: the specs other stacks write, read as sources of proposed links.
+boundary: arch:infer
+level: component
+part-of: arch:lib-onboarding
+label: infer
+realizes: [gmi:SpecInference]
+default-namespace: gmi
+owner: glossmark

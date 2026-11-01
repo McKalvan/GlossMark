@@ -14,12 +14,12 @@ import (
 )
 
 func init() {
-	register(command{"check", "lint: syntax, dangling refs, domain/range, own-subject rule, tiers, allowed lists", cmdCheck})
+	register(command{"check", "lint: syntax, dangling refs, domain/range, own-subject rule, tiers, allowed lists; surface-rule hints never fail", cmdCheck})
 }
 
 func cmdCheck(args []string) int {
 	fs, root := newFlags("check")
-	warnErr := fs.Bool("strict", false, "treat warnings as errors")
+	warnErr := fs.Bool("strict", false, "treat warnings as errors (hints never fail)")
 	explain := fs.Bool("explain", false, "print the effective allowed set of every manifest (declared, or derived from what it declares) and why each entry is in it")
 	format := fs.String("format", "text", "--explain output: text | json")
 	if err := parseFlags(fs, args); err != nil {
@@ -49,8 +49,9 @@ func cmdCheck(args []string) int {
 		case "error":
 			errs++
 		case "hint":
-			// A hint (GM250, the starter relation profile) names a switch,
-			// not a defect: --strict leaves it alone.
+			// A hint (GM250, the starter relation profile; GM255 to GM259, the
+			// surface rules) names a switch or a choice, not a defect: --strict
+			// leaves it alone.
 			hints++
 		default:
 			warns++

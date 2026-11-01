@@ -96,7 +96,7 @@ func runCalibration(t *testing.T) []calibrated {
 				return
 			}
 			rollup.Derive(res.Graph, ws.Vocab)
-			m, err := SelfEval(ws, res.Graph, nil)
+			m, err := SelfEval(ws, res.Graph, nil, nil)
 			if err != nil {
 				calibrationErr = fmt.Errorf("%s: %w", cs.name, err)
 				return
@@ -195,7 +195,7 @@ func TestCalibrationReport(t *testing.T) {
 	}
 	all, labels := pool(cs, "")
 	pooled := Evaluate("pooled (in sample)", all, labels, rule)
-	t.Log("\n" + pooled.String() + pooled.BasisTable())
+	t.Log("\n" + pooled.String() + pooled.SourceTable() + pooled.BasisTable())
 	t.Log("\n" + sweep("pooled, in sample", all))
 	hall, hsets, hsc := heldOut(cs)
 	t.Log("\n" + heldOutSummary(hall, hsets) + hall.BandTable())

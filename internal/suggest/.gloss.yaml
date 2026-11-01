@@ -3,7 +3,7 @@ boundary: arch:suggest
 level: component
 label: suggest
 part-of: arch:lib-onboarding
-realizes: [gmi:MarkerSuggester, gmi:SuggestCalibration]
+realizes: [gmi:MarkerSuggester, gmi:SuggestCalibration, gmi:SpecInference]
 produces: [gm:ProposedLink]
 default-namespace: gmi
 owner: glossmark
