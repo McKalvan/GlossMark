@@ -96,7 +96,7 @@ func runCalibration(t *testing.T) []calibrated {
 				return
 			}
 			rollup.Derive(res.Graph, ws.Vocab)
-			m, err := SelfEval(ws, res.Graph, nil, nil)
+			m, err := SelfEval(ws, res.Graph, nil, nil, Options{})
 			if err != nil {
 				calibrationErr = fmt.Errorf("%s: %w", cs.name, err)
 				return

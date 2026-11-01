@@ -11,7 +11,9 @@ package suggest
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +24,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/infer"
+	"github.com/mckalvan/glossmark/internal/infer/wire"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/mcp"
@@ -79,7 +82,7 @@ const (
 	SourceSchema = "schema" // a table, view or model declaration, or an ORM mapping to one
 )
 
-// Sources lists every source, for gloss suggest --source.
+// Sources lists every source in the binary, for gloss suggest --source.
 var Sources = func() []string {
 	out := []string{SourceCode, SourceRoute, SourceTopic, SourceSchema}
 	for _, s := range infer.Builtin() {
@@ -87,6 +90,29 @@ var Sources = func() []string {
 	}
 	return out
 }()
+
+// ExternalSources names the external sources a run from root discovers:
+// sources: in glossmark.yaml and gloss-source-<name> on PATH
+// (docs/PLUGINS.md).
+func ExternalSources(cfg *model.Config, root string) []string {
+	var out []string
+	ext, _ := wire.Discover(cfg, root)
+	for _, c := range ext {
+		out = append(out, c.Name())
+	}
+	return out
+}
+
+// AllSources is Sources plus ExternalSources, for gloss suggest --source.
+func AllSources(cfg *model.Config, root string) []string {
+	out := append([]string{}, Sources...)
+	for _, name := range ExternalSources(cfg, root) {
+		if !contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
 
 // Options tunes the matcher.
 type Options struct {
@@ -100,6 +126,19 @@ type Options struct {
 	// Sources keeps only the proposals of these sources (gloss suggest
 	// --source); empty keeps every source.
 	Sources []string
+	// Warn, when set, receives what went wrong without stopping the run:
+	// an external source that crashed or answered outside the protocol
+	// (GM700). Nil drops the messages.
+	Warn func(msg string)
+	// PluginDir is the directory external sources run from and a relative
+	// sources: command resolves against; "" is the workspace root. The
+	// calibration harness runs them from the original root, not its copy.
+	PluginDir string
+	// AutoAcceptThreshold is the conf at or above which proposals
+	// auto-accept, in force for this run; the prior an unmeasured
+	// external source declares is capped below it (ADR 0050). 0 derives
+	// the default from the shipped calibration.
+	AutoAcceptThreshold float64
 }
 
 // DefaultMinConf drops the evidence that is wrong more often than right
@@ -131,7 +170,12 @@ type runner struct {
 	g       *graph.Graph
 	m       *matcher
 	sources []infer.Source
-	allowed map[*model.Manifest]rollup.Allowed
+	// external are the sources outside the binary, by name: their conf is
+	// read apart (conf), and their failures are reported, not fatal.
+	external map[string]*wire.Client
+	measured calib.Table // the repository's own calibration, if any
+	cap      float64     // what a declared prior is capped at
+	allowed  map[*model.Manifest]rollup.Allowed
 	// linked maps a symbol's last part to the targets implements links
 	// give it, for tests that call it; tables maps a table name to the
 	// entity a represents link gives it.
@@ -159,13 +203,11 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	if ws.Config.Suggest != nil {
 		stop = ws.Config.Suggest.Stopwords
 	}
-	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
-	for _, s := range infer.Builtin() {
-		if err := s.Index(ws, vocab{r.m, g}); err != nil {
-			return nil, 0, fmt.Errorf("%s: %w", s.Name(), err)
-		}
-		r.sources = append(r.sources, s)
+	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop), external: map[string]*wire.Client{}, measured: ws.Config.Measured(), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
+	if err := r.index(opt); err != nil {
+		return nil, 0, err
 	}
+	defer r.close()
 	type link struct{ fp, rel, target string }
 	rejected := map[link]bool{}
 	for _, e := range opt.Ledger {
@@ -200,7 +242,12 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	var files []*file
 	for _, rel := range ws.Files {
 		ext := strings.ToLower(filepath.Ext(rel))
-		if !Under(rel, paths) || !codeExts[ext] || marked[rel+"#file"] || skipDoc(rel) {
+		if !Under(rel, paths) || marked[rel+"#file"] || skipDoc(rel) {
+			continue
+		}
+		// A file in no language suggest reads is still a spec when a
+		// source declares items in it (a GraphQL schema through a plugin).
+		if !codeExts[ext] && !r.specFile(rel) {
 			continue
 		}
 		style, ok := marker.StyleFor(rel, ws.Config.CommentStyles)
@@ -226,17 +273,21 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		var decls []marker.Decl
 		items := map[int]specItem{} // decl index → the spec item it stands for
 		ext := strings.ToLower(filepath.Ext(f.rel))
+		yaml := ext == ".yaml" || ext == ".yml"
 		switch {
-		case ext == ".yaml" || ext == ".yml":
+		case yaml || r.specFile(f.rel):
 			// A spec file's items come from the source that reads it; any
 			// other YAML may hold Kubernetes workloads and topics.
 			for _, src := range r.sources {
 				for _, it := range src.Items(f.rel) {
+					if it.Line < 1 || it.Line > len(f.lines) {
+						continue
+					}
 					items[len(decls)] = specItem{it, src.Name()}
 					decls = append(decls, marker.Decl{Symbol: it.Symbol, Kind: "item", Line: it.Line, End: it.End, Insert: it.Line, Indent: it.Indent, Doc: it.Doc})
 				}
 			}
-			if len(decls) == 0 {
+			if len(decls) == 0 && yaml {
 				decls = workloads(f.lines)
 			}
 		default:
@@ -323,7 +374,148 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	if out == nil {
 		out = []Proposal{}
 	}
+	if opt.Warn != nil {
+		for _, msg := range r.failures() {
+			opt.Warn(msg)
+		}
+	}
 	return out, skipped, nil
+}
+
+// index registers and indexes the sources: the built-ins, then the
+// external ones (sources: in glossmark.yaml, gloss-source-<name> on
+// PATH), an external one replacing a built-in of the same name. A
+// built-in that fails stops the run; an external one that speaks another
+// contract version does too (#209), while one that crashes or answers
+// outside the protocol is reported through opt.Warn and left out, so the
+// other sources still run.
+func (r *runner) index(opt Options) error {
+	files := infer.Files{Root: r.ws.Root}
+	for _, rel := range r.ws.Files {
+		f := infer.File{Path: rel, Test: r.ws.IsTestPath(rel)}
+		if m := r.ws.ManifestFor(rel); m != nil {
+			f.Dir = m.Dir
+		}
+		files.List = append(files.List, f)
+	}
+	dir := opt.PluginDir
+	if dir == "" {
+		dir = r.ws.Root
+	}
+	ext, err := wire.Discover(r.ws.Config, dir)
+	if err != nil {
+		return err
+	}
+	replaced := map[string]bool{}
+	for _, c := range ext {
+		replaced[c.Name()] = true
+	}
+	v := vocab{r.m, r.g}
+	for _, s := range infer.Builtin() {
+		if replaced[s.Name()] {
+			continue
+		}
+		if err := s.Index(files, v); err != nil {
+			return fmt.Errorf("%s: %w", s.Name(), err)
+		}
+		r.sources = append(r.sources, s)
+	}
+	for _, c := range ext {
+		if err := c.Index(files, v); err != nil {
+			var ce *wire.ContractError
+			if errors.As(err, &ce) {
+				r.close()
+				return err
+			}
+			if opt.Warn != nil {
+				opt.Warn(err.Error())
+			}
+			continue
+		}
+		r.sources = append(r.sources, c)
+		r.external[c.Name()] = c
+	}
+	r.cap = opt.AutoAcceptThreshold
+	if r.cap <= 0 {
+		r.cap = calib.Derive(confFor, calib.Shipped, calib.DefaultPrecision, opt.MinConf).Threshold
+	}
+	r.cap = math.Round((r.cap-0.01)*100) / 100
+	if r.cap > 1 {
+		r.cap = 1
+	}
+	return nil
+}
+
+// close ends the external sources' processes and reports the ones that
+// failed after indexing.
+func (r *runner) close() {
+	for _, c := range r.external {
+		c.Close()
+	}
+}
+
+// failures are the external sources that broke during the run, for the
+// caller to report (GM700).
+func (r *runner) failures() []string {
+	var out []string
+	for _, name := range sortedKeys(r.external) {
+		if err := r.external[name].Err(); err != nil {
+			out = append(out, err.Error())
+		}
+	}
+	return out
+}
+
+func sortedKeys(m map[string]*wire.Client) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// conf is the conf a basis carries. A basis of the binary's own sources
+// reads the shipped calibration (confFor). A basis of an external source
+// (<name>/<basis>/<role>) cannot be in the shipped table, so it reads,
+// in order: the repository's own calibration when it measured the
+// basis's row (gloss suggest --calibrate --write); the prior the plugin
+// declared, capped below the auto-accept threshold in force; else
+// calib.Unmeasured. Only measured precision auto-accepts (ADR 0024,
+// ADR 0050).
+func (r *runner) conf(basis string) float64 {
+	c := r.external[calib.Evidence(basis)]
+	if c == nil {
+		return confFor(basis)
+	}
+	if r.measured != nil && r.measured.Seen(basis) {
+		return r.measured.Conf(basis)
+	}
+	if calib.Shipped.Seen(basis) {
+		// A plugin that replaces a built-in inherits its measurement.
+		return confFor(basis)
+	}
+	rest := strings.SplitN(basis, "/", 2)
+	if len(rest) == 2 {
+		role := strings.TrimSuffix(rest[1], "/tie")
+		for _, key := range []string{role, calib.Evidence(role)} {
+			if p, ok := c.Priors()[key]; ok {
+				return math.Min(p, r.cap)
+			}
+		}
+	}
+	return calib.Unmeasured
+}
+
+// specFile reports whether a source declares items in a file: a spec
+// file is proposed on by its items, not its declarations.
+func (r *runner) specFile(rel string) bool {
+	for _, src := range r.sources {
+		if len(src.Items(rel)) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // dedupeLinks drops a proposal that repeats another's line, relation and
@@ -518,7 +710,7 @@ func (r *runner) propose(f *file, d marker.Decl, role string, hints map[string][
 		source = SourceRoute
 	}
 	basis := h.basis(role, tie)
-	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: r.shorten(f, h.c.curie), Matched: h.matched(), Basis: basis, Source: source, Context: context, Conf: confFor(basis)}
+	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: r.shorten(f, h.c.curie), Matched: h.matched(), Basis: basis, Source: source, Context: context, Conf: r.conf(basis)}
 	if h.c.n.Deprecated {
 		p.Deprecated, p.Note = true, deprecatedNote(h.c.n)
 	}
@@ -536,7 +728,12 @@ func (r *runner) proposeItem(f *file, d marker.Decl, it specItem) (Proposal, boo
 		return Proposal{}, false
 	}
 	basis := h.basis(it.Role, tie)
-	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: r.shorten(f, h.c.curie), Matched: h.matched(), Basis: basis, Source: it.source, Scope: "block", Conf: confFor(basis)}
+	// A one-line item (a GraphQL field) is anchored as that line.
+	scope := "block"
+	if it.End <= it.Line {
+		scope = "line"
+	}
+	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: r.shorten(f, h.c.curie), Matched: h.matched(), Basis: basis, Source: it.source, Scope: scope, Conf: r.conf(basis)}
 	if h.c.n.Deprecated {
 		p.Deprecated, p.Note = true, deprecatedNote(h.c.n)
 	}
