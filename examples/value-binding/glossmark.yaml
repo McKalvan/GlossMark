@@ -1,0 +1,6 @@
+# glossmark.yaml: the namespaces this repository owns (docs/FILE-FORMATS.md).
+grammar: 1
+repo-iri: https://onto.tidewater.example/
+owns:
+  claim: { iri: https://onto.tidewater.example/core/, tier: core,           version: 0.1.0, owner: claims-product }   # what the business recognises
+  tide:  { iri: https://onto.tidewater.example/impl/, tier: implementation, version: 0.1.0, owner: claims-engineering }   # the mechanisms that realize it

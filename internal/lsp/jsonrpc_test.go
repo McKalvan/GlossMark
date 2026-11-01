@@ -69,7 +69,7 @@ func TestToDiagnostic(t *testing.T) {
 	if d.Severity != SeverityWarning || d.Code != "GM503" || d.Range.Start.Character != 2 || d.Range.End.Character != len(lines[0]) || d.Source != "gloss" {
 		t.Errorf("warning: %+v", d)
 	}
-	if d := toDiagnostic(diag("hint", "GM250", 1, 5), lines); d.Severity != SeverityHint || d.Range.Start.Character != 4 {
+	if d := toDiagnostic(diag("hint", "GM255", 1, 5), lines); d.Severity != SeverityHint || d.Range.Start.Character != 4 {
 		t.Errorf("hint: %+v", d)
 	}
 	if d := toDiagnostic(diag("error", "GM215", 9, 0), lines); d.Severity != SeverityError || d.Range.Start.Line != 8 {

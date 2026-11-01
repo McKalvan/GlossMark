@@ -16,11 +16,15 @@ import (
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/surface"
 )
 
 // Run returns lint diagnostics for a built graph. Codes:
 //
-//	GM2xx references   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
+//	GM2xx references   GM255-GM259 surface rules (hints)   GM3xx ontology tiers   GM4xx own-subject   GM5xx markers/manifests   GM6xx governance
+//
+// Severity is error, warning or hint; a hint never fails gloss check, not
+// even under --strict.
 func Run(ws *load.Workspace, g *graph.Graph) []marker.Diagnostic {
 	c := &checker{ws: ws, g: g}
 	c.ontologyFiles()
@@ -49,6 +53,58 @@ type checker struct {
 	g    *graph.Graph
 	out  []marker.Diagnostic
 	seen map[marker.Diagnostic]bool
+	// files caches the lines and surface kind of the files inline markers
+	// sit in, for the surface rules.
+	files map[string]*surfaceFile
+}
+
+type surfaceFile struct {
+	lines []string
+	kind  surface.Kind
+}
+
+// surfaceOf reads a marked file once and says which surface it is.
+func (c *checker) surfaceOf(path string) *surfaceFile {
+	if f, ok := c.files[path]; ok {
+		return f
+	}
+	if c.files == nil {
+		c.files = map[string]*surfaceFile{}
+	}
+	f := &surfaceFile{}
+	if b, err := c.ws.ReadFile(path); err == nil {
+		f.lines = strings.Split(string(b), "\n")
+	}
+	f.kind = surface.Detect(path, f.lines)
+	c.files[path] = f
+	return f
+}
+
+// surfaceHint applies the surface rules (GM255 to GM259, hints) to one
+// inline marker and reports whether one fired, so the general GM223 and
+// GM224 do not repeat it.
+func (c *checker) surfaceHint(e *graph.Edge, sn, on *graph.Node, path string, line int) bool {
+	if sn.NodeType != model.NodeArtifact || e.Prov == nil || e.Prov.Path == "" {
+		return false
+	}
+	// The surface is the code the link maps (Prov.Path), also for a
+	// manifest links: entry, whose diagnostic sits at the entry.
+	code := e.Prov.Path
+	f := c.surfaceOf(code)
+	if f.kind == surface.None {
+		return false
+	}
+	h := surface.Advise(c.g, c.ws, f.kind, surface.Link{Path: code, Lines: f.lines, Relation: e.P, Target: on, Artifact: sn})
+	if h == nil {
+		return false
+	}
+	msg := h.Msg
+	if e.Source == graph.SourceManifest {
+		// A mapped link has no marker to rewrite: the links: entry is it.
+		msg += fmt.Sprintf("; this link is a links: entry mapping %s, so the rewrite is the entry's relation, not a marker in the code", code)
+	}
+	c.add(path, line, "hint", h.Code, msg)
+	return true
 }
 
 // add records a diagnostic once. Edge checks run per target, so a marker or
@@ -698,8 +754,10 @@ func (c *checker) edges() {
 		}
 		// Surfaces that hide a mechanism (ADR 0012): a shell hosts a whole
 		// system-type (or a page concept), and a page that edits a
-		// constraint's value configures it rather than presenting it.
-		if graph.LinkSource(e.Source) && on.NodeType == model.NodeConcept && on.Kind != "" {
+		// constraint's value configures it rather than presenting it. On a
+		// recognised surface the surface rule's hint says it instead
+		// (ADR 0046), for an inline marker and a manifest links: entry alike.
+		if graph.LinkSource(e.Source) && on.NodeType == model.NodeConcept && on.Kind != "" && !c.surfaceHint(e, sn, on, path, line) {
 			switch {
 			case e.P == "hosts" && on.Kind != "system-type" && len(c.g.Objects(on.ID, "presents"))+len(c.g.Objects(on.ID, "hosts")) == 0:
 				c.add(path, line, "warning", "GM223", fmt.Sprintf("hosts %s: %s is a %s, and hosts is for a shell around a whole system-type; if this code does the work, write implements, if it shows it, presents (hosts hides a missing mechanism from drift)", on.CURIE, on.CURIE, on.Kind))

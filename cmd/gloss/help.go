@@ -17,11 +17,11 @@ var helpGroups = []struct {
 	name     string
 	commands []string
 }{
-	{"Start", []string{"init", "doctor", "strip"}},
+	{"Start", []string{"onboard", "init", "doctor", "strip"}},
 	{"Daily", []string{"check", "build", "drift", "coverage", "review", "view"}},
 	{"Pull requests", []string{"diff", "impact", "accept", "reject", "status"}},
 	{"Agents", []string{"hook", "context", "mcp", "agents", "lsp"}},
-	{"Ontology", []string{"propose", "suggest", "harvest", "import", "criticality"}},
+	{"Ontology", []string{"bind", "propose", "suggest", "harvest", "import", "criticality"}},
 	{"Advanced", []string{"export", "history", "landscape", "lock", "publish", "report", "slice", "version"}},
 }
 
@@ -39,6 +39,15 @@ type helpEntry struct {
 // help is keyed by command name, in the order of helpGroups.
 var help = map[string]helpEntry{
 	// Start
+	"onboard": {line: "draft ontology, boundary map, markers and viewer in one run",
+		usage: []string{"onboard [--namespace ns] [--top n] [--no-suggest] [--open]"},
+		more:  "For a repository with no GlossMark files: gloss init, the vocabulary it keeps, harvested candidates as proposed concepts, a boundary map from deploy manifests and Terraform, @gloss? markers, and the viewer. Everything is a proposal; gloss review decides.",
+		examples: []string{
+			"gloss onboard  # then open .glossmark/viewer.html",
+			"gloss onboard --namespace clinic --open  # name the core; open the viewer",
+			"gloss onboard --no-suggest  # no markers yet",
+		},
+		docs: "docs/QUICKSTART.md#0-scaffold"},
 	"init": {line: "scaffold a repository: config, manifests, CI, hook, first graph",
 		usage: []string{"init [--dry-run] [--name n] [--core prefix] [--import dir]..."},
 		examples: []string{
@@ -190,6 +199,16 @@ var help = map[string]helpEntry{
 		docs: "docs/QUICKSTART.md#agent-experience"},
 
 	// Ontology
+	"bind": {line: "bind a constant to a published value; drift and HARD follow",
+		usage: []string{"bind <path>:<symbol> --as <ns:Name> [--publish-as core:X] [flags]"},
+		more:  "Reads the value the line assigns, writes value:, value-from: and published: into the ontology file, puts a @gloss publishes-value marker above the line and records the baseline. From then on a change to the line without a change to value: is drift (gloss drift) and HARD in the gate (gloss diff), with the owner named. The constant can be in any language GlossMark comments, or a key in a YAML, TOML or JSON file (--no-marker when the file takes no comment).",
+		examples: []string{
+			"gloss bind settings.py:AUTO_APPROVE_LIMIT_EUR --as tide:AutoApprovalRule \\",
+			"    --publish-as claim:AutoApprovalLimit --value \"5000 EUR\"",
+			"gloss bind ratelimit.yaml:policies.write.per_minute --as tide:Limit --internal",
+			"gloss bind -n Thresholds.kt:SCORE_THRESHOLD --as tide:Referral  # dry run",
+		},
+		docs: "docs/DEMO.md"},
 	"propose": {line: "add a proposed concept, or lift ns:NEW:Name markers",
 		usage: []string{
 			"propose concept <ns:Name> --kind <kind> [--realizes ns:X] [flags]",

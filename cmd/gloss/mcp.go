@@ -22,6 +22,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/review"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/surface"
 	"github.com/mckalvan/glossmark/internal/version"
 )
 
@@ -81,8 +82,49 @@ func (b *mcpBackend) Impact(props []mcp.Proposal) (any, error) {
 	overall := gate.AUTO
 	var items []map[string]any
 	for _, p := range props {
-		rel := ws.Vocab.Get(p.Relation)
 		item := map[string]any{"path": p.Path, "relation": p.Relation, "target": p.Target}
+		// The surface the file is (a page, a CLI, a BFF, a document
+		// renderer) and its marking rule (ADR 0046): the default relation
+		// when none is given, and a hint when the given one departs from it.
+		var lines []string
+		if b, err := os.ReadFile(ws.Abs(p.Path)); err == nil {
+			lines = strings.Split(string(b), "\n")
+		}
+		kind := surface.Detect(p.Path, lines)
+		var tnode *graph.Node
+		if t := p.Target; !marker.IsNewTarget(t) {
+			if strings.HasPrefix(t, ".") {
+				if m := ws.ManifestFor(p.Path); m != nil && m.DefaultNamespace != "" {
+					t = m.DefaultNamespace + ":" + t[1:]
+				}
+			}
+			if iri, ok := g.Expand(t); ok {
+				tnode = g.Node(iri)
+			}
+		}
+		if r, ok := surface.RuleFor(kind); ok {
+			item["surface"] = string(kind)
+			item["surface_rule"] = r.Text
+			if p.Relation == "" {
+				if d := surface.Default(g, ws, kind, p.Path, tnode); d != "" {
+					p.Relation, item["relation"], item["relation_defaulted"] = d, d, true
+				}
+			}
+			if h := surface.Advise(g, ws, kind, surface.Link{Path: p.Path, Lines: lines, Relation: p.Relation, Target: tnode}); h != nil {
+				item["hint"] = h.Code + ": " + h.Msg
+				if h.Relation != "" {
+					item["suggested_relation"] = h.Relation
+				}
+			}
+		}
+		if p.Relation == "" {
+			item["error"] = "relation is required: no surface rule gives " + p.Path + " a default"
+			item["gate"] = "HARD"
+			overall = gate.HARD
+			items = append(items, item)
+			continue
+		}
+		rel := ws.Vocab.Get(p.Relation)
 		if rel == nil || !rel.Inline {
 			item["error"] = fmt.Sprintf("relation %q cannot be used inline", p.Relation)
 			item["gate"] = "HARD"
@@ -149,7 +191,12 @@ func (b *mcpBackend) Impact(props []mcp.Proposal) (any, error) {
 		item["gate"] = string(cls)
 		item["reasons"] = why
 		if ws.Config.RelationProfile() == model.ProfileStarter && !model.InStarter(p.Relation) {
-			item["hint"] = fmt.Sprintf("%s is outside the starter relation profile; gloss check hints at it (GM250) until %s says relations: full", p.Relation, load.ConfigName)
+			msg := fmt.Sprintf("%s is outside the starter relation profile; gloss check hints at it (GM250) until %s says relations: full", p.Relation, load.ConfigName)
+			if prev, ok := item["hint"].(string); ok {
+				// A surface rule hint stands first; the profile's follows.
+				msg = prev + "; " + msg
+			}
+			item["hint"] = msg
 		}
 		if on := g.Node(oiri); on != nil {
 			item["target_kind"] = on.Kind

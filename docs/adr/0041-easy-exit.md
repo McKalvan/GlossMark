@@ -1,5 +1,5 @@
 <!-- @gloss documents gmi:Stripper scope=file -->
-# ADR 0041: leaving is one command, and it removes exactly what the scanner reads
+# ADR 0049: leaving is one command, and it removes exactly what the scanner reads
 
 Status: accepted, 2026-10-28; `gloss strip` and [docs/LEAVING.md](../LEAVING.md) built 2026-10-28 (#263).
 

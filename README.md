@@ -93,6 +93,7 @@ On your own repository, in roughly ten minutes:
 
 ```sh
 gloss init --dry-run           # the plan: a declaration per deployable directory, CI job, agent hook; writes nothing
+gloss onboard                  # or draft all of the below in one run: ontology, boundary map, @gloss? lines and the viewer, every item a proposal
 gloss init                     # write it and build the first graph
 gloss suggest --concepts       # draft a first vocabulary from the names in the code (or let an agent interview you: gloss hook install --skill)
 gloss suggest                  # propose @gloss? comment lines for the code; accept them in gloss review

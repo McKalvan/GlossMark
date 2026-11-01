@@ -728,24 +728,34 @@ func symbolLine(symbol string) *regexp.Regexp {
 // bindValue resolves a concept's value-from to a line of code and records it.
 // @gloss implements gmi:ValueBinder
 func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, line int) {
-	rel := filepath.ToSlash(vf.Path)
-	abs, err := ex.ws.Within(rel)
+	at, text, err := ResolveValueFrom(ex.ws, *vf)
 	if err != nil {
-		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from %v", n.CURIE, err))
+		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: %v", n.CURIE, err))
 		return
 	}
-	b, err := ex.ws.ReadFile(ex.ws.Rel(abs))
+	ex.addBinding(n, fmt.Sprintf("%s:%d", filepath.ToSlash(vf.Path), at), text)
+}
+
+// ResolveValueFrom finds the line of code a value-from names: its 1-based
+// line and the line's text, trimmed. The error reads as GM360 does, after
+// the concept's name: "value-from ..." and what to write instead. gloss bind
+// uses it to read a constant before it writes the binding.
+func ResolveValueFrom(ws *load.Workspace, vf model.ValueFrom) (int, string, error) {
+	rel := filepath.ToSlash(vf.Path)
+	abs, err := ws.Within(rel)
 	if err != nil {
-		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from %s does not exist", n.CURIE, rel))
-		return
+		return 0, "", fmt.Errorf("value-from %v", err)
+	}
+	b, err := ws.ReadFile(ws.Rel(abs))
+	if err != nil {
+		return 0, "", fmt.Errorf("value-from %s does not exist", rel)
 	}
 	lines := strings.Split(string(b), "\n")
 	at := 0
 	switch {
 	case vf.Line > 0:
 		if vf.Line > len(lines) {
-			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from %s has no line %d", n.CURIE, rel, vf.Line))
-			return
+			return 0, "", fmt.Errorf("value-from %s has no line %d", rel, vf.Line)
 		}
 		at = vf.Line
 	case vf.Symbol != "" && keyPathFile(rel):
@@ -753,11 +763,9 @@ func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, 
 		at, cands = findKey(rel, lines, vf.Symbol)
 		switch {
 		case len(cands) > 1:
-			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from symbol %q matches %d keys in %s (%s); write the dotted key path", n.CURIE, vf.Symbol, len(cands), rel, strings.Join(cands, ", ")))
-			return
+			return 0, "", fmt.Errorf("value-from symbol %q matches %d keys in %s (%s); write the dotted key path", vf.Symbol, len(cands), rel, strings.Join(cands, ", "))
 		case at == 0:
-			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from symbol %q names no key in %s; write the dotted key path from the top (a.b.c), or use line:", n.CURIE, vf.Symbol, rel))
-			return
+			return 0, "", fmt.Errorf("value-from symbol %q names no key in %s; write the dotted key path from the top (a.b.c), or use line:", vf.Symbol, rel)
 		}
 	case vf.Symbol != "":
 		re := symbolLine(vf.Symbol)
@@ -768,14 +776,63 @@ func (ex *extractor) bindValue(n *graph.Node, vf *model.ValueFrom, file string, 
 			}
 		}
 		if at == 0 {
-			ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from symbol %q is not assigned anywhere in %s", n.CURIE, vf.Symbol, rel))
-			return
+			return 0, "", fmt.Errorf("value-from symbol %q is not assigned anywhere in %s", vf.Symbol, rel)
 		}
 	default:
-		ex.diag(file, line, "error", "GM360", fmt.Sprintf("%s: value-from needs symbol: or line:", n.CURIE))
-		return
+		return 0, "", fmt.Errorf("value-from needs symbol: or line:")
 	}
-	ex.addBinding(n, fmt.Sprintf("%s:%d", rel, at), strings.TrimSpace(lines[at-1]))
+	return at, strings.TrimSpace(lines[at-1]), nil
+}
+
+// ValueLiteral reads the value a line assigns to symbol, as the ontology
+// would publish it: the right-hand side of the first =, := or : after the
+// symbol, without a trailing comment or semicolon; a quoted string without
+// its quotes; a number as its first numeric literal with digit separators
+// dropped (5_000 is 5000), so gloss accept --value finds it in the line. A
+// line that assigns nothing readable returns "".
+func ValueLiteral(line, symbol string) string {
+	re := symbolLine(symbol)
+	loc := re.FindStringIndex(line)
+	if loc == nil {
+		// A key in a configuration file: "key: value" or "key = value".
+		i := strings.Index(line, symbol)
+		if i < 0 {
+			return ""
+		}
+		loc = []int{i, i + len(symbol)}
+		rest := strings.TrimLeft(line[loc[1]:], "\"' \t")
+		if !strings.HasPrefix(rest, ":") && !strings.HasPrefix(rest, "=") {
+			return ""
+		}
+		loc[1] += len(line[loc[1]:]) - len(rest) + 1
+	}
+	rhs := strings.TrimSpace(line[loc[1]:])
+	if rhs == "" || rhs == "{" || rhs == "[" {
+		return ""
+	}
+	if q := rhs[0]; q == '"' || q == '\'' || q == '`' {
+		if j := strings.IndexByte(rhs[1:], q); j >= 0 {
+			return rhs[1 : j+1]
+		}
+	}
+	for _, c := range []string{" #", " //", "//", ";", " --"} {
+		if j := strings.Index(rhs, c); j > 0 {
+			rhs = rhs[:j]
+		}
+	}
+	rhs = strings.TrimRight(strings.TrimSpace(rhs), ",;")
+	if m := numLiteral.FindStringIndex(rhs); m != nil && (m[0] == 0 || !isIdent(rhs[m[0]-1])) {
+		return strings.NewReplacer("_", "", ",", "").Replace(rhs[m[0]:m[1]])
+	}
+	return rhs
+}
+
+// numLiteral matches a number as code writes it: digit groups (1_000),
+// a fraction, an exponent.
+var numLiteral = regexp.MustCompile(`[-+]?(?:\d[\d_]*(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?`)
+
+func isIdent(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }
 
 // valueBinding is one line of code a published value is bound to.
