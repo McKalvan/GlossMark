@@ -1,0 +1,765 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glossmark.dev/schemas/backstage-export.json",
+  "title": "GlossMark portal export",
+  "description": "The documents gloss export --backstage and gloss landscape --backstage write (ADR 0053): one boundary document per manifest, <slug>.json, and one landscape.json indexing them. Mirrors backstage.Document and backstage.Landscape in internal/backstage/backstage.go. A reader selects by kind. format rises only when a reader of the previous format would misread a document; a field may be added without a bump.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/document"
+    },
+    {
+      "$ref": "#/$defs/landscape"
+    }
+  ],
+  "$defs": {
+    "document": {
+      "type": "object",
+      "description": "One boundary document, <slug>.json: what a component's or system's tab shows.",
+      "properties": {
+        "format": {
+          "const": 1
+        },
+        "kind": {
+          "const": "boundary"
+        },
+        "generated": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "generator": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string",
+          "description": "The repository the boundary's manifest lives in (its directory name)."
+        },
+        "sourceUrl": {
+          "type": "string",
+          "description": "The repository's link template with {path} and {line}."
+        },
+        "boundary": {
+          "$ref": "#/$defs/boundary"
+        },
+        "concepts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/concept"
+          }
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/decision"
+          },
+          "description": "Newest first, at most 20."
+        }
+      },
+      "required": [
+        "format",
+        "kind",
+        "generated",
+        "repo",
+        "boundary",
+        "concepts",
+        "coverage",
+        "findings",
+        "decisions"
+      ],
+      "additionalProperties": false
+    },
+    "landscape": {
+      "type": "object",
+      "description": "The index, landscape.json: every boundary across repositories with its drift summary.",
+      "properties": {
+        "format": {
+          "const": 1
+        },
+        "kind": {
+          "const": "landscape"
+        },
+        "generated": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "generator": {
+          "type": "string"
+        },
+        "repos": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/repo"
+          }
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/summary"
+          },
+          "description": "Sorted by CURIE."
+        },
+        "contextMap": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/contextEdge"
+          }
+        },
+        "metrics": {
+          "$ref": "#/$defs/metrics"
+        }
+      },
+      "required": [
+        "format",
+        "kind",
+        "generated",
+        "repos",
+        "boundaries",
+        "contextMap",
+        "metrics"
+      ],
+      "additionalProperties": false
+    },
+    "boundary": {
+      "type": "object",
+      "description": "The manifest's identity and governance.",
+      "properties": {
+        "curie": {
+          "type": "string"
+        },
+        "iri": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "The document's file name stem: the CURIE lower-cased, every run of other characters one hyphen, numbered on a collision."
+        },
+        "label": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "doc": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "The manifest's directory, empty at the repository root; in a landscape it starts with the repository name."
+        },
+        "owner": {
+          "type": "string"
+        },
+        "criticality": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "criticalityFrom": {
+          "type": "string"
+        },
+        "partOf": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deprecated": {
+          "type": "boolean"
+        },
+        "replacedBy": {
+          "type": "string"
+        },
+        "retireBy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "curie",
+        "iri",
+        "slug",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "concept": {
+      "type": "object",
+      "description": "One concept the boundary relates to.",
+      "properties": {
+        "curie": {
+          "type": "string"
+        },
+        "iri": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "core",
+            "implementation"
+          ]
+        },
+        "doc": {
+          "type": "string"
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "realizes",
+              "holds",
+              "presents",
+              "hosts",
+              "configures",
+              "produces",
+              "consumes",
+              "publishes",
+              "subscribes"
+            ]
+          },
+          "description": "How the boundary relates to the concept, sorted."
+        },
+        "declared": {
+          "type": "boolean",
+          "description": "The manifest states at least one of relations."
+        },
+        "derived": {
+          "type": "boolean",
+          "description": "The code under the boundary derives at least one of relations."
+        },
+        "criticality": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "implemented",
+            "untested",
+            "unimplemented",
+            "orphan",
+            "planned",
+            "proposed"
+          ],
+          "description": "gloss export --status's word for the concept across the repository; absent for an imported concept."
+        },
+        "deprecated": {
+          "type": "boolean"
+        },
+        "replacedBy": {
+          "type": "string"
+        },
+        "planned": {
+          "type": "boolean"
+        },
+        "planBy": {
+          "type": "string"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/link"
+          },
+          "description": "Code under the boundary linked to the concept or to a concept that realizes it."
+        },
+        "verifiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/link"
+          },
+          "description": "Tests verifying the concept, anywhere in the repository."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of the document's findings about this concept."
+        }
+      },
+      "required": [
+        "curie",
+        "iri",
+        "relations",
+        "declared",
+        "derived",
+        "artifacts",
+        "verifiers"
+      ],
+      "additionalProperties": false
+    },
+    "link": {
+      "type": "object",
+      "description": "One artifact linked to a concept.",
+      "properties": {
+        "relation": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative; in a landscape document it starts with the repository name."
+        },
+        "line": {
+          "type": "integer"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "description": "The source-url template resolved for path and line; absent without a template."
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "inline",
+            "manifest",
+            "inferred"
+          ]
+        },
+        "via": {
+          "type": "string",
+          "description": "The realizing concept the link came through when it is not this concept."
+        },
+        "proposed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "relation",
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "description": "The boundary's share of the repository's coverage.",
+      "properties": {
+        "conceptsInScope": {
+          "type": "integer",
+          "description": "Concepts the boundary relates to that are in the coverage denominator (ADR 0013): owned implementation concepts, and core concepts code implements directly, that are not deprecated, proposed, planned or internal below high."
+        },
+        "conceptsCovered": {
+          "type": "integer",
+          "description": "Of those, the ones with code and a test (status implemented)."
+        },
+        "conceptCoveragePct": {
+          "type": "number"
+        },
+        "inScopeFiles": {
+          "type": "integer",
+          "description": "Scanned files whose nearest manifest is this boundary."
+        },
+        "coveredFiles": {
+          "type": "integer",
+          "description": "Of those, the ones carrying an accepted link."
+        },
+        "coveragePct": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "conceptsInScope",
+        "conceptsCovered",
+        "conceptCoveragePct",
+        "inScopeFiles",
+        "coveredFiles",
+        "coveragePct"
+      ],
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "description": "One open drift finding (rollup.Finding, the fields a reader shows) on the boundary, on code under it, or on a concept it relates to.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "boundary": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "concept": {
+          "type": "string"
+        },
+        "declared": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "derived": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "msg": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "url": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        },
+        "waived": {
+          "type": "boolean"
+        },
+        "waiver": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "msg"
+      ],
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "description": "One reviewed ledger row on a link under the boundary.",
+      "properties": {
+        "markerId": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "rejected",
+            "stale"
+          ]
+        },
+        "actor": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "reviewedBy": {
+          "type": "string"
+        },
+        "reviewedAt": {
+          "type": "string"
+        },
+        "gate": {
+          "type": "string",
+          "enum": [
+            "AUTO",
+            "SOFT",
+            "HARD"
+          ],
+          "description": "The gate class the link had when it was accepted, when the ledger recorded one."
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "reviewReason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "markerId",
+        "path",
+        "relation",
+        "targets",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "description": "One boundary's row in the landscape.",
+      "properties": {
+        "curie": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "document": {
+          "type": "string",
+          "description": "The boundary document's file name, relative to landscape.json."
+        },
+        "repo": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "criticality": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "partOf": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deprecated": {
+          "type": "boolean"
+        },
+        "concepts": {
+          "type": "integer"
+        },
+        "findings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Open (unwaived) findings by kind."
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ],
+          "description": "The worst open finding; absent when clean."
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        }
+      },
+      "required": [
+        "curie",
+        "slug",
+        "document",
+        "repo",
+        "path",
+        "concepts",
+        "findings",
+        "coverage"
+      ],
+      "additionalProperties": false
+    },
+    "repo": {
+      "type": "object",
+      "description": "One repository in the landscape.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "sourceUrl": {
+          "type": "string"
+        },
+        "boundaries": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "boundaries"
+      ],
+      "additionalProperties": false
+    },
+    "contextEdge": {
+      "type": "object",
+      "description": "One implied depends-on between boundaries (consumer → producer), as gloss landscape prints it; only gloss landscape fills it.",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "via": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "description": "The repository's, or the union's, drift metrics (rollup.Metrics, as gloss drift --format json prints them).",
+      "properties": {
+        "concepts_in_scope": {
+          "type": "integer"
+        },
+        "concepts_covered": {
+          "type": "integer"
+        },
+        "concept_coverage_pct": {
+          "type": "number"
+        },
+        "in_scope_files": {
+          "type": "integer"
+        },
+        "covered_files": {
+          "type": "integer"
+        },
+        "coverage_pct": {
+          "type": "number"
+        },
+        "markers": {
+          "type": "integer"
+        },
+        "targets": {
+          "type": "integer"
+        },
+        "accepted": {
+          "type": "integer"
+        },
+        "proposed": {
+          "type": "integer"
+        },
+        "stale": {
+          "type": "integer"
+        },
+        "rejected": {
+          "type": "integer"
+        },
+        "orphans": {
+          "type": "integer"
+        },
+        "rogues": {
+          "type": "integer"
+        },
+        "violations": {
+          "type": "integer"
+        },
+        "gaps": {
+          "type": "integer"
+        },
+        "untested": {
+          "type": "integer"
+        },
+        "proposed_concepts": {
+          "type": "integer"
+        },
+        "plan_items": {
+          "type": "integer"
+        },
+        "dangling": {
+          "type": "integer"
+        },
+        "review_backlog_oldest_days": {
+          "type": "integer"
+        },
+        "concepts": {
+          "type": "integer"
+        },
+        "boundaries": {
+          "type": "integer"
+        },
+        "artifacts": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "concepts_in_scope",
+        "concepts_covered",
+        "concept_coverage_pct",
+        "in_scope_files",
+        "covered_files",
+        "coverage_pct",
+        "markers",
+        "targets",
+        "accepted",
+        "proposed",
+        "stale",
+        "rejected",
+        "orphans",
+        "rogues",
+        "violations",
+        "gaps",
+        "untested",
+        "proposed_concepts",
+        "plan_items",
+        "dangling",
+        "review_backlog_oldest_days",
+        "concepts",
+        "boundaries",
+        "artifacts"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

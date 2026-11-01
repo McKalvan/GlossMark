@@ -96,6 +96,19 @@ marker id, path, relation and targets, who placed it and when, its review
 `status` (`proposed`, `accepted`, `rejected`, `stale`, `removed`) and the anchor
 fingerprint used to detect staleness.
 
+### `backstage-export.schema.json`
+
+Validates what `gloss export --backstage` and `gloss landscape --backstage`
+write ([ADR 0053](../docs/adr/0053-portal-export.md)): a boundary document
+(`kind: boundary`, `backstage.Document`), one per manifest as `<slug>.json`,
+with the boundary's identity and criticality, its concepts with the code and
+tests behind them, its coverage, its open drift findings and the last review
+decisions under it; and the index (`kind: landscape`, `backstage.Landscape`),
+`landscape.json`, listing every boundary across repositories with its drift
+summary and, from `gloss landscape`, the context map. Both carry `format: 1`.
+Validate a directory with
+`check-jsonschema --schemafile schemas/backstage-export.schema.json glossmark/*.json`.
+
 ### `graph.linkml.yaml`
 
 A [LinkML](https://linkml.io) schema for the graph metamodel behind

@@ -67,4 +67,4 @@ JOIN is_a_closure c ON c.sub = a.concept
 JOIN nodes h ON h.id = c.super WHERE h.curie = 'lib:Media';
 ```
 
-`gloss mcp` serves the same graph to agents over the Model Context Protocol.
+`gloss export --backstage` writes the graph per boundary as JSON for a developer portal ([INTEGRATIONS.md](INTEGRATIONS.md)). `gloss mcp` serves the same graph to agents over the Model Context Protocol.

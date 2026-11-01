@@ -1,0 +1,9 @@
+# integrations/backstage/.gloss.yaml: the Backstage frontend plugin, a consumer of gloss export --backstage.
+boundary: arch:backstage-plugin
+level: component
+label: Backstage plugin
+part-of: arch:glossmark
+realizes: [gmi:BackstagePlugin]
+presents: [gm:View]
+default-namespace: gmi
+owner: glossmark
