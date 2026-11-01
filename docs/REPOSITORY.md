@@ -26,6 +26,7 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 | `scripts/screenshots.sh` | Regenerates the README images in `docs/img/` from the [glossmark-examples](https://github.com/McKalvan/glossmark-examples) showcase |
 | `docs/` | [Quickstart](QUICKSTART.md) · [Trying it safely, leaving](LEAVING.md) · [When to mark](MARKING.md) · [Agent integrations](AGENTS.md) · [Advanced](ADVANCED.md) · [Grammar](GRAMMAR.md) · [File formats](FILE-FORMATS.md) · [Graph](GRAPH.md) · [Governance](GOVERNANCE.md) · [Versioning](VERSIONING.md) · [Plan](PLAN.md) · [ADRs](adr/) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
+| `internal/prapp/`, `Dockerfile`, `docs/app/` | The hosted pull-request app (`gloss app serve`, [APP.md](APP.md)): the GitHub App that posts the comment, the check run and the review request with no CI |
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.
 
