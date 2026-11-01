@@ -1,0 +1,8 @@
+# internal/bootstrap/.gloss.yaml: the zero-config draft gloss onboard writes.
+boundary: arch:bootstrap
+level: component
+label: bootstrap
+part-of: arch:lib-onboarding
+realizes: [gmi:Bootstrapper]
+default-namespace: gmi
+owner: glossmark
