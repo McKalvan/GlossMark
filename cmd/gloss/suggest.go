@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	register(command{"suggest", "propose @gloss? markers for unmarked declarations from names, docstrings, tables touched, calls and specs (AsyncAPI, OpenAPI, routes, topics, ORM tables); prints a patch (--write to apply, --format json, --source, --eval labels.tsv, --calibrate, --concepts)", cmdSuggest})
+	register(command{"suggest", "propose @gloss? markers for unmarked declarations from names, docstrings, tables touched, calls and specs (AsyncAPI, OpenAPI, routes, topics, ORM tables, and external sources: gloss-source-<name> on PATH or sources: in glossmark.yaml, docs/PLUGINS.md); prints a patch (--write to apply, --format json, --source, --eval labels.tsv, --calibrate, --concepts)", cmdSuggest})
 }
 
 // suggestReport is gloss suggest --format json: the auto-accept rule in
@@ -62,22 +62,23 @@ func cmdSuggest(args []string) int {
 		fmt.Fprintln(os.Stderr, "gloss suggest: --auto-accept-precision must be in (0, 1]")
 		return 2
 	}
-	var sources []string
-	if *source != "" {
-		for _, src := range strings.Split(*source, ",") {
-			src = strings.TrimSpace(src)
-			if !slices.Contains(suggest.Sources, src) {
-				fmt.Fprintf(os.Stderr, "gloss suggest: --source %q is not a source; use one of %s\n", src, strings.Join(suggest.Sources, ", "))
-				return 2
-			}
-			sources = append(sources, src)
-		}
-	}
 	p, err := buildGraph(*root, false)
 	if err != nil {
 		return fail(err)
 	}
 	cfg := p.WS.Config
+	var sources []string
+	if *source != "" {
+		all := suggest.AllSources(cfg, p.WS.Root)
+		for _, src := range strings.Split(*source, ",") {
+			src = strings.TrimSpace(src)
+			if !slices.Contains(all, src) {
+				fmt.Fprintf(os.Stderr, "gloss suggest: --source %q is not a source; use one of %s (gloss source list shows the external ones)\n", src, strings.Join(all, ", "))
+				return 2
+			}
+			sources = append(sources, src)
+		}
+	}
 	if !set["min-conf"] {
 		*minConf = cfg.SuggestMinConf()
 	}
@@ -111,7 +112,10 @@ func cmdSuggest(args []string) int {
 	if *calibrate {
 		return suggestCalibrate(p, *eval, *write, *format, rule, sources)
 	}
-	opt := suggest.Options{MinConf: *minConf, Ledger: p.Ledger.Entries, Sources: sources}
+	if ext := suggest.ExternalSources(cfg, p.WS.Root); len(ext) > 0 {
+		fmt.Fprintf(os.Stderr, "gloss suggest: external sources: %s\n", strings.Join(ext, ", "))
+	}
+	opt := suggest.Options{MinConf: *minConf, Ledger: p.Ledger.Entries, Sources: sources, Warn: warnSuggest, AutoAcceptThreshold: rule.Threshold}
 	if *eval != "" {
 		opt.MinConf = 0.01 // the report shows every band
 	}
@@ -202,7 +206,7 @@ func suggestCalibrate(p *pipeline, evalPath string, write bool, format string, r
 		}
 		name = evalPath
 	}
-	m, err := suggest.SelfEval(p.WS, p.Graph, ls, sources)
+	m, err := suggest.SelfEval(p.WS, p.Graph, ls, sources, suggest.Options{Warn: warnSuggest, AutoAcceptThreshold: rule.Threshold})
 	if err != nil {
 		return fail(err)
 	}
@@ -228,6 +232,10 @@ func suggestCalibrate(p *pipeline, evalPath string, write bool, format string, r
 	fmt.Print(rep.BasisTable())
 	return 0
 }
+
+// warnSuggest prints what a run reports without stopping: an external
+// source that failed (GM700).
+func warnSuggest(msg string) { fmt.Fprintln(os.Stderr, "gloss suggest: "+msg) }
 
 func readLabels(path string) ([]suggest.Label, error) {
 	f, err := os.Open(path)
