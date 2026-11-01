@@ -43,3 +43,29 @@ func TestFindKey(t *testing.T) {
 		}
 	}
 }
+
+// TestValueLiteral: gloss bind reads the value a line assigns as the
+// ontology would publish it (#272).
+func TestValueLiteral(t *testing.T) {
+	cases := []struct{ line, symbol, want string }{
+		{"AUTO_APPROVE_LIMIT_EUR = 5_000", "AUTO_APPROVE_LIMIT_EUR", "5000"},
+		{"const val REFERRAL_SCORE_THRESHOLD = 0.80", "REFERRAL_SCORE_THRESHOLD", "0.80"},
+		{"const AutoApproveLimitEUR = 5000 // EUR", "AutoApproveLimitEUR", "5000"},
+		{"    public static final BigDecimal LIMIT = new BigDecimal(\"5000\");", "LIMIT", "5000"},
+		{"const val LIMIT = 5_000L", "LIMIT", "5000"},
+		{"def plan(years: int, swr: float = 0.04):", "swr", "0.04"},
+		{"ADJUSTER_QUEUE = \"property-and-motor\"  # the queue", "ADJUSTER_QUEUE", "property-and-motor"},
+		{"export const WINDOW = '24h'; // hours", "WINDOW", "24h"},
+		{"var Mode = fast", "Mode", "fast"},
+		{"    per_minute: 30", "per_minute", "30"},
+		{"per_minute = 30 # toml", "per_minute", "30"},
+		{"  \"ceiling\": 12,", "ceiling", "12"},
+		{"REQUIRED_EVIDENCE = {", "REQUIRED_EVIDENCE", ""},
+		{"other = 1", "LIMIT", ""},
+	}
+	for _, c := range cases {
+		if got := ValueLiteral(c.line, c.symbol); got != c.want {
+			t.Errorf("ValueLiteral(%q, %s) = %q, want %q", c.line, c.symbol, got, c.want)
+		}
+	}
+}

@@ -180,9 +180,9 @@ func (s *Server) instructions() string {
 // first relations and an ellipsis otherwise.
 func (s *Server) relationDesc() string {
 	if ws, _, _, err := s.backend.Current(); err == nil && ws != nil && ws.Config.RelationProfile() == model.ProfileStarter {
-		return strings.Join(ws.Vocab.InlineNames(model.ProfileStarter), " | ") + " (the starter profile; relations: full in glossmark.yaml unlocks the rest)"
+		return strings.Join(ws.Vocab.InlineNames(model.ProfileStarter), " | ") + " (the starter profile; relations: full in glossmark.yaml unlocks the rest)" + relationSurfaceNote
 	}
-	return "implements | represents | verifies | ..."
+	return relationPlaceholder + relationSurfaceNote
 }
 
 type tool struct {
@@ -205,6 +205,10 @@ func str(desc string) map[string]any { return map[string]any{"type": "string", "
 // table; toolList swaps in the profile's list (Server.relationDesc).
 const relationPlaceholder = "implements | represents | verifies | ..."
 
+// relationSurfaceNote follows the relation list in every profile: on a
+// recognised surface the relation may be left out (ADR 0046).
+const relationSurfaceNote = "; omit it on a page, CLI, BFF, GraphQL or document-renderer file to take the surface rule's default (MARKING.md, Surfaces); the result carries surface, surface_rule and, when the relation departs from the rule, hint and suggested_relation"
+
 var tools = []tool{
 	{"lookup_concept", "Return a concept (by CURIE such as lib:Book) with its kind, tier, doc, relations, realizations and the artifacts linking to it.",
 		obj(map[string]any{"curie": str("Concept CURIE, e.g. lib:Renewal")}, "curie")},
@@ -213,7 +217,7 @@ var tools = []tool{
 	{"concepts_for_path", "The concepts an artifact at this repo-relative path is linked to, plus the boundary manifest context: default namespace, allowed targets, and what the boundary realizes.",
 		obj(map[string]any{"path": str("Repo-relative file path")}, "path")},
 	{"propose_link", "Render the exact @gloss? marker line to insert for a proposal and classify its gate (AUTO/SOFT/HARD) against policy, allowed lists and remit. Does not edit files. " + agents.ProposalSentence,
-		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str(relationPlaceholder), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "relation", "target")},
+		obj(map[string]any{"path": str("Repo-relative file the marker will live in"), "relation": str(relationPlaceholder + relationSurfaceNote), "target": str("Concept CURIE, .Local, or ns:NEW:Name for a new concept"), "conf": map[string]any{"type": "number"}, "note": str("Rationale (optional)"), "scope": str("file | symbol | block | line | range (optional)")}, "path", "target")},
 	{"impact_of", "Impact of a change. Pass proposals (links you intend to add) to get each link's gate; and/or pass paths (files you changed) or base (a git ref) to learn what those files touch: the concepts, whether they sit on the published seam, what constrains them, which boundaries declare them, their tests, and the other files sharing them, and the plan items (ADR 0034) the change closes or still works towards. With base, the AUTO/SOFT/HARD classification of the whole working tree is included.",
 		obj(map[string]any{"proposals": map[string]any{"type": "array", "items": obj(map[string]any{"path": str(""), "relation": str(""), "target": str(""), "conf": map[string]any{"type": "number"}, "note": str("")}, "path", "relation", "target")},
 			"paths": map[string]any{"type": "array", "items": str("Repo-relative file you changed or will change")},
