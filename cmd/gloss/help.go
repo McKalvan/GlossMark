@@ -228,7 +228,7 @@ var help = map[string]helpEntry{
 		examples: []string{
 			"gloss export --sqlite graph.db",
 			"gloss export --status -o status.json",
-			"gloss export --backstage -o public/glossmark  # publish the directory; point the plugin at it",
+			"gloss export --backstage -o public/glossmark  # for the Backstage plugin",
 		},
 		docs: "docs/GRAPH.md#querying"},
 	"report": {line: "audit report per rule: code, tests, value, decisions, findings",
@@ -252,11 +252,11 @@ var help = map[string]helpEntry{
 		},
 		docs: "docs/ADVANCED.md#history-gloss-history"},
 	"landscape": {line: "union several repositories' graphs; cross-repo drift",
-		usage: []string{"landscape [--format text|json|markdown] [--view file] [--backstage dir] <root>..."},
+		usage: []string{"landscape [--format text|json|markdown] [--view file] <root>...", "landscape --backstage dir <root>..."},
 		examples: []string{
 			"gloss landscape ../repo-a ../repo-b",
 			"gloss landscape --view landscape.html ../repo-a ../repo-b",
-			"gloss landscape --backstage glossmark ../repo-a ../repo-b  # every boundary's document, one landscape.json",
+			"gloss landscape --backstage glossmark ../repo-a ../repo-b  # portal documents",
 		},
 		docs: "docs/QUICKSTART.md#6-run-the-tooling"},
 	"lock": {line: "pin every import in glossmark.lock and vendor it",

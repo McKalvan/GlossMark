@@ -14,7 +14,8 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 | `internal/tui` | The interactive terminal for `gloss review`, hand-rolled on `golang.org/x/term`; `gloss review --format frame` renders one frame of it without a terminal |
 | `internal/browse` | The read-only graph browser: `gloss review node`, the terminal's Browse tab, `browse_node` |
 | `internal/check`, `internal/rollup`, `internal/gate` | Lint rules, rollup rules and drift comparison, AUTO/SOFT/HARD gating with per-view impact |
-| `internal/ledger`, `internal/views`, `internal/viewer` | Review-state ledger, view projections, static HTML viewer |
+| `internal/ledger`, `internal/views`, `internal/viewer`, `internal/backstage` | Review-state ledger, view projections, static HTML viewer, per-boundary JSON for portals |
+| `integrations/backstage` | The Backstage frontend plugin that reads `gloss export --backstage` ([INTEGRATIONS.md](INTEGRATIONS.md)) |
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](adr/0025-deriving-the-ontology.md), experimental) |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` and `derive-ontology` (deriving the core and implementation tiers from an existing application, [ADR 0025](adr/0025-deriving-the-ontology.md)), installed by `gloss hook install --skill` (`--agent claude-code` bundles them in a plugin, `--agent cursor` and `--agent copilot` write a rule or instructions that point at them, [AGENTS.md](AGENTS.md)), before `gloss init` too |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
@@ -24,7 +25,7 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/library` | The worked example: a public library in two repos sharing one core (`circulation` owns both tiers, `holds-worker` imports and extends the core), covering taxonomic lift, the published seam, `value-from`, surfaces, criticality, extension, remits and a landscape; see its [README](../examples/library/README.md) |
 | `scripts/screenshots.sh` | Regenerates the README images in `docs/img/` from the [glossmark-examples](https://github.com/McKalvan/glossmark-examples) showcase |
-| `docs/` | [Quickstart](QUICKSTART.md) · [Trying it safely, leaving](LEAVING.md) · [When to mark](MARKING.md) · [Agent integrations](AGENTS.md) · [Advanced](ADVANCED.md) · [Grammar](GRAMMAR.md) · [File formats](FILE-FORMATS.md) · [Graph](GRAPH.md) · [Governance](GOVERNANCE.md) · [Versioning](VERSIONING.md) · [Plan](PLAN.md) · [ADRs](adr/) |
+| `docs/` | [Quickstart](QUICKSTART.md) · [Trying it safely, leaving](LEAVING.md) · [When to mark](MARKING.md) · [Agent integrations](AGENTS.md) · [Portal integrations](INTEGRATIONS.md) · [Advanced](ADVANCED.md) · [Grammar](GRAMMAR.md) · [File formats](FILE-FORMATS.md) · [Graph](GRAPH.md) · [Governance](GOVERNANCE.md) · [Versioning](VERSIONING.md) · [Plan](PLAN.md) · [ADRs](adr/) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.
