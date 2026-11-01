@@ -90,6 +90,29 @@
         "$ref": "#/$defs/glob"
       }
     },
+    "sources": {
+      "description": "External link sources for gloss suggest, beside the gloss-source-<name> executables on PATH: each a command that speaks the plugin protocol, contract v1 (docs/PLUGINS.md, ADR 0050). An entry wins over PATH for the same name; a name shared with a built-in source (asyncapi, openapi) replaces it; a core source's name (code, route, topic, schema) is an error.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "command"],
+        "properties": {
+          "name": {
+            "description": "The source id: what the plugin answers as its name, Proposal.Source, a --source value and the namespace of its calibration bases.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "command": {
+            "description": "The executable and its arguments, run from the repository root: a list, or one string split on spaces. A relative path is relative to the root.",
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+            ]
+          }
+        }
+      }
+    },
     "suggest": {
       "description": "The repository's defaults for gloss suggest, and the precision auto-accept must meet (ADR 0024). Command-line flags override them.",
       "type": "object",

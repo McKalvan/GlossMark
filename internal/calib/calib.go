@@ -117,6 +117,10 @@ func (t Table) Conf(basis string) float64 {
 	return Unmeasured
 }
 
+// Seen reports whether t measured the row a basis reads from, so Conf
+// returns a measurement rather than Unmeasured.
+func (t Table) Seen(basis string) bool { return t.sum(t.Row(basis)).N > 0 }
+
 // Confs precomputes Conf for every basis of t and every row, for lookups
 // in the matcher's inner loop.
 func (t Table) Confs() func(string) float64 {

@@ -445,7 +445,7 @@ func TestTypesNamedInAProcessDoc(t *testing.T) {
 	// dispatch imports frt from its sibling checkout, which SelfEval
 	// resolves from a stripped copy.
 	ws, g := build(t, filepath.Join(freight, "dispatch"))
-	m, err := SelfEval(ws, g, nil, nil)
+	m, err := SelfEval(ws, g, nil, nil, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

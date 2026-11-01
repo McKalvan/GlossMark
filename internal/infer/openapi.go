@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mckalvan/glossmark/internal/load"
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,14 +33,15 @@ var httpMethods = map[string]bool{"get": true, "post": true, "put": true, "patch
 
 func (s *openAPI) Name() string { return "openapi" }
 
-func (s *openAPI) Index(ws *load.Workspace, v Vocabulary) error {
+func (s *openAPI) Index(files Files, v Vocabulary) error {
 	s.ops, s.files = nil, map[string][]Item{}
-	for _, rel := range ws.Files {
+	for _, f := range files.List {
+		rel := f.Path
 		ext := strings.ToLower(filepath.Ext(rel))
 		if ext != ".yaml" && ext != ".yml" && ext != ".json" {
 			continue
 		}
-		lines, root := readSpec(ws.Abs(rel), "openapi")
+		lines, root := readSpec(files.Abs(rel), "openapi")
 		if root == nil {
 			continue
 		}

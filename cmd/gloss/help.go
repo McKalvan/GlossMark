@@ -22,7 +22,7 @@ var helpGroups = []struct {
 	{"Pull requests", []string{"diff", "impact", "accept", "reject", "status"}},
 	{"Agents", []string{"hook", "context", "mcp", "agents"}},
 	{"Ontology", []string{"bind", "propose", "suggest", "harvest", "import", "criticality"}},
-	{"Advanced", []string{"export", "history", "landscape", "lock", "publish", "report", "slice", "version"}},
+	{"Advanced", []string{"export", "history", "landscape", "lock", "publish", "report", "slice", "source", "version"}},
 }
 
 // helpEntry is what 'gloss -h' and 'gloss <command> -h' say about a command
@@ -219,6 +219,7 @@ var help = map[string]helpEntry{
 			"gloss suggest services/  # a patch to review",
 			"gloss suggest --write  # insert the proposals",
 			"gloss suggest --concepts  # propose new concepts from clusters",
+			"gloss suggest --source asyncapi,graphql  # only these sources",
 		},
 		docs: "docs/MARKING.md"},
 	"harvest": {line: "collect domain-vocabulary evidence before an ontology exists",
@@ -290,6 +291,14 @@ var help = map[string]helpEntry{
 			"gloss slice services/circulation --format md",
 		},
 		docs: "docs/ADVANCED.md#feature-slices-gloss-slice"},
+	"source": {line: "list the link sources suggest uses; serve a built-in as a plugin",
+		usage: []string{"source list", "source serve <asyncapi|openapi>"},
+		more:  "An external source is an executable named gloss-source-<name> on PATH, or a command under sources: in glossmark.yaml, that speaks the plugin protocol (JSON lines on stdin/stdout, docs/PLUGINS.md). gloss suggest runs each once per run and treats what it returns as proposals, calibrated under its own name; a plugin on another contract version fails the command naming both.",
+		examples: []string{
+			"gloss source list  # the sources a run here uses, and where from",
+			"gloss source serve asyncapi  # the built-in AsyncAPI source over the protocol",
+		},
+		docs: "docs/PLUGINS.md"},
 	"version": {line: "print the tool, grammar and file-format versions",
 		usage:    []string{"version"},
 		examples: []string{"gloss version", "gloss --version"},
