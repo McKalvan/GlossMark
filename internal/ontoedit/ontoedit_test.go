@@ -230,3 +230,32 @@ relations:
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// TestAddConceptBinding: gloss bind writes a published value with the code
+// it is bound to, in the documented field order (#272).
+func TestAddConceptBinding(t *testing.T) {
+	p := tmp(t, "namespace: tide\nconcepts:\n  Other: { kind: process, internal: true }\n")
+	spec := ConceptSpec{Kind: "constraint", Realizes: []string{"claim:AutoApprovalLimit"}, PublishedAs: "claim:AutoApprovalLimit",
+		Value: "5000", ValueFrom: &ValueFrom{Path: "services/assessment/settings.py", Symbol: "AUTO_APPROVE_LIMIT_EUR"}, Doc: "AUTO_APPROVE_LIMIT_EUR in the assessment settings."}
+	if err := AddConcept(p, "AutoApprovalRule", spec); err != nil {
+		t.Fatal(err)
+	}
+	want := "namespace: tide\nconcepts:\n  Other: { kind: process, internal: true }\n" +
+		"  AutoApprovalRule:\n" +
+		"    kind: constraint\n" +
+		"    realizes: claim:AutoApprovalLimit\n" +
+		"    published: { as: claim:AutoApprovalLimit }\n" +
+		"    value: \"5000\"\n" +
+		"    value-from: { path: services/assessment/settings.py, symbol: AUTO_APPROVE_LIMIT_EUR }\n" +
+		"    doc: \"AUTO_APPROVE_LIMIT_EUR in the assessment settings.\"\n"
+	if got := read(t, p); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	// The same fields on an existing entry, one key each, keep its style.
+	if err := SetField(p, "Other", "value-from", ValueFrom{Path: "a b.py", Symbol: "X"}.Render()); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, p); !strings.Contains(got, `  Other: { kind: process, internal: true, value-from: { path: a b.py, symbol: X } }`) {
+		t.Errorf("SetField value-from on a flow entry:\n%s", got)
+	}
+}

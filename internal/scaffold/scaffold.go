@@ -345,9 +345,9 @@ func GitRoot(dir string) string {
 	}
 }
 
-// vocabularyFiles finds a markdown glossary and an enums file an importer
+// VocabularyFiles finds a markdown glossary and an enums file an importer
 // can read, at most three directories deep.
-func vocabularyFiles(root string) (glossaries, enums []string) {
+func VocabularyFiles(root string) (glossaries, enums []string) {
 	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -613,7 +613,7 @@ jobs:
 		add(File{Path: ".github/workflows/gloss.yml", Action: Create, Content: workflow})
 	}
 	if !coreImported {
-		glossaries, enums := vocabularyFiles(root)
+		glossaries, enums := VocabularyFiles(root)
 		for _, g := range glossaries {
 			p.Vocabulary = append(p.Vocabulary, fmt.Sprintf("gloss import --from markdown-glossary %s --namespace %s", g, core))
 		}

@@ -89,7 +89,7 @@ func Concepts(ws *load.Workspace, g *graph.Graph, paths []string) []ConceptPropo
 	if ws.Config.Suggest != nil {
 		stop = ws.Config.Suggest.Stopwords
 	}
-	m := newMatcher(ws, g, append(stop, "tbl", "tab", "table", "log", "tmp", "temp", "master", "line", "detail", "history", "queue"))
+	m := newMatcher(ws, g, append(stop, "tbl", "tab", "table", "log", "tmp", "temp", "master", "line", "detail", "history", "queue"), false)
 	type decl struct {
 		id, doc string
 		body    string

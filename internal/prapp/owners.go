@@ -21,9 +21,11 @@ type Reviewers struct {
 	Unmapped []string
 }
 
-// OwnersOf lists the owner: values behind the HARD changes: the owner of
-// the namespace of each subject and object, and the owner of the boundary
-// whose manifest encloses the change's path.
+// OwnersOf lists the owner: values behind the HARD changes: the owner the
+// gate named on the change (the ontology file's namespace, else the
+// enclosing manifest, else the subject's namespace), plus the owner of the
+// namespace of each subject and object and of the boundary whose manifest
+// encloses the change's path, so every party is asked.
 func OwnersOf(ws *load.Workspace, im *gate.Impact) []string {
 	byBoundary := map[string]string{}
 	for _, m := range ws.Manifests {
@@ -39,6 +41,7 @@ func OwnersOf(ws *load.Workspace, im *gate.Impact) []string {
 		if ch.Gate != gate.HARD {
 			continue
 		}
+		add(ch.Owner)
 		for _, curie := range strings.Split(ch.Subject+", "+ch.Object, ", ") {
 			prefix, _, ok := strings.Cut(strings.TrimSpace(curie), ":")
 			if !ok {

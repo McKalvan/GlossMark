@@ -21,11 +21,13 @@ import (
 	"github.com/mckalvan/glossmark/internal/calib"
 	"github.com/mckalvan/glossmark/internal/extract"
 	"github.com/mckalvan/glossmark/internal/graph"
+	"github.com/mckalvan/glossmark/internal/infer"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/marker"
 	"github.com/mckalvan/glossmark/internal/mcp"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	surf "github.com/mckalvan/glossmark/internal/surface"
 )
 
 // Proposal is one marker to insert.
@@ -44,6 +46,10 @@ type Proposal struct {
 	Scope string `json:"scope,omitempty"`
 	// Basis is the calibration bucket conf was read from: evidence/role.
 	Basis string `json:"basis"`
+	// Source is where the evidence came from: code (names, docstrings,
+	// tables touched, test calls), asyncapi, openapi, route, topic or
+	// schema (#260). gloss suggest --eval reports precision per source.
+	Source string `json:"source"`
 	// Context is evidence that informs the review without choosing the
 	// target, such as the tables the declaration touches.
 	Context string `json:"context,omitempty"`
@@ -58,7 +64,30 @@ type Proposal struct {
 	// target is not deprecated, so the gate classes the proposal SOFT
 	// unless another rule raises it (set by gloss suggest, ADR 0024).
 	AutoAccept bool `json:"auto_accept"`
+	// channel is the address a flow proposal names; channelOnly when the
+	// code named the channel and none of its messages (plumbing).
+	channel     string
+	channelOnly bool
 }
+
+// Sources a proposal's evidence can come from, named in Proposal.Source so
+// gloss suggest --eval reports precision per source: the core ones, and
+// the name of every infer.Source.
+const (
+	SourceCode   = "code"   // names, docstrings, tables touched, test calls
+	SourceRoute  = "route"  // a framework route with no spec behind it
+	SourceTopic  = "topic"  // a Kafka topic resource (Strimzi KafkaTopic)
+	SourceSchema = "schema" // a table, view or model declaration, or an ORM mapping to one
+)
+
+// Sources lists every source, for gloss suggest --source.
+var Sources = func() []string {
+	out := []string{SourceCode, SourceRoute, SourceTopic, SourceSchema}
+	for _, s := range infer.Builtin() {
+		out = append(out, s.Name())
+	}
+	return out
+}()
 
 // Options tunes the matcher.
 type Options struct {
@@ -69,6 +98,13 @@ type Options struct {
 	// rejected (same marker id, or same anchor fingerprint, relation and
 	// target) is not proposed again.
 	Ledger map[string]*model.LedgerEntry
+	// Proposed makes proposed: true concepts targets too. gloss onboard sets
+	// it: its vocabulary is all proposals, and every link to one is HARD at
+	// the gate, so nothing is accepted without a review (ADR 0030).
+	Proposed bool
+	// Sources keeps only the proposals of these sources (gloss suggest
+	// --source); empty keeps every source.
+	Sources []string
 }
 
 // DefaultMinConf drops the evidence that is wrong more often than right
@@ -88,14 +124,19 @@ const Coverage = `relations: implements (SQL functions and procedures too), repr
 roles, subnet groups, policies and other resources that only support one), documents (Markdown headings),
 deploys (Kubernetes workloads), presents and hosts (page and layout components), subscribes, consumes and publishes
 (listener annotations and producer or consumer calls); one scope=file or scope=block marker stands for a run.
-targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts.
+specs: an AsyncAPI contract (documents per channel; publishes and subscribes on the code that names a channel or a
+message), an OpenAPI spec (documents per operation, represents per schema, implements on the handler of a covered
+route), Strimzi KafkaTopic resources (provisions), ORM table mappings (represents); --source picks sources.
+targets: deprecated concepts too, with a note naming replaced-by and never auto; not proposed: true concepts (gloss onboard includes them: its vocabulary is all proposals).
 files: .py .ts .tsx .js .jsx .mjs .go .rs .java .kt .rb .cs .php .swift .scala .tf .sql .proto .prisma .feature .sh .md .yaml
-never proposed: configures, publishes-value, instructs, may-modify, produces; sidecars, JSON, Dockerfiles, CI workflows`
+configures and produces only where a surface rule asks for them (an admin page editing a constraint, a document renderer)
+never proposed: publishes-value, instructs, may-modify; sidecars, JSON, Dockerfiles, CI workflows`
 
 type runner struct {
 	ws      *load.Workspace
 	g       *graph.Graph
 	m       *matcher
+	sources []infer.Source
 	allowed map[*model.Manifest]rollup.Allowed
 	// linked maps a symbol's last part to the targets implements links
 	// give it, for tests that call it; tables maps a table name to the
@@ -111,6 +152,9 @@ type file struct {
 	m     *model.Manifest
 	test  bool
 	phase int
+	// kind is the surface the file is (a page, a CLI, a BFF, a document
+	// renderer), whose rule sets the relation (ADR 0046).
+	kind surf.Kind
 }
 
 // Run proposes markers for the files under paths (all workspace files when
@@ -124,7 +168,13 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	if ws.Config.Suggest != nil {
 		stop = ws.Config.Suggest.Stopwords
 	}
-	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
+	r := &runner{ws: ws, g: g, m: newMatcher(ws, g, stop, opt.Proposed), allowed: map[*model.Manifest]rollup.Allowed{}, linked: map[string][]callee{}, tables: map[string]string{}}
+	for _, s := range infer.Builtin() {
+		if err := s.Index(ws, vocab{r.m, g}); err != nil {
+			return nil, 0, fmt.Errorf("%s: %w", s.Name(), err)
+		}
+		r.sources = append(r.sources, s)
+	}
 	type link struct{ fp, rel, target string }
 	rejected := map[link]bool{}
 	for _, e := range opt.Ledger {
@@ -170,7 +220,7 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		if err != nil {
 			return nil, 0, err
 		}
-		f := &file{rel: rel, lines: lines, style: style, m: ws.ManifestFor(rel), test: ws.IsTestPath(rel), phase: 1}
+		f := &file{rel: rel, lines: lines, style: style, m: ws.ManifestFor(rel), test: ws.IsTestPath(rel), phase: 1, kind: surf.Detect(rel, lines)}
 		switch {
 		case ext == ".sql" || ext == ".proto" || ext == ".prisma":
 			f.phase = 0
@@ -183,35 +233,74 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 	for _, f := range files {
 		var ps []Proposal
 		var decls []marker.Decl
+		items := map[int]specItem{} // decl index → the spec item it stands for
 		ext := strings.ToLower(filepath.Ext(f.rel))
-		if ext == ".yaml" || ext == ".yml" {
-			decls = workloads(f.lines)
-		} else {
+		switch {
+		case ext == ".yaml" || ext == ".yml":
+			// A spec file's items come from the source that reads it; any
+			// other YAML may hold Kubernetes workloads and topics.
+			for _, src := range r.sources {
+				for _, it := range src.Items(f.rel) {
+					items[len(decls)] = specItem{it, src.Name()}
+					decls = append(decls, marker.Decl{Symbol: it.Symbol, Kind: "item", Line: it.Line, End: it.End, Insert: it.Line, Indent: it.Indent, Doc: it.Doc})
+				}
+			}
+			if len(decls) == 0 {
+				decls = workloads(f.lines)
+			}
+		default:
 			decls = marker.Declarations(f.rel, f.lines, f.style)
 		}
-		for _, d := range decls {
+		for i, d := range decls {
 			if marked[fmt.Sprintf("%s#%d", f.rel, d.Line)] {
 				continue
 			}
-			role := roleWorkload
-			if d.Kind != "workload" {
+			var found []Proposal
+			var role string
+			switch d.Kind {
+			case "item":
+				it := items[i]
+				role = it.Role
+				if p, ok := r.proposeItem(f, d, it); ok {
+					found = append(found, p)
+				}
+			case "workload", "topic":
+				role = roleWorkload
+				if d.Kind == "topic" {
+					role = roleResource
+				}
+				if p, ok := r.propose(f, d, role, nil); ok {
+					found = append(found, p)
+				}
+			default:
 				var ok bool
 				if role, ok = surface(d, f.lines, f.rel, f.test); !ok {
 					continue
 				}
+				hints := r.hints(f, d, role)
+				if p, ok := r.propose(f, d, role, hints); ok {
+					found = append(found, p)
+				}
+				if role == roleFunc || role == roleMember {
+					for _, src := range r.sources {
+						flows, _ := flowHints(hints[src.Name()])
+						found = append(found, r.proposeFlows(f, d, role, src.Name(), flows)...)
+					}
+				}
 			}
-			p, ok := r.propose(f, d, role)
-			if !ok || p.Conf < opt.MinConf {
-				continue
+			for _, p := range found {
+				if p.Conf < opt.MinConf {
+					continue
+				}
+				if le := opt.Ledger[extract.MarkerID(f.rel, p.Relation, []string{p.Target}, d.Symbol, "symbol")]; (le != nil && le.Status == model.StatusRejected) ||
+					rejected[link{d.Fingerprint, p.Relation, p.Target}] {
+					skipped++
+					continue
+				}
+				ps = append(ps, p)
 			}
-			if le := opt.Ledger[extract.MarkerID(f.rel, p.Relation, []string{p.Target}, d.Symbol, "symbol")]; (le != nil && le.Status == model.StatusRejected) ||
-				rejected[link{d.Fingerprint, p.Relation, p.Target}] {
-				skipped++
-				continue
-			}
-			ps = append(ps, p)
 		}
-		ps = collapse(f, dedupeMembers(ps, decls))
+		ps = collapse(f, dedupeMembers(plumbing(dedupeLinks(ps)), decls))
 		parentAt := map[int]string{}
 		for _, d := range decls {
 			parentAt[d.Insert] = d.Parent
@@ -231,10 +320,36 @@ func Run(ws *load.Workspace, g *graph.Graph, paths []string, opt Options) (out [
 		}
 		out = append(out, ps...)
 	}
+	if len(opt.Sources) > 0 {
+		var kept []Proposal
+		for _, p := range out {
+			if contains(opt.Sources, p.Source) {
+				kept = append(kept, p)
+			}
+		}
+		out = kept
+	}
 	if out == nil {
 		out = []Proposal{}
 	}
 	return out, skipped, nil
+}
+
+// dedupeLinks drops a proposal that repeats another's line, relation and
+// target: the flow a spec infers and the topic the body names are one
+// link. The stronger-sourced one, read first, stays.
+func dedupeLinks(ps []Proposal) []Proposal {
+	seen := map[string]bool{}
+	var out []Proposal
+	for _, p := range ps {
+		k := fmt.Sprintf("%d\x00%s\x00%s", p.Line, p.Relation, p.Target)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 // callableConf is the conf a link suggest proposes itself must reach
@@ -283,8 +398,36 @@ func skipDoc(rel string) bool {
 	return strings.Contains("/"+rel, "/adr/")
 }
 
+// specItem is a spec file's item with the source that declared it.
+type specItem struct {
+	infer.Item
+	source string
+}
+
+// hints asks every source what a code declaration names through its
+// spec, keyed by source name.
+func (r *runner) hints(f *file, d marker.Decl, role string) map[string][]infer.Hint {
+	if len(r.sources) == 0 || role == roleTest || role == roleHeading || role == roleWorkload || role == roleTable || role == roleResource {
+		return nil
+	}
+	dir := ""
+	if f.m != nil {
+		dir = f.m.Dir
+	}
+	decl := infer.Decl{Path: f.rel, Dir: dir, Symbol: d.Symbol, Role: role, Line: d.Line, Decorators: d.Decorators, Body: bodyOf(f.lines, d)}
+	out := map[string][]infer.Hint{}
+	for _, src := range r.sources {
+		if hs := src.Hints(decl); len(hs) > 0 {
+			out[src.Name()] = hs
+		}
+	}
+	return out
+}
+
 // propose chooses the target, relation and conf for one declaration.
-func (r *runner) propose(f *file, d marker.Decl, role string) (Proposal, bool) {
+// hints are what the sources said about it (nil for a declaration no
+// source reads).
+func (r *runner) propose(f *file, d marker.Decl, role string, hints map[string][]infer.Hint) (Proposal, bool) {
 	sym := lastPart(d.Symbol)
 	switch role {
 	case roleHeading, roleWorkload:
@@ -307,48 +450,253 @@ func (r *runner) propose(f *file, d marker.Decl, role string) (Proposal, bool) {
 		}
 		sym = testSubject(sym)
 	}
+	if d.Kind == "topic" {
+		// A Kafka topic resource is named after its topic: claims.filed.v1.
+		sym = d.Symbol[strings.Index(d.Symbol, "/")+1:]
+	}
 	body := bodyOf(f.lines, d)
 	consumer, producer := flow(d, body)
 	var hits []hit
-	if role != roleHeading && role != roleWorkload {
-		hits = append(hits, r.m.namedInDoc(d.Symbol, d.Parent)...)
+	source := SourceCode
+	switch {
+	case d.Kind == "topic":
+		source = SourceTopic
+		hits = r.topicResourceHits(sym)
+	default:
+		if role == roleTable {
+			source = SourceSchema
+		}
+		if role != roleHeading && role != roleWorkload {
+			hits = append(hits, r.m.namedInDoc(d.Symbol, d.Parent)...)
+		}
+		hits = append(hits, r.m.nameHits(sym)...)
 	}
-	hits = append(hits, r.m.nameHits(sym)...)
 	if role == rolePage || role == roleShell {
 		// A component named Page takes its meaning from its route.
 		hits = append(hits, r.m.nameHits(filepath.Base(filepath.Dir(f.rel)))...)
 	}
-	hits = append(hits, r.m.docHits(d.Doc)...)
 	context := ""
+	sourced, flows := 0, 0
 	switch {
+	case d.Kind == "topic":
 	case role == roleTest:
+		hits = append(hits, r.m.docHits(d.Doc)...)
 		hits = append(hits, r.callHits(body, lastPart(d.Symbol), strings.Join(f.lines, "\n"))...)
-	case role != roleHeading && role != roleWorkload && role != roleTable:
-		dh, ctx := r.dataHits(body)
-		hits = append(hits, dh...)
-		context = ctx
+	default:
+		hits = append(hits, r.m.docHits(d.Doc)...)
+		if role != roleHeading && role != roleWorkload && role != roleTable {
+			dh, ctx := r.dataHits(body)
+			hits = append(hits, dh...)
+			context = ctx
+		}
+		if role == roleType {
+			hits = append(hits, r.schemaHits(body)...)
+		}
+		// What the specs say the declaration names: a route the OpenAPI
+		// document maps to a process, ... Flows are proposed apart.
+		for _, src := range r.sources {
+			fl, plain := flowHints(hints[src.Name()])
+			flows += len(fl)
+			for _, h := range plain {
+				hs := r.resolve(src.Name(), h.Target, "", h.Relation)
+				sourced += len(hs)
+				hits = append(hits, hs...)
+			}
+		}
+		// A route no spec covers is name evidence on its path.
+		if (role == roleFunc || role == roleMember) && sourced == 0 {
+			hits = append(hits, r.routeHits(d, body)...)
+		}
 	}
-	if consumer || producer {
+	// A listener's or producer's topic literal is weaker evidence than a
+	// contract that names the topic's events: when a source covers the
+	// declaration (proposeFlows), the literal adds nothing.
+	if (consumer || producer) && flows == 0 {
 		hits = append(hits, r.topicHits(d, body)...)
 	}
-	h, rel, tie, ok := r.choose(f, d, role, hits, consumer, producer)
+	h, rel, tie, ok := r.choose(f, d, role, hits, consumer, producer, "")
 	if !ok {
 		return Proposal{}, false
 	}
-	target := h.c.curie
-	if f.m != nil && f.m.DefaultNamespace != "" && strings.HasPrefix(target, f.m.DefaultNamespace+":") {
-		target = "." + strings.TrimPrefix(target, f.m.DefaultNamespace+":")
+	switch {
+	case h.source != "":
+		source = h.source
+	case h.kind == evSchema:
+		source = SourceSchema
+	case h.kind == evRoute:
+		source = SourceRoute
 	}
-	basis := h.kind + "/" + role
-	if tie {
-		basis += "/tie"
-	}
-	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: target, Matched: h.matched(), Basis: basis, Context: context, Conf: confFor(basis)}
+	basis := h.basis(role, tie)
+	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: r.shorten(f, h.c.curie), Matched: h.matched(), Basis: basis, Source: source, Context: context, Conf: confFor(basis)}
 	if h.c.n.Deprecated {
 		p.Deprecated, p.Note = true, deprecatedNote(h.c.n)
 	}
 	p.Marker = markerLine(f.style, d.Indent, p)
 	return p, true
+}
+
+// proposeItem proposes the link a spec item stands for: documents on an
+// AsyncAPI channel or an OpenAPI operation, represents on a schema,
+// anchored as a YAML block.
+func (r *runner) proposeItem(f *file, d marker.Decl, it specItem) (Proposal, bool) {
+	hits := r.resolve(it.source, it.Target, it.Doc, "")
+	h, rel, tie, ok := r.choose(f, d, it.Role, hits, false, false, it.Relation)
+	if !ok {
+		return Proposal{}, false
+	}
+	basis := h.basis(it.Role, tie)
+	p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: rel, Target: r.shorten(f, h.c.curie), Matched: h.matched(), Basis: basis, Source: it.source, Scope: "block", Conf: confFor(basis)}
+	if h.c.n.Deprecated {
+		p.Deprecated, p.Note = true, deprecatedNote(h.c.n)
+	}
+	p.Marker = markerLine(f.style, d.Indent, p)
+	return p, true
+}
+
+// resolve turns a source's target into hits: the concept it named, or
+// what the matcher finds for its names and doc, of the kinds it allows.
+// A basis the source set replaces the matcher's evidence kind, so the
+// calibration bucket is the source's (openapi/operation/func); none
+// keeps the matcher's (openapi/name-exact/operation).
+func (r *runner) resolve(source string, t infer.Target, doc, rel string) []hit {
+	if t.Concept != "" {
+		c := r.m.byCurie[t.Concept]
+		if c == nil {
+			return nil
+		}
+		return []hit{{c: c, kind: t.Basis, terms: t.Terms, source: source, rel: rel}}
+	}
+	var hs []hit
+	for _, n := range t.Names {
+		hs = append(hs, r.m.nameHits(n)...)
+	}
+	hs = append(hs, r.m.docHits(doc)...)
+	var out []hit
+	for _, h := range hs {
+		if len(t.Kinds) > 0 && !r.kindOK(h.c, t.Kinds) {
+			continue
+		}
+		h.source, h.rel = source, rel
+		switch {
+		case t.Basis != "":
+			h.kind, h.terms = t.Basis, t.Terms
+		case t.Terms != "":
+			h.terms += "<" + t.Terms
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
+// kindOK reports a concept of one of the kinds, or an implementation
+// concept that realizes one.
+func (r *runner) kindOK(c *concept, kinds []string) bool {
+	if contains(kinds, c.n.Kind) {
+		return true
+	}
+	for cur := range c.realizes {
+		if o := r.m.byCurie[cur]; o != nil && contains(kinds, o.n.Kind) {
+			return true
+		}
+	}
+	return false
+}
+
+// processKinds are what a route can implement.
+var processKinds = []string{"process", "capability"}
+
+// topicWords are the words a topic resource's name shares with any topic:
+// they never tell one from another.
+var topicWords = map[string]bool{"topic": true, "queue": true, "stream": true, "channel": true, "event": true, "kafka": true, "subject": true}
+
+// topicResourceHits finds the resource concepts a Kafka topic's name
+// stands up: every distinguishing word of the concept's name is in the
+// topic's (claims.filed.v1: FiledTopic). With several, the ones that cover
+// the most of the topic's name are kept.
+func (r *runner) topicResourceHits(name string) []hit {
+	toks := mcp.Tokens(infer.StripVersion(name))
+	if len(toks) == 0 {
+		return nil
+	}
+	have := map[string]bool{}
+	for _, t := range toks {
+		have[t] = true
+	}
+	var out []hit
+	best := 0
+	for _, c := range r.m.concepts {
+		if c.n.Kind != "resource" {
+			continue
+		}
+		var own []string
+		for _, t := range c.toks {
+			if !topicWords[t] {
+				own = append(own, t)
+			}
+		}
+		if len(own) == 0 || !r.m.nonStop(own) {
+			continue
+		}
+		all := true
+		for _, t := range own {
+			all = all && have[t]
+		}
+		if !all {
+			continue
+		}
+		if len(own) > best {
+			best, out = len(own), nil
+		}
+		if len(own) == best {
+			out = append(out, hit{c: c, kind: evTopic, terms: name})
+		}
+	}
+	return out
+}
+
+var tableMapping = regexp.MustCompile(`__tablename__\s*=\s*["'](\w+)["']|@Table\s*\(\s*(?:name\s*=\s*)?["'](\w+)["']|\b(?:table_name|tableName|db_table|__table__)\s*[:=]\s*["'](\w+)["']|@@map\s*\(\s*["'](\w+)["']\s*\)`)
+
+// schemaHits finds the entity a type maps to a table of (__tablename__,
+// @Table(name), tableName, db_table): the entity a represents link already
+// binds the table to, else the one the table's name is.
+func (r *runner) schemaHits(body string) []hit {
+	var out []hit
+	for _, m := range tableMapping.FindAllStringSubmatch(body, -1) {
+		name := m[1] + m[2] + m[3] + m[4]
+		if cur, ok := r.tables[strings.ToLower(name)]; ok {
+			if c := r.m.byCurie[cur]; c != nil {
+				out = append(out, hit{c: c, kind: evSchema, terms: name})
+				continue
+			}
+		}
+		bare := name
+		for _, p := range []string{"tbl_", "tb_", "t_"} {
+			if strings.HasPrefix(strings.ToLower(bare), p) && len(bare) > len(p) {
+				bare = bare[len(p):]
+				break
+			}
+		}
+		for _, h := range r.m.nameHits(bare) {
+			if (h.kind == evNameExact || h.kind == evAliasExact) && (h.c.n.Kind == "entity" || h.c.n.Kind == "event") {
+				out = append(out, hit{c: h.c, kind: evSchema, terms: name})
+			}
+		}
+	}
+	return out
+}
+
+// routeHits is the name evidence of a route no spec covers: the process
+// its path's own words name.
+func (r *runner) routeHits(d marker.Decl, body string) []hit {
+	var out []hit
+	for _, rt := range infer.Routes(d.Decorators, body) {
+		for _, h := range r.m.nameHits(infer.PathWords(rt.Path)) {
+			if (h.kind == evNameExact || h.kind == evAliasExact || h.kind == evNameContains || h.kind == evNamePartial) && r.kindOK(h.c, processKinds) {
+				out = append(out, hit{c: h.c, kind: evRoute, terms: strings.TrimSpace(rt.Method + " " + rt.Path)})
+			}
+		}
+	}
+	return out
 }
 
 // deprecatedNote tells the reviewer the target is deprecated and what
@@ -370,7 +718,8 @@ func (p Proposal) AutoAccepts(threshold float64) bool {
 // choose returns the strongest hit this boundary may use, the relation it
 // gets, and whether an unrelated concept matched as strongly (a tie the
 // reviewer has to break).
-func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consumer, producer bool) (hit, string, bool, bool) {
+// fixed, when set, is the relation every hit gets (a spec item's).
+func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consumer, producer bool, fixed string) (hit, string, bool, bool) {
 	sort.SliceStable(hits, func(i, j int) bool {
 		a, b := hits[i], hits[j]
 		if a.strength() != b.strength() {
@@ -384,9 +733,11 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 		if pa, pb := kindPreferred(role, a.c.n.Kind), kindPreferred(role, b.c.n.Kind); pa != pb {
 			return pa
 		}
-		// Code implements the implementation tier; a tie goes to it.
+		// Code implements the implementation tier; a tie goes to it. A
+		// surface (a page, a route, a renderer) names the core concept it
+		// shows, not the engine's concept (ADR 0046).
 		if a.c.impl != b.c.impl {
-			return a.c.impl
+			return a.c.impl != surf.PrefersCore(f.kind)
 		}
 		if len(a.c.toks) != len(b.c.toks) {
 			return len(a.c.toks) < len(b.c.toks)
@@ -402,6 +753,21 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 		}
 		seen[h.c.curie] = true
 		rel := relationFor(role, d.Kind, h.c.n.Kind, h.c.impl, consumer, producer)
+		switch {
+		case fixed != "":
+			rel = fixed
+		case h.rel != "":
+			rel = h.rel
+		case role != roleTest && !f.test:
+			// The surface rule overrides the role's relation: produces on
+			// a document renderer, configures on an admin page editing a
+			// constraint, presents on a surface for a process an engine
+			// elsewhere implements (ADR 0046). A relation a spec fixes
+			// (fixed, h.rel) is more specific and wins over it.
+			if sr := surf.Default(r.g, r.ws, f.kind, f.rel, h.c.n); sr != "" && (rel == "implements" || rel == "presents" || rel == "represents") {
+				rel = sr
+			}
+		}
 		if !r.usable(f, h.c, rel) {
 			continue
 		}
@@ -447,9 +813,9 @@ func (r *runner) choose(f *file, d marker.Decl, role string, hits []hit, consume
 		}
 		switch {
 		case len(strong) == 1:
-			best = hit{strong[0].c, strong[0].kind, strong[0].terms + "+core:" + best.c.curie}
+			best = hit{c: strong[0].c, kind: strong[0].kind, terms: strong[0].terms + "+core:" + best.c.curie, source: strong[0].source, rel: strong[0].rel}
 		case len(impls) == 1:
-			best = hit{impls[0].c, best.kind, best.terms + "+impl"}
+			best = hit{c: impls[0].c, kind: best.kind, terms: best.terms + "+impl"}
 		}
 	}
 	tie := false
@@ -581,7 +947,7 @@ func (r *runner) topicHits(d marker.Decl, body string) []hit {
 		toks := mcp.Tokens(lit)
 		for _, c := range r.m.concepts {
 			if c.n.Kind == "event" && containsSeq(toks, c.toks) {
-				out = append(out, hit{c, evTopic, lit})
+				out = append(out, hit{c: c, kind: evTopic, terms: lit})
 			}
 		}
 	}
@@ -620,7 +986,7 @@ func (r *runner) callHits(body, self string, fileText string) []hit {
 		}
 	}
 	if c := r.m.byCurie[best]; c != nil {
-		return []hit{{c, evCalls, via[best]}}
+		return []hit{{c: c, kind: evCalls, terms: via[best]}}
 	}
 	return nil
 }
@@ -672,7 +1038,7 @@ func (r *runner) dataHits(body string) ([]hit, string) {
 		return nil, ctx
 	}
 	for c, e := range procs {
-		return []hit{{c, evData, e}}, ctx
+		return []hit{{c: c, kind: evData, terms: e}}, ctx
 	}
 	return nil, ctx
 }
@@ -819,8 +1185,15 @@ func workloads(lines []string) []marker.Decl {
 				name = strings.Trim(strings.TrimSpace(strings.TrimPrefix(t, "name:")), `"'`)
 			}
 		}
+		declKind := "workload"
 		switch kind {
 		case "Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job", "Rollout", "Service", "KnativeService":
+		case "KafkaTopic":
+			// A Strimzi topic stands up the topic it names (provisions).
+			declKind = "topic"
+			if t := topicName(lines[start:end]); t != "" {
+				name = t
+			}
 		default:
 			return
 		}
@@ -834,7 +1207,7 @@ func workloads(lines []string) []marker.Decl {
 		if first >= end {
 			return
 		}
-		out = append(out, marker.Decl{Symbol: kind + "/" + name, Kind: "workload", Line: first + 1, End: end, Insert: first + 1})
+		out = append(out, marker.Decl{Symbol: kind + "/" + name, Kind: declKind, Line: first + 1, End: end, Insert: first + 1})
 	}
 	for k, l := range lines {
 		if strings.TrimSpace(l) == "---" {
@@ -844,6 +1217,17 @@ func workloads(lines []string) []marker.Decl {
 	}
 	flush(len(lines))
 	return out
+}
+
+// topicName is spec.topicName of a KafkaTopic document, when set.
+func topicName(lines []string) string {
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		if strings.HasPrefix(t, "topicName:") && strings.HasPrefix(l, "  ") {
+			return strings.Trim(strings.TrimSpace(strings.TrimPrefix(t, "topicName:")), `"'`)
+		}
+	}
+	return ""
 }
 
 func contains(xs []string, x string) bool {

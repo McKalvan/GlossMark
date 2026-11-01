@@ -13,13 +13,13 @@ import (
 )
 
 // proposalsRepo is a tiny workspace with three agent proposals at conf
-// 0.5, 0.75 and 0.97, and the given suggest: and policy: blocks.
+// 0.4, 0.75 and 0.97, and the given suggest: and policy: blocks.
 func proposalsRepo(t *testing.T, extraConfig string, files map[string]string) string {
 	t.Helper()
 	all := map[string]string{
 		"glossmark.yaml":        "owns:\n  z: { iri: https://x/z/, file: ontology/z.gloss.yaml, tier: core }\n  i: { iri: https://x/i/, file: ontology/i.gloss.yaml, tier: implementation }\n" + extraConfig,
 		"ontology/i.gloss.yaml": "namespace: i\nconcepts:\n  Doer: { kind: process, realizes: z:Doing }\n  Maker: { kind: process, realizes: z:Doing }\n  Taker: { kind: process, realizes: z:Doing }\n",
-		"low.py":                "# @gloss? implements .Doer conf=0.5\ndef low(): pass\n",
+		"low.py":                "# @gloss? implements .Doer conf=0.4\ndef low(): pass\n",
 		"mid.py":                "# @gloss? implements .Maker conf=0.75\ndef mid(): pass\n",
 		"high.py":               "# @gloss? implements .Taker conf=0.97\ndef high(): pass\n",
 	}
@@ -47,12 +47,16 @@ func acceptedByPolicy(t *testing.T, root string) []string {
 // TestAcceptPolicyHonoursPrecisionTarget (ADR 0024): accept --policy
 // accepts what the derived threshold makes SOFT. The default target (0.9
 // on the shipped calibration) derives a threshold above 0.75; a lower
-// target derives one below; policy.soft-conf-threshold alone still fixes
-// it; and when no basis meets the target nothing is accepted.
+// target (0.8) derives one below 0.75 and above 0.4; policy.soft-conf-threshold
+// alone still fixes it; and when no basis meets the target nothing is
+// accepted.
 func TestAcceptPolicyHonoursPrecisionTarget(t *testing.T) {
 	def := calib.Derive(calib.Shipped.Confs(), calib.Shipped, calib.DefaultPrecision, calib.DefaultMinConf)
 	if !def.Met || def.Threshold <= 0.75 || def.Threshold > 0.97 {
 		t.Fatalf("the shipped default threshold %.2f no longer separates the fixture's 0.75 and 0.97", def.Threshold)
+	}
+	if low := calib.Derive(calib.Shipped.Confs(), calib.Shipped, 0.8, calib.DefaultMinConf); !low.Met || low.Threshold <= 0.4 || low.Threshold > 0.75 {
+		t.Fatalf("the shipped threshold for the target 0.8, %.2f, no longer separates the fixture's 0.4 and 0.75", low.Threshold)
 	}
 	cases := []struct {
 		name, config string

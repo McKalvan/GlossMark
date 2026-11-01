@@ -52,10 +52,12 @@ func TestOwnersAndMapping(t *testing.T) {
 		{Gate: gate.HARD, Kind: "concept-changed", Subject: "clinic:CancellationWindow", Path: "ontology/clinic.gloss.yaml"},
 		{Gate: gate.HARD, Kind: "link-added", Subject: "services/booking-api/x.go", Object: "lark:Thing, clinic:Booking", Path: "services/booking-api/x.go", Boundary: "clinicb:booking-api"},
 		{Gate: gate.SOFT, Kind: "link-added", Object: "clinic:Patient", Path: "apps/web/p.ts", Boundary: "clinicb:web"},
-		{Gate: gate.HARD, Kind: "boundary-changed", Subject: "clinicb:unowned", Path: "infra/main.tf"},
+		{Gate: gate.HARD, Kind: "boundary-changed", Subject: "clinicb:unowned", Path: "infra/main.tf", Owner: "platform"},
 	}}
 	owners := OwnersOf(ws, im)
-	if want := []string{"booking-platform", "clinical-ops"}; !reflect.DeepEqual(owners, want) {
+	// The gate's own owner on a change (platform) counts beside the ones
+	// read from the namespaces and manifests.
+	if want := []string{"booking-platform", "clinical-ops", "platform"}; !reflect.DeepEqual(owners, want) {
 		t.Fatalf("owners %v", owners)
 	}
 	cfg := &model.AppConfig{Owners: map[string]model.StringList{"booking-platform": {"@org/booking", "alice"}, "web-team": {"dave"}}}
@@ -68,11 +70,12 @@ func TestOwnersAndMapping(t *testing.T) {
 	if want := []string{"booking", "platform"}; !reflect.DeepEqual(rv.Teams, want) {
 		t.Errorf("teams %v", rv.Teams)
 	}
-	if !reflect.DeepEqual(rv.Unmapped, []string{"clinical-ops"}) {
+	if !reflect.DeepEqual(rv.Unmapped, []string{"clinical-ops", "platform"}) {
 		t.Errorf("unmapped %v", rv.Unmapped)
 	}
 	// Every owner mapped: CODEOWNERS is not consulted.
 	cfg.Owners["clinical-ops"] = model.StringList{"@carol"}
+	cfg.Owners["platform"] = model.StringList{"@org/booking"}
 	rv = MapOwners(cfg, owners, im, codeowners)
 	if !reflect.DeepEqual(rv.Users, []string{"alice", "carol"}) || !reflect.DeepEqual(rv.Teams, []string{"booking"}) || rv.Unmapped != nil {
 		t.Errorf("mapped: %+v", rv)
