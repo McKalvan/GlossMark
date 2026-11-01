@@ -1,0 +1,8 @@
+# internal/surface/.gloss.yaml: the six ambiguous surfaces, their marking rules, the lint hints and defaults drawn from them.
+boundary: arch:surface
+level: component
+label: surface rules
+part-of: arch:lib-checking
+realizes: [gmi:SurfaceRules]
+default-namespace: gmi
+owner: glossmark

@@ -75,7 +75,8 @@ func TestStarterProfileMCP(t *testing.T) {
 			if !strings.Contains(init.Result.Instructions, "inline: `consumes`, `documents`, `implements`, `produces`, `represents`, `verifies`. ") || !strings.Contains(init.Result.Instructions, "relations: full") {
 				t.Errorf("starter instructions:\n%s", init.Result.Instructions)
 			}
-			if desc != "consumes | documents | implements | produces | represents | verifies (the starter profile; relations: full in glossmark.yaml unlocks the rest)" {
+			// The surface rule's note (ADR 0046) follows the profile's list.
+			if !strings.HasPrefix(desc, "consumes | documents | implements | produces | represents | verifies (the starter profile; relations: full in glossmark.yaml unlocks the rest); omit it") {
 				t.Errorf("starter propose_link relation: %q", desc)
 			}
 			if !strings.Contains(hint, "presents is outside the starter relation profile") || !strings.Contains(hint, "GM250") {
@@ -86,7 +87,7 @@ func TestStarterProfileMCP(t *testing.T) {
 		if !strings.Contains(init.Result.Instructions, "`presents`") || strings.Contains(init.Result.Instructions, "starter") {
 			t.Errorf("full instructions:\n%s", init.Result.Instructions)
 		}
-		if desc != "implements | represents | verifies | ..." || hint != "" {
+		if !strings.HasPrefix(desc, "implements | represents | verifies | ...; omit it") || hint != "" {
 			t.Errorf("full propose_link relation %q, hint %q", desc, hint)
 		}
 	}
