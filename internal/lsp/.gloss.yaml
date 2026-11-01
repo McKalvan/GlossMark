@@ -1,0 +1,9 @@
+# internal/lsp/.gloss.yaml: the language server editors run (gloss lsp).
+boundary: arch:lsp
+level: component
+label: lsp
+part-of: arch:lib-agents
+realizes: [gmi:LanguageServer]
+publishes: [gm:LinkAccepted]   # the accept code action runs gloss accept
+default-namespace: gmi
+owner: glossmark
