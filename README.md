@@ -76,7 +76,7 @@ curl -fsSL https://raw.githubusercontent.com/mckalvan/glossmark/main/install.sh 
 go install github.com/mckalvan/glossmark/cmd/gloss@v0.3.0                                          # with a Go toolchain
 ```
 
-Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.3.0` runs the same binary and posts the PR comment ([`action.yml`](action.yml)). Versions are pinned as described in [docs/VERSIONING.md](docs/VERSIONING.md).
+Binaries for Linux, macOS and Windows are attached to each [release](https://github.com/mckalvan/glossmark/releases); the script verifies the sha256. In CI, `uses: mckalvan/glossmark@v0.3.0` runs the same binary and posts the PR comment ([`action.yml`](action.yml)). With no CI at all, the hosted GitHub App (`gloss app serve`, [docs/APP.md](docs/APP.md)) posts the comment, a check run and a review request to the owners of the HARD changes once installed on a repository. Versions are pinned as described in [docs/VERSIONING.md](docs/VERSIONING.md).
 
 ## Try it on an example, then on your repo
 
