@@ -251,6 +251,8 @@ A proposed concept carries `proposed: true` and `proposed-by:` in the ontology f
 
 Over MCP the same capabilities are `context`, `impact_of` (with `paths` or `base`), `propose_concept`, `propose_link`, `search_concepts`, `concepts_for_path`, `lookup_concept`, `slice_of`, `history_of` and `drift`. `gloss slice <curie>` (MCP `slice_of`, `gloss context --concept`) shows everything relevant to one feature; see [ADVANCED.md](ADVANCED.md#feature-slices-gloss-slice). `history_of` tells an agent how a concept got to where it is before it changes it; see [ADVANCED.md](ADVANCED.md#history-gloss-history).
 
+In the editor, the same vocabulary comes through `gloss lsp`, a language server: completion after `@gloss`, hover on a concept, `gloss check` as you type and the accept action; see [IDE.md](IDE.md) and the VS Code extension under `editors/vscode`.
+
 ## 7. Wire CI
 
 `.github/workflows/gloss.yml`:

@@ -20,7 +20,7 @@ var helpGroups = []struct {
 	{"Start", []string{"onboard", "init", "doctor", "strip"}},
 	{"Daily", []string{"check", "build", "drift", "coverage", "review", "view"}},
 	{"Pull requests", []string{"diff", "impact", "accept", "reject", "status"}},
-	{"Agents", []string{"hook", "context", "mcp", "agents"}},
+	{"Agents", []string{"hook", "context", "mcp", "agents", "lsp"}},
 	{"Ontology", []string{"bind", "propose", "suggest", "harvest", "import", "criticality"}},
 	{"Advanced", []string{"export", "history", "landscape", "lock", "publish", "report", "slice", "version"}},
 }
@@ -185,6 +185,11 @@ var help = map[string]helpEntry{
 		usage:    []string{"mcp"},
 		examples: []string{"gloss mcp  # stdio; gloss hook install registers it"},
 		docs:     "docs/QUICKSTART.md#agent-experience"},
+	"lsp": {line: "serve markers to an editor: completion, hover, diagnostics",
+		usage:    []string{"lsp [--root dir] [--log file]"},
+		more:     "The Language Server Protocol on stdio, for the VS Code extension in editors/vscode and any other LSP client: gloss check diagnostics as you type, completion of relations and concepts after @gloss ranked by the boundary's allowed set, hover and go-to-definition on a concept, and the code actions Accept proposal, Propose new concept and Go to ontology entry. The editor starts it; nothing to run by hand.",
+		examples: []string{"gloss lsp --log /tmp/gloss-lsp.log  # what an editor would start, with a trace"},
+		docs:     "docs/IDE.md"},
 	"agents": {line: "print the AGENTS.md vocabulary snippet",
 		usage: []string{"agents [--dir dir] [--write file]"},
 		examples: []string{

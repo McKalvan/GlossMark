@@ -52,6 +52,19 @@ type Workspace struct {
 	// Lock is glossmark.lock when present.
 	Lock    *Lock
 	lockErr error
+	// Overlay holds the contents an editor has for files it has open and
+	// not saved, by repo-relative path; ReadFile serves them in place of the
+	// disk so the language server (gloss lsp) extracts what is being typed.
+	Overlay map[string][]byte
+}
+
+// ReadFile returns a repo-relative file's contents: the editor's unsaved
+// copy when Overlay holds one, the disk otherwise.
+func (ws *Workspace) ReadFile(rel string) ([]byte, error) {
+	if b, ok := ws.Overlay[filepath.ToSlash(rel)]; ok {
+		return b, nil
+	}
+	return os.ReadFile(ws.Abs(rel))
 }
 
 // FindRoot walks up from start until it finds glossmark.yaml.

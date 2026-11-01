@@ -37,6 +37,7 @@ glossmark.yaml, ontology/*.gloss.yaml, **/.gloss.yaml, inline @gloss markers
         ├─ internal/store     gloss export    (SQLite with recursive CTE closures, JSON-LD context)
         ├─ internal/slice     gloss slice     (feature slices: typed traversal from a seed, ADR 0023)
         ├─ internal/mcp       gloss mcp       (stdio MCP server: 9 tools)
+        ├─ internal/lsp       gloss lsp       (stdio language server for editors, ADR 0051)
         └─ internal/agents    gloss agents    (AGENTS.md vocabulary snippet)
 ```
 
@@ -89,6 +90,7 @@ internal/slice/           Feature slices (ADR 0023)
 internal/viewer/          Embedded static HTML viewer
 internal/store/           SQLite export
 internal/mcp/             MCP stdio server
+internal/lsp/             Language server for editors (editors/vscode is the VS Code client)
 internal/agents/          AGENTS.md snippet
 schemas/                  JSON Schemas for glossmark.yaml, *.gloss.yaml, .gloss.yaml, views.yaml; LinkML schema for the graph
 corpus/                   Conformance corpus: one file per supported extension + expected.json

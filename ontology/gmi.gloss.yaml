@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.12.0
+version: 1.14.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -106,4 +106,6 @@ concepts:
   # Agents
   McpServer:          { kind: process, realizes: gm:Vocabulary, publishes: [gm:LinkProposed], doc: "The MCP server agents call to search concepts, ask what a path or change touches, and propose links and concepts." }
   AgentsSnippet:      { kind: process, realizes: gm:Vocabulary, doc: "The AGENTS.md vocabulary snippet and the session-start briefing." }
+  LanguageServer:     { kind: process, realizes: [gm:Vocabulary, gm:Lint], publishes: [gm:LinkAccepted], doc: "gloss lsp: the language server an editor runs for completion of relations and concepts after @gloss, hover and go-to-definition on a concept, gloss check diagnostics as you type, and the accept, propose and go-to-ontology actions (ADR 0051)." }
+  EditorExtension:    { kind: process, part-of: LanguageServer, internal: true, doc: "The editor side of gloss lsp: starts the server, shows the file's boundary in the status bar and runs gloss impact on request; editors/vscode is the VS Code one." }
   AgentIntegrations:  { kind: process, realizes: gm:Vocabulary, doc: "gloss hook install --agent: the ready-made Claude Code plugin, Cursor rule and Copilot instructions, each with its MCP config, that give an agent the briefing, the skills and the concept tools in one step; every file committed and running gloss by name." }

@@ -1,0 +1,63 @@
+{
+  "name": "glossmark",
+  "displayName": "GlossMark",
+  "description": "Completion, hover, diagnostics and review actions for @gloss markers, through the gloss language server.",
+  "version": "0.1.0",
+  "publisher": "mckalvan",
+  "repository": { "type": "git", "url": "https://github.com/McKalvan/GlossMark", "directory": "editors/vscode" },
+  "homepage": "https://github.com/McKalvan/GlossMark/blob/main/docs/IDE.md",
+  "bugs": { "url": "https://github.com/McKalvan/GlossMark/issues" },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Linters", "Programming Languages", "Other"],
+  "keywords": ["glossmark", "ontology", "architecture", "lsp"],
+  "activationEvents": ["workspaceContains:**/glossmark.yaml", "onCommand:glossmark.showImpact"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "glossmark.showImpact", "title": "GlossMark: Show impact", "category": "GlossMark" },
+      { "command": "glossmark.restartServer", "title": "GlossMark: Restart language server", "category": "GlossMark" },
+      { "command": "glossmark.openLocation", "title": "GlossMark: Open location", "category": "GlossMark" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "glossmark.openLocation", "when": "false" }
+      ]
+    },
+    "configuration": {
+      "title": "GlossMark",
+      "properties": {
+        "glossmark.path": {
+          "type": "string",
+          "default": "gloss",
+          "description": "The gloss executable: a name on PATH or an absolute path. The language server is `gloss lsp`."
+        },
+        "glossmark.impactBase": {
+          "type": "string",
+          "default": "",
+          "description": "Git ref `GlossMark: Show impact` compares against (e.g. origin/main); empty runs `gloss impact` on the current file alone."
+        },
+        "glossmark.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace the messages between VS Code and gloss lsp in the GlossMark output channel."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.4.5"
+  }
+}
