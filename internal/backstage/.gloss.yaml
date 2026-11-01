@@ -1,0 +1,10 @@
+# internal/backstage/.gloss.yaml: the per-boundary JSON documents a developer portal reads.
+boundary: arch:backstage
+level: component
+label: backstage
+part-of: arch:lib-projection
+realizes: [gmi:BackstageExport]
+consumes: [gm:Graph, gm:Ledger, gm:Drift]
+produces: [gm:View]
+default-namespace: gmi
+owner: glossmark

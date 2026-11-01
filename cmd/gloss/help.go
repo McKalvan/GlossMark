@@ -222,11 +222,13 @@ var help = map[string]helpEntry{
 		docs:     "docs/GOVERNANCE.md"},
 
 	// Advanced
-	"export": {line: "export the graph as SQLite, PROV-O or per-concept status",
-		usage: []string{"export --sqlite file | --prov file | --status [-o file]"},
+	"export": {line: "export the graph: SQLite, PROV-O, concept status, portal docs",
+		usage: []string{"export --sqlite file | --prov file | --status [-o file]", "export --backstage [-o dir] [--source-url tpl]"},
+		more:  "--backstage writes one self-contained JSON document per boundary (its concepts with criticality, the code and tests behind them, coverage, open drift findings and the last review decisions) and landscape.json indexing them, under glossmark/ by default, for the Backstage plugin in integrations/backstage and docs-site plugins (docs/INTEGRATIONS.md, schemas/backstage-export.schema.json). Links use --source-url, else source-url in glossmark.yaml.",
 		examples: []string{
 			"gloss export --sqlite graph.db",
 			"gloss export --status -o status.json",
+			"gloss export --backstage -o public/glossmark  # publish the directory; point the plugin at it",
 		},
 		docs: "docs/GRAPH.md#querying"},
 	"report": {line: "audit report per rule: code, tests, value, decisions, findings",
@@ -250,10 +252,11 @@ var help = map[string]helpEntry{
 		},
 		docs: "docs/ADVANCED.md#history-gloss-history"},
 	"landscape": {line: "union several repositories' graphs; cross-repo drift",
-		usage: []string{"landscape [--format text|json|markdown] [--view file] <root>..."},
+		usage: []string{"landscape [--format text|json|markdown] [--view file] [--backstage dir] <root>..."},
 		examples: []string{
 			"gloss landscape ../repo-a ../repo-b",
 			"gloss landscape --view landscape.html ../repo-a ../repo-b",
+			"gloss landscape --backstage glossmark ../repo-a ../repo-b  # every boundary's document, one landscape.json",
 		},
 		docs: "docs/QUICKSTART.md#6-run-the-tooling"},
 	"lock": {line: "pin every import in glossmark.lock and vendor it",
