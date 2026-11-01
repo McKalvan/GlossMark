@@ -1,0 +1,8 @@
+# internal/infer/wire/.gloss.yaml: the Source interface over a pipe, for link sources outside the binary.
+boundary: arch:infer-wire
+level: component
+part-of: arch:infer
+label: infer/wire
+realizes: [gmi:SourcePlugin]
+default-namespace: gmi
+owner: glossmark
