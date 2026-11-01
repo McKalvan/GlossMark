@@ -1,0 +1,9 @@
+# internal/prapp/.gloss.yaml: the hosted pull-request app (gloss app serve, ADR 0052).
+boundary: arch:prapp
+level: component
+label: pull-request app
+part-of: arch:lib-checking
+realizes: [gmi:PullRequestApp]
+consumes: [gm:Graph, gm:Impact]   # it builds the graph of the checkout and posts what the gate produced: the comment, the check run, the review request
+default-namespace: gmi
+owner: glossmark
