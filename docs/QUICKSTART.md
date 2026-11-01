@@ -46,7 +46,13 @@ gloss diff --base HEAD      # gate HARD ... [HIGH, HARD: published value drifted
 
 ## 0. Scaffold
 
-*Level 0.*
+*Level 0.* In a hurry? `gloss onboard` runs this section and the next four in one go and ends with the viewer: the scaffold below, a `glossary.md` or `enums.yaml` imported, a draft core and implementation vocabulary from the harvested code, schemas, tests, UI and docs, a draft boundary map from the deploy manifests (Kubernetes, Compose) and Terraform, and `@gloss?` markers. Everything it writes is a proposal (`proposed: true`, `@gloss?`, a commented `realizes:`), so the repository lands on level 0 with level 1 drafted: `gloss check` passes on it and `gloss review` decides what is accepted. Pass `--namespace <ns>` to name the core yourself, `--top n` for more or fewer concepts, `--no-suggest` to skip the markers, `--open` to open the viewer. The tail of the draft is noise (a config key, a report name): review it, do not accept it whole ([ADR 0048](adr/0048-zero-config-bootstrap.md)).
+
+```sh
+gloss onboard --namespace clinic   # scaffold, import, harvest, draft, mark, view; then open .glossmark/viewer.html and run gloss review
+```
+
+Step by step, the same ground:
 
 ```sh
 gloss init --dry-run     # print the plan: prefixes guessed from the repo name, one manifest per deployable directory, then hook and build
