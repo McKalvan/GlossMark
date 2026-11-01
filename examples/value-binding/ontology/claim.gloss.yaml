@@ -1,0 +1,16 @@
+# ontology/claim.gloss.yaml: the core tier, in words a claims manager recognises.
+namespace: claim
+version: 0.1.0
+concepts:
+  Assessment:
+    kind: entity
+    doc: "What the rules or an adjuster concluded about a claim, and why."
+  ClaimAssessment:
+    kind: process
+    produces: [Assessment]
+    doc: "Deciding a filed claim: approve it, deny it, or refer it to an adjuster."
+  AutoApprovalLimit:
+    kind: constraint
+    constrains: [ClaimAssessment]
+    doc: "The largest estimated loss the rules may approve without an adjuster."
+    criticality: high          # above it, money moves without a human

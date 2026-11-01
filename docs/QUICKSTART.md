@@ -30,6 +30,20 @@ adoption: 1   # manifests and file-level links are written; drift warns, nothing
 
 `gloss doctor` reports the level in force, the rung the tree has actually reached (read from what is written: concepts, manifests and links, declared criticality, markers on declarations) and what the next rung asks for and gives; when the two differ it says which line to change. A command that the level kept from failing says so on stderr (`gloss drift: adoption level 1 (manifests): 3 finding(s) would fail (fail-on: ...), reported only; set adoption: 2 in glossmark.yaml for ...`), and the report itself is the same at every level: the level changes the exit code, never what is shown. `--fail-on` still chooses which kinds or gate class count; the level caps how hard they bite, so the GitHub Action needs no change. `gloss check --strict` fails on errors at every level.
 
+## Sixty seconds: a constant becomes a governed business rule
+
+Before climbing the ladder, see the one feature that explains the rest (level 3, but one command away). [DEMO.md](DEMO.md) binds one constant in a sample service to the business rule it is, then changes it:
+
+```sh
+examples/value-binding/demo.sh                                   # builds gloss, runs the three steps below in a temporary copy
+gloss bind services/assessment/assessment/settings.py:AUTO_APPROVE_LIMIT_EUR --as tide:AutoApprovalRule --publish-as claim:AutoApprovalLimit --value "5000 EUR"
+sed -i 's/= 5_000/= 7_500/' services/assessment/assessment/settings.py
+gloss drift                 # ≠ Published values drifted: tide:AutoApprovalRule publishes "5000 EUR", bound to settings.py:7, which changed ...
+gloss diff --base HEAD      # gate HARD ... [HIGH, HARD: published value drifted ..., owner claims-decisioning]
+```
+
+`gloss bind` reads the value from the code, writes `value:`, `value-from:` and `published:` into the ontology file, puts a `@gloss publishes-value` marker above the line and records the baseline. From then on the constant, the ontology and the baseline change together in one reviewable diff, or the build fails. The rest of this page is how to get a repository to the point where every such rule has a name.
+
 ## 0. Scaffold
 
 *Level 0.*

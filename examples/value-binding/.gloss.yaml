@@ -1,0 +1,7 @@
+# .gloss.yaml: the repository's root boundary.
+boundary: claimb:claims-events
+level: system
+label: Tidewater Mutual claims platform
+realizes: inherit
+default-namespace: tide
+owner: claims-platform

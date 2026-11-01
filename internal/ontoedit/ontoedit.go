@@ -36,6 +36,22 @@ type ConceptSpec struct {
 	Planned       bool
 	PlannedBy     string
 	PlannedTicket string
+	// PublishedAs writes published: { as: core:X }; Value and ValueFrom
+	// write a published value and the code it is bound to (gloss bind).
+	PublishedAs string
+	Value       string
+	ValueFrom   *ValueFrom
+}
+
+// ValueFrom is one value-from location: a file and the symbol it assigns.
+type ValueFrom struct {
+	Path   string
+	Symbol string
+}
+
+// Render writes the location as the flow mapping value-from: takes.
+func (v ValueFrom) Render() string {
+	return "{ path: " + plain(v.Path) + ", symbol: " + plain(v.Symbol) + " }"
 }
 
 // file is one ontology file: its lines plus the parsed tree for locating entries.
@@ -236,6 +252,9 @@ func fields(spec ConceptSpec) []string {
 	if len(spec.Realizes) > 0 {
 		out = append(out, "realizes: "+list(spec.Realizes))
 	}
+	if spec.PublishedAs != "" {
+		out = append(out, "published: { as: "+plain(spec.PublishedAs)+" }")
+	}
 	if spec.Internal {
 		out = append(out, "internal: true")
 	}
@@ -250,6 +269,12 @@ func fields(spec ConceptSpec) []string {
 		default:
 			out = append(out, "planned: true")
 		}
+	}
+	if spec.Value != "" {
+		out = append(out, "value: "+strconv.Quote(spec.Value))
+	}
+	if spec.ValueFrom != nil {
+		out = append(out, "value-from: "+spec.ValueFrom.Render())
 	}
 	if spec.Doc != "" {
 		// Always quoted: inside a { } flow mapping an unquoted doc ends at its first comma.
