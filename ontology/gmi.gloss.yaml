@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.11.0
+version: 1.12.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -79,6 +79,7 @@ concepts:
   Bootstrapper:       { kind: process, realizes: gm:Onboarding, produces: [gm:ProposedLink], doc: "gloss onboard: on a repository with no GlossMark files, the scaffold, the vocabulary it keeps, harvested candidates as proposed concepts, a boundary map read from deploy manifests and Terraform, suggested @gloss? markers and the viewer, in one run; everything it writes is a proposal (ADR 0048)." }
   MarkerSuggester:    { kind: process, realizes: gm:Onboarding, doc: "gloss suggest: proposed links for unmarked public surfaces, from names, docstrings, the tables they touch and the code their tests call." }
   SuggestCalibration: { kind: process, part-of: MarkerSuggester, realizes: gm:Onboarding, doc: "gloss suggest --eval, --calibrate and the calibration harness: precision and auto-accept rate per confidence band on labelled links, the counts conf is read from, and the auto-accept threshold derived from a precision target." }
+  SpecInference:      { kind: process, part-of: MarkerSuggester, realizes: gm:Onboarding, doc: "The links gloss suggest infers from the specs a repository already has, through the infer.Source interface: a source reads its files once, says what a spec file declares (an AsyncAPI channel, an OpenAPI operation or schema) and what code names through it (a topic, a route), and the runner settles the relation, the direction of a flow and the conf from the source's own calibration bases (ADR 0049). Strimzi topics and ORM table mappings are matched in the runner." }
   DefaultSoftThreshold:
     kind: measure
     part-of: SuggestCalibration
