@@ -6,8 +6,6 @@ package check
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -472,7 +470,7 @@ func (c *checker) markers() {
 		for _, r := range order {
 			f := runs[r]
 			if lines == nil {
-				b, _ := os.ReadFile(filepath.Join(c.ws.Root, filepath.FromSlash(path)))
+				b, _ := c.ws.ReadFile(path)
 				lines = strings.Split(string(b), "\n")
 			}
 			nested := true

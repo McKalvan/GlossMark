@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -204,8 +205,30 @@ func cmdAccept(args []string) int {
 		}
 	}
 	rev := reviewer(p.WS.Root)
+	n, err := acceptLinks(p, targets, pol, *dry, os.Stdout)
+	if err != nil {
+		return fail(err)
+	}
+	if !*dry {
+		if err := p.Ledger.Save(); err != nil {
+			return fail(err)
+		}
+		verb := "accepted"
+		if *stale {
+			verb = "re-confirmed"
+		}
+		fmt.Printf("gloss accept: %s %s by %s\n", plural(n, "link"), verb, rev)
+	}
+	return 0
+}
+
+// acceptLinks accepts each target (or re-confirms it when stale): the
+// one-character diff in the file and the ledger entry, in memory; the caller
+// saves the ledger. It is the one path for gloss accept, the review engine's
+// callers and the language server's accept action, so they cannot drift.
+func acceptLinks(p *pipeline, targets []extract.FoundMarker, pol *model.Policy, dry bool, out io.Writer) (n int, err error) {
+	rev := reviewer(p.WS.Root)
 	now := time.Now().UTC()
-	n := 0
 	done := map[string]bool{}
 	for _, fm := range targets {
 		if done[fm.ID] {
@@ -226,14 +249,14 @@ func cmdAccept(args []string) int {
 		if !fm.Marker.Proposed {
 			// A stale link is re-confirmed: the current anchor becomes the baseline.
 			if e := p.Ledger.Entry(fm.ID); e != nil && e.Status == model.StatusStale {
-				fmt.Printf("%s %s %s %s (stale)\n", map[bool]string{true: "would re-confirm", false: "re-confirm"}[*dry], where(fm), fm.Marker.Relation, join(fm.Marker.Targets))
-				if !*dry {
+				fmt.Fprintf(out, "%s %s %s %s (stale)\n", map[bool]string{true: "would re-confirm", false: "re-confirm"}[dry], where(fm), fm.Marker.Relation, join(fm.Marker.Targets))
+				if !dry {
 					p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
 					n++
 				}
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "%s: %s is not proposed; nothing to accept\n", where(fm), fm.ID)
+			fmt.Fprintf(out, "%s: %s is not proposed; nothing to accept\n", where(fm), fm.ID)
 			continue
 		}
 		g := gate.SOFT
@@ -243,13 +266,13 @@ func cmdAccept(args []string) int {
 			g = gate.Max(g, cg)
 			why = append(why, r...)
 		}
-		fmt.Printf("%s %s %s %s [%s]\n", map[bool]string{true: "would accept", false: "accept"}[*dry], where(fm), fm.Marker.Relation, join(fm.Marker.Targets), g)
-		if *dry {
+		fmt.Fprintf(out, "%s %s %s %s [%s]\n", map[bool]string{true: "would accept", false: "accept"}[dry], where(fm), fm.Marker.Relation, join(fm.Marker.Targets), g)
+		if dry {
 			continue
 		}
 		for _, l := range lines {
 			if err := flipMarker(p, l); err != nil {
-				return fail(err)
+				return n, err
 			}
 		}
 		p.Ledger.Accept(fm.ID, rev, fm.Anchor.Fingerprint, now)
@@ -258,17 +281,7 @@ func cmdAccept(args []string) int {
 		}
 		n++
 	}
-	if !*dry {
-		if err := p.Ledger.Save(); err != nil {
-			return fail(err)
-		}
-		verb := "accepted"
-		if *stale {
-			verb = "re-confirmed"
-		}
-		fmt.Printf("gloss accept: %s %s by %s\n", plural(n, "link"), verb, rev)
-	}
-	return 0
+	return n, nil
 }
 
 func cmdReject(args []string) int {
