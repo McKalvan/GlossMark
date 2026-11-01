@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.8.0
+version: 1.9.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -34,6 +34,11 @@ concepts:
   CanonicalGraph:     { kind: resource, realizes: gm:Graph, doc: "The deterministic graph.jsonl record stream (nodes, then edges, with provenance) and its JSON-LD context." }
   Linter:             { kind: process, realizes: [gm:Lint, gm:TierSeparation, gm:PublishedSeam, gm:OwnSubjectRule, gm:AllowedList], doc: "Where the tier, seam, own-subject and allowed-list constraints are enforced." }
   RelationProfile:    { kind: constraint, part-of: Linter, internal: true, doc: "glossmark.yaml relations: starter | full. Under starter, check hints (GM250) at a relation outside the starter set and the agent surfaces list only it; the graph is the same under either (issue #261)." }
+  SurfaceRules:
+    kind: process
+    part-of: Linter
+    realizes: gm:Lint
+    doc: "The marking rule of each ambiguous surface (a page, an admin value editor, a CLI, a BFF, a GraphQL gateway, a document renderer), recognised from a file's path and imports: gloss check hints GM255 to GM259 when a marker departs from it, gloss suggest and propose_link default to it (ADR 0046)."
   RollupEngine:       { kind: process, realizes: gm:Rollup, doc: "Derives boundary-level facts from code-level links: containment, realization lifted to cores, flows lifted to boundaries, implied relationships." }
   CriticalityStamper:
     kind: process
