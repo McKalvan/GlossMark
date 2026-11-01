@@ -7,7 +7,7 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 
 | Path | What |
 | --- | --- |
-| `cmd/gloss` | The CLI: `init`, `harvest`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `review`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `version` |
+| `cmd/gloss` | The CLI: `init`, `harvest`, `suggest`, `import`, `criticality`, `build`, `check`, `drift`, `diff`, `impact`, `coverage`, `accept`, `reject`, `status`, `review`, `propose`, `context`, `hook`, `doctor`, `lock`, `view`, `export`, `publish`, `landscape`, `agents`, `mcp`, `lsp`, `version` |
 | `internal/marker` | The frozen `@gloss` grammar, comment table, declaration detector |
 | `internal/load`, `internal/extract`, `internal/graph` | Workspace loader, pass-1 extractor, canonical graph (`.glossmark/graph.jsonl`) |
 | `internal/review` | `gloss review` (experimental, [ADR 0033](adr/0033-review-sessions.md)): the review queue, decisions by gate authority, agent recommendations and an undo journal |
@@ -18,13 +18,14 @@ What is where, how this repository uses GlossMark on itself, how versions are pi
 | `internal/scaffold`, `internal/doctor`, `internal/suggest`, `internal/importers`, `internal/harvest` | `gloss init` templates and plan; `gloss doctor` checks; `gloss suggest` matcher; glossary and enum importers; `gloss harvest` evidence for deriving an ontology ([ADR 0025](adr/0025-deriving-the-ontology.md), experimental) |
 | `skills/` | Claude Code skills shipped with the binary: `adopt-glossmark` and `derive-ontology` (deriving the core and implementation tiers from an existing application, [ADR 0025](adr/0025-deriving-the-ontology.md)), installed by `gloss hook install --skill` (`--agent claude-code` bundles them in a plugin, `--agent cursor` and `--agent copilot` write a rule or instructions that point at them, [AGENTS.md](AGENTS.md)), before `gloss init` too |
 | `internal/store`, `internal/mcp`, `internal/agents` | SQLite export, MCP server, AGENTS.md vocabulary snippet |
+| `internal/lsp`, `editors/vscode` | `gloss lsp`, the language server editors run ([IDE.md](IDE.md), [ADR 0051](adr/0051-language-server.md)), and the VS Code extension that starts it |
 | `internal/bench`, `cmd/glossbench`, `bench/` | The agent benchmark ([BENCHMARK.md](BENCHMARK.md)): task files, the scorer and the runner; results not yet collected |
 | `ontology/`, `glossmark.yaml`, `.gloss.yaml` | GlossMark applied to itself: the `gm:` core and `gmi:` implementation tiers this source tree is linked to |
 | `corpus/` | Conformance corpus for the grammar across 18 file types |
 | `schemas/` | JSON Schemas for every file format, LinkML schema for the graph |
 | `examples/library` | The worked example: a public library in two repos sharing one core (`circulation` owns both tiers, `holds-worker` imports and extends the core), covering taxonomic lift, the published seam, `value-from`, surfaces, criticality, extension, remits and a landscape; see its [README](../examples/library/README.md) |
 | `scripts/screenshots.sh` | Regenerates the README images in `docs/img/` from the [glossmark-examples](https://github.com/McKalvan/glossmark-examples) showcase |
-| `docs/` | [Quickstart](QUICKSTART.md) · [Trying it safely, leaving](LEAVING.md) · [When to mark](MARKING.md) · [Agent integrations](AGENTS.md) · [Advanced](ADVANCED.md) · [Grammar](GRAMMAR.md) · [File formats](FILE-FORMATS.md) · [Graph](GRAPH.md) · [Governance](GOVERNANCE.md) · [Versioning](VERSIONING.md) · [Plan](PLAN.md) · [ADRs](adr/) |
+| `docs/` | [Quickstart](QUICKSTART.md) · [Trying it safely, leaving](LEAVING.md) · [When to mark](MARKING.md) · [Agent integrations](AGENTS.md) · [Editor support](IDE.md) · [Advanced](ADVANCED.md) · [Grammar](GRAMMAR.md) · [File formats](FILE-FORMATS.md) · [Graph](GRAPH.md) · [Governance](GOVERNANCE.md) · [Versioning](VERSIONING.md) · [Plan](PLAN.md) · [ADRs](adr/) |
 | `action.yml`, `hooks/`, `.pre-commit-hooks.yaml` | GitHub Action with PR comment, pre-commit hook |
 
 `go test ./...` runs the conformance corpus, graph tests and end-to-end runs that assert the design document's worked-example table.
