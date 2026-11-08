@@ -93,9 +93,23 @@ type Config struct {
 	// Links maps paths and symbols anywhere in the repository to concepts,
 	// as a manifest's links: does for its directory (ADR 0045).
 	Links []*Link `yaml:"links,omitempty" json:"links,omitempty"`
+	// App configures the hosted pull-request app (gloss app serve,
+	// docs/APP.md, ADR 0052).
+	App *AppConfig `yaml:"app,omitempty" json:"app,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
+}
+
+// AppConfig is the app: block of glossmark.yaml: what the hosted
+// pull-request app needs that the code host cannot tell it.
+type AppConfig struct {
+	// Owners maps an owner: value written in manifests and owns: (a team
+	// name in the repository's own words) to the code-host accounts that
+	// review for it: GitHub logins (alice) or teams (@org/slug). The app
+	// requests a review from the owners of every HARD change; an owner
+	// with no entry here falls back to CODEOWNERS for the changed paths.
+	Owners map[string]StringList `yaml:"owners,omitempty" json:"owners,omitempty"`
 }
 
 // HistoryConfig is the history: block of glossmark.yaml.

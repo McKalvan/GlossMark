@@ -1,0 +1,25 @@
+# @gloss deploys gmi:PullRequestApp scope=file
+# The hosted pull-request app, one container (docs/APP.md). Put the App's
+# private key next to this file as app.pem and the other values in .env:
+#   APP_ID=123456
+#   WEBHOOK_SECRET=the secret given when the App was registered
+services:
+  glossmark-app:
+    build: ../..           # or image: ghcr.io/<you>/glossmark-app:<tag> once you publish one
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    environment:
+      APP_ID: ${APP_ID}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      PRIVATE_KEY_FILE: /run/secrets/app.pem
+      LISTEN_ADDR: ":8080"
+      WORKDIR: /work
+      # GITHUB_API_URL: https://ghe.example.com/api/v3   # GitHub Enterprise Server
+    volumes:
+      - ./app.pem:/run/secrets/app.pem:ro
+      - work:/work
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+volumes:
+  work:

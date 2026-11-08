@@ -19,7 +19,7 @@ var helpGroups = []struct {
 }{
 	{"Start", []string{"onboard", "init", "doctor", "strip"}},
 	{"Daily", []string{"check", "build", "drift", "coverage", "review", "view"}},
-	{"Pull requests", []string{"diff", "impact", "accept", "reject", "status"}},
+	{"Pull requests", []string{"diff", "impact", "accept", "reject", "status", "app"}},
 	{"Agents", []string{"hook", "context", "mcp", "agents"}},
 	{"Ontology", []string{"bind", "propose", "suggest", "harvest", "import", "criticality"}},
 	{"Advanced", []string{"export", "history", "landscape", "lock", "publish", "report", "slice", "version"}},
@@ -163,6 +163,15 @@ var help = map[string]helpEntry{
 		usage:    []string{"status"},
 		examples: []string{"gloss status"},
 		docs:     "docs/QUICKSTART.md#review-workflow"},
+
+	"app": {line: "serve the hosted GitHub App: comment, check run, reviewers",
+		usage: []string{"app serve"},
+		more:  "The no-CI path to the gate: a GitHub App installed on a repository sends its pull_request webhooks here; the server checks the PR out, runs gloss diff against the merge base as the PR author and posts the impact comment (the same one the Action posts), a check run named GlossMark gate (action_required on HARD until a reviewer labels the PR ontology-approved) and a review request to the owners of the HARD changes (app.owners in glossmark.yaml, CODEOWNERS as the fallback). Configured by environment: APP_ID, PRIVATE_KEY or PRIVATE_KEY_FILE, WEBHOOK_SECRET, LISTEN_ADDR, WORKDIR, GITHUB_API_URL.",
+		examples: []string{
+			"APP_ID=123 PRIVATE_KEY_FILE=app.pem WEBHOOK_SECRET=s gloss app serve",
+			"docker compose -f docs/app/docker-compose.yml up  # the same, in a container",
+		},
+		docs: "docs/APP.md"},
 
 	// Agents
 	"hook": {line: "install the agent hook, MCP server and per-agent integrations",

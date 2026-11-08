@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.12.0
+version: 1.15.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -47,6 +47,10 @@ concepts:
     doc: "Stamps every concept, boundary and artifact with its effective criticality and reports boundaries that understate it."
   DriftComparator:    { kind: process, realizes: [gm:DriftComparison, gm:DeclaredCapability], produces: [gm:Coverage, gm:DecisionRequest], publishes: [gm:DecisionRequested], doc: "Classifies each declared-versus-derived pair as consistent, a violation or a gap, adds the concept- and link-level findings (orphan, untested, stale and the rest) and computes coverage." }
   Gate:               { kind: process, realizes: gm:Gating, doc: "Classifies the changes between two graphs as AUTO, SOFT or HARD by the views and criticality they touch, and renders the PR impact." }
+  PullRequestApp:
+    kind: process
+    realizes: gm:Gating
+    doc: "gloss app serve (ADR 0052, #264): the hosted GitHub App that gates a pull request with no CI setup. It receives the pull_request webhooks, checks the PR out, runs the Gate against the merge base as the PR author and posts the impact comment the Action posts, a check run (action_required on HARD until a reviewer labels the PR ontology-approved) and a review request to the owners of the HARD changes (app.owners in glossmark.yaml, CODEOWNERS as the fallback). GitLab is a follow-up."
   Doctor:
     kind: process
     internal: true

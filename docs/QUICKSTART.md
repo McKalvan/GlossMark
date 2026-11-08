@@ -272,6 +272,8 @@ On the first PR (the base has no graph) the comment reports counts per boundary 
 
 A repository with several workspaces runs the Action once per `root:` (a matrix); each root keeps its own comment, keyed by `<!-- glossmark-impact:<root> -->` and named in its heading, and a re-run updates it in place.
 
+**No CI at all.** The hosted GitHub App ([docs/APP.md](APP.md), `gloss app serve`) does the gate without a workflow file: installed on a repository, it posts the same impact comment, a `GlossMark gate` check run (`action_required` on HARD until a reviewer labels the PR `ontology-approved`) and a review request to the owners of the HARD changes (`app.owners` in `glossmark.yaml`, CODEOWNERS as the fallback). The Action stays as the self-hosted path; both can run on one repository and share the comment.
+
 The Action downloads the release binary named by `version:` (default: the Action's own release) and falls back to `go install` only when no binary exists for it.
 
 The Action's drift step fails on `violation,value-drift,dangling,overdue` by default. `drift-fail-on:` takes any `gloss drift --fail-on` list, and `check-graph: "true"` also fails when the committed `.glossmark/graph.jsonl` is not what `gloss build` makes from the tree (`gloss build --check`). A repository that wants nothing to merge unreviewed fails on stale links too, so a PR that edits a marked file re-confirms its links in the same PR:

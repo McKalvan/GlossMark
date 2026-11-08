@@ -57,6 +57,23 @@
     "policy": {
       "$ref": "#/$defs/policy"
     },
+    "app": {
+      "description": "The hosted pull-request app (gloss app serve, docs/APP.md, ADR 0052).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "owners": {
+          "description": "owner: value (as written in manifests and owns:) \u2192 the code-host accounts that review for it: GitHub logins (alice) or teams (@org/slug), one or a list. The app requests a review from the owners of every HARD change; an owner without an entry falls back to CODEOWNERS for the changed paths.",
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            ]
+          }
+        }
+      }
+    },
     "adoption": {
       "description": "The rung of the adoption ladder this repository has reached (docs/QUICKSTART.md): 0 vocabulary only (check, drift and diff report, nothing fails), 1 manifests and file-level links (check errors fail; drift and the PR gate report only), 2 criticality on key concepts (drift findings and HARD changes fail only on critical or high concepts), 3 full (everything --fail-on names). Unset means 3, so an existing repository changes nothing.",
       "type": "integer",

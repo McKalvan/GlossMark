@@ -39,29 +39,11 @@ func cmdDiff(args []string) int {
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
-	head, err := buildGraph(*root, false)
+	d, err := runDiff(*root, *base, *actor, *baseline)
 	if err != nil {
 		return fail(err)
 	}
-	baseGraph, err := loadBaseGraph(head.WS, *base)
-	if err != nil {
-		return fail(err)
-	}
-	changed, _ := changedFiles(head.WS.Root, *base)
-	pol := head.WS.Config.EffectivePolicy()
-	after := rollup.Compare(head.Graph, head.WS, rollup.Options{Ledger: head.Ledger.Entries, Policy: pol, Now: time.Now()})
-	before := baseReport(head.WS, *base, baseGraph, pol)
-	label := *base
-	adoption := *baseline
-	if baseGraph.Stats()["nodes"] == 0 {
-		// The base never ran gloss: this PR is the adoption.
-		adoption = true
-		label += " (no graph)"
-	}
-	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption, BaseViews: baseViews(head.WS, *base),
-		Actor: *actor, BaseLedger: baseLedger(head.WS, *base), BaseHardPaths: baseHardPaths(head.WS, *base)})
-	// The adoption level caps what fails: the report keeps every gate.
-	gate.Enforce(im, head.WS.Config.AdoptionLevel())
+	im := d.im
 	var buf bytes.Buffer
 	switch *format {
 	case "json":
@@ -69,14 +51,7 @@ func cmdDiff(args []string) int {
 		enc.SetIndent("", "  ")
 		enc.Encode(im)
 	case "markdown":
-		buf.WriteString(gate.RenderMarkdown(im))
-		if *history > 0 && im.Adoption == nil {
-			hist, err := renderHistoryMarkdown(head.WS, *base, touchedSubjects(im, baseGraph), *history)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "gloss diff: recent history left out:", err)
-			}
-			buf.WriteString(hist)
-		}
+		buf.WriteString(d.markdown(*history))
 	default:
 		buf.WriteString(gate.RenderText(im))
 	}
@@ -101,6 +76,59 @@ func cmdDiff(args []string) int {
 		}
 	}
 	return 0
+}
+
+// diffRun is one gloss diff: the head pipeline, the base graph and the
+// classified impact, shared by the command and the pull-request app.
+type diffRun struct {
+	head      *pipeline
+	baseGraph *graph.Graph
+	base      string
+	im        *gate.Impact
+}
+
+// runDiff builds the head, loads the base and classifies the difference,
+// enforced at the repository's adoption level.
+func runDiff(root, base, actor string, baseline bool) (*diffRun, error) {
+	head, err := buildGraph(root, false)
+	if err != nil {
+		return nil, err
+	}
+	baseGraph, err := loadBaseGraph(head.WS, base)
+	if err != nil {
+		return nil, err
+	}
+	changed, _ := changedFiles(head.WS.Root, base)
+	pol := head.WS.Config.EffectivePolicy()
+	after := rollup.Compare(head.Graph, head.WS, rollup.Options{Ledger: head.Ledger.Entries, Policy: pol, Now: time.Now()})
+	before := baseReport(head.WS, base, baseGraph, pol)
+	label := base
+	adoption := baseline
+	if baseGraph.Stats()["nodes"] == 0 {
+		// The base never ran gloss: this PR is the adoption.
+		adoption = true
+		label += " (no graph)"
+	}
+	im := gate.Classify(baseGraph, head.Graph, head.WS, gate.Options{Base: label, Policy: pol, HeadLedger: head.Ledger.Entries, ChangedFiles: changed, BeforeReport: before, AfterReport: after, Adoption: adoption, BaseViews: baseViews(head.WS, base),
+		Actor: actor, BaseLedger: baseLedger(head.WS, base), BaseHardPaths: baseHardPaths(head.WS, base)})
+	// The adoption level caps what fails: the report keeps every gate.
+	gate.Enforce(im, head.WS.Config.AdoptionLevel())
+	return &diffRun{head: head, baseGraph: baseGraph, base: base, im: im}, nil
+}
+
+// markdown renders the PR comment with the last history steps of what the
+// change touches (none when history is 0 or the diff is an adoption).
+func (d *diffRun) markdown(history int) string {
+	var buf bytes.Buffer
+	buf.WriteString(gate.RenderMarkdown(d.im))
+	if history > 0 && d.im.Adoption == nil {
+		hist, err := renderHistoryMarkdown(d.head.WS, d.base, touchedSubjects(d.im, d.baseGraph), history)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "gloss diff: recent history left out:", err)
+		}
+		buf.WriteString(hist)
+	}
+	return buf.String()
 }
 
 // loadBaseGraph obtains the graph at a git ref by extracting the ref's tree
