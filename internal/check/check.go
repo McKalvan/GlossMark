@@ -161,10 +161,14 @@ func (c *checker) ontologyFiles() {
 		file := relFile(c.ws, o.Path)
 		for _, name := range sortedKeys(o.Concepts) {
 			con := o.Concepts[name]
-			if con == nil || len(con.NullKeys) == 0 {
+			if con == nil {
 				continue
 			}
 			curie := p + ":" + name
+			c.seeAlso(file, curie, con)
+			if len(con.NullKeys) == 0 {
+				continue
+			}
 			if con.Flow && con.Doc != "" && looksTruncated(con.Doc) {
 				c.add(file, con.Line, "error", "GM305", fmt.Sprintf("%s: doc is cut at a comma inside { }: %q; the rest became null keys (%s). Quote the doc or write the entry in block style", curie, con.Doc, strings.Join(con.NullKeys, ", ")))
 				continue
