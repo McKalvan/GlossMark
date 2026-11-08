@@ -272,6 +272,17 @@ function srcLink(path,line){
   const url=srcURL.split('{path}').join(path.split('/').map(encodeURIComponent).join('/')).split('{line}').join(String(line||1));
   return `<a class="mono src" href="${esc(url)}"${webSrc?' target="_blank" rel="noopener"':''} title="${esc(webSrc?'Open on the code host':'Open in the editor')}">${txt}</a>`;
 }
+/* A see-also entry (docs/adr/0054-concept-see-also.md): an http(s) URL links as it is; a
+   repository path links through a web source-url (its #L{line} replaced by the entry's
+   own #anchor) for a namespace this repository owns, and is plain text otherwise. */
+function seeAlsoLink(e,imported){
+  e=String(e);
+  if(/^https?:\/\//i.test(e))return `<a href="${esc(e)}" target="_blank" rel="noopener noreferrer">${esc(e)}</a>`;
+  const i=e.indexOf('#'),p=i<0?e:e.slice(0,i),a=i<0?'':e.slice(i);
+  if(imported||!webSrc||!p)return `<span class="mono">${pathHtml(e)}</span>`;
+  const url=srcURL.split('#')[0].split('{path}').join(p.split('/').map(encodeURIComponent).join('/'))+a;
+  return `<a class="mono src" href="${esc(url)}" target="_blank" rel="noopener" title="Open on the code host">${pathHtml(e)}</a>`;
+}
 const views=Array.isArray(data.views)?data.views:[];
 /* Precomputed feature slices (docs/adr/0023-feature-slices.md): for each concept and
    boundary, its members as [node, role, via step...] indexes into ids, roles and steps. */
@@ -1523,7 +1534,8 @@ function renderPanel(){
     if(n.liveValue){const at=n.valueFrom||'',i=at.lastIndexOf(':');row('live value','<span class="mono">'+esc(n.liveValue)+'</span><br>'+srcLink(i>0?at.slice(0,i):at,i>0?+at.slice(i+1):0));}
     row('path',n.path?srcLink(n.path,n.line||0):'');
     row('flags',[n.internal&&'internal',n.imported&&'imported',n.ghost&&'removed in diff',n._diff&&!n.ghost&&n._diff].filter(Boolean).join(', '));
-    row('doc',esc(n.doc));h+='</dl>';
+    row('doc',esc(n.doc));
+    if(Array.isArray(n.seeAlso)&&n.seeAlso.length)row('see also',n.seeAlso.map(e=>seeAlsoLink(e,n.imported)).join('<br>'));h+='</dl>';
     const dt=n.type==='concept'?details[n.id]:null;
     if(dt){
       const linkLi=l=>`<li><b>${esc(l.relation)}</b> ${srcLink(l.path,l.line)}${l.symbol?' <span class="note">'+esc(l.symbol)+'</span>':''}${l.proposed?' <span class="note">proposed</span>':''}${l.source==='manifest'?' <span class="note" title="mapped by a links: entry in '+esc(l.from||'a manifest')+'">manifest'+(l.from?' '+esc(l.from):'')+'</span>':l.source==='inferred'?' <span class="note">inferred</span>':''}${l.via?' <span class="note">via '+esc(l.via)+'</span>':''}</li>`;

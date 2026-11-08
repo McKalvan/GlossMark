@@ -54,12 +54,13 @@ type Node struct {
 	KindFrom string `json:"kind-from,omitempty"`
 	Label    string `json:"label,omitempty"`
 	Doc      string `json:"doc,omitempty"`
-	// Concept attributes.
-	Published  string `json:"published-as,omitempty"`
-	Internal   bool   `json:"internal,omitempty"`
-	Deprecated bool   `json:"deprecated,omitempty"`
-	ReplacedBy string `json:"replaced-by,omitempty"`
-	Value      any    `json:"value,omitempty"`
+	// Concept attributes. SeeAlso is the concept's see-also list (ADR 0054).
+	SeeAlso    []string `json:"see-also,omitempty"`
+	Published  string   `json:"published-as,omitempty"`
+	Internal   bool     `json:"internal,omitempty"`
+	Deprecated bool     `json:"deprecated,omitempty"`
+	ReplacedBy string   `json:"replaced-by,omitempty"`
+	Value      any      `json:"value,omitempty"`
 	// ValueFrom is path:line of the code a published value is bound to;
 	// LiveValue is that line, ValueFP its fingerprint (see model.ValueFrom).
 	ValueFrom  string `json:"value-from,omitempty"`
