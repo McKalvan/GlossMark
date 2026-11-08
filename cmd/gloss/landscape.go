@@ -14,10 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mckalvan/glossmark/internal/backstage"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/load"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/rollup"
+	"github.com/mckalvan/glossmark/internal/version"
 	"github.com/mckalvan/glossmark/internal/viewer"
 	"github.com/mckalvan/glossmark/internal/views"
 )
@@ -34,7 +36,7 @@ func cmdLandscape(args []string) int {
 	repos := append([]string{}, fs.repos...)
 	repos = append(repos, fs.fs.Args()...)
 	if len(repos) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: gloss landscape [--format text|json|markdown] [--view out.html] [--graph out.jsonl] <repo-root>...")
+		fmt.Fprintln(os.Stderr, "usage: gloss landscape [--format text|json|markdown] [--view out.html] [--graph out.jsonl] [--backstage dir] <repo-root>...")
 		return 2
 	}
 	failKinds, err := rollup.ParseFailOn(fs.failOn)
@@ -42,7 +44,7 @@ func cmdLandscape(args []string) int {
 		fmt.Fprintln(os.Stderr, "gloss landscape:", err)
 		return 2
 	}
-	ws, g, wss, err := assembleLandscapeRepos(repos)
+	ws, g, wss, ledger, err := assembleLandscapeRepos(repos)
 	if err != nil {
 		return fail(err)
 	}
@@ -61,13 +63,21 @@ func cmdLandscape(args []string) int {
 	// Context-map edges: implied depends-on (consumer → producer) between
 	// boundaries, except between a boundary and one that contains it.
 	var ctx []string
+	var ctxEdges []backstage.ContextEdge
 	anc := boundaryAncestors(g, ws)
 	for _, e := range g.Edges() {
 		if e.P == "depends-on" && e.Source == graph.SourceDerived && !anc[e.S][e.O] && !anc[e.O][e.S] {
 			ctx = append(ctx, fmt.Sprintf("%s → %s via %s", g.Curie(e.S), g.Curie(e.O), strings.Join(e.Prov.Via, ", ")))
+			ctxEdges = append(ctxEdges, backstage.ContextEdge{From: g.Curie(e.S), To: g.Curie(e.O), Via: e.Prov.Via})
 		}
 	}
 	sort.Strings(ctx)
+	sort.Slice(ctxEdges, func(i, j int) bool {
+		if ctxEdges[i].From != ctxEdges[j].From {
+			return ctxEdges[i].From < ctxEdges[j].From
+		}
+		return ctxEdges[i].To < ctxEdges[j].To
+	})
 	switch fs.format {
 	case "json":
 		enc := json.NewEncoder(os.Stdout)
@@ -122,6 +132,19 @@ func cmdLandscape(args []string) int {
 		}
 		fmt.Fprintf(os.Stderr, "gloss landscape: viewer → %s\n", fs.viewOut)
 	}
+	if fs.backstageOut != "" {
+		// One document per boundary of every repository, each linked to its
+		// own repository's source-url, and the union's landscape.json.
+		urls := map[string]string{}
+		for _, w := range wss {
+			urls[filepath.Base(w.Root)] = w.Config.SourceURL
+		}
+		docs, l := backstage.Build(g, ws, rep, backstage.Options{Landscape: true, SourceURLs: urls, Ledger: ledger, Generator: "gloss " + version.String(), ContextMap: ctxEdges})
+		if err := backstage.Write(fs.backstageOut, docs, l); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintf(os.Stderr, "gloss landscape: backstage: %s + %s → %s\n", countBoundaries(len(docs)), backstage.LandscapeFile, fs.backstageOut)
+	}
 	if failing := rep.Failing(failKinds); len(failing) > 0 {
 		fmt.Fprintf(os.Stderr, "gloss landscape: %s\n", rollup.FailSummary(failing, failKinds))
 		return 1
@@ -133,19 +156,21 @@ func cmdLandscape(args []string) int {
 // the repository name so they stay unique, unions the graphs by IRI and
 // re-derives the rollups on the union.
 func assembleLandscape(repos []string) (*load.Workspace, *graph.Graph, error) {
-	ws, g, _, err := assembleLandscapeRepos(repos)
+	ws, g, _, _, err := assembleLandscapeRepos(repos)
 	return ws, g, err
 }
 
 // assembleLandscapeRepos is assembleLandscape that also returns each
-// repository's own workspace (for its imports, lock and versions).
-func assembleLandscapeRepos(repos []string) (*load.Workspace, *graph.Graph, []*load.Workspace, error) {
+// repository's own workspace (for its imports, lock and versions) and the
+// union of their ledgers, keyed by marker id with repo-prefixed paths.
+func assembleLandscapeRepos(repos []string) (*load.Workspace, *graph.Graph, []*load.Workspace, map[string]*model.LedgerEntry, error) {
 	var wss []*load.Workspace
 	var graphs []*graph.Graph
+	ledger := map[string]*model.LedgerEntry{}
 	for _, r := range repos {
 		p, err := buildGraph(r, false)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s: %w", r, err)
+			return nil, nil, nil, nil, fmt.Errorf("%s: %w", r, err)
 		}
 		// Prefix every path with the repo name so it stays unique in the
 		// union and every finding says which repository it is in. An
@@ -163,26 +188,35 @@ func assembleLandscapeRepos(repos []string) (*load.Workspace, *graph.Graph, []*l
 				e.Prov.Path = inRepo(name, e.Prov.Path)
 			}
 		}
+		for id, le := range p.Ledger.Entries {
+			if _, ok := ledger[id]; ok {
+				continue // one marker id, one row: the first repository's
+			}
+			ll := *le
+			ll.Path = inRepo(name, le.Path)
+			ledger[id] = &ll
+		}
 		wss = append(wss, p.WS)
 		graphs = append(graphs, p.Graph)
 	}
 	ws, err := load.Merge(wss)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	g := union(graphs, ws)
 	rollup.Derive(g, ws.Vocab)
-	return ws, g, wss, nil
+	return ws, g, wss, ledger, nil
 }
 
 type landscapeFlags struct {
-	fs       *flag.FlagSet
-	repos    []string
-	format   string
-	viewOut  string
-	graphOut string
-	failOn   string
-	all      bool
+	fs           *flag.FlagSet
+	repos        []string
+	format       string
+	viewOut      string
+	graphOut     string
+	backstageOut string
+	failOn       string
+	all          bool
 }
 
 func newLandscapeFlags() *landscapeFlags {
@@ -192,6 +226,7 @@ func newLandscapeFlags() *landscapeFlags {
 	fs.StringVar(&f.format, "format", "text", "text | json | markdown")
 	fs.StringVar(&f.viewOut, "view", "", "write the landscape viewer HTML here")
 	fs.StringVar(&f.graphOut, "graph", "", "write the union graph.jsonl here")
+	fs.StringVar(&f.backstageOut, "backstage", "", "write one JSON document per boundary of every repository plus landscape.json into this directory (gloss export --backstage over the union)")
 	fs.StringVar(&f.failOn, "fail-on", "violation,dangling,overdue", "finding kinds that fail the command")
 	fs.BoolVar(&f.all, "all", false, "also list consistent pairs")
 	f.fs = fs

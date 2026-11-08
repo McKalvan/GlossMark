@@ -1,0 +1,52 @@
+{
+  "name": "@glossmark/backstage-plugin-glossmark",
+  "version": "0.1.0",
+  "description": "Backstage frontend plugin: a GlossMark tab per component or system (concepts, criticality, coverage, drift, decisions) and a landscape page across repositories, read from the documents gloss export --backstage writes.",
+  "license": "MIT",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "backstage": {
+    "role": "frontend-plugin",
+    "pluginId": "glossmark",
+    "pluginPackages": [
+      "@glossmark/backstage-plugin-glossmark"
+    ]
+  },
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "tsc": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "verify": "yarn tsc && yarn lint && yarn test"
+  },
+  "dependencies": {
+    "@backstage/catalog-model": "^1.10.2",
+    "@backstage/core-components": "^0.18.15",
+    "@backstage/core-plugin-api": "^1.12.11",
+    "@backstage/plugin-catalog-react": "^1.21.6",
+    "@material-ui/core": "^4.12.4",
+    "react-use": "^17.6.1"
+  },
+  "peerDependencies": {
+    "react": "^17.0.0 || ^18.0.0",
+    "react-dom": "^17.0.0 || ^18.0.0",
+    "react-router-dom": "^6.30.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^9.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.2",
+    "typescript": "~5.9.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}

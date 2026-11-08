@@ -2,7 +2,7 @@
 # A concept nested with part-of is a step of, or a parameter of, the mechanism it
 # belongs to (ADR 0035); the architecture view opens each mechanism two levels deep.
 namespace: gmi
-version: 1.12.0
+version: 1.16.0
 concepts:
   GlossCli:           { kind: system-type, realizes: gm:GlossMark, doc: "The gloss command and the Go library it is built from." }
   # Reading a workspace
@@ -72,6 +72,8 @@ concepts:
   HtmlViewer:         { kind: process, part-of: ViewProjector, presents: gm:View, doc: "The static page that shows a projection: a UI surface for views, not their mechanism." }
   Publisher:          { kind: process, realizes: gm:Publication, doc: "Per-namespace ontology.jsonld and graph.jsonl for importers." }
   SqliteExport:       { kind: process, internal: true, doc: "gloss export --sqlite: the graph as a SQLite database with closure views, for ad-hoc queries." }
+  BackstageExport:    { kind: process, realizes: gm:Projection, consumes: [gm:Graph, gm:Ledger, gm:Drift], produces: gm:View, doc: "gloss export --backstage and gloss landscape --backstage: one self-contained JSON document per boundary (its concepts with criticality, the code and tests behind them, coverage, open drift findings, the last review decisions) and a landscape.json indexing every boundary across repositories, for the Backstage plugin and docs-site plugins (ADR 0053)." }
+  BackstagePlugin:    { kind: process, part-of: BackstageExport, presents: gm:View, doc: "integrations/backstage: the Backstage frontend plugin that reads those documents; an entity tab per Component or System and a landscape page, a UI surface for the export, not its mechanism." }
   ComplianceReporter: { kind: process, realizes: gm:Projection, consumes: [gm:Ledger, gm:Drift], doc: "gloss report compliance: for each rule or critical concept, the code that enforces it, the tests that verify it, its published value, every ledger decision about those links and the open findings and waivers, as Markdown, HTML, CSV or JSON for an auditor." }
   LandscapeAssembler: { kind: process, realizes: gm:Landscape, doc: "Unions sibling repositories' graphs by IRI; realizes the landscape itself, there is no separate federation process yet." }
   # Onboarding

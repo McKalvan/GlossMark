@@ -1,0 +1,877 @@
+{
+  "format": 1,
+  "kind": "boundary",
+  "generated": "2026-11-01T15:06:51Z",
+  "generator": "gloss 0.0.0-dev",
+  "repo": "claims-events",
+  "sourceUrl": "https://github.com/example/claims-events/blob/main/{path}#L{line}",
+  "boundary": {
+    "curie": "claimb:assessment",
+    "iri": "https://onto.tidewater.example/boundaries/claimb/assessment",
+    "slug": "claimb-assessment",
+    "label": "Claim assessment",
+    "level": "container",
+    "path": "services/assessment",
+    "owner": "claims-decisioning",
+    "criticality": "high",
+    "criticalityFrom": "claim:AutoApprovalLimit",
+    "partOf": [
+      "claimb:claims-events"
+    ]
+  },
+  "concepts": [
+    {
+      "curie": "claim:Assessment",
+      "iri": "https://onto.tidewater.example/core/Assessment",
+      "kind": "entity",
+      "tier": "core",
+      "doc": "What the rules or an adjuster concluded about a claim, and why.",
+      "relations": [
+        "produces"
+      ],
+      "declared": true,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "represents",
+          "path": "services/assessment/assessment/models.py",
+          "line": 55,
+          "symbol": "Assessment",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/models.py#L55",
+          "source": "inline"
+        },
+        {
+          "relation": "produces",
+          "path": "services/assessment/assessment/rules.py",
+          "line": 11,
+          "symbol": "assess",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/rules.py#L11",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:AutoApprovalLimit",
+      "iri": "https://onto.tidewater.example/core/AutoApprovalLimit",
+      "kind": "constraint",
+      "tier": "core",
+      "doc": "The largest estimated loss the rules may approve without an adjuster.",
+      "relations": [
+        "realizes"
+      ],
+      "declared": true,
+      "derived": true,
+      "criticality": "high",
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "implements",
+          "path": "services/assessment/assessment/settings.py",
+          "line": 8,
+          "symbol": "AUTO_APPROVE_LIMIT_EUR",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/settings.py#L8",
+          "source": "inline",
+          "via": "tide:AutoApprovalRule"
+        }
+      ],
+      "verifiers": [
+        {
+          "relation": "verifies",
+          "path": "services/assessment/tests/test_rules.py",
+          "line": 13,
+          "symbol": "test_claim_at_the_limit_is_approved_and_one_cent_above_is_referred",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/tests/test_rules.py#L13",
+          "source": "inline"
+        }
+      ]
+    },
+    {
+      "curie": "claim:Claim",
+      "iri": "https://onto.tidewater.example/core/Claim",
+      "kind": "entity",
+      "tier": "core",
+      "doc": "A policyholder's request to be indemnified for a loss under one policy.",
+      "relations": [
+        "consumes"
+      ],
+      "declared": true,
+      "derived": true,
+      "criticality": "high",
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "consumes",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 58,
+          "symbol": "handle",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L58",
+          "source": "inline"
+        },
+        {
+          "relation": "represents",
+          "path": "services/assessment/assessment/models.py",
+          "line": 26,
+          "symbol": "FiledClaim",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/models.py#L26",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:ClaimApproved",
+      "iri": "https://onto.tidewater.example/core/ClaimApproved",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A claim was approved for a settled amount.",
+      "relations": [
+        "publishes"
+      ],
+      "declared": false,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "publishes",
+          "path": "services/assessment/assessment/producer.py",
+          "line": 43,
+          "symbol": "publish",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/producer.py#L43",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:ClaimAssessment",
+      "iri": "https://onto.tidewater.example/core/ClaimAssessment",
+      "kind": "process",
+      "tier": "core",
+      "doc": "Deciding a filed claim: approve and authorize the payout, deny, or refer to an adjuster.",
+      "relations": [
+        "realizes"
+      ],
+      "declared": true,
+      "derived": true,
+      "criticality": "high",
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "implements",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 29,
+          "symbol": "AssessmentConsumer",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L29",
+          "source": "inline",
+          "via": "tide:AssessmentPipeline"
+        },
+        {
+          "relation": "implements",
+          "path": "services/assessment/assessment/rules.py",
+          "line": 10,
+          "symbol": "assess",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/rules.py#L10",
+          "source": "inline",
+          "via": "tide:AssessmentRules"
+        },
+        {
+          "relation": "configures",
+          "path": "services/assessment/config/consumer-group.yaml",
+          "line": 4,
+          "symbol": "consumer",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/config/consumer-group.yaml#L4",
+          "source": "inline",
+          "via": "tide:AssessmentService"
+        }
+      ],
+      "verifiers": [
+        {
+          "relation": "verifies",
+          "path": "services/assessment/tests/test_consumer.py",
+          "line": 1,
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/tests/test_consumer.py#L1",
+          "source": "inline",
+          "via": "tide:AssessmentPipeline"
+        },
+        {
+          "relation": "verifies",
+          "path": "services/assessment/tests/test_rules.py",
+          "line": 1,
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/tests/test_rules.py#L1",
+          "source": "inline",
+          "via": "tide:AssessmentRules"
+        }
+      ],
+      "findings": [
+        "overlap:realizes:claim:ClaimAssessment"
+      ]
+    },
+    {
+      "curie": "claim:ClaimDecided",
+      "iri": "https://onto.tidewater.example/core/ClaimDecided",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A claim was approved or denied.",
+      "relations": [
+        "publishes"
+      ],
+      "declared": true,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:ClaimDenied",
+      "iri": "https://onto.tidewater.example/core/ClaimDenied",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A claim was denied, with the reason.",
+      "relations": [
+        "publishes"
+      ],
+      "declared": false,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "publishes",
+          "path": "services/assessment/assessment/producer.py",
+          "line": 43,
+          "symbol": "publish",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/producer.py#L43",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:ClaimFiled",
+      "iri": "https://onto.tidewater.example/core/ClaimFiled",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A policyholder filed a claim.",
+      "relations": [
+        "subscribes"
+      ],
+      "declared": true,
+      "derived": true,
+      "status": "unimplemented",
+      "artifacts": [],
+      "verifiers": [
+        {
+          "relation": "verifies",
+          "path": "contracts/test_asyncapi_contract.py",
+          "line": 34,
+          "symbol": "test_filed_events_share_the_claim_ref",
+          "url": "https://github.com/example/claims-events/blob/main/contracts/test_asyncapi_contract.py#L34",
+          "source": "inline"
+        },
+        {
+          "relation": "verifies",
+          "path": "services/claim-intake/src/test/kotlin/com/tidewater/claims/intake/ClaimEventPublisherTest.kt",
+          "line": 22,
+          "symbol": "ClaimEventPublisherTest",
+          "url": "https://github.com/example/claims-events/blob/main/services/claim-intake/src/test/kotlin/com/tidewater/claims/intake/ClaimEventPublisherTest.kt#L22",
+          "source": "inline"
+        }
+      ]
+    },
+    {
+      "curie": "claim:ClaimReferred",
+      "iri": "https://onto.tidewater.example/core/ClaimReferred",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A claim the rules could not decide was handed to an adjuster.",
+      "relations": [
+        "publishes"
+      ],
+      "declared": false,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "publishes",
+          "path": "services/assessment/assessment/referral.py",
+          "line": 33,
+          "symbol": "refer",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/referral.py#L33",
+          "source": "inline"
+        }
+      ],
+      "verifiers": [],
+      "findings": [
+        "violation:claimb:assessment:publishes:claim:ClaimReferred"
+      ]
+    },
+    {
+      "curie": "claim:ClaimWithdrawn",
+      "iri": "https://onto.tidewater.example/core/ClaimWithdrawn",
+      "kind": "event",
+      "tier": "core",
+      "doc": "The policyholder withdrew a claim before it was decided.",
+      "relations": [
+        "subscribes"
+      ],
+      "declared": true,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "subscribes",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 59,
+          "symbol": "handle",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L59",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:FireClaimFiled",
+      "iri": "https://onto.tidewater.example/core/FireClaimFiled",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A fire claim was filed.",
+      "relations": [
+        "subscribes"
+      ],
+      "declared": false,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "subscribes",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 59,
+          "symbol": "handle",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L59",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:FloodClaimFiled",
+      "iri": "https://onto.tidewater.example/core/FloodClaimFiled",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A flood claim was filed.",
+      "relations": [
+        "subscribes"
+      ],
+      "declared": false,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "subscribes",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 59,
+          "symbol": "handle",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L59",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:FraudSuspected",
+      "iri": "https://onto.tidewater.example/core/FraudSuspected",
+      "kind": "event",
+      "tier": "core",
+      "doc": "Screening thinks a claim may be fraudulent and wants it held.",
+      "relations": [
+        "subscribes"
+      ],
+      "declared": true,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "subscribes",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 59,
+          "symbol": "handle",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L59",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:MotorClaimFiled",
+      "iri": "https://onto.tidewater.example/core/MotorClaimFiled",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A motor claim was filed.",
+      "relations": [
+        "subscribes"
+      ],
+      "declared": false,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "subscribes",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 59,
+          "symbol": "handle",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L59",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:Payout",
+      "iri": "https://onto.tidewater.example/core/Payout",
+      "kind": "entity",
+      "tier": "core",
+      "doc": "Money cleared for payment to a policyholder for an approved claim.",
+      "relations": [
+        "produces"
+      ],
+      "declared": true,
+      "derived": true,
+      "criticality": "high",
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "produces",
+          "path": "services/assessment/assessment/producer.py",
+          "line": 44,
+          "symbol": "publish",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/producer.py#L44",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "claim:PayoutAuthorized",
+      "iri": "https://onto.tidewater.example/core/PayoutAuthorized",
+      "kind": "event",
+      "tier": "core",
+      "doc": "A payout was cleared for payment.",
+      "relations": [
+        "publishes"
+      ],
+      "declared": true,
+      "derived": true,
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "publishes",
+          "path": "services/assessment/assessment/producer.py",
+          "line": 43,
+          "symbol": "publish",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/producer.py#L43",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    },
+    {
+      "curie": "tide:AssessmentPipeline",
+      "iri": "https://onto.tidewater.example/impl/AssessmentPipeline",
+      "kind": "process",
+      "tier": "implementation",
+      "doc": "AssessmentConsumer: reads filed claims, withdrawals and fraud alerts on one consumer group and routes each outcome.",
+      "relations": [
+        "realizes"
+      ],
+      "declared": false,
+      "derived": true,
+      "criticality": "high",
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "implements",
+          "path": "services/assessment/assessment/consumer.py",
+          "line": 29,
+          "symbol": "AssessmentConsumer",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py#L29",
+          "source": "inline"
+        },
+        {
+          "relation": "implements",
+          "path": "services/assessment/assessment/rules.py",
+          "line": 10,
+          "symbol": "assess",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/rules.py#L10",
+          "source": "inline",
+          "via": "tide:AssessmentRules"
+        }
+      ],
+      "verifiers": [
+        {
+          "relation": "verifies",
+          "path": "services/assessment/tests/test_consumer.py",
+          "line": 1,
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/tests/test_consumer.py#L1",
+          "source": "inline"
+        },
+        {
+          "relation": "verifies",
+          "path": "services/assessment/tests/test_rules.py",
+          "line": 1,
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/tests/test_rules.py#L1",
+          "source": "inline",
+          "via": "tide:AssessmentRules"
+        }
+      ]
+    },
+    {
+      "curie": "tide:AssessmentRules",
+      "iri": "https://onto.tidewater.example/impl/AssessmentRules",
+      "kind": "process",
+      "tier": "implementation",
+      "doc": "assess(): the pure decision function, denials first, then holds, then the auto-approval limit.",
+      "relations": [
+        "realizes"
+      ],
+      "declared": false,
+      "derived": true,
+      "criticality": "high",
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "implements",
+          "path": "services/assessment/assessment/rules.py",
+          "line": 10,
+          "symbol": "assess",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/rules.py#L10",
+          "source": "inline"
+        }
+      ],
+      "verifiers": [
+        {
+          "relation": "verifies",
+          "path": "services/assessment/tests/test_rules.py",
+          "line": 1,
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/tests/test_rules.py#L1",
+          "source": "inline"
+        }
+      ]
+    },
+    {
+      "curie": "tide:AssessmentService",
+      "iri": "https://onto.tidewater.example/impl/AssessmentService",
+      "kind": "system-type",
+      "tier": "implementation",
+      "doc": "assessment, the Python consumer that decides filed claims.",
+      "relations": [
+        "configures",
+        "realizes"
+      ],
+      "declared": true,
+      "derived": true,
+      "criticality": "high",
+      "status": "untested",
+      "artifacts": [
+        {
+          "relation": "configures",
+          "path": "services/assessment/config/consumer-group.yaml",
+          "line": 4,
+          "symbol": "consumer",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/config/consumer-group.yaml#L4",
+          "source": "inline"
+        }
+      ],
+      "verifiers": [],
+      "findings": [
+        "untested:tide:AssessmentService",
+        "overlap:realizes:tide:AssessmentService"
+      ]
+    },
+    {
+      "curie": "tide:AutoApprovalRule",
+      "iri": "https://onto.tidewater.example/impl/AutoApprovalRule",
+      "kind": "constraint",
+      "tier": "implementation",
+      "doc": "AUTO_APPROVE_LIMIT_EUR in the assessment settings.",
+      "relations": [
+        "realizes"
+      ],
+      "declared": false,
+      "derived": true,
+      "criticality": "high",
+      "status": "implemented",
+      "artifacts": [
+        {
+          "relation": "implements",
+          "path": "services/assessment/assessment/settings.py",
+          "line": 8,
+          "symbol": "AUTO_APPROVE_LIMIT_EUR",
+          "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/settings.py#L8",
+          "source": "inline"
+        }
+      ],
+      "verifiers": []
+    }
+  ],
+  "coverage": {
+    "conceptsInScope": 4,
+    "conceptsCovered": 3,
+    "conceptCoveragePct": 75,
+    "inScopeFiles": 14,
+    "coveredFiles": 9,
+    "coveragePct": 64.28571428571429
+  },
+  "findings": [
+    {
+      "id": "violation:claimb:assessment:publishes:claim:ClaimReferred",
+      "kind": "violation",
+      "severity": "error",
+      "boundary": "claimb:assessment",
+      "relation": "publishes",
+      "concept": "claim:ClaimReferred",
+      "declared": [
+        "claim:ClaimDecided",
+        "claim:PayoutAuthorized"
+      ],
+      "derived": [
+        "claim:ClaimApproved",
+        "claim:ClaimDenied",
+        "claim:ClaimReferred",
+        "claim:PayoutAuthorized"
+      ],
+      "msg": "claimb:assessment publishes claim:ClaimReferred but declares publishes {claim:ClaimDecided, claim:PayoutAuthorized}; rollup: publishes {claim:ClaimEvent} (from claim:ClaimApproved, claim:ClaimDenied, claim:ClaimReferred, claim:PayoutAuthorized) ⊄ declared",
+      "path": "services/assessment/assessment/referral.py",
+      "line": 33,
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/referral.py#L33"
+    },
+    {
+      "id": "untested:tide:AssessmentService",
+      "kind": "untested",
+      "severity": "info",
+      "concept": "tide:AssessmentService",
+      "msg": "tide:AssessmentService has code but nothing tests or verifies it; claim:ClaimAssessment, which it realizes, counts as tested only because tide:AssessmentPipeline, tide:AssessmentRules are tested",
+      "path": "ontology/tide.gloss.yaml",
+      "line": 12,
+      "url": "https://github.com/example/claims-events/blob/main/ontology/tide.gloss.yaml#L12"
+    },
+    {
+      "id": "overlap:realizes:claim:ClaimAssessment",
+      "kind": "overlap",
+      "severity": "info",
+      "relation": "realizes",
+      "concept": "claim:ClaimAssessment",
+      "derived": [
+        "claimb:assessment",
+        "claimb:deploy"
+      ],
+      "msg": "claim:ClaimAssessment is realized by claimb:assessment and claimb:deploy; if one replaces the other, mark the old manifest deprecated: true with replaced-by: and retire-by:",
+      "path": "services/assessment/.gloss.yaml",
+      "line": 1,
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/.gloss.yaml#L1"
+    },
+    {
+      "id": "overlap:realizes:tide:AssessmentService",
+      "kind": "overlap",
+      "severity": "info",
+      "relation": "realizes",
+      "concept": "tide:AssessmentService",
+      "derived": [
+        "claimb:assessment",
+        "claimb:deploy"
+      ],
+      "msg": "tide:AssessmentService is realized by claimb:assessment and claimb:deploy; if one replaces the other, mark the old manifest deprecated: true with replaced-by: and retire-by:",
+      "path": "services/assessment/.gloss.yaml",
+      "line": 1,
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/.gloss.yaml#L1"
+    }
+  ],
+  "decisions": [
+    {
+      "markerId": "m-042d638f38",
+      "path": "services/assessment/assessment/models.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/models.py",
+      "relation": "represents",
+      "targets": [
+        "claim:Claim"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-0a5d8547dd",
+      "path": "services/assessment/assessment/consumer.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py",
+      "relation": "implements",
+      "targets": [
+        ".AssessmentPipeline"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-12d0df8e4a",
+      "path": "services/assessment/assessment/rules.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/rules.py",
+      "relation": "produces",
+      "targets": [
+        "claim:Assessment"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-2cc1dcdf44",
+      "path": "services/assessment/assessment/producer.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/producer.py",
+      "relation": "produces",
+      "targets": [
+        "claim:Payout"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-2d25aee67b",
+      "path": "services/assessment/assessment/referral.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/referral.py",
+      "relation": "publishes",
+      "targets": [
+        "claim:ClaimReferred"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "HARD"
+    },
+    {
+      "markerId": "m-5e33d9c478",
+      "path": "services/assessment/assessment/models.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/models.py",
+      "relation": "represents",
+      "targets": [
+        "claim:Assessment"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-8c04a307f6",
+      "path": "services/assessment/assessment/consumer.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/consumer.py",
+      "relation": "subscribes",
+      "targets": [
+        "claim:MotorClaimFiled",
+        "claim:FloodClaimFiled",
+        "claim:FireClaimFiled",
+        "claim:ClaimWithdrawn",
+        "claim:FraudSuspected"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-b75128524a",
+      "path": "services/assessment/assessment/rules.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/rules.py",
+      "relation": "implements",
+      "targets": [
+        ".AssessmentRules"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-c68494faac",
+      "path": "services/assessment/config/consumer-group.yaml",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/config/consumer-group.yaml",
+      "relation": "configures",
+      "targets": [
+        "tide:AssessmentService"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-c71e3f6ab8",
+      "path": "services/assessment/tests/test_rules.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/tests/test_rules.py",
+      "relation": "verifies",
+      "targets": [
+        "claim:AutoApprovalLimit"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "HARD"
+    },
+    {
+      "markerId": "m-e759cbb33e",
+      "path": "services/assessment/assessment/producer.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/producer.py",
+      "relation": "publishes",
+      "targets": [
+        "claim:ClaimApproved",
+        "claim:ClaimDenied",
+        "claim:PayoutAuthorized"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "SOFT"
+    },
+    {
+      "markerId": "m-f4b679ba65",
+      "path": "services/assessment/assessment/settings.py",
+      "url": "https://github.com/example/claims-events/blob/main/services/assessment/assessment/settings.py",
+      "relation": "implements",
+      "targets": [
+        ".AutoApprovalRule"
+      ],
+      "status": "accepted",
+      "actor": "agent:claude-code",
+      "created": "2026-10-20T03:08:20Z",
+      "reviewedBy": "agent:claude-code",
+      "reviewedAt": "2026-10-20T03:08:58Z",
+      "gate": "HARD"
+    }
+  ]
+}

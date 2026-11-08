@@ -1,4 +1,4 @@
-// @gloss implements gmi:Publisher, gmi:SqliteExport, gmi:AgentsSnippet scope=file
+// @gloss implements gmi:Publisher, gmi:SqliteExport, gmi:BackstageExport, gmi:AgentsSnippet scope=file
 
 package main
 
@@ -12,15 +12,17 @@ import (
 	"time"
 
 	"github.com/mckalvan/glossmark/internal/agents"
+	"github.com/mckalvan/glossmark/internal/backstage"
 	"github.com/mckalvan/glossmark/internal/graph"
 	"github.com/mckalvan/glossmark/internal/model"
 	"github.com/mckalvan/glossmark/internal/ontoedit"
 	"github.com/mckalvan/glossmark/internal/rollup"
 	"github.com/mckalvan/glossmark/internal/store"
+	"github.com/mckalvan/glossmark/internal/version"
 )
 
 func init() {
-	register(command{"export", "export the graph: --sqlite path | --prov path (PROV-O JSON-LD ledger) | --status (implemented/untested/orphan/proposed per concept, JSON)", cmdExport})
+	register(command{"export", "export the graph: --sqlite path | --prov path (PROV-O JSON-LD ledger) | --status (implemented/untested/orphan/proposed per concept, JSON) | --backstage (one JSON document per boundary for a developer portal)", cmdExport})
 	register(command{"publish", "write per-namespace ontology.jsonld and graph.jsonl for importers (default dist/glossmark/)", cmdPublish})
 	register(command{"agents", "print the AGENTS.md vocabulary snippet for the repo or a directory (--dir)", cmdAgents})
 }
@@ -30,12 +32,14 @@ func cmdExport(args []string) int {
 	sqlitePath := fs.String("sqlite", "", "write a SQLite database with closure views")
 	provPath := fs.String("prov", "", "write the ledger as PROV-O JSON-LD")
 	status := fs.Bool("status", false, "write implemented / untested / unimplemented / orphan / proposed per owned concept as JSON (for an external checker)")
-	out := fs.String("o", "", "with --status: write to this file instead of stdout")
+	portal := fs.Bool("backstage", false, "write one JSON document per boundary (concepts, criticality, coverage, drift, last decisions) plus landscape.json, for the Backstage plugin and docs-site plugins (schemas/backstage-export.schema.json)")
+	out := fs.String("o", "", "with --status: write to this file instead of stdout; with --backstage: the output directory (default glossmark/)")
+	sourceURL := fs.String("source-url", "", "with --backstage: template links to code, with {path} and {line} (default: source-url in glossmark.yaml)")
 	if err := parseFlags(fs, args); err != nil {
 		return 2
 	}
-	if *sqlitePath == "" && *provPath == "" && !*status {
-		fmt.Fprintln(os.Stderr, "usage: gloss export --sqlite graph.db | --prov ledger.prov.jsonld | --status [-o status.json]")
+	if *sqlitePath == "" && *provPath == "" && !*status && !*portal {
+		fmt.Fprintln(os.Stderr, "usage: gloss export --sqlite graph.db | --prov ledger.prov.jsonld | --status [-o status.json] | --backstage [-o dir] [--source-url tpl]")
 		return 2
 	}
 	p, err := buildGraph(*root, false)
@@ -55,6 +59,27 @@ func cmdExport(args []string) int {
 		} else if err := os.WriteFile(*out, b, 0o644); err != nil {
 			return fail(err)
 		}
+	}
+	if *portal {
+		dir := *out
+		if dir == "" {
+			dir = backstage.Dir
+		}
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(p.WS.Root, dir)
+		}
+		rep := rollup.Compare(p.Graph, p.WS, rollup.Options{Ledger: p.Ledger.Entries, Policy: p.WS.Config.EffectivePolicy(), Now: time.Now()})
+		rollup.AddDeprecatedUse(rep, p.Graph, p.WS.Config.EffectivePolicy(), time.Now())
+		tpl := *sourceURL
+		if tpl == "" {
+			tpl = p.WS.Config.SourceURL
+		}
+		repo := filepath.Base(p.WS.Root)
+		docs, l := backstage.Build(p.Graph, p.WS, rep, backstage.Options{Repo: repo, SourceURLs: map[string]string{repo: tpl}, Ledger: p.Ledger.Entries, Generator: "gloss " + version.String()})
+		if err := backstage.Write(dir, docs, l); err != nil {
+			return fail(err)
+		}
+		fmt.Printf("gloss export: backstage: %s + %s → %s\n", countBoundaries(len(docs)), backstage.LandscapeFile, relOrAbs(p.WS.Root, dir))
 	}
 	if *sqlitePath != "" {
 		if err := store.Export(p.Graph, *sqlitePath, floorFiles(p)...); err != nil {
@@ -296,4 +321,11 @@ func cmdAgents(args []string) int {
 	}
 	fmt.Printf("gloss agents: vocabulary written to %s\n", *write)
 	return 0
+}
+
+func countBoundaries(n int) string {
+	if n == 1 {
+		return "1 boundary"
+	}
+	return fmt.Sprintf("%d boundaries", n)
 }

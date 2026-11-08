@@ -1,0 +1,257 @@
+{
+  "format": 1,
+  "kind": "landscape",
+  "generated": "2026-11-01T15:06:51Z",
+  "generator": "gloss 0.0.0-dev",
+  "repos": [
+    {
+      "name": "claims-events",
+      "sourceUrl": "https://github.com/example/claims-events/blob/main/{path}#L{line}",
+      "boundaries": 8
+    }
+  ],
+  "boundaries": [
+    {
+      "curie": "claimb:assessment",
+      "slug": "claimb-assessment",
+      "document": "claimb-assessment.json",
+      "repo": "claims-events",
+      "label": "Claim assessment",
+      "level": "container",
+      "path": "services/assessment",
+      "owner": "claims-decisioning",
+      "criticality": "high",
+      "partOf": [
+        "claimb:claims-events"
+      ],
+      "concepts": 20,
+      "findings": {
+        "overlap": 2,
+        "untested": 1,
+        "violation": 1
+      },
+      "severity": "error",
+      "coverage": {
+        "conceptsInScope": 4,
+        "conceptsCovered": 3,
+        "conceptCoveragePct": 75,
+        "inScopeFiles": 14,
+        "coveredFiles": 9,
+        "coveragePct": 64.28571428571429
+      }
+    },
+    {
+      "curie": "claimb:claim-intake",
+      "slug": "claimb-claim-intake",
+      "document": "claimb-claim-intake.json",
+      "repo": "claims-events",
+      "label": "Claim intake API",
+      "level": "container",
+      "path": "services/claim-intake",
+      "owner": "claims-intake",
+      "criticality": "high",
+      "partOf": [
+        "claimb:claims-events"
+      ],
+      "concepts": 17,
+      "findings": {
+        "overlap": 3,
+        "untested": 1
+      },
+      "coverage": {
+        "conceptsInScope": 4,
+        "conceptsCovered": 4,
+        "conceptCoveragePct": 100,
+        "inScopeFiles": 17,
+        "coveredFiles": 11,
+        "coveragePct": 64.70588235294117
+      }
+    },
+    {
+      "curie": "claimb:claims-events",
+      "slug": "claimb-claims-events",
+      "document": "claimb-claims-events.json",
+      "repo": "claims-events",
+      "label": "Tidewater Mutual claims platform",
+      "level": "system",
+      "path": "",
+      "owner": "claims-platform",
+      "criticality": "high",
+      "concepts": 49,
+      "findings": {
+        "orphan": 3,
+        "overlap": 9,
+        "untested": 3,
+        "value-drift": 1
+      },
+      "severity": "error",
+      "coverage": {
+        "conceptsInScope": 14,
+        "conceptsCovered": 12,
+        "conceptCoveragePct": 85.71428571428571,
+        "inScopeFiles": 23,
+        "coveredFiles": 13,
+        "coveragePct": 56.52173913043478
+      }
+    },
+    {
+      "curie": "claimb:contracts",
+      "slug": "claimb-contracts",
+      "document": "claimb-contracts.json",
+      "repo": "claims-events",
+      "label": "Event contract",
+      "level": "container",
+      "path": "contracts",
+      "owner": "claims-architecture",
+      "criticality": "high",
+      "partOf": [
+        "claimb:claims-events"
+      ],
+      "concepts": 0,
+      "findings": {},
+      "coverage": {
+        "conceptsInScope": 0,
+        "conceptsCovered": 0,
+        "conceptCoveragePct": 0,
+        "inScopeFiles": 2,
+        "coveredFiles": 2,
+        "coveragePct": 100
+      }
+    },
+    {
+      "curie": "claimb:deploy",
+      "slug": "claimb-deploy",
+      "document": "claimb-deploy.json",
+      "repo": "claims-events",
+      "label": "Kubernetes deployment",
+      "level": "container",
+      "path": "deploy",
+      "owner": "platform",
+      "criticality": "high",
+      "partOf": [
+        "claimb:claims-events"
+      ],
+      "concepts": 9,
+      "findings": {
+        "overlap": 9,
+        "untested": 3
+      },
+      "coverage": {
+        "conceptsInScope": 4,
+        "conceptsCovered": 2,
+        "conceptCoveragePct": 50,
+        "inScopeFiles": 6,
+        "coveredFiles": 4,
+        "coveragePct": 66.66666666666667
+      }
+    },
+    {
+      "curie": "claimb:fraud-screening",
+      "slug": "claimb-fraud-screening",
+      "document": "claimb-fraud-screening.json",
+      "repo": "claims-events",
+      "label": "Fraud screening",
+      "level": "container",
+      "path": "services/fraud-screening",
+      "owner": "claims-siu-engineering",
+      "criticality": "high",
+      "partOf": [
+        "claimb:claims-events"
+      ],
+      "concepts": 8,
+      "findings": {
+        "overlap": 2,
+        "untested": 1,
+        "value-drift": 1
+      },
+      "severity": "error",
+      "coverage": {
+        "conceptsInScope": 4,
+        "conceptsCovered": 3,
+        "conceptCoveragePct": 75,
+        "inScopeFiles": 10,
+        "coveredFiles": 6,
+        "coveragePct": 60
+      }
+    },
+    {
+      "curie": "claimb:kafka-platform",
+      "slug": "claimb-kafka-platform",
+      "document": "claimb-kafka-platform.json",
+      "repo": "claims-events",
+      "label": "Kafka platform",
+      "level": "container",
+      "path": "platform",
+      "owner": "platform",
+      "criticality": "high",
+      "partOf": [
+        "claimb:claims-events"
+      ],
+      "concepts": 8,
+      "findings": {},
+      "coverage": {
+        "conceptsInScope": 0,
+        "conceptsCovered": 0,
+        "conceptCoveragePct": 0,
+        "inScopeFiles": 8,
+        "coveredFiles": 8,
+        "coveragePct": 100
+      }
+    },
+    {
+      "curie": "claimb:payout-notifier",
+      "slug": "claimb-payout-notifier",
+      "document": "claimb-payout-notifier.json",
+      "repo": "claims-events",
+      "label": "Payout notifier",
+      "level": "container",
+      "path": "services/payout-notifier",
+      "owner": "customer-comms",
+      "criticality": "high",
+      "partOf": [
+        "claimb:claims-events"
+      ],
+      "concepts": 6,
+      "findings": {
+        "gap": 1,
+        "overlap": 2
+      },
+      "severity": "warning",
+      "coverage": {
+        "conceptsInScope": 2,
+        "conceptsCovered": 2,
+        "conceptCoveragePct": 100,
+        "inScopeFiles": 10,
+        "coveredFiles": 5,
+        "coveragePct": 50
+      }
+    }
+  ],
+  "contextMap": [],
+  "metrics": {
+    "concepts_in_scope": 14,
+    "concepts_covered": 10,
+    "concept_coverage_pct": 71.42857142857143,
+    "in_scope_files": 90,
+    "covered_files": 58,
+    "coverage_pct": 64.44444444444444,
+    "markers": 85,
+    "targets": 95,
+    "accepted": 85,
+    "proposed": 0,
+    "stale": 0,
+    "rejected": 0,
+    "orphans": 3,
+    "rogues": 0,
+    "violations": 1,
+    "gaps": 1,
+    "untested": 3,
+    "proposed_concepts": 0,
+    "plan_items": 0,
+    "dangling": 0,
+    "review_backlog_oldest_days": 0,
+    "concepts": 58,
+    "boundaries": 8,
+    "artifacts": 79
+  }
+}
