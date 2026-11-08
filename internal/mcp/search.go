@@ -20,6 +20,7 @@ type Hit struct {
 	PublishedAs string   `json:"published_as,omitempty"`
 	Realizes    []string `json:"realizes,omitempty"`
 	Aliases     []string `json:"aliases,omitempty"`
+	SeeAlso     []string `json:"see_also,omitempty"`
 	Proposed    bool     `json:"proposed,omitempty"`
 	// Planned: specified, nothing implements it yet; PlanBy its deadline.
 	Planned bool   `json:"planned,omitempty"`
@@ -101,7 +102,7 @@ func SearchWith(g *graph.Graph, q string, f Filter, limit int) []Hit {
 				score -= 30
 			}
 		}
-		h := Hit{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, PublishedAs: n.Published, Aliases: n.Aliases, Proposed: n.Proposed, Planned: n.Planned, PlanBy: n.PlanBy, Score: score, Matched: how,
+		h := Hit{Curie: n.CURIE, Kind: n.Kind, Tier: n.Tier, Doc: n.Doc, PublishedAs: n.Published, Aliases: n.Aliases, SeeAlso: n.SeeAlso, Proposed: n.Proposed, Planned: n.Planned, PlanBy: n.PlanBy, Score: score, Matched: how,
 			dist: lev(raw, strings.ToLower(n.CURIE[strings.Index(n.CURIE, ":")+1:]))}
 		if r := g.Objects(n.ID, "realizes"); len(r) > 0 {
 			for _, x := range r {

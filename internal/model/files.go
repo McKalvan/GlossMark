@@ -435,9 +435,13 @@ type Published struct {
 // key is a relation (produces, consumes, constrains, ...) resolved against the
 // vocabulary, or a documented attribute (value, label, doc).
 type Concept struct {
-	Kind       string     `yaml:"kind,omitempty" json:"kind,omitempty"`
-	Label      string     `yaml:"label,omitempty" json:"label,omitempty"`
-	Doc        string     `yaml:"doc,omitempty" json:"doc,omitempty"`
+	Kind  string `yaml:"kind,omitempty" json:"kind,omitempty"`
+	Label string `yaml:"label,omitempty" json:"label,omitempty"`
+	Doc   string `yaml:"doc,omitempty" json:"doc,omitempty"`
+	// SeeAlso points at fuller documentation outside the file: absolute
+	// http(s) URLs or repository-relative paths with an optional #anchor,
+	// the first being the canonical page. Never fetched (ADR 0054).
+	SeeAlso    StringList `yaml:"see-also,omitempty" json:"see-also,omitempty"`
 	IsA        StringList `yaml:"is-a,omitempty" json:"is-a,omitempty"`
 	PartOf     StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`
 	HasPart    StringList `yaml:"has-part,omitempty" json:"has-part,omitempty"`
