@@ -371,6 +371,9 @@ func conceptLine(g *graph.Graph, n *graph.Node) string {
 	if len(n.Aliases) > 0 {
 		tags = append(tags, "aka "+strings.Join(n.Aliases, "/"))
 	}
+	if len(n.SeeAlso) > 0 {
+		tags = append(tags, "see "+n.SeeAlso[0])
+	}
 	line := fmt.Sprintf("- %s (%s)", n.CURIE, n.Kind)
 	if len(tags) > 0 {
 		line += ": " + strings.Join(tags, ", ")

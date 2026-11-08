@@ -25,6 +25,12 @@ func Snippet(ws *load.Workspace, g *graph.Graph, m *model.Manifest) string {
 	sb.WriteString("- " + ProposalSentence + "\n")
 	sb.WriteString("- Relations you may use inline: ")
 	sb.WriteString(RelationGuidance(ws) + "\n")
+	for _, n := range g.NodesOf(model.NodeConcept) {
+		if len(n.SeeAlso) > 0 {
+			sb.WriteString("- `see` names a concept's fuller documentation (a URL or a repository path). It is optional reading: open it with your own tools when the one-line doc is not enough.\n")
+			break
+		}
+	}
 	if m != nil {
 		fmt.Fprintf(&sb, "- This directory is boundary `%s` (%s)", m.Boundary, m.Level)
 		if m.DefaultNamespace != "" {
@@ -97,6 +103,9 @@ func Snippet(ws *load.Workspace, g *graph.Graph, m *model.Manifest) string {
 			}
 			if len(n.Aliases) > 0 {
 				notes = append(notes, "aka "+strings.Join(n.Aliases, "/"))
+			}
+			if len(n.SeeAlso) > 0 {
+				notes = append(notes, "see "+n.SeeAlso[0])
 			}
 			fmt.Fprintf(&sb, "| `%s` | %s | %s | %s |\n", n.CURIE, n.Kind, n.Criticality, strings.Join(notes, "; "))
 		}

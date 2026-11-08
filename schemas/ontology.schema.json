@@ -160,6 +160,10 @@
           "description": "Definition of the concept.",
           "type": "string"
         },
+        "see-also": {
+          "description": "Fuller documentation outside the file: absolute http(s) URLs or repository-relative paths with an optional #anchor, the first being the canonical page. Never fetched (ADR 0054).",
+          "$ref": "#/$defs/stringOrList"
+        },
         "is-a": {
           "description": "Taxonomic parent(s). Stored as direct edges; the closure is computed.",
           "$ref": "#/$defs/stringOrList"

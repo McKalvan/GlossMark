@@ -384,6 +384,12 @@ slots:
     range: string
     multivalued: true
     description: Other names used for the concept; matched by search.
+  see_also:
+    range: string
+    multivalued: true
+    description: Fuller documentation of a concept (JSON key "see-also"); http(s) URLs or repository-relative paths, never fetched (ADR 0054).
+    aliases: ["see-also"]
+    slot_uri: rdfs:seeAlso
 
 classes:
   Any:
@@ -412,6 +418,7 @@ classes:
       - proposed
       - proposed_by
       - aliases
+      - see_also
       - tier
       - published_as
       - internal
