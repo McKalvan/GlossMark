@@ -39,6 +39,12 @@ type pipeline struct {
 // buildGraph runs the pipeline. When writeLedger is true the ledger is synced
 // to disk; otherwise it is only read (so read-only commands stay read-only).
 func buildGraph(root string, writeLedger bool) (*pipeline, error) {
+	return buildGraphOverlay(root, writeLedger, nil)
+}
+
+// buildGraphOverlay is buildGraph with an editor's unsaved buffers laid over
+// the tree (repo-relative path → contents): what gloss lsp extracts.
+func buildGraphOverlay(root string, writeLedger bool, overlay map[string][]byte) (*pipeline, error) {
 	start := time.Now()
 	if root == "" {
 		cwd, _ := os.Getwd()
@@ -52,6 +58,7 @@ func buildGraph(root string, writeLedger bool) (*pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
+	ws.Overlay = overlay
 	res, err := extract.Build(ws)
 	if err != nil {
 		return nil, err

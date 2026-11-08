@@ -7,12 +7,12 @@
 package extract
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -356,12 +356,11 @@ func (ex *extractor) manifests() {
 func (ex *extractor) files() error {
 	for _, rel := range ex.ws.Files {
 		style, _ := marker.StyleFor(rel, ex.ws.Config.CommentStyles)
-		f, err := os.Open(ex.ws.Abs(rel))
+		src, err := ex.ws.ReadFile(rel)
 		if err != nil {
 			return err
 		}
-		found, diags, lines := marker.Scan(f, style)
-		f.Close()
+		found, diags, lines := marker.Scan(bytes.NewReader(src), style)
 		ex.res.ScannedFiles++
 		for _, d := range diags {
 			d.Path = rel
@@ -374,7 +373,7 @@ func (ex *extractor) files() error {
 		var tsrc []byte // the annotated file, for a sidecar
 		if marker.IsSidecar(rel) {
 			target = marker.SidecarTarget(rel)
-			b, err := os.ReadFile(ex.ws.Abs(target))
+			b, err := ex.ws.ReadFile(target)
 			if err != nil {
 				ex.diag(rel, 1, "warning", "GM121", fmt.Sprintf("sidecar annotates %s, which does not exist", target))
 			}
@@ -595,7 +594,7 @@ func (ex *extractor) mapping(file, dir string, l *model.Link, m *model.Manifest)
 			continue
 		}
 		files++
-		b, err := os.ReadFile(ex.ws.Abs(f))
+		b, err := ex.ws.ReadFile(f)
 		if err != nil {
 			return err
 		}
@@ -747,7 +746,7 @@ func ResolveValueFrom(ws *load.Workspace, vf model.ValueFrom) (int, string, erro
 	if err != nil {
 		return 0, "", fmt.Errorf("value-from %v", err)
 	}
-	b, err := os.ReadFile(abs)
+	b, err := ws.ReadFile(ws.Rel(abs))
 	if err != nil {
 		return 0, "", fmt.Errorf("value-from %s does not exist", rel)
 	}
