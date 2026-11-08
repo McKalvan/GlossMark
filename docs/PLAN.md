@@ -90,7 +90,7 @@ internal/slice/           Feature slices (ADR 0023)
 internal/viewer/          Embedded static HTML viewer
 internal/store/           SQLite export
 internal/mcp/             MCP stdio server
-internal/lsp/             Language server for editors (editors/vscode is the VS Code client)
+internal/lsp/             Language server for editors (the VS Code client is McKalvan/glossmark-vscode)
 internal/agents/          AGENTS.md snippet
 schemas/                  JSON Schemas for glossmark.yaml, *.gloss.yaml, .gloss.yaml, views.yaml; LinkML schema for the graph
 corpus/                   Conformance corpus: one file per supported extension + expected.json

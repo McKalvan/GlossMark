@@ -18,7 +18,7 @@ import (
 )
 
 func init() {
-	register(command{"lsp", "serve markers to an editor over the Language Server Protocol on stdio: gloss check diagnostics as you type, completion of relations and concepts after @gloss, hover and go-to-definition on a concept, and the accept, propose and go-to-ontology code actions (editors/vscode is the VS Code extension)", cmdLSP})
+	register(command{"lsp", "serve markers to an editor over the Language Server Protocol on stdio: gloss check diagnostics as you type, completion of relations and concepts after @gloss, hover and go-to-definition on a concept, and the accept, propose and go-to-ontology code actions (the VS Code extension is github.com/McKalvan/glossmark-vscode)", cmdLSP})
 }
 
 // lspBackend runs the pipeline for the language server: the same build as

@@ -13,6 +13,3 @@ examples/*/*/.glossmark/viewer.html
 .glossmark/views.js
 .glossmark/views.json
 bench/results/
-editors/vscode/node_modules/
-editors/vscode/out/
-editors/vscode/*.vsix

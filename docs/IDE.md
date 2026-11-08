@@ -1,7 +1,7 @@
 <!-- @gloss documents gmi:LanguageServer scope=file -->
 # Editor support: `gloss lsp`
 
-Markers are written and read in the editor, and until now the editor knew nothing about them: no completion, no hover, no squiggle until CI failed. `gloss lsp` is a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) server built into the `gloss` binary; the extension under [`editors/vscode`](../editors/vscode/README.md) is a thin client of it, and any other LSP client (Neovim, Helix, Emacs, JetBrains through its LSP support) can start it the same way. The design is [ADR 0051](adr/0051-language-server.md).
+Markers are written and read in the editor, and until now the editor knew nothing about them: no completion, no hover, no squiggle until CI failed. `gloss lsp` is a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) server built into the `gloss` binary; the VS Code extension, [glossmark-vscode](https://github.com/McKalvan/glossmark-vscode), is a thin client of it, and any other LSP client (Neovim, Helix, Emacs, JetBrains through its LSP support) can start it the same way. The design is [ADR 0051](adr/0051-language-server.md).
 
 ```sh
 gloss lsp                                  # what an editor starts: LSP over stdio
@@ -28,16 +28,9 @@ Two things are deliberately not in this slice: the gate class of unsaved changes
 
 ## VS Code
 
-[`editors/vscode`](../editors/vscode/README.md) is the extension: it starts `gloss lsp` from `PATH` (or `glossmark.path`), registers the language features for every file type, shows the status bar item, registers the `glossmark.openLocation` command the *Go to ontology entry* action uses, and adds **GlossMark: Show impact**, which runs `gloss impact` for the current file (or the working tree against `glossmark.impactBase`) into the GlossMark output channel.
+The extension is [glossmark-vscode](https://github.com/McKalvan/glossmark-vscode), in its own repository: it starts `gloss lsp` from `PATH` (or `glossmark.path`), registers the language features for every file type, shows the status bar item, registers the `glossmark.openLocation` command the *Go to ontology entry* action uses, and adds **GlossMark: Show impact**, which runs `gloss impact` for the current file (or the working tree against `glossmark.impactBase`) into the GlossMark output channel. Its README says how to build and install it; it is not published to a marketplace yet.
 
-```sh
-cd editors/vscode
-npm ci && npm run compile       # what CI would run; node is not set up in the Go workflow, so run it locally
-npx vsce package                # glossmark-<version>.vsix
-code --install-extension glossmark-*.vsix
-```
-
-VS Code does not pop completions inside comments unless `"editor.quickSuggestions": { "comments": "on" }` is set; `Ctrl+Space` after `@gloss ` works regardless. The extension is not published to a marketplace yet.
+VS Code does not pop completions inside comments unless `"editor.quickSuggestions": { "comments": "on" }` is set; `Ctrl+Space` after `@gloss ` works regardless.
 
 ## Other editors
 
