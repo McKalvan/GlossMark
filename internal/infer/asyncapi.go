@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mckalvan/glossmark/internal/load"
 	"gopkg.in/yaml.v3"
 )
 
@@ -42,14 +41,15 @@ type alias struct {
 
 func (s *asyncAPI) Name() string { return "asyncapi" }
 
-func (s *asyncAPI) Index(ws *load.Workspace, v Vocabulary) error {
+func (s *asyncAPI) Index(files Files, v Vocabulary) error {
 	s.channels, s.messages, s.files, s.aliases = map[string]*channel{}, map[string]string{}, map[string][]Item{}, map[string]map[string]*alias{}
-	for _, rel := range ws.Files {
+	for _, f := range files.List {
+		rel := f.Path
 		ext := strings.ToLower(filepath.Ext(rel))
 		if ext != ".yaml" && ext != ".yml" && ext != ".json" {
 			continue
 		}
-		lines, root := readSpec(ws.Abs(rel), "asyncapi")
+		lines, root := readSpec(files.Abs(rel), "asyncapi")
 		if root == nil {
 			continue
 		}
@@ -59,7 +59,7 @@ func (s *asyncAPI) Index(ws *load.Workspace, v Vocabulary) error {
 		}
 	}
 	if len(s.channels) > 0 {
-		s.bindings(ws)
+		s.bindings(files)
 	}
 	return nil
 }
@@ -190,20 +190,17 @@ func eventNamed(v Vocabulary, name string) string {
 // bindings reads, per boundary, the identifiers the code and its
 // configuration bind to the contract's addresses and message names.
 // Tests bind fixtures, not the service's topics.
-func (s *asyncAPI) bindings(ws *load.Workspace) {
-	for _, rel := range ws.Files {
-		ext := strings.ToLower(filepath.Ext(rel))
-		if !codeExts[ext] && !configExts[ext] || ws.IsTestPath(rel) {
+func (s *asyncAPI) bindings(files Files) {
+	for _, f := range files.List {
+		ext := strings.ToLower(filepath.Ext(f.Path))
+		if !codeExts[ext] && !configExts[ext] || f.Test {
 			continue
 		}
-		lines, err := readLines(ws.Abs(rel))
+		lines, err := readLines(files.Abs(f.Path))
 		if err != nil {
 			continue
 		}
-		dir := ""
-		if m := ws.ManifestFor(rel); m != nil {
-			dir = m.Dir
-		}
+		dir := f.Dir
 		for _, ln := range lines {
 			b, ok := ParseBinding(ln)
 			if !ok {

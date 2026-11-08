@@ -93,10 +93,52 @@ type Config struct {
 	// Links maps paths and symbols anywhere in the repository to concepts,
 	// as a manifest's links: does for its directory (ADR 0045).
 	Links []*Link `yaml:"links,omitempty" json:"links,omitempty"`
+	// Sources are external link sources for gloss suggest, beside the
+	// executables named gloss-source-<name> on PATH: each a command that
+	// speaks the wire contract (docs/PLUGINS.md, ADR 0050).
+	Sources []*SourceDecl `yaml:"sources,omitempty" json:"sources,omitempty"`
 
 	// Dir is the directory holding the file (not serialized).
 	Dir string `yaml:"-" json:"-"`
 }
+
+// SourceDecl is one entry of sources: in glossmark.yaml: an external link
+// source gloss suggest runs. Name is the source id (Proposal.Source,
+// --source, the namespace of its calibration bases) and must be what the
+// plugin calls itself; Command is the executable and its arguments,
+// written as a list or as one string split on spaces, run from the
+// repository root.
+type SourceDecl struct {
+	Name    string  `yaml:"name" json:"name"`
+	Command Command `yaml:"command" json:"command"`
+}
+
+// Command is an argument vector that YAML may write as a list or as one
+// string split on spaces.
+type Command []string
+
+func (c *Command) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		*c = strings.Fields(n.Value)
+		return nil
+	case yaml.SequenceNode:
+		var list []string
+		if err := n.Decode(&list); err != nil {
+			return err
+		}
+		*c = list
+		return nil
+	}
+	return fmt.Errorf("line %d: command must be a string or a list of strings", n.Line)
+}
+
+// sourceName is what a source id may look like: the suffix of a
+// gloss-source-<name> executable, a basis namespace, a --source value.
+var sourceName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+// ValidSourceName reports whether name can be a link source's id.
+func ValidSourceName(name string) bool { return sourceName.MatchString(name) }
 
 // HistoryConfig is the history: block of glossmark.yaml.
 type HistoryConfig struct {
@@ -344,6 +386,20 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if err := c.loadSuggest(path); err != nil {
 		return nil, err
+	}
+	seen := map[string]bool{}
+	for i, s := range c.Sources {
+		switch {
+		case s == nil || s.Name == "":
+			return nil, fmt.Errorf("%s: sources[%d]: name is required (the id the plugin answers with)", path, i)
+		case !ValidSourceName(s.Name):
+			return nil, fmt.Errorf("%s: sources[%d]: name %q must be lower-case letters, digits and hyphens", path, i, s.Name)
+		case len(s.Command) == 0:
+			return nil, fmt.Errorf("%s: sources[%d] (%s): command is required", path, i, s.Name)
+		case seen[s.Name]:
+			return nil, fmt.Errorf("%s: sources[%d]: %s is listed twice", path, i, s.Name)
+		}
+		seen[s.Name] = true
 	}
 	if c.Views == "" {
 		c.Views = "ontology/views.yaml"

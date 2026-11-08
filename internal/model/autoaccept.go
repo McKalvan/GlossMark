@@ -70,6 +70,17 @@ func (c *Config) loadSuggest(path string) error {
 	return nil
 }
 
+// Measured is the repository's own calibration (suggest.calibration,
+// written by gloss suggest --calibrate --write), or nil when there is
+// none. An external source's conf is read from it, since the shipped
+// table cannot have measured a source outside the binary (ADR 0050).
+func (c *Config) Measured() calib.Table {
+	if c == nil || c.Suggest == nil {
+		return nil
+	}
+	return c.Suggest.measured
+}
+
 // SuggestPath resolves a path under suggest: against the repository root.
 func (c *Config) SuggestPath(p string) string {
 	if filepath.IsAbs(p) || c == nil {

@@ -28,9 +28,11 @@ type Measurement struct {
 // suggests on the copy with every conf kept, and scores the proposals
 // against labels, or against the workspace's own accepted links when
 // labels is nil. sources, when given, keeps only those inference sources
-// (gloss suggest --source). Relative import sources are rewritten to point
-// at the original, so imports from a sibling checkout still resolve.
-func SelfEval(ws *load.Workspace, g *graph.Graph, labels []Label, sources []string) (*Measurement, error) {
+// (gloss suggest --source); opt carries the rest of the run's options
+// (its floor is every conf). Relative import sources are rewritten to
+// point at the original, so imports from a sibling checkout still
+// resolve, and external sources run from the original root.
+func SelfEval(ws *load.Workspace, g *graph.Graph, labels []Label, sources []string, opt Options) (*Measurement, error) {
 	if labels == nil {
 		labels = LabelsFromGraph(g)
 	}
@@ -51,7 +53,8 @@ func SelfEval(ws *load.Workspace, g *graph.Graph, labels []Label, sources []stri
 		return nil, err
 	}
 	rollup.Derive(res.Graph, cws.Vocab)
-	ps, _, err := Run(cws, res.Graph, nil, Options{MinConf: 0.01, Sources: sources})
+	opt.MinConf, opt.Sources, opt.PluginDir = 0.01, sources, ws.Root
+	ps, _, err := Run(cws, res.Graph, nil, opt)
 	if err != nil {
 		return nil, err
 	}

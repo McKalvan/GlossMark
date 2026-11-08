@@ -122,7 +122,7 @@ func (r *runner) proposeFlows(f *file, d marker.Decl, role, source string, hints
 			if h.Via != "" && h.Via != terms {
 				terms += "<" + h.Via
 			}
-			p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: ref.dir, Target: r.shorten(f, c.curie), Matched: h.Basis + ":" + terms, Basis: basis, Source: source, Conf: confFor(basis), channel: ref.channel, channelOnly: channelOnly}
+			p := Proposal{Path: f.rel, Line: d.Insert, Symbol: d.Symbol, Relation: ref.dir, Target: r.shorten(f, c.curie), Matched: h.Basis + ":" + terms, Basis: basis, Source: source, Conf: r.conf(basis), channel: ref.channel, channelOnly: channelOnly}
 			if c.n.Deprecated {
 				p.Deprecated, p.Note = true, deprecatedNote(c.n)
 			}

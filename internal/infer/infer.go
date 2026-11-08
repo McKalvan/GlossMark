@@ -13,7 +13,7 @@
 // answers over a wire (#209, step B).
 package infer
 
-import "github.com/mckalvan/glossmark/internal/load"
+import "path/filepath"
 
 // Concept is the read-only view of a vocabulary concept a source matches
 // against.
@@ -68,6 +68,27 @@ type Target struct {
 	Terms   string   `json:"terms,omitempty"`   // what matched, for the reviewer
 }
 
+// File is one workspace file as a source sees it: its repo-relative
+// path, its boundary's directory ("" at the root) and whether it is a
+// test path (a test binds fixtures, not the service's topics).
+type File struct {
+	Path string `json:"path"`
+	Dir  string `json:"dir,omitempty"`
+	Test bool   `json:"test,omitempty"`
+}
+
+// Files is the workspace a source indexes: the root and the scanned
+// files, in workspace order. A source reads a file's content through
+// Abs; over the wire it may instead ask the core for it (wire.Message
+// "read").
+type Files struct {
+	Root string `json:"root"`
+	List []File `json:"files"`
+}
+
+// Abs is a file's absolute path.
+func (f Files) Abs(rel string) string { return filepath.Join(f.Root, filepath.FromSlash(rel)) }
+
 // Decl is a code declaration a source is asked about.
 type Decl struct {
 	Path       string   `json:"path"`
@@ -100,7 +121,7 @@ type Source interface {
 	// the namespace of its calibration bases (name/basis/role).
 	Name() string
 	// Index reads the source's files once per run.
-	Index(ws *load.Workspace, v Vocabulary) error
+	Index(files Files, v Vocabulary) error
 	// Items lists what a spec file declares; nil for a file that is not
 	// one of the source's specs.
 	Items(path string) []Item
@@ -111,4 +132,15 @@ type Source interface {
 // Builtin returns fresh instances of the sources shipped in the binary.
 func Builtin() []Source {
 	return []Source{&asyncAPI{}, &openAPI{}}
+}
+
+// BuiltinNamed returns a fresh instance of the built-in source of that
+// name, or nil.
+func BuiltinNamed(name string) Source {
+	for _, s := range Builtin() {
+		if s.Name() == name {
+			return s
+		}
+	}
+	return nil
 }
