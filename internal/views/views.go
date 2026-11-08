@@ -52,7 +52,7 @@ type PNode struct {
 	Folded      []string `json:"folded,omitempty"` // CURIEs collapsed into this node
 	Internal    bool     `json:"internal,omitempty"`
 	Doc         string   `json:"doc,omitempty"`
-	SeeAlso     []string `json:"seeAlso,omitempty"` // concepts only (ADR 0050)
+	SeeAlso     []string `json:"seeAlso,omitempty"` // concepts only (ADR 0054)
 	Value       any      `json:"value,omitempty"`
 	Path        string   `json:"path,omitempty"`
 	Line        int      `json:"line,omitempty"` // first line of an artifact's anchor

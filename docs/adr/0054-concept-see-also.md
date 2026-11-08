@@ -1,5 +1,5 @@
 <!-- @gloss documents gm:Concept scope=file -->
-# ADR 0050: a concept points at its fuller documentation with `see-also`
+# ADR 0054: a concept points at its fuller documentation with `see-also`
 
 Status: accepted, 2026-11-08.
 

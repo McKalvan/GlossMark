@@ -387,7 +387,7 @@ slots:
   see_also:
     range: string
     multivalued: true
-    description: Fuller documentation of a concept (JSON key "see-also"); http(s) URLs or repository-relative paths, never fetched (ADR 0050).
+    description: Fuller documentation of a concept (JSON key "see-also"); http(s) URLs or repository-relative paths, never fetched (ADR 0054).
     aliases: ["see-also"]
     slot_uri: rdfs:seeAlso
 

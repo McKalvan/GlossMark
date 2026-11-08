@@ -518,7 +518,7 @@ func (c *classifier) ontology() {
 		if declaredCriticality(b) != declaredCriticality(h) {
 			diffs = append(diffs, fmt.Sprintf("criticality %s → %s", orNone(declaredCriticality(b)), orNone(declaredCriticality(h))))
 		}
-		// see-also is the fuller definition, so it is gated as the doc is (ADR 0050).
+		// see-also is the fuller definition, so it is gated as the doc is (ADR 0054).
 		var prose []string
 		if b.Label != h.Label {
 			prose = append(prose, "label")

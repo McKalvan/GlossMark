@@ -384,7 +384,7 @@ type Concept struct {
 	Doc   string `yaml:"doc,omitempty" json:"doc,omitempty"`
 	// SeeAlso points at fuller documentation outside the file: absolute
 	// http(s) URLs or repository-relative paths with an optional #anchor,
-	// the first being the canonical page. Never fetched (ADR 0050).
+	// the first being the canonical page. Never fetched (ADR 0054).
 	SeeAlso    StringList `yaml:"see-also,omitempty" json:"see-also,omitempty"`
 	IsA        StringList `yaml:"is-a,omitempty" json:"is-a,omitempty"`
 	PartOf     StringList `yaml:"part-of,omitempty" json:"part-of,omitempty"`

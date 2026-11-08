@@ -11,7 +11,7 @@ import (
 	"github.com/mckalvan/glossmark/internal/gate"
 )
 
-// TestSeeAlso pins ADR 0050: see-also entries reach the graph node; check
+// TestSeeAlso pins ADR 0054: see-also entries reach the graph node; check
 // rejects an entry that is neither an http(s) URL nor a repository path
 // (GM309) and warns on a missing file or Markdown anchor (GM313); a changed
 // entry is gated as a doc change, a PATCH.

@@ -54,7 +54,7 @@ type Node struct {
 	KindFrom string `json:"kind-from,omitempty"`
 	Label    string `json:"label,omitempty"`
 	Doc      string `json:"doc,omitempty"`
-	// Concept attributes. SeeAlso is the concept's see-also list (ADR 0050).
+	// Concept attributes. SeeAlso is the concept's see-also list (ADR 0054).
 	SeeAlso    []string `json:"see-also,omitempty"`
 	Published  string   `json:"published-as,omitempty"`
 	Internal   bool     `json:"internal,omitempty"`

@@ -272,7 +272,7 @@ function srcLink(path,line){
   const url=srcURL.split('{path}').join(path.split('/').map(encodeURIComponent).join('/')).split('{line}').join(String(line||1));
   return `<a class="mono src" href="${esc(url)}"${webSrc?' target="_blank" rel="noopener"':''} title="${esc(webSrc?'Open on the code host':'Open in the editor')}">${txt}</a>`;
 }
-/* A see-also entry (docs/adr/0050-concept-see-also.md): an http(s) URL links as it is; a
+/* A see-also entry (docs/adr/0054-concept-see-also.md): an http(s) URL links as it is; a
    repository path links through a web source-url (its #L{line} replaced by the entry's
    own #anchor) for a namespace this repository owns, and is plain text otherwise. */
 function seeAlsoLink(e,imported){

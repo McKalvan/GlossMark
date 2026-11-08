@@ -18,7 +18,7 @@ import (
 
 var scheme = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
 
-// seeAlso lints a concept's see-also entries (ADR 0050): one that is neither
+// seeAlso lints a concept's see-also entries (ADR 0054): one that is neither
 // an http(s) URL nor a repository-relative path is GM309; a path whose file
 // is missing, or whose #anchor names no heading of a Markdown file, is GM313.
 // URLs are never fetched.
