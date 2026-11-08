@@ -187,7 +187,7 @@ Generate the vocabulary agents should see first:
 gloss agents --dir services/circulation --write AGENTS.md
 ```
 
-The block gives the marker syntax (with `id=`), the inline relations (`verifies` for tests, not its alias `tests`), and one table row per concept with its kind, its effective criticality, and notes: `PROPOSED` for a concept awaiting acceptance, its doc, what it realizes and its aliases.
+The block gives the marker syntax (with `id=`), the inline relations (`verifies` for tests, not its alias `tests`), and one table row per concept with its kind, its effective criticality, and notes: `PROPOSED` for a concept awaiting acceptance, its doc, what it realizes, its aliases, and `see` with the first `see-also` entry (when any concept has one, a line above the table says it is optional reading).
 
 ## 6. Run the tooling
 

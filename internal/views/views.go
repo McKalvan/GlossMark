@@ -9,6 +9,7 @@ package views
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -51,6 +52,7 @@ type PNode struct {
 	Folded      []string `json:"folded,omitempty"` // CURIEs collapsed into this node
 	Internal    bool     `json:"internal,omitempty"`
 	Doc         string   `json:"doc,omitempty"`
+	SeeAlso     []string `json:"seeAlso,omitempty"` // concepts only (ADR 0050)
 	Value       any      `json:"value,omitempty"`
 	Path        string   `json:"path,omitempty"`
 	Line        int      `json:"line,omitempty"` // first line of an artifact's anchor
@@ -337,7 +339,7 @@ func (p *projector) concepts() {
 		}
 		p.included[n.ID] = true
 		p.fold[n.ID] = []string{n.ID}
-		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom,
+		pn := PNode{ID: n.CURIE, Label: p.g.Label(n.ID), Type: "concept", Kind: n.Kind, Tier: n.Tier, NS: n.NS, Depth: d, Internal: n.Internal, Doc: n.Doc, SeeAlso: n.SeeAlso, Value: n.Value, Imported: n.Imported, Criticality: n.Criticality, CriticalityFrom: n.CriticalityFrom,
 			LiveValue: n.LiveValue, ValueFrom: n.ValueFrom, Deprecated: n.Deprecated, ReplacedBy: n.ReplacedBy,
 			Planned: n.Planned, PlanBy: n.PlanBy, PlanTicket: n.PlanTicket}
 		pn.Branch = p.branch(n.ID)
@@ -1269,7 +1271,7 @@ func Diff(base, head *Projection) *Delta {
 			d.AddedNodes = append(d.AddedNodes, id)
 			continue
 		}
-		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Doc != n.Doc || b.Deprecated != n.Deprecated || b.ReplacedBy != n.ReplacedBy || b.Kind != n.Kind || b.Criticality != n.Criticality {
+		if valueString(b.Value) != valueString(n.Value) || b.Published != n.Published || b.PublishedAs != n.PublishedAs || b.Label != n.Label || b.Doc != n.Doc || !slices.Equal(b.SeeAlso, n.SeeAlso) || b.Deprecated != n.Deprecated || b.ReplacedBy != n.ReplacedBy || b.Kind != n.Kind || b.Criticality != n.Criticality {
 			d.ChangedNodes = append(d.ChangedNodes, id)
 		}
 	}

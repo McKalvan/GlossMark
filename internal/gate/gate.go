@@ -518,8 +518,19 @@ func (c *classifier) ontology() {
 		if declaredCriticality(b) != declaredCriticality(h) {
 			diffs = append(diffs, fmt.Sprintf("criticality %s → %s", orNone(declaredCriticality(b)), orNone(declaredCriticality(h))))
 		}
-		if b.Label != h.Label || b.Doc != h.Doc {
-			diffs = append(diffs, "label/doc")
+		// see-also is the fuller definition, so it is gated as the doc is (ADR 0050).
+		var prose []string
+		if b.Label != h.Label {
+			prose = append(prose, "label")
+		}
+		if b.Doc != h.Doc {
+			prose = append(prose, "doc")
+		}
+		if !slices.Equal(b.SeeAlso, h.SeeAlso) {
+			prose = append(prose, "see-also")
+		}
+		if len(prose) > 0 {
+			diffs = append(diffs, strings.Join(prose, "/"))
 		}
 		if len(diffs) == 0 {
 			continue
@@ -527,7 +538,7 @@ func (c *classifier) ontology() {
 		pub := isPublished(c.head, id) || isPublished(c.base, id)
 		gate := HARD
 		reasons := []string{"edit to ontology"}
-		if len(diffs) == 1 && diffs[0] == "label/doc" {
+		if len(diffs) == 1 && len(prose) > 0 {
 			// A core concept's definition is what the business view shows;
 			// rewriting it is a decision, not a typo fix (ADR 0018).
 			if h.Tier == model.TierImpl {

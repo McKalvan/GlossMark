@@ -394,6 +394,9 @@ func describe(g *graph.Graph, n *graph.Node) map[string]any {
 	if n.Doc != "" {
 		out["doc"] = n.Doc
 	}
+	if len(n.SeeAlso) > 0 {
+		out["see_also"] = n.SeeAlso
+	}
 	if n.Published != "" {
 		out["published_as"] = n.Published
 	}

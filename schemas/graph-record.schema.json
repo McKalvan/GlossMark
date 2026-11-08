@@ -232,6 +232,12 @@
           "items": {
             "type": "string"
           }
+        },
+        "see-also": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "allOf": [
